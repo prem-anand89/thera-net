@@ -114,9 +114,10 @@ export interface VisitRepo {
   /**
    * Writes a visit with its service lines and revenue shares in ONE transaction, and queues them for
    * sync in that order — visit, then lines (in array order), then shares — so the parent reaches the
-   * server before its children. `itemsFirst` queues the lines before the visit row instead, for the one
-   * change the server would reject the other way round (a primary therapist change that must clear an
-   * assistant tag first).
+   * server before its children. `itemsFirst` queues the lines before the visit row instead. The server
+   * does not need that order (it only checks assistant != primary on the line write itself); it is a
+   * harmless safety ordering used when a primary change also clears an assistant tag, so no pushed state
+   * ever has the new primary and the old tag side by side.
    */
   putWithChildren(
     visit: Visit,

@@ -265,7 +265,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       setEnabled: async () => undefined,
     },
   };
-  return { repos, visits, items, credits, writes };
+  return { repos, visits, items, credits, writes, catalog };
 }
 
 describe('visitService.create', () => {
@@ -816,17 +816,103 @@ describe('visitService: lines and shares', () => {
   it('editing a line and a share on different rows never overwrite each other', async () => {
     const v = await svc.create({
       ...base,
-      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping' }],
     });
-    // Two writers start from the same snapshot of the rows.
-    const lineCopy = { ...liveItems(v.id).find((i) => i.serviceCatalogId === 'svc-taping')! };
-    const shareCopy = { ...liveCredits(v.id).find((c) => c.therapistId === 'th-aish')! };
-    await fake.repos.visitItems.bulkPut([{ ...lineCopy, assistingTherapistId: 'th-ravi', updatedAt: 'a' }]);
-    await fake.repos.visitCredits.bulkPut([{ ...shareCopy, amountPaise: rs(450), updatedAt: 'b' }]);
-    expect(liveItems(v.id).find((i) => i.serviceCatalogId === 'svc-taping')!.assistingTherapistId).toBe('th-ravi');
-    expect(shareOf(v.id, 'th-aish')).toBe(rs(450));
-    expect(liveItems(v.id)).toHaveLength(2);
-    expect(liveCredits(v.id)).toHaveLength(2);
+    fake.writes.length = 0;
+    await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(1000) },
+      { therapistId: 'th-aish', amountPaise: rs(300) },
+    ]);
+    expect(fake.writes.some((w) => w.startsWith('visit_items:'))).toBe(false);
+
+    const [first, second] = liveItems(v.id).sort((a, b) => a.position - b.position);
+    fake.writes.length = 0;
+    const out = await svc.updateLines(v.id, [
+      { serviceCatalogId: 'svc-consult' },
+      { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-ravi' },
+    ]);
+    expect(out.sharesOutdated).toBe(true);
+    expect(fake.writes.some((w) => w.startsWith('visit_credits:'))).toBe(false);
+    expect(fake.writes).not.toContain(`visit_items:${first.id}`);
+    expect(fake.writes).toContain(`visit_items:${second.id}`);
+
+    expect(liveItems(v.id).find((i) => i.id === second.id)!.assistingTherapistId).toBe('th-ravi');
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(1000));
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(300));
+  });
+
+  it('changing a service keeps the discount', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }],
+      actualBillPaise: rs(700),
+      adjustmentReason: 'loyalty',
+    });
+    const out = await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping' }]);
+    expect(out.visit.actualBillPaise).toBe(rs(1200));
+    expect(out.visit.adjustmentPaise).toBe(rs(-100));
+    expect(out.visit.adjustmentReason).toBe('loyalty');
+    // a bill that would go below zero clears it; an explicit bill wins
+    const small = await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-taping' }]);
+    expect(small.visit.actualBillPaise).toBe(rs(400));
+    const gone = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-consult' }], actualBillPaise: rs(100), adjustmentReason: 'x' });
+    const cleared = await svc.updateLines(gone.id, [{ serviceCatalogId: 'svc-taping' }]);
+    expect(cleared.visit.actualBillPaise).toBe(rs(500));
+    expect(cleared.visit.adjustmentPaise).toBe(0);
+    expect(cleared.visit.adjustmentReason).toBeNull();
+  });
+
+  it('manual primary change moves the old primary share to a new primary with no row', async () => {
+    const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-consult' }] });
+    await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(800) },
+    ]);
+    const out = await svc.updateBilling(v.id, { therapistId: 'th-ravi' });
+    expect(out.sharesOutdated).toBe(true);
+    expect(shareOf(v.id, 'th-ravi')).toBe(rs(800));
+    expect(shareOf(v.id, 'th-prem')).toBeUndefined();
+  });
+
+  it('refuses to remove a package purchase while later sessions exist', async () => {
+    const first = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3' }] });
+    await svc.create({
+      ...base,
+      lines: [
+        {
+          serviceCatalogId: 'svc-physio3',
+          packageContinuation: { packageGroupId: first.packageGroupId!, sessionIndex: 2, packageTotal: 3 },
+        },
+      ],
+    });
+    await expect(svc.updateLines(first.id, [{ serviceCatalogId: 'svc-consult' }])).rejects.toThrow(
+      'This package already has later sessions. Remove those first.'
+    );
+  });
+
+  it('refuses edits on a deleted visit and non-whole-paise shares', async () => {
+    const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-consult' }] });
+    await expect(
+      svc.setShares(v.id, [{ therapistId: 'th-prem', amountPaise: rs(800) + 0.5 }])
+    ).rejects.toThrow(/whole paise/);
+    fake.visits.set(v.id, { ...fake.visits.get(v.id)!, deleted: true });
+    await expect(svc.updateLines(v.id, [{ serviceCatalogId: 'svc-consult' }])).rejects.toThrow('This visit was deleted.');
+    await expect(svc.setShares(v.id, [{ therapistId: 'th-prem', amountPaise: rs(800) }])).rejects.toThrow(
+      'This visit was deleted.'
+    );
+  });
+
+  it('rejects lines together with legacy package fields', async () => {
+    await expect(
+      svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-consult' }], isContinuation: true })
+    ).rejects.toThrow(/packageContinuation/);
+  });
+
+  it('an existing line keeps its package flag when the catalog session count changes', async () => {
+    const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3' }] });
+    fake.catalog.find((c) => c.id === 'svc-physio3')!.sessionCount = 1;
+    const out = await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3' }, { serviceCatalogId: 'svc-taping' }]);
+    expect(liveItems(v.id).find((i) => i.serviceCatalogId === 'svc-physio3')!.isPackageLine).toBe(true);
+    expect(out.visit.packageGroupId).toBe(v.packageGroupId);
   });
 
   it('recalculateShares puts manual shares back to the automatic ones', async () => {

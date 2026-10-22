@@ -31,6 +31,7 @@ export interface VisitLineInput {
   packageContinuation?: { packageGroupId: UUID; sessionIndex: number; packageTotal: number };
 }
 
+const VISIT_DELETED = 'This visit was deleted.';
 const LINES_FROZEN = 'This visit is on an invoice; its services are frozen.';
 const NOT_IN_CLINIC = "That therapist isn't part of this clinic.";
 const SHARES_DONT_ADD_UP = 'The shares must add up to the bill.';
@@ -145,11 +146,37 @@ export function createVisitService(repos: Repos) {
     }));
   }
 
-  /** New-API lines: a continuation, or a service with several sessions, is the package line. */
-  function withPackageFlags(specs: LineSpec[], catalog: Map<UUID, CatalogItem>): LineSpec[] {
-    return specs.map((sp) => ({
+  /**
+   * Which existing row each spec reuses: the same service at the same position first, else the first
+   * unused row of that service. Shared by the package-flag step and `reconcileLines` so both agree.
+   */
+  function matchExisting(specs: LineSpec[], existing: VisitItem[]): (VisitItem | undefined)[] {
+    const pool = [...existing];
+    return specs.map((sp, position) => {
+      let at = pool.findIndex((e) => e.serviceCatalogId === sp.serviceCatalogId && e.position === position);
+      if (at < 0) at = pool.findIndex((e) => e.serviceCatalogId === sp.serviceCatalogId);
+      return at < 0 ? undefined : pool.splice(at, 1)[0];
+    });
+  }
+
+  /**
+   * New-API lines: a continuation, or a NEW line for a service with several sessions, is the package
+   * line. A line that already exists keeps the flag it was saved with — today's catalog session count
+   * (which may have been edited since) never re-decides it.
+   */
+  function withPackageFlags(
+    specs: LineSpec[],
+    catalog: Map<UUID, CatalogItem>,
+    existing: VisitItem[] = []
+  ): LineSpec[] {
+    const matched = matchExisting(specs, existing);
+    return specs.map((sp, i) => ({
       ...sp,
-      isPackage: Boolean(sp.continuation) || (catalog.get(sp.serviceCatalogId)?.sessionCount ?? 1) > 1,
+      isPackage: sp.continuation
+        ? true
+        : matched[i]
+          ? matched[i]!.isPackageLine
+          : (catalog.get(sp.serviceCatalogId)?.sessionCount ?? 1) > 1,
     }));
   }
 
@@ -185,6 +212,9 @@ export function createVisitService(repos: Repos) {
    * `rows` are in PUSH ORDER: anything that frees the visit's single package slot (a removed package
    * line, or one no longer flagged) comes before anything that takes it, so the server never sees two
    * live package lines.
+   * Known gap: the sync merges all queued entries for one row at its OLDEST queue position, so if the
+   * slot-taking row already had an older pending entry, the order can invert (rare). The server then
+   * answers 23505 (one live package line per visit) and the row reverts. Worth a later fix in the outbox.
    */
   function reconcileLines(
     visitId: UUID,
@@ -194,6 +224,7 @@ export function createVisitService(repos: Repos) {
     existing: VisitItem[],
     now: string
   ) {
+    const matched = matchExisting(specs, existing);
     const pool = [...existing];
     const live: VisitItem[] = [];
     const releasing: VisitItem[] = [];
@@ -201,14 +232,13 @@ export function createVisitService(repos: Repos) {
     let keptPackage = false;
     specs.forEach((sp, position) => {
       const fresh = freshLine(visitId, clinicId, position, sp, catalog.get(sp.serviceCatalogId)!, now);
-      let at = pool.findIndex((e) => e.serviceCatalogId === sp.serviceCatalogId && e.position === position);
-      if (at < 0) at = pool.findIndex((e) => e.serviceCatalogId === sp.serviceCatalogId);
-      if (at < 0) {
+      const old = matched[position];
+      if (!old) {
         live.push(fresh);
         taking.push(fresh);
         return;
       }
-      const [old] = pool.splice(at, 1);
+      pool.splice(pool.indexOf(old), 1);
       const sameSnapshot =
         old.isPackageLine === fresh.isPackageLine && (old.pricePaise === 0) === (fresh.pricePaise === 0);
       const next: VisitItem = sameSnapshot
@@ -281,6 +311,11 @@ export function createVisitService(repos: Repos) {
       let specs: LineSpec[];
       let legacyPackage = false;
       if (input.lines?.length) {
+        if (input.isContinuation || input.packageGroupId || input.sessionIndex != null) {
+          throw new Error(
+            'Give package details on the lines (packageContinuation), not alongside them.'
+          );
+        }
         specs = specsFromLines(input.lines);
       } else if (input.serviceCatalogId) {
         // The old single-service shape: one line, its package-ness decided as it always was.
@@ -395,8 +430,9 @@ export function createVisitService(repos: Repos) {
     },
 
     /**
-     * Replaces an uninvoiced visit's services. The bill is `adjustment.actualBillPaise`, or the catalog
-     * total when omitted (then no reason is needed); the revenue-split snapshot is recomputed with the
+     * Replaces an uninvoiced visit's services. The bill is `adjustment.actualBillPaise`, or, when
+     * omitted, the new subtotal plus the visit's existing adjustment when omitted (a discount survives a service
+     * change; it is dropped only if the bill would go below ₹0); the revenue-split snapshot is recomputed with the
      * visit's ORIGINAL rates, as `updateBilling` does. In 'auto' mode the shares are rewritten from the
      * new lines; in 'manual' mode they are left exactly as edited and `sharesOutdated` tells the caller
      * to ask the user to check them. Only rows that actually change are written.
@@ -408,18 +444,19 @@ export function createVisitService(repos: Repos) {
     ): Promise<{ visit: Visit; sharesOutdated: boolean }> {
       const visit = await repos.visits.get(visitId);
       if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
+      if (visit.deleted) throw new Error(VISIT_DELETED);
       if (visit.invoiceId) throw new Error(LINES_FROZEN);
       const clinic = await loadClinic(visit.clinicId);
 
-      const catalog = await loadCatalog(specsFromLines(lines));
-      const specs = withPackageFlags(specsFromLines(lines), catalog);
-      await checkSpecs(visit.clinicId, visit.therapistId, specs);
-
-      const now = new Date().toISOString();
       const [existingItems, existingCredits] = await Promise.all([
         repos.visitItems.listByVisitIds([visitId]),
         repos.visitCredits.listByVisitIds([visitId]),
       ]);
+      const catalog = await loadCatalog(specsFromLines(lines));
+      const specs = withPackageFlags(specsFromLines(lines), catalog, existingItems);
+      await checkSpecs(visit.clinicId, visit.therapistId, specs);
+
+      const now = new Date().toISOString();
       const { live, rows, keptPackage } = reconcileLines(
         visitId,
         visit.clinicId,
@@ -429,14 +466,30 @@ export function createVisitService(repos: Repos) {
         now
       );
 
+      // A package PURCHASE can't be removed while later sessions of it are logged: they'd be orphaned.
+      const hadPackage = existingItems.some((i) => i.isPackageLine);
+      if (hadPackage && !keptPackage && visit.packageGroupId && visit.sessionIndex === 1) {
+        const group = await repos.visits.listByPackageGroup(visit.packageGroupId);
+        if (group.some((v) => v.id !== visit.id && !v.deleted)) {
+          throw new Error('This package already has later sessions. Remove those first.');
+        }
+      }
+
       const catalogPricePaise = live.reduce((sum, l) => sum + l.pricePaise, 0);
-      const reason =
+      let reason =
         adjustment.adjustmentReason !== undefined ? adjustment.adjustmentReason : visit.adjustmentReason;
-      const { actualBillPaise, adjustmentPaise } = billFor(
-        catalogPricePaise,
-        adjustment.actualBillPaise,
-        reason
-      );
+      // Without an explicit bill the visit keeps its discount (or surcharge) as the same rupee amount on
+      // the new subtotal; only a bill that would go below ₹0 clears it.
+      let wantedBill = adjustment.actualBillPaise;
+      if (wantedBill === undefined) {
+        const carried = catalogPricePaise + visit.adjustmentPaise;
+        if (carried >= 0) wantedBill = carried;
+        else {
+          wantedBill = catalogPricePaise;
+          reason = null;
+        }
+      }
+      const { actualBillPaise, adjustmentPaise } = billFor(catalogPricePaise, wantedBill, reason);
       const split = computeVisitSplit(actualBillPaise, visit.clinicSplitPct, visit.taxPct, visit.tdsBasis);
 
       const pkgSpec = specs.find((s) => s.isPackage);
@@ -504,6 +557,7 @@ export function createVisitService(repos: Repos) {
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
       if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
+      if (visit.deleted) throw new Error(VISIT_DELETED);
       const clinic = await loadClinic(visit.clinicId);
       const [items, existing] = await Promise.all([
         repos.visitItems.listByVisitIds([visitId]),
@@ -528,7 +582,8 @@ export function createVisitService(repos: Repos) {
           }
         : null;
       for (const r of rows) {
-        if (!Number.isFinite(r.amountPaise) || r.amountPaise < 0) throw new Error(SHARE_BELOW_ZERO);
+        if (!Number.isInteger(r.amountPaise)) throw new Error('Share amounts must be whole paise.');
+        if (r.amountPaise < 0) throw new Error(SHARE_BELOW_ZERO);
         if (locked && r.therapistId === locked.therapistId && r.amountPaise < locked.amountPaise) {
           throw new Error(SHARE_BELOW_PACKAGE);
         }
@@ -570,8 +625,9 @@ export function createVisitService(repos: Repos) {
      * ORIGINAL rate snapshots — editing a bill never silently re-rates it.
      * Revenue shares follow a change of bill or primary therapist: 'auto' shares are rewritten (untagged
      * lines follow the new primary by themselves; a line tagged with the new primary has its tag cleared,
-     * queued BEFORE the visit row so the server never sees an assistant equal to the primary), 'manual'
-     * ones are left alone and `sharesOutdated` is true.
+     * queued before the visit row as a safety ordering, so no pushed state has an assistant equal to the
+     * primary), 'manual' ones keep their amounts and `sharesOutdated` is true; if the new primary has no
+     * share row, the old primary's row moves to them, so the primary always has a row.
      */
     async updateBilling(
       visitId: UUID,
@@ -651,6 +707,12 @@ export function createVisitService(repos: Repos) {
           let creditWrites: VisitCredit[] = [];
           if ((visit.creditsMode ?? 'auto') === 'manual' || isLegacySplit(visit, credits)) {
             sharesOutdated = credits.length > 0 || isLegacySplit(visit, credits);
+            // The primary always has a row: if the new primary has none, the old primary's row moves to
+            // them (same amount, so the total is unchanged).
+            const oldRow = credits.find((c) => c.therapistId === visit.therapistId);
+            if (primaryChanged && oldRow && !credits.some((c) => c.therapistId === updated.therapistId)) {
+              creditWrites = [{ ...oldRow, therapistId: updated.therapistId, updatedAt: now }];
+            }
           } else {
             const clinic = await loadClinic(visit.clinicId);
             const { therapistSplit } = clinicBillingConfig(clinic);
@@ -725,13 +787,18 @@ export function createVisitService(repos: Repos) {
           { therapistId: sharedTherapistId, amountPaise: assistant },
         ];
       } else if (existing.length > 0) {
-        shares = [{ therapistId: visit.therapistId, amountPaise: visit.actualBillPaise }];
+        // Clearing the split hands the visit back to automatic shares, computed from its lines.
+        const clinic = await loadClinic(visit.clinicId);
+        const items = await repos.visitItems.listByVisitIds([visitId]);
+        shares = autoCredits(items, visit.therapistId, visit.actualBillPaise, {
+          splitEnabled: clinicBillingConfig(clinic).therapistSplit,
+        });
       }
       if (!shares) {
         await repos.visits.put(updated);
         return updated;
       }
-      updated.creditsMode = 'manual';
+      updated.creditsMode = sharedTherapistId ? 'manual' : 'auto';
       await repos.visits.putWithChildren(updated, [], creditRows(updated, existing, shares, now));
       return updated;
     },

@@ -1720,9 +1720,16 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   a line tagged with the new primary has its tag cleared. **Push order matters** (the server rejects
   some intermediate states permanently and the sync would revert the local row): a line that frees the
   visit's single package slot (removed, or no longer the package line) is queued BEFORE the one that
-  takes it, and a tag-clearing line write is queued BEFORE the visit row (`putWithChildren` option
-  `itemsFirst`). Legacy `setSplit` still writes `shared_therapist_id/shared_pct` and now also two manual
-  share rows (assistant = bill × pct rounded to the rupee, primary = remainder).
+  takes it (known gap: the sync merges queued entries for a row at its oldest position, so a slot-taking
+  row that already had an older pending entry can invert this; the server answers 23505 and the row
+  reverts), and a tag-clearing line write is queued before the visit row as a safety ordering
+  (`putWithChildren` option `itemsFirst`; the server doesn't require it). `updateLines` without an
+  explicit bill keeps the visit's adjustment (new subtotal + old adjustment, reason kept; cleared only
+  if that would go below ₹0), refuses deleted visits, keeps an existing line's package flag, and refuses
+  to remove a package purchase line while later sessions of that package exist. In manual mode a primary
+  change moves the old primary's share row to the new primary when they had none. Legacy `setSplit` still
+  writes `shared_therapist_id/shared_pct` and now also two manual share rows (assistant = bill × pct
+  rounded to the rupee, primary = remainder); clearing it returns the visit to auto shares.
 - **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
   on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
 
@@ -3616,9 +3623,16 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   a line tagged with the new primary has its tag cleared. **Push order matters** (the server rejects
   some intermediate states permanently and the sync would revert the local row): a line that frees the
   visit's single package slot (removed, or no longer the package line) is queued BEFORE the one that
-  takes it, and a tag-clearing line write is queued BEFORE the visit row (`putWithChildren` option
-  `itemsFirst`). Legacy `setSplit` still writes `shared_therapist_id/shared_pct` and now also two manual
-  share rows (assistant = bill × pct rounded to the rupee, primary = remainder).
+  takes it (known gap: the sync merges queued entries for a row at its oldest position, so a slot-taking
+  row that already had an older pending entry can invert this; the server answers 23505 and the row
+  reverts), and a tag-clearing line write is queued before the visit row as a safety ordering
+  (`putWithChildren` option `itemsFirst`; the server doesn't require it). `updateLines` without an
+  explicit bill keeps the visit's adjustment (new subtotal + old adjustment, reason kept; cleared only
+  if that would go below ₹0), refuses deleted visits, keeps an existing line's package flag, and refuses
+  to remove a package purchase line while later sessions of that package exist. In manual mode a primary
+  change moves the old primary's share row to the new primary when they had none. Legacy `setSplit` still
+  writes `shared_therapist_id/shared_pct` and now also two manual share rows (assistant = bill × pct
+  rounded to the rupee, primary = remainder); clearing it returns the visit to auto shares.
 - **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
   on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
 
