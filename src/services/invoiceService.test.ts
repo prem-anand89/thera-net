@@ -68,6 +68,26 @@ describe('invoiceService.amendInvoice', () => {
     await db.visit_items.clear();
   });
 
+  it('says a refused change blocks the bill, for amend and for issue', async () => {
+    const REFUSED = 'A change to one of these visits was refused by the server. Fix or discard it from the unsynced changes notice, then give the bill.';
+    await db.outbox.clear();
+    await db.outbox.add({ table: 'visit_credits', rowId: 'c1', ts: 1, error: 'denied', errorCode: '42501' });
+    await db.visit_credits.put({ id: 'c1', visitId: 'v1' } as never);
+    const { repos } = setup([]);
+    const r = repos as unknown as { patients: unknown; visits: { get: unknown } };
+    r.patients = { get: async () => ({ id: 'p1' }) };
+    r.visits.get = async () => visit({ invoiceId: null });
+    const svc = createInvoiceService(repos);
+    await expect(svc.amendInvoice('inv-old', ['v1'], 'Cash')).rejects.toThrow(REFUSED);
+    await expect(svc.issueForVisits(['v1'], 'Cash')).rejects.toThrow(REFUSED);
+    await db.outbox.clear();
+    await db.outbox.add({ table: 'visit_credits', rowId: 'c1', ts: 2 });
+    await expect(svc.issueForVisits(['v1'], 'Cash')).rejects.toThrow('still syncing');
+    expect(rpc).not.toHaveBeenCalled();
+    await db.outbox.clear();
+    await db.visit_credits.clear();
+  });
+
   it('gives an amendment of an unpaid invoice an explicit outstanding status', async () => {
     const { repos, statuses } = setup([]);
     await createInvoiceService(repos).amendInvoice('inv-old', ['v1'], 'Cash');

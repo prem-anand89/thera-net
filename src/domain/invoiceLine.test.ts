@@ -675,4 +675,55 @@ describe('invoice lines per service', () => {
     expect(therapistId).toBe('primary');
     expect(lineItems.every((l) => l.therapistIds?.join() === 'primary')).toBe(true);
   });
+
+  it('two same-service lines on one visit count two sessions but print the date once', () => {
+    const v = makeVisit({ id: 'v1', catalogPricePaise: rs(1000), actualBillPaise: rs(1000) });
+    const items = [
+      makeItem({ id: 'i1', visitId: 'v1', catalogPricePaise: rs(500), pricePaise: rs(500) }),
+      makeItem({ id: 'i2', visitId: 'v1', position: 1, catalogPricePaise: rs(500), pricePaise: rs(500) }),
+    ];
+    const { lineItems } = build([v], items);
+    expect(lineItems).toHaveLength(1);
+    expect(lineItems[0].billedSessionCount).toBe(2);
+    expect(lineItems[0].sessionDates).toEqual(['2026-01-01']);
+    expect(lineReconciles(lineItems[0])).toBe(true);
+  });
+
+  it('prints the line snapshot name, not the catalog name', () => {
+    const v = makeVisit({ id: 'v1', actualBillPaise: rs(1000), catalogPricePaise: rs(1000) });
+    const { lineItems } = build([v], [makeItem({ id: 'i1', visitId: 'v1', serviceName: 'Old name' })]);
+    expect(lineItems[0].serviceName).toBe('Old name');
+  });
+
+  it('a line-less visit and a lined visit of the same service and price merge into one line', () => {
+    const a = makeVisit({ id: 'a', visitDate: '2026-01-01', catalogPricePaise: rs(1000), actualBillPaise: rs(1000) });
+    const b = makeVisit({ id: 'b', visitDate: '2026-01-02', catalogPricePaise: rs(1000), actualBillPaise: rs(1000) });
+    const { lineItems, totalPaise } = build([a, b], [makeItem({ id: 'i1', visitId: 'b' })]);
+    expect(lineItems).toHaveLength(1);
+    expect(lineItems[0]).toMatchObject({ billedSessionCount: 2, totalPaise: rs(2000), catalogPricePaise: rs(2000) });
+    expect(lineItems[0].sessionDates).toEqual(['2026-01-01', '2026-01-02']);
+    expect(totalPaise).toBe(rs(2000));
+    expect(lineReconciles(lineItems[0])).toBe(true);
+  });
+
+  it('a ₹0 package continuation plus a discounted add-on', () => {
+    const pkg = 'pkg-2';
+    const v = makeVisit({
+      id: 'v2', packageGroupId: pkg, sessionIndex: 2, packageTotal: 5, catalogPricePaise: 0,
+      actualBillPaise: rs(400), adjustmentPaise: -rs(100), adjustmentReason: 'Loyalty',
+    });
+    const items = [
+      makeItem({ id: 'p', visitId: 'v2', isPackageLine: true, catalogPricePaise: 0, pricePaise: 0 }),
+      makeItem({
+        id: 'x', visitId: 'v2', position: 1, serviceCatalogId: 'svc-2', serviceName: 'Manual Therapy',
+        catalogPricePaise: rs(500), pricePaise: rs(500),
+      }),
+    ];
+    const { lineItems, totalPaise } = build([v], items);
+    const addOn = lineItems.find((l) => l.serviceName === 'Manual Therapy');
+    expect(addOn).toMatchObject({ totalPaise: rs(400), adjustmentPaise: -rs(100), adjustmentReason: 'Loyalty' });
+    expect(lineItems.find((l) => l.authorizedSessionCount === 5)?.totalPaise).toBe(0);
+    expect(totalPaise).toBe(rs(400));
+    for (const l of lineItems) expect(lineReconciles(l)).toBe(true);
+  });
 });

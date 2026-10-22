@@ -142,7 +142,11 @@ export function billingUnits(visits: Visit[], itemsByVisitId: Map<UUID, VisitIte
       continue;
     }
     const nets = lineNets(live, visit.actualBillPaise);
-    for (const item of live) units.push({ visit, item, netPaise: nets.get(item.id) ?? 0 });
+    for (const item of live) {
+      const net = nets.get(item.id);
+      if (net === undefined) throw new Error('A service line has no amount; cannot print the invoice.');
+      units.push({ visit, item, netPaise: net });
+    }
   }
   return units;
 }
@@ -238,8 +242,10 @@ export function buildLineItems(
     const ordered = sortGroup(rawGroup);
     const groupBilled = ordered.find((u) => u.netPaise > 0) ?? ordered[0];
     const serviceId = groupBilled.item?.serviceCatalogId ?? groupBilled.visit.serviceCatalogId;
-    const serviceName =
-      serviceNameById.get(serviceId) ?? (groupBilled.item ? groupBilled.item.serviceName : undefined);
+    // A service line prints its own snapshot name; the catalog name is for visits without lines.
+    const serviceName = groupBilled.item
+      ? groupBilled.item.serviceName || serviceNameById.get(serviceId)
+      : serviceNameById.get(serviceId);
     if (!serviceName) throw new Error('Service not found');
 
     const billedSessionCount = ordered.length;
@@ -249,7 +255,10 @@ export function buildLineItems(
       ? null
       : normalizeAuthorizedCount(groupBilled.visit.packageTotal);
     const sessionCount = authorizedSessionCount ?? billedSessionCount;
-    const sessionDates = ordered.map((u) => u.visit.visitDate);
+    // One date per visit: two lines of one visit count as two sessions but never repeat the date.
+    const sessionDates = ordered
+      .filter((u, i) => ordered.findIndex((o) => o.visit.id === u.visit.id) === i)
+      .map((u) => u.visit.visitDate);
     // Sum of every unit's own snapshot, not one's — the fix that keeps
     // `catalogPricePaise + adjustmentPaise = totalPaise` holding by construction for a merged
     // non-package group too. A service line's adjustment is its net less its catalog price.

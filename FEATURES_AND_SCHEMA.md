@@ -1798,7 +1798,7 @@ like any other service. The invoice shows only the primary therapist: line
 wins) are computed over the visits' primaries, never assistants. Issuing and
 amending refuse ("Some of these services are still syncing…") while any of
 the visits, their lines or their shares still has an outbox entry
-(`hasPendingVisitSync`), because the server freezes a visit's lines once it
+(`pendingVisitSync`; an entry the server refused, i.e. with `error` set, gets its own message telling the user to fix or discard it from the unsynced changes notice), because the server freezes a visit's lines once it
 has an invoice and a line pushed afterwards would be rejected and reverted.
 
 **Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
@@ -3718,7 +3718,7 @@ like any other service. The invoice shows only the primary therapist: line
 wins) are computed over the visits' primaries, never assistants. Issuing and
 amending refuse ("Some of these services are still syncing…") while any of
 the visits, their lines or their shares still has an outbox entry
-(`hasPendingVisitSync`), because the server freezes a visit's lines once it
+(`pendingVisitSync`; an entry the server refused, i.e. with `error` set, gets its own message telling the user to fix or discard it from the unsynced changes notice), because the server freezes a visit's lines once it
 has an invoice and a line pushed afterwards would be rejected and reverted.
 
 **Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**

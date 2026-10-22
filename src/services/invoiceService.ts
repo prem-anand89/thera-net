@@ -18,6 +18,9 @@ import { getSupabase } from '@/lib/supabase';
 import { rowToDomain } from '@/repositories/rowMapping';
 import { createPaymentService } from './paymentService';
 
+export const REFUSED_CHANGE =
+  'A change to one of these visits was refused by the server. Fix or discard it from the unsynced changes notice, then give the bill.';
+
 export const STILL_SYNCING =
   'Some of these services are still syncing. Try again in a moment.';
 
@@ -27,8 +30,8 @@ export const STILL_SYNCING =
  * issuing would be rejected and reverted — issue only once everything has reached the server. Reads
  * the tables directly (not the repos) so a soft-deleted line still waiting to push counts too.
  */
-export async function hasPendingVisitSync(visitIds: UUID[]): Promise<boolean> {
-  if (visitIds.length === 0) return false;
+export async function pendingVisitSync(visitIds: UUID[]): Promise<'none' | 'syncing' | 'refused'> {
+  if (visitIds.length === 0) return 'none';
   const [items, credits] = await Promise.all([
     db.visit_items.where('visitId').anyOf(visitIds).toArray(),
     db.visit_credits.where('visitId').anyOf(visitIds).toArray(),
@@ -39,7 +42,16 @@ export async function hasPendingVisitSync(visitIds: UUID[]): Promise<boolean> {
     ...credits.map((c) => `visit_credits:${c.id}`),
   ]);
   const pending = await db.outbox.where('table').anyOf('visits', 'visit_items', 'visit_credits').toArray();
-  return pending.some((e) => wanted.has(`${e.table}:${e.rowId}`));
+  const mine = pending.filter((e) => wanted.has(`${e.table}:${e.rowId}`));
+  if (mine.length === 0) return 'none';
+  // An entry with `error` set was rejected by the server and stays until fixed or discarded.
+  return mine.some((e) => e.error) ? 'refused' : 'syncing';
+}
+
+async function assertNothingPending(visitIds: UUID[]): Promise<void> {
+  const state = await pendingVisitSync(visitIds);
+  if (state === 'refused') throw new Error(REFUSED_CHANGE);
+  if (state === 'syncing') throw new Error(STILL_SYNCING);
 }
 
 /**
@@ -191,7 +203,7 @@ export function createInvoiceService(repos: Repos) {
       if (!clinic || !patient) throw new Error('Missing clinic/patient data');
 
       const { allVisits, lineItems, totalPaise, therapistId } = await buildLineItems(visitIds);
-      if (await hasPendingVisitSync(allVisits.map((v) => v.id))) throw new Error(STILL_SYNCING);
+      await assertNothingPending(allVisits.map((v) => v.id));
 
       const fy = fiscalYearOf(new Date(), clinic.fyStartMonth);
       const { data, error } = await supabase.rpc('issue_invoice', {
@@ -263,7 +275,7 @@ export function createInvoiceService(repos: Repos) {
         visitIds,
         originalInvoiceId
       );
-      if (await hasPendingVisitSync(allVisits.map((v) => v.id))) throw new Error(STILL_SYNCING);
+      await assertNothingPending(allVisits.map((v) => v.id));
 
       const { data, error } = await supabase.rpc('amend_invoice', {
         p_original_invoice_id: originalInvoiceId,
