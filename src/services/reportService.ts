@@ -1,7 +1,7 @@
 import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { paiseToRupees } from '@/domain/money';
-import { attributablePackageGroupIds, payBaseByTherapist } from '@/domain/payBase';
+import { attributablePackageGroupIds, payBaseByTherapist, type PayBaseInput } from '@/domain/payBase';
 import { monthDateRange, monthName, type FyMonth } from '@/domain/fiscalYear';
 import type { Repos } from '@/repositories/types';
 
@@ -17,7 +17,9 @@ export interface TherapistMonthRow {
   adjustmentPaise: Paise;
   /**
    * Internal therapist split: net billed-rupees credited to (+) or given up
-   * by (−) this therapist via same-visit splits. Nets to zero on the Total
+   * by (−) this therapist via same-visit splits — a visit's revenue shares
+   * (VisitCredit rows), or the legacy sharedPct for visits without shares.
+   * Nets to zero on the Total
    * row — purely an internal redistribution, never touches billed totals.
    */
   sharedPaise: Paise;
@@ -26,15 +28,18 @@ export interface TherapistMonthRow {
    * therapist's actual take-home/credit figure, not just what happened to
    * be billed under their name. Two adjustments feed in, both applied to
    * Post-Tax directly (not derived from sharedPaise, a different base):
-   * (1) same-visit manual Shared/Split — a share given to/from a named
-   * assisting therapist; (2) automatic package attribution — a package's
+   * (1) same-visit revenue shares — a share given to/from another
+   * therapist on the visit (VisitCredit rows, each therapist's share of
+   * the bill ÷ bill × Post-Tax; or the legacy sharedPct); (2) automatic package attribution — a package's
    * full price is billed on one session's visit (the "billing visit"),
    * with every other session logged separately at ₹0 so it isn't
    * double-billed, which otherwise credits 100% of a multi-session
    * package to whichever therapist logged the billing visit even when a
    * colleague delivered other sessions. For every OTHER session in the
    * group logged by a DIFFERENT therapist, a fixed per-session share
-   * (billing visit's Post-Tax ÷ declared session count, whole rupees)
+   * (the package's Post-Tax — its package line's share of the billing
+   * visit, or the whole visit for visits without lines — ÷ declared
+   * session count, whole rupees)
    * moves from the biller to that therapist, but only for sessions that
    * fall inside THIS report's own month — a package spanning several
    * months settles incrementally, one month at a time, so a past month's
@@ -85,6 +90,47 @@ export async function loadPackageGroups(
   const ids = attributablePackageGroupIds(visits);
   const groups = await Promise.all(ids.map((id) => repos.visits.listByPackageGroup(id)));
   return new Map(ids.map((id, i) => [id, groups[i]]));
+}
+
+/**
+ * Everything payBase needs for a window's visits: their package groups, the
+ * service lines and revenue shares of every visit involved (the window's
+ * and the groups', one repo call per table), and the clinic's therapist-split
+ * setting (default on). Shared by reportService and the attribution audit
+ * so both always compute from identical input.
+ */
+export async function loadPayBaseInput(
+  clinicId: UUID,
+  visits: Visit[],
+  from: string,
+  to: string,
+  repos: Pick<Repos, 'visits' | 'visitItems' | 'visitCredits' | 'clinics'>
+): Promise<PayBaseInput> {
+  const packageGroups = await loadPackageGroups(visits, repos);
+  const visitIds = [...new Set([...visits, ...[...packageGroups.values()].flat()].map((v) => v.id))];
+  const [items, credits, clinic] = await Promise.all([
+    repos.visitItems.listByVisitIds(visitIds),
+    repos.visitCredits.listByVisitIds(visitIds),
+    repos.clinics.get(clinicId),
+  ]);
+  const byVisit = <T extends { visitId: UUID }>(rows: T[]) => {
+    const map = new Map<UUID, T[]>();
+    for (const r of rows) {
+      const list = map.get(r.visitId);
+      if (list) list.push(r);
+      else map.set(r.visitId, [r]);
+    }
+    return map;
+  };
+  return {
+    visits,
+    packageGroups,
+    items: byVisit(items),
+    credits: byVisit(credits),
+    splitEnabled: clinic?.enableTherapistSplit ?? true,
+    from,
+    to,
+  };
 }
 
 /**
@@ -176,9 +222,8 @@ export function createReportService(repos: Repos) {
       // instead would silently overcredit the colleague without debiting
       // anyone (`rowFor` forces the row into existence; `rowsById.get`
       // alone would not). Package attribution moves no gross, so
-      // sharedPaise is exactly the manual Shared/Split movement.
-      const packageGroups = await loadPackageGroups(visits, repos);
-      const payBase = payBaseByTherapist({ visits, packageGroups, from, to });
+      // sharedPaise is exactly the revenue-share (or legacy split) movement.
+      const payBase = payBaseByTherapist(await loadPayBaseInput(clinicId, visits, from, to, repos));
       for (const [therapistId, b] of payBase) {
         const row = rowFor(therapistId);
         row.sharedPaise = b.grossPaise - row.billPaise;

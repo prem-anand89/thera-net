@@ -362,8 +362,8 @@ queued with a visible error.
 - **Per-therapist metrics**: Bill, BM Share, TDS, Post-Tax, HV, unique patients, total
 - **CSV export** capability
 - **Attribution audit tab** (Reports → "Attribution audit"): a per-visit
-  ledger of every rupee a manual split or automatic package attribution
-  moved between therapists that month — see §2b.
+  ledger of every rupee a revenue share, a legacy manual split or automatic
+  package attribution moved between therapists that month — see §2b.
 
 ---
 
@@ -4876,8 +4876,11 @@ generate" — which the raw per-visit numbers get wrong for two real cases:
   isn't double-billed. Naively summing `postTaxPaise` per therapist credits
   100% of a 3-session package to whoever logged session 1, even when a
   colleague ran the other two.
-- **Manual same-visit Shared/Split**: an admin can explicitly move a % of
-  one visit's Post-Tax BM to an assisting therapist (`visits.shared_therapist_id`/`shared_pct`, set via `visitService.setSplit`).
+- **Same-visit revenue shares**: a visit's bill can be shared between the
+  therapists on it — today as `visit_credits` rows (each therapist's ₹ share
+  of the bill, from the service lines or edited by hand); on older visits
+  without credit rows, as the legacy % (`visits.shared_therapist_id`/`shared_pct`,
+  no longer written).
 
 Both are folded into ONE number, `TherapistMonthRow.netPostTaxPaise`
 (`reportService.ts`), rather than kept as parallel concepts: the base is
@@ -4886,14 +4889,29 @@ each row's summed `postTaxPaise`, adjusted by (1) the manual-split delta
 the month) and (2) an automatic package-attribution delta, computed
 **per package group, as explicit movements the biller gives away** —
 `attributionMovements()` in `src/domain/payBase.ts`:
-1. Find the group's **billing visit** (the one with the largest bill —
-   everything else is logged at ₹0 by convention).
-2. `perSessionShare = floor(billingVisit.postTaxPaise / packageTotal)`
-   — a fixed whole-rupee amount, computed from the package's **declared**
-   session count so it stays stable as later sessions get logged.
-3. For every *other* logged session run by a **different** therapist than
-   the biller, move one `perSessionShare` from the biller's row to
-   theirs. A session the biller ran themselves needs no delta.
+1. Find the group's **billing visit**: the visit whose live **package
+   line** (`visit_items.is_package_line`) has `price_paise > 0`. For groups
+   billed before lines existed, today's rule over the visits **without
+   lines** — the largest bill (everything else is logged at ₹0 by
+   convention) — so a continuation with a paid add-on (a bigger bill) can
+   never become the billing visit; mixed groups work.
+2. The package's **base**: with a package line, that line's net
+   (`lineNets`) ÷ the bill × the billing visit's Post-Tax (and clinic share),
+   `roundToRupeeHalfUp` — so a consultation billed in the same visit never
+   leaks into the sessions; without lines, the visit's whole figures.
+   `perSessionShare = floor(base / 100 / packageTotal) × 100` — a fixed
+   whole-rupee amount, computed from the package's **declared** session
+   count so it stays stable as later sessions get logged.
+3. The **biller** is whoever holds the package money: the package line's
+   deliverer (`assisting_therapist_id ?? visit therapist`) on the billing
+   visit — the credits rule always gives the package line's net to it — or
+   the billing visit's therapist when it has no lines or the clinic's
+   therapist split is off (every rupee then sits with the primary). A
+   session's **runner** is the deliverer of that visit's package line, or
+   the visit's therapist for a visit without lines. For every *other*
+   logged session whose runner is **not** the biller, move one
+   `perSessionShare` from the biller's row to the runner's. A session the
+   biller ran themselves needs no delta.
 4. Whatever isn't explicitly claimed this way stays with the biller —
    including the share reserved for sessions **not yet logged**. Earlier
    versions of this algorithm divided evenly across only the *logged*
@@ -4943,20 +4961,39 @@ so there's one lens, not two.
 **Pay base — one function for each therapist's money** (`src/domain/payBase.ts`).
 Both mechanisms live in ONE pure module, never re-implemented elsewhere:
 `attributionMovements(input)` returns every therapist-to-therapist
-`Movement` for a `[from,to]` window (`mechanism` `manual_split` |
-`package_attribution` | `line_share` — the last reserved for per-line
-revenue shares, nothing produces it yet), each carrying the gross,
-clinic-share and post-tax amount moved; `payBaseByTherapist(input)` puts
+`Movement` for a `[from,to]` window (`mechanism` `line_share` |
+`manual_split` | `package_attribution`), each carrying the gross,
+clinic-share and post-tax amount moved (and `repaired: true` on a
+`line_share` from repaired shares, below); `payBaseByTherapist(input)` puts
 every in-window visit's billed amounts under its primary therapist and
 applies every movement (equal and opposite, so Σ over therapists always
 equals Σ over visits on all three bases). Input is
-`{ visits, packageGroups, from, to }`; the function is pure, so callers
-fetch the full package groups themselves (`loadPackageGroups` in
-`reportService.ts`, via `repos.visits.listByPackageGroup`). Rules: a manual
-split moves `roundToRupeeHalfUp(amount × sharedPct / 100)` of the bill,
-clinic share and post-tax each; a package session moves
-`floor(billing visit's figure / 100 / packageTotal) × 100` of clinic share
-and post-tax, and **no gross** (so `Shared` stays manual-split-only).
+`{ visits, packageGroups, items, credits, splitEnabled, from, to }`
+(`items` / `credits`: `visit_items` / `visit_credits` rows by visit id, for
+the window's visits AND every package group's visits; empty maps = every
+visit is a visit without lines, i.e. the pre-lines behaviour exactly). The
+function is pure, so callers fetch everything themselves —
+`loadPayBaseInput` in `reportService.ts` (package groups via
+`repos.visits.listByPackageGroup`, then ONE `listByVisitIds` call per child
+table, plus the clinic's `enableTherapistSplit`, default on); the audit uses
+the same loader. Rules:
+- **A visit with live credit rows** moves one `line_share` per non-primary
+  therapist, from the primary: gross = that therapist's ₹ share; clinic share
+  and post-tax = the same proportion (share ÷ bill) of the visit's own
+  figures, in whole rupees by **largest remainder** across all the visit's
+  shares (primary first in line on ties, stray paise stay on the primary), so
+  each base sums exactly to the visit's figure. Credit rows replace the
+  legacy split — the two never both apply. Rows that don't sum to the bill
+  (or hold a negative share) are recomputed with `autoCredits(lines, primary,
+  bill, { splitEnabled })` for the report, and every movement from them
+  carries `repaired: true`.
+- **A visit without credit rows** keeps the legacy formula, so closed months
+  reproduce to the rupee: `sharedPct` moves `roundToRupeeHalfUp(amount ×
+  sharedPct / 100)` of the bill, clinic share and post-tax each
+  (`manual_split`); no split → nothing moves.
+- A package session moves `perSessionShare` of clinic share and post-tax
+  (above), and **no gross** (so `Shared` is exactly the revenue-share /
+  legacy-split movement).
 `reportService` (Shared / Net / `netClinicSharePaise`) and the attribution
 audit both read from it; future payroll will too. **Never compute
 therapist attribution anywhere else** — add an input to `PayBaseInput`
@@ -4974,17 +5011,21 @@ explicitly so it doesn't read as the two disagreeing by mistake.
 
 **Attribution audit view** (`attributionAuditService.ts`,
 `AttributionAuditPage.tsx`, Reports → "Attribution audit" tab): a
-per-transaction ledger for a month — every rupee either mechanism moved,
+per-transaction ledger for a month — every rupee any mechanism moved,
 with the visit, patient, from/to therapist, and gross/post-tax amounts —
 so a disputed Shared or Net figure can be traced back to the specific
 visit(s) that produced it, rather than taken on faith. Built from the
-same `attributionMovements()` output `reportService` aggregates (same
-source visits, same in-window scoping for package attribution) so the list
+same `loadPayBaseInput` + `attributionMovements()` output `reportService`
+aggregates (same source visits, lines and shares, same in-window scoping for
+package attribution; the movement → entry mapping is an exhaustive `switch`) so the list
 always sums to the same deltas that produced that month's Net figures. A **Basis** column
 shows what the moved amount is a share OF — a bare "₹500" moved between
 two names is unverifiable on its own: for `manual_split`, the full visit
-bill and the % applied; for `package_attribution`, the billing visit's
-total price, the package's declared session count, and which session
+bill and the % applied; for `line_share` ("Revenue share"), the full visit
+bill (gross is the therapist's ₹ share of it; entries from repaired shares
+show a **Repaired** tag, `AttributionEntry.repaired`); for
+`package_attribution`, the package's price (its package line's net, or the
+billing visit's bill for visits without lines), the package's declared session count, and which session
 number triggered this row (e.g. "Session 2 of 3 · ₹1,500 package"). Gross
 is null for every `package_attribution` row by design — continuation
 sessions are billed at ₹0, so only a Post-Tax share (derived from the

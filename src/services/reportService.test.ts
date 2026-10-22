@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { createReportService } from './reportService';
 import type { Repos, VisitFilter } from '@/repositories/types';
-import { clinicShareLabels, type Therapist, type Visit } from '@/domain/types';
+import { clinicShareLabels, type Clinic, type Therapist, type Visit, type VisitCredit, type VisitItem } from '@/domain/types';
 import { roundToRupeeHalfUp, rupeesToPaise as rs } from '@/domain/money';
 
 const CLINIC = 'clinic-1';
 const PREM = 'th-prem';
 const AISH = 'th-aish';
 
-function makeFakeRepos(visitList: Visit[]) {
+function makeFakeRepos(
+  visitList: Visit[],
+  lines: { items?: VisitItem[]; credits?: VisitCredit[]; clinic?: Partial<Clinic> } = {},
+) {
+  const ofVisits = <T extends { visitId: string; deleted: boolean }>(rows: T[] = []) => ({
+    calls: 0,
+    async listByVisitIds(ids: string[]) {
+      this.calls += 1;
+      return rows.filter((r) => ids.includes(r.visitId) && !r.deleted);
+    },
+  });
   const therapists: Therapist[] = [
     { id: PREM, clinicId: CLINIC, name: 'Prem', active: true, updatedAt: '' },
     { id: AISH, clinicId: CLINIC, name: 'Aishwarya', active: true, updatedAt: '' },
@@ -21,6 +31,9 @@ function makeFakeRepos(visitList: Visit[]) {
       listByPackageGroup: async (groupId: string) =>
         visitList.filter((v) => v.packageGroupId === groupId && !v.deleted),
     },
+    visitItems: ofVisits(lines.items),
+    visitCredits: ofVisits(lines.credits),
+    clinics: { get: async () => ({ id: CLINIC, ...lines.clinic }) },
   } as unknown as Repos;
   return repos;
 }
@@ -484,6 +497,88 @@ describe('reportService.monthly — netClinicSharePaise (payroll base)', () => {
     expect(report.total.netClinicSharePaise).toBe(report.total.clinicSharePaise);
     // The billed clinic-share column itself never moves.
     expect(prem.clinicSharePaise).toBe(rs(4049) + rs(2250));
+  });
+});
+
+describe('reportService.monthly — service lines and revenue shares', () => {
+  const lineItem = (visitId: string, over: Partial<VisitItem>): VisitItem => ({
+    id: `${visitId}-${over.position ?? 0}`,
+    clinicId: CLINIC,
+    visitId,
+    position: 0,
+    serviceCatalogId: 'svc-1',
+    serviceName: 'Service',
+    catalogPricePaise: over.pricePaise ?? 0,
+    pricePaise: 0,
+    assistingTherapistId: null,
+    durationMinutes: null,
+    isPackageLine: false,
+    deleted: false,
+    updatedAt: '',
+    ...over,
+  });
+  const share = (visitId: string, therapistId: string, amountPaise: number): VisitCredit => ({
+    id: `${visitId}-${therapistId}`,
+    clinicId: CLINIC,
+    visitId,
+    therapistId,
+    amountPaise,
+    deleted: false,
+    updatedAt: '',
+  });
+
+  it("moves an assistant's revenue share into Shared and Net, loading lines and shares once per table", async () => {
+    const v = visit({ id: 'lv1', therapistId: PREM, actualBillPaise: rs(1300), clinicSharePaise: rs(975), postTaxPaise: rs(878) });
+    const items = [
+      lineItem('lv1', { position: 0, pricePaise: rs(1000) }),
+      lineItem('lv1', { position: 1, pricePaise: rs(500), assistingTherapistId: AISH }),
+    ];
+    const credits = [share('lv1', PREM, rs(867)), share('lv1', AISH, rs(433))];
+    const repos = makeFakeRepos([v, visit({ therapistId: AISH })], { items, credits });
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    expect(prem.billPaise).toBe(rs(1300)); // billed under the primary, as before
+    expect(prem.sharedPaise).toBe(-rs(433));
+    expect(aish.sharedPaise).toBe(rs(433));
+    expect(prem.netPostTaxPaise).toBe(rs(586));
+    expect(aish.netPostTaxPaise).toBe(rs(3645) + rs(292));
+    expect(prem.netClinicSharePaise).toBe(rs(650));
+    expect(report.total.sharedPaise).toBe(0);
+    const calls = (repos as unknown as { visitItems: { calls: number }; visitCredits: { calls: number } });
+    expect(calls.visitItems.calls).toBe(1);
+    expect(calls.visitCredits.calls).toBe(1);
+  });
+
+  it("repairs shares that don't add up with the clinic's split setting", async () => {
+    const v = visit({ id: 'lv2', therapistId: PREM, actualBillPaise: rs(1300), clinicSharePaise: rs(975), postTaxPaise: rs(878) });
+    const items = [
+      lineItem('lv2', { position: 0, pricePaise: rs(1000) }),
+      lineItem('lv2', { position: 1, pricePaise: rs(500), assistingTherapistId: AISH }),
+    ];
+    const credits = [share('lv2', PREM, rs(1000)), share('lv2', AISH, rs(500))];
+    const on = await createReportService(makeFakeRepos([v], { items, credits })).monthly(CLINIC, JULY);
+    expect(on.rows.find((r) => r.therapistId === AISH)!.sharedPaise).toBe(rs(433));
+    const off = await createReportService(
+      makeFakeRepos([v], { items, credits, clinic: { enableTherapistSplit: false } })
+    ).monthly(CLINIC, JULY);
+    expect(off.rows.find((r) => r.therapistId === AISH)).toBeUndefined();
+  });
+
+  it("bases a package's session shares on the package line, loading the whole group's lines", async () => {
+    const pkg = { packageGroupId: 'gc', packageTotal: 3 };
+    // Billed in June (outside the window): consultation ₹500 + package ₹3,000.
+    const v1 = visit({ ...pkg, id: 'gc-1', sessionIndex: 1, therapistId: PREM, visitDate: '2026-06-30', actualBillPaise: rs(3500), clinicSharePaise: rs(2625), postTaxPaise: rs(2362) });
+    const v2 = visit({ ...pkg, id: 'gc-2', sessionIndex: 2, therapistId: AISH, visitDate: '2026-07-08', actualBillPaise: 0, clinicSharePaise: 0, postTaxPaise: 0 });
+    const items = [
+      lineItem('gc-1', { position: 0, pricePaise: rs(500) }),
+      lineItem('gc-1', { position: 1, pricePaise: rs(3000), isPackageLine: true }),
+      lineItem('gc-2', { position: 0, pricePaise: 0, isPackageLine: true }),
+    ];
+    const credits = [share('gc-1', PREM, rs(3500)), share('gc-2', AISH, 0)];
+    const report = await createReportService(makeFakeRepos([v1, v2], { items, credits })).monthly(CLINIC, JULY);
+    expect(report.rows.find((r) => r.therapistId === AISH)!.netPostTaxPaise).toBe(rs(675));
+    expect(report.rows.find((r) => r.therapistId === PREM)!.netPostTaxPaise).toBe(-rs(675));
   });
 });
 

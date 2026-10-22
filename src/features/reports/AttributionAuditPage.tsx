@@ -6,11 +6,12 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicShareLabels } from '@/domain/types';
+import type { AttributionEntry } from '@/services/attributionAuditService';
 import { inputCls, th, thNum, td, tdNum } from '@/components/ui';
 
 /**
  * Per-transaction detail behind reportService's aggregate Shared/Net
- * figures — every rupee a manual split or automatic package attribution
+ * figures — every rupee a revenue share, a legacy manual split or automatic package attribution
  * moved between therapists this month, with the patient/visit/therapist
  * it came from. Exists so a disputed monthly number can be traced back to
  * the specific visit(s) that produced it, rather than taken on faith.
@@ -140,10 +141,8 @@ export function AttributionAuditPage() {
                   {therapistName.get(e.toTherapistId) ?? 'Unknown'}
                 </div>
                 <div className="mt-1 text-xs text-[var(--muted)]">
-                  {e.mechanism === 'manual_split' ? 'Manual split' : 'Package attribution'} ·{' '}
-                  {e.mechanism === 'manual_split'
-                    ? `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`
-                    : `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`}
+                  {MECHANISM_LABEL[e.mechanism]}
+                  {e.repaired ? ' (repaired)' : ''} · {basisText(e)}
                 </div>
               </div>
             ))}
@@ -172,21 +171,25 @@ export function AttributionAuditPage() {
                       <td className={td}>{therapistName.get(e.fromTherapistId) ?? 'Unknown'}</td>
                       <td className={td}>{therapistName.get(e.toTherapistId) ?? 'Unknown'}</td>
                       <td className={td}>
-                        {e.mechanism === 'manual_split' ? (
-                          <span className="rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-[10px] font-semibold text-[#b45309]">
-                            Manual split
+                        {e.mechanism === 'package_attribution' ? (
+                          <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-semibold text-[var(--teal-strong)]">
+                            {MECHANISM_LABEL[e.mechanism]}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-semibold text-[var(--teal-strong)]">
-                            Package attribution
+                          <span className="rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-[10px] font-semibold text-[#b45309]">
+                            {MECHANISM_LABEL[e.mechanism]}
+                          </span>
+                        )}
+                        {e.repaired && (
+                          <span
+                            className="ml-1 text-[10px] font-semibold text-[#b45309]"
+                            title="The visit's saved shares didn't add up to its bill, so they were recalculated from its services for this report."
+                          >
+                            Repaired
                           </span>
                         )}
                       </td>
-                      <td className={`${td} text-[var(--muted)]`}>
-                        {e.mechanism === 'manual_split'
-                          ? `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`
-                          : `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`}
-                      </td>
+                      <td className={`${td} text-[var(--muted)]`}>{basisText(e)}</td>
                       <td
                         className={tdNum}
                         title={
@@ -221,4 +224,22 @@ export function AttributionAuditPage() {
       )}
     </div>
   );
+}
+
+const MECHANISM_LABEL: Record<AttributionEntry['mechanism'], string> = {
+  line_share: 'Revenue share',
+  manual_split: 'Manual split',
+  package_attribution: 'Package attribution',
+};
+
+/** What the moved amount is a share of, in words. */
+function basisText(e: AttributionEntry): string {
+  switch (e.mechanism) {
+    case 'manual_split':
+      return `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`;
+    case 'line_share':
+      return `Share of ${formatINR(e.visitBillPaise ?? 0)} bill`;
+    case 'package_attribution':
+      return `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`;
+  }
 }
