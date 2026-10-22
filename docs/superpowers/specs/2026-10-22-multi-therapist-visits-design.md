@@ -293,6 +293,47 @@ Found while fitting this design into today's form (`NewVisitPage.tsx`); they shi
 6. **Front desk's path stays four steps:** Patient → Therapist → Services → Payment; condition and
    treatments stay collapsed for front desk as today. The future Home/Clinic choice (home-visits plan 9a)
    sits beside Date at the visit level.
+
+### New Visit form: final layout (refined after the Gemini UX review)
+
+The right-hand panel becomes three cards in the order people work, so the services are listed once and
+the bill is read straight off them:
+
+1. **Visit** — Date, **Therapist** (one choice; the label stays "Therapist", the word "billing" appears
+   only in the revenue-share card), then Condition / Treatments (collapsed for front desk, as today).
+2. **Services** — the service rows *are* the itemised bill:
+   - Each row is a small stacked card: service name and price on the first line, ✕ at the right; the
+     second line holds "+ Assign assistant" (muted, with a person-plus icon) or, once chosen, the chip
+     "Dr Sneha · assisting ✕". Nothing else on a row. No dropdown sits in a row until someone taps.
+   - **One row:** no ✕ (the service is changed by tapping its name). **Two or more:** every row has ✕;
+     removing the first promotes the next to be the main service.
+   - "+ Assign assistant" opens a short searchable list of **active** therapists, **excluding the visit's
+     therapist**. Tapping the chip's ✕ removes the tag in one tap.
+   - **Auto-added package row** shows "Session 4 of 10 · package (₹0)" as its second line plus a clear
+     "Use a different service" action (not just a ✕), for the patient who came for something unrelated
+     today. If the package row is gone, the guardrail note under the rows reads "Rahul has an open package
+     (session 4 of 10). It isn't used on this visit." with a one-tap **"Add package session"**.
+   - "+ Add another service" under the rows.
+   - Directly under the rows: **Subtotal**, the existing discount / top-up control (₹ or %, reason),
+     **Total**. The rows are not repeated in a second list — on a phone the same services shown twice is
+     clutter, and the rows already carry name, price and any assistant.
+   - **Revenue share** as a quiet, read-only line under Total, only when an assistant is tagged and
+     therapist split is on: "Revenue share · from services — Dr Raghavender ₹867 (67%) · Dr Sneha ₹433
+     (33%)" with an **"Edit split"** link that opens the share editor. After a hand edit it reads
+     "· edited". Never shown as input fields.
+3. **Payment** — as today (Collected now / Take payment later, method, UPI QR).
+
+Errors name the row by its service ("Dry needling: only one package per visit"), not by a number.
+
+**Phone (below `sm:`):** a slim bar fixed above the app's bottom navigation (offset by the nav height and
+the safe-area inset) shows **"₹1,300 · 2 services · UPI, collected now"** and **Save visit**. The payment
+choice is spelled out in the bar on purpose: a Save button that floats away from the Payment card could
+otherwise record a UPI payment nobody chose to collect. Tapping the summary scrolls to the Payment card.
+Tablet and desktop keep the Save button under the Payment card as today.
+
+Rejected from the review: a separate "Services summary" list in the Billing card (duplicates the rows);
+row numbers ("1.", "2.") (order means nothing to the user except "first = main service"); emoji icons
+(the app uses its own icon set).
 - **Secondary therapist's views** (Workspace today's visits, Ledger filtered by therapist, their history):
   the visit appears as its own row under their name — their service, patient, "Assisted · with Dr R" —
   read-only for them.
