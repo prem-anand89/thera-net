@@ -4,6 +4,7 @@ import { useClinic } from '@/app/clinicContext';
 import { monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import { minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { therapistUtilisation, type Utilisation } from '@/domain/utilisation';
+import { loadUtilisationVisits } from '@/services/utilisationVisits';
 import type { WorkingHours } from '@/domain/types';
 
 /** Per-therapist utilisation for one month, keyed by therapist id. Undefined while loading, when disabled, or for a month that hasn't started. */
@@ -25,7 +26,14 @@ export function useTherapistUtilisation(
         repos.visits.list({ clinicId: clinic.id }),
         repos.clinicClosedDates.listByClinic(clinic.id),
       ]);
-      const inMonth = visits.filter((v) => v.visitDate >= from && v.visitDate <= to);
+      const slotMinutes = clinic.slotDurationMinutes || 30;
+      const inMonth = await loadUtilisationVisits(
+        clinic.id,
+        visits.filter((v) => v.visitDate >= from && v.visitDate <= to),
+        { from, to },
+        slotMinutes,
+        repos
+      );
       const clinicHours = {
         startHour: clinic.bookingStartHour ?? 9,
         endHour: clinic.bookingEndHour ?? 17,
@@ -42,7 +50,7 @@ export function useTherapistUtilisation(
             clinicHours,
             closedWeekdays: clinic.closedWeekdays,
             closedDates,
-            slotMinutes: clinic.slotDurationMinutes || 30,
+            slotMinutes,
             asOf,
           }),
         ])

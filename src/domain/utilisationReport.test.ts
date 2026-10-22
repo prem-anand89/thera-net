@@ -112,3 +112,25 @@ describe('clinicUtilisationReport', () => {
   });
 });
 
+
+describe('clinicUtilisationReport with service lines', () => {
+  const mk = (over: Record<string, unknown> = {}) => ({
+    id: 'i', clinicId: 'c', visitId: 'v', position: 0, serviceCatalogId: 's', serviceName: 'S',
+    catalogPricePaise: 0, pricePaise: 0, assistingTherapistId: null, durationMinutes: null,
+    isPackageLine: false, deleted: false, updatedAt: '', ...over,
+  });
+  it('patients treated counts assisted visits once; the clinic visit total does not change', () => {
+    const v = { ...visit('a'), items: [mk(), mk({ assistingTherapistId: 'b' })] as never, actualBillPaise: 1000 };
+    const r = clinicUtilisationReport({ ...common, visits: [v, visit('a')] });
+    const a = r[0].rows.find((x) => x.therapistId === 'a')!;
+    const b = r[0].rows.find((x) => x.therapistId === 'b')!;
+    expect(a).toMatchObject({ visitCount: 2, patientsTreated: 2, assistedVisitCount: 0 });
+    expect(b).toMatchObject({ visitCount: 0, patientsTreated: 1, assistedVisitCount: 1 });
+    expect(r[0].clinicRevenuePaise).toBe(1000);
+  });
+  it('keeps an inactive assistant who delivered a line', () => {
+    const v = { ...visit('a'), items: [mk({ assistingTherapistId: 'gone' })] as never };
+    const r = clinicUtilisationReport({ ...common, visits: [v] });
+    expect(r[0].rows.map((x) => x.therapistId)).toContain('gone');
+  });
+});

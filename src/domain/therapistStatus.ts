@@ -18,11 +18,11 @@ export function therapistStatus(input: {
   utilisation: number | null;
   clinicUtilisation: number | null;
   previousUtilisation: number | null;
-  visitCount: number;
+  patientsTreated: number;
 }): { status: TherapistStatus; reason: string } {
-  const { utilisation: u, clinicUtilisation: c, previousUtilisation: p, visitCount } = input;
+  const { utilisation: u, clinicUtilisation: c, previousUtilisation: p, patientsTreated } = input;
   const t = STATUS_THRESHOLDS;
-  if (u == null || visitCount < MIN_VISITS_FOR_RANKING) {
+  if (u == null || patientsTreated < MIN_VISITS_FOR_RANKING) {
     return { status: 'insufficient', reason: `Fewer than ${MIN_VISITS_FOR_RANKING} visits, or no available hours` };
   }
   const pct = (x: number) => `${Math.round(x * 100)}%`;

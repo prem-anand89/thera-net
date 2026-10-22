@@ -12,6 +12,7 @@ const row = (over: Partial<TherapistComparisonRow> = {}): TherapistComparisonRow
   postTaxPaise: 0,
   netPostTaxPaise: 80000,
   visitCount: 12,
+  patientsTreated: 12,
   retentionPct: 50,
   newPackages: 1,
   ...over,
@@ -66,8 +67,8 @@ describe('TherapistComparisonTable utilisation column', () => {
 
 describe('TherapistComparisonTable ranking', () => {
   const two = [
-    row({ therapistName: 'Priya', visitCount: 25, netPostTaxPaise: 5000 }),
-    row({ therapistName: 'Kiran', visitCount: 40, netPostTaxPaise: 3000 }),
+    row({ therapistName: 'Priya', visitCount: 25, patientsTreated: 25, netPostTaxPaise: 5000 }),
+    row({ therapistName: 'Kiran', visitCount: 40, patientsTreated: 40, netPostTaxPaise: 3000 }),
   ];
 
   it('marks the leader of each column and explains the minimum', () => {
@@ -79,7 +80,7 @@ describe('TherapistComparisonTable ranking', () => {
   it('shows no marks when only one therapist is eligible', () => {
     render(
       <TherapistComparisonTable
-        rows={[two[0], row({ therapistName: 'New', visitCount: 3 })]}
+        rows={[two[0], row({ therapistName: 'New', visitCount: 3, patientsTreated: 3 })]}
         showPostTax={false}
         ownLabel="BM"
       />

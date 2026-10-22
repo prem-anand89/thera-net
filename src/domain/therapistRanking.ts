@@ -5,7 +5,8 @@ export type RankMetric = 'net' | 'visits' | 'retention' | 'utilisation';
 export type RankableRow = {
   therapistName: string;
   netPostTaxPaise: number;
-  visitCount: number;
+  /** Visits the therapist delivered a service on (assisted ones included), each once. */
+  patientsTreated: number;
   retentionPct: number | null;
   /** 0-1 */
   utilisation?: number | null;
@@ -16,7 +17,7 @@ export function metricValue(row: RankableRow, metric: RankMetric): number | null
     case 'net':
       return row.netPostTaxPaise;
     case 'visits':
-      return row.visitCount;
+      return row.patientsTreated;
     case 'retention':
       return row.retentionPct;
     case 'utilisation':
@@ -36,7 +37,7 @@ export function columnLeaders(
   minVisits = MIN_VISITS_FOR_RANKING
 ): Record<RankMetric, Set<string>> {
   const result = { net: new Set<string>(), visits: new Set<string>(), retention: new Set<string>(), utilisation: new Set<string>() };
-  const eligible = rows.filter((r) => r.visitCount >= minVisits);
+  const eligible = rows.filter((r) => r.patientsTreated >= minVisits);
   for (const metric of metrics) {
     const scored = eligible
       .map((r) => ({ name: r.therapistName, value: metricValue(r, metric) }))

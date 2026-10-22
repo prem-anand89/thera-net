@@ -12,6 +12,7 @@ import {
   clinicUtilisationReport,
   type BucketReport,
 } from '@/domain/utilisationReport';
+import { loadUtilisationVisits } from '@/services/utilisationVisits';
 import { PerformanceFilterBar } from './PerformanceFilterBar';
 import { UtilisationTrendCard } from './UtilisationTrendCard';
 import { CapacityHoursCard } from './CapacityHoursCard';
@@ -38,6 +39,9 @@ export function ClinicUtilisationCard() {
       repos.therapists.list(clinic.id, true),
       repos.clinicClosedDates.listByClinic(clinic.id),
     ]);
+    const slotMinutes = clinic.slotDurationMinutes || 30;
+    const range = { from: buckets[0].from, to: buckets[buckets.length - 1].to };
+    const withLines = await loadUtilisationVisits(clinic.id, visits, range, slotMinutes, repos);
     const now = new Date();
     return clinicUtilisationReport({
       buckets,
@@ -48,14 +52,14 @@ export function ClinicUtilisationCard() {
         workingHours: t.workingHours,
         photoPath: (t as unknown as { photoPath?: string | null }).photoPath,
       })),
-      visits,
+      visits: withLines,
       clinicHours: {
         startHour: clinic.bookingStartHour ?? 9,
         endHour: clinic.bookingEndHour ?? 17,
       },
       closedWeekdays: clinic.closedWeekdays,
       closedDates,
-      slotMinutes: clinic.slotDurationMinutes || 30,
+      slotMinutes,
       asOf: { date: toLocalDateStr(now), minutes: minutesOfDay(now.toISOString()) },
     });
   }, [

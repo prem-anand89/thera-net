@@ -56,6 +56,8 @@ export type TherapistComparisonRow = {
   postTaxPaise: number;
   netPostTaxPaise: number;
   visitCount: number;
+  /** Visits the therapist delivered a service on, assisted ones included; what the Visits column ranks by. */
+  patientsTreated: number;
   retentionPct: number | null;
   newPackages: number;
   /** Work done / time available, 0-1. Undefined = not computed; null = nothing was available. */
@@ -133,7 +135,7 @@ export function TherapistComparisonTable({
                 <td className={tdN}>{formatINR(row.billPaise)}</td>
                 {showPostTax && <td className={tdN}>{formatINR(row.postTaxPaise)}</td>}
                 <td className={tdN}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
-                <td className={tdN}>{row.visitCount}{lead('visits', row.therapistName)}</td>
+                <td className={tdN}>{row.patientsTreated}{lead('visits', row.therapistName)}</td>
                 <td className={tdN}>{row.newPackages}</td>
                 <td className={tdN}>
                   {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
@@ -191,7 +193,7 @@ export function TherapistComparisonTable({
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.billPaise)}</td>
                 {showPostTax && <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
-                <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.visitCount}</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.patientsTreated}</td>
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
                 <td className={tdN}>—</td>
                 {showUtilisation && (

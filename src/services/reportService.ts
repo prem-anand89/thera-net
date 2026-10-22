@@ -2,6 +2,7 @@ import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { paiseToRupees } from '@/domain/money';
 import { attributablePackageGroupIds, payBaseByTherapist, type PayBaseInput } from '@/domain/payBase';
+import { deliverer } from '@/domain/visitLines';
 import { monthDateRange, monthName, type FyMonth } from '@/domain/fiscalYear';
 import type { Repos } from '@/repositories/types';
 
@@ -63,7 +64,16 @@ export interface TherapistMonthRow {
    * Total row equals `clinicSharePaise`, rows sum to it.
    */
   netClinicSharePaise: Paise;
+  /** Visits this therapist was the primary on. */
   visitCount: number;
+  /**
+   * Visits this therapist delivered at least one service line on (visits without lines: as primary), each
+   * visit once per therapist — so a primary who also delivers counts once. The Total row is the number of
+   * visits (no double count).
+   */
+  patientsTreated: number;
+  /** Visits this therapist delivered a line on without being the primary. Always 0 on the Total row. */
+  assistedVisitCount: number;
   /** Number of sessions represented by the revenue billed this month (e.g., a 5-session package counts as 5, not 1) */
   billedSessionCount: number;
   /** COUNT(DISTINCT mrno) — unique patients, not visit count (spec §5.2) */
@@ -175,6 +185,8 @@ export function createReportService(repos: Repos) {
         netClinicSharePaise: 0,
         netPostTaxPaise: 0,
         visitCount: 0,
+        patientsTreated: 0,
+        assistedVisitCount: 0,
         billedSessionCount: 0,
         uniquePatients: 0,
       });
@@ -223,13 +235,31 @@ export function createReportService(repos: Repos) {
       // anyone (`rowFor` forces the row into existence; `rowsById.get`
       // alone would not). Package attribution moves no gross, so
       // sharedPaise is exactly the revenue-share (or legacy split) movement.
-      const payBase = payBaseByTherapist(await loadPayBaseInput(clinicId, visits, from, to, repos));
+      const payBaseInput = await loadPayBaseInput(clinicId, visits, from, to, repos);
+      const payBase = payBaseByTherapist(payBaseInput);
       for (const [therapistId, b] of payBase) {
         const row = rowFor(therapistId);
         row.sharedPaise = b.grossPaise - row.billPaise;
         row.netClinicSharePaise = b.clinicSharePaise;
         row.netPostTaxPaise = b.postTaxPaise;
       }
+
+      // Patients treated / assisted visits, from the same service lines: each visit counts once per therapist
+      // who delivered a line on it (visits without lines: the primary; an assistant only shows where they have
+      // a row, i.e. split on), and the Total is just the visit count.
+      for (const v of visits) {
+        const live = (payBaseInput.items.get(v.id) ?? []).filter((i) => !i.deleted);
+        const treated = new Set<UUID>(live.length > 0 ? live.map((i) => deliverer(i, v.therapistId)) : [v.therapistId]);
+        for (const id of treated) {
+          // An assistant with no row of their own (therapist split off: all money stays with the primary)
+          // is not listed; the primary always has one from the loop above.
+          const row = rowsById.get(id);
+          if (!row) continue;
+          row.patientsTreated += 1;
+          if (id !== v.therapistId) row.assistedVisitCount += 1;
+        }
+      }
+      total.patientsTreated = visits.length;
 
       const rows = [...rowsById.values()].sort((a, b) =>
         a.therapistName.localeCompare(b.therapistName)

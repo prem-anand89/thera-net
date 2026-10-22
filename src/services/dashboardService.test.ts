@@ -672,6 +672,35 @@ describe('dashboardService.serviceUsage', () => {
   });
 });
 
+describe('dashboardService.serviceUsage with service lines', () => {
+  it('service mix lists both services of one visit, split by line net', async () => {
+    const fake = makeFakeRepos();
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', serviceCatalogId: 'svc-1', actualBillPaise: rs(1300) }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-06', serviceCatalogId: 'svc-1', actualBillPaise: rs(500) }));
+    const line = (id: string, visitId: string, position: number, svc: string, price: number, name: string) =>
+      ({
+        id, clinicId: 'clinic-1', visitId, position, serviceCatalogId: svc, serviceName: name,
+        catalogPricePaise: rs(price), pricePaise: rs(price), assistingTherapistId: null, durationMinutes: null,
+        isPackageLine: false, deleted: false, updatedAt: '',
+      }) as import('@/domain/types').VisitItem;
+    const items = [
+      line('l1', 'v1', 0, 'svc-1', 1000, 'Physio'),
+      line('l2', 'v1', 1, 'svc-9', 500, 'Dry needling'),
+      { ...line('l3', 'v1', 2, 'svc-9', 500, 'Dry needling'), deleted: true },
+    ];
+    (fake.repos as unknown as { visitItems: unknown }).visitItems = {
+      listByVisitIds: async (ids: string[]) => items.filter((i) => ids.includes(i.visitId)),
+      listByClinic: async () => [],
+      bulkPut: async () => {},
+    };
+    const rows = await createDashboardService(fake.repos).serviceUsage('clinic-1', { year: 2026, month: 6 });
+    const s1 = rows.find((r) => r.serviceId === 'svc-1')!;
+    const s9 = rows.find((r) => r.serviceId === 'svc-9')!;
+    expect(s1).toMatchObject({ visitCount: 2, totalBilledPaise: rs(867) + rs(500) }); // line + the legacy visit
+    expect(s9).toMatchObject({ visitCount: 1, totalBilledPaise: rs(433), serviceName: 'Dry needling' });
+  });
+});
+
 describe('dashboardService.modalityUsage', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { therapistUtilisation } from './utilisation';
+import { therapistUtilisation, visitInvolvement } from './utilisation';
+import type { VisitItem } from './types';
 
 const clinicHours = { startHour: 9, endHour: 17 }; // 480 min
 const base = {
@@ -120,5 +121,76 @@ describe('therapistUtilisation', () => {
   it('flags when it fell back to clinic hours', () => {
     const r = therapistUtilisation({ ...base, visits: [], from: '2026-10-12', to: '2026-10-12' });
     expect(r.usesClinicHours).toBe(true);
+  });
+});
+
+const line = (over: Partial<VisitItem> = {}): VisitItem => ({
+  id: crypto.randomUUID(),
+  clinicId: 'c',
+  visitId: 'v',
+  position: 0,
+  serviceCatalogId: 's',
+  serviceName: 'Svc',
+  catalogPricePaise: 0,
+  pricePaise: 0,
+  assistingTherapistId: null,
+  durationMinutes: null,
+  isPackageLine: false,
+  deleted: false,
+  updatedAt: '',
+  ...over,
+});
+const run = (therapistId: string, visits: ReturnType<typeof visit>[]) =>
+  therapistUtilisation({ ...base, therapistId, visits, from: '2026-10-12', to: '2026-10-12' });
+
+describe('utilisation from service lines', () => {
+  it('assistant time counts on a zero-bill visit', () => {
+    const v = visit('2026-10-12', { items: [line({ assistingTherapistId: 't2' })], sittingMinutes: 45 });
+    expect(run('t2', [v]).workedMinutes).toBe(45);
+    expect(run('t1', [v]).workedMinutes).toBe(0); // primary delivered nothing
+  });
+
+  it('service durations replace the sitting when every line has one', () => {
+    const v = visit('2026-10-12', {
+      items: [line({ durationMinutes: 20 }), line({ durationMinutes: 10 }), line({ assistingTherapistId: 't2', durationMinutes: 15 })],
+      sittingMinutes: 60,
+    });
+    expect(run('t1', [v]).workedMinutes).toBe(30);
+    expect(run('t2', [v]).workedMinutes).toBe(15);
+  });
+
+  it('caps at the sitting and counts it once when a duration is missing', () => {
+    const capped = visit('2026-10-12', { items: [line({ durationMinutes: 40 }), line({ durationMinutes: 40 })], sittingMinutes: 45 });
+    expect(run('t1', [capped]).workedMinutes).toBe(45);
+    const missing = visit('2026-10-12', { items: [line({ durationMinutes: 10 }), line()], sittingMinutes: 45 });
+    expect(run('t1', [missing]).workedMinutes).toBe(45);
+  });
+
+  it('uses the clinic slot when no sitting is given, and ignores deleted lines', () => {
+    const v = visit('2026-10-12', { items: [line(), line({ assistingTherapistId: 't2', deleted: true })] });
+    expect(run('t1', [v]).workedMinutes).toBe(30);
+    expect(run('t2', [v]).workedMinutes).toBe(0);
+  });
+
+  it('legacy visits keep today’s utilisation exactly', () => {
+    const legacy = visit('2026-10-12', { sharedTherapistId: 't2', sharedPct: 40 });
+    expect(run('t1', [legacy]).workedMinutes).toBeCloseTo(18);
+    expect(run('t2', [legacy]).workedMinutes).toBeCloseTo(12);
+    const allDeleted = visit('2026-10-12', { items: [line({ deleted: true })], sittingMinutes: 90 });
+    expect(run('t1', [allDeleted]).workedMinutes).toBe(30);
+  });
+});
+
+describe('visitInvolvement', () => {
+  it('counts a primary who also delivers once, and flags assistants', () => {
+    const v = visit('2026-10-12', { items: [line(), line({ assistingTherapistId: 't2' })] });
+    expect(visitInvolvement(v, 't1')).toEqual({ treated: true, assisted: false });
+    expect(visitInvolvement(v, 't2')).toEqual({ treated: true, assisted: true });
+    expect(visitInvolvement(v, 't3')).toEqual({ treated: false, assisted: false });
+  });
+  it('legacy: only the primary is treated', () => {
+    const v = visit('2026-10-12', { sharedTherapistId: 't2', sharedPct: 40 });
+    expect(visitInvolvement(v, 't1').treated).toBe(true);
+    expect(visitInvolvement(v, 't2')).toEqual({ treated: false, assisted: false });
   });
 });

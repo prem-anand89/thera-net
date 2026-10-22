@@ -4,9 +4,11 @@ import {
   referringSourceDetailLabel,
   type UUID,
   type Visit,
+  type VisitItem,
   type AppointmentStatus,
 } from '@/domain/types';
 import type { Paise } from '@/domain/money';
+import { lineNets } from '@/domain/visitLines';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import {
   daysSince,
@@ -652,17 +654,37 @@ export function createDashboardService(repos: Repos) {
         repos.catalog.list(clinicId, true),
       ]);
       const nameById = new Map(catalog.map((c) => [c.id, c.name]));
-      const byService = new Map<UUID, { visitCount: number; totalBilledPaise: Paise }>();
-      for (const v of visits) {
-        const entry = byService.get(v.serviceCatalogId) ?? { visitCount: 0, totalBilledPaise: 0 };
+      const items = visits.length > 0 ? await repos.visitItems.listByVisitIds(visits.map((v) => v.id)) : [];
+      const linesByVisit = new Map<UUID, VisitItem[]>();
+      for (const i of items) {
+        if (i.deleted) continue;
+        const list = linesByVisit.get(i.visitId);
+        if (list) list.push(i);
+        else linesByVisit.set(i.visitId, [i]);
+      }
+      const byService = new Map<UUID, { visitCount: number; totalBilledPaise: Paise; snapshotName?: string }>();
+      const add = (serviceId: UUID, paise: Paise, snapshotName?: string) => {
+        const entry = byService.get(serviceId) ?? { visitCount: 0, totalBilledPaise: 0 };
         entry.visitCount += 1;
-        entry.totalBilledPaise += v.actualBillPaise;
-        byService.set(v.serviceCatalogId, entry);
+        entry.totalBilledPaise += paise;
+        if (snapshotName && !entry.snapshotName) entry.snapshotName = snapshotName;
+        byService.set(serviceId, entry);
+      };
+      // A visit with service lines counts once per line at that line's share of the bill; one without
+      // keeps its single entry.
+      for (const v of visits) {
+        const lines = linesByVisit.get(v.id);
+        if (!lines?.length) {
+          add(v.serviceCatalogId, v.actualBillPaise);
+          continue;
+        }
+        const nets = lineNets(lines, v.actualBillPaise);
+        for (const l of lines) add(l.serviceCatalogId, nets.get(l.id) ?? 0, l.serviceName);
       }
       return [...byService.entries()]
-        .map(([serviceId, stats]) => ({
+        .map(([serviceId, { snapshotName, ...stats }]) => ({
           serviceId,
-          serviceName: nameById.get(serviceId) ?? 'Unknown',
+          serviceName: nameById.get(serviceId) ?? snapshotName ?? 'Unknown',
           ...stats,
         }))
         .sort((a, b) => b.visitCount - a.visitCount);

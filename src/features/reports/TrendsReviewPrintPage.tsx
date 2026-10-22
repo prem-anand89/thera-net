@@ -167,6 +167,7 @@ export function TrendsReviewPrintPage() {
         postTaxPaise: r.postTaxPaise,
         netPostTaxPaise: r.netPostTaxPaise,
         visitCount: r.visitCount,
+        patientsTreated: r.patientsTreated,
         retentionPct: live?.retentionPct ?? null,
         newPackages: live?.newPackages ?? 0,
         utilisation: utilisationById?.get(r.therapistId)?.ratio,
@@ -183,6 +184,7 @@ export function TrendsReviewPrintPage() {
       postTaxPaise: report.total.postTaxPaise,
       netPostTaxPaise: report.total.netPostTaxPaise,
       visitCount: report.total.visitCount,
+      patientsTreated: report.total.patientsTreated,
       retentionPct: null,
       newPackages: (therapistEngagement ?? []).reduce((s, e) => s + e.newPackages, 0),
     };

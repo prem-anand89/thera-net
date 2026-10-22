@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { therapistStatus } from './therapistStatus';
 
 type Input = Parameters<typeof therapistStatus>[0];
-const base: Input = { utilisation: 0.75, clinicUtilisation: 0.65, previousUtilisation: 0.7, visitCount: 40 };
+const base: Input = { utilisation: 0.75, clinicUtilisation: 0.65, previousUtilisation: 0.7, patientsTreated: 40 };
 const status = (over: Partial<Input> = {}) => therapistStatus({ ...base, ...over }).status;
 
 describe('therapistStatus', () => {
@@ -25,10 +25,10 @@ describe('therapistStatus', () => {
     expect(status({ utilisation: 0.72, clinicUtilisation: 0.6, previousUtilisation: 0.9 })).toBe('strong');
   });
   it('insufficient: too few visits or no available time', () => {
-    expect(status({ visitCount: 5 })).toBe('insufficient');
+    expect(status({ patientsTreated: 5 })).toBe('insufficient');
     expect(status({ utilisation: null })).toBe('insufficient');
   });
   it('works with no previous period or clinic figure', () => {
-    expect(therapistStatus({ utilisation: 0.8, clinicUtilisation: null, previousUtilisation: null, visitCount: 30 }).status).toBe('strong');
+    expect(therapistStatus({ utilisation: 0.8, clinicUtilisation: null, previousUtilisation: null, patientsTreated: 30 }).status).toBe('strong');
   });
 });

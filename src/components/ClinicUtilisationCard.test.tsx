@@ -28,6 +28,8 @@ const row = (
   name,
   photoPath: null,
   visitCount,
+  patientsTreated: visitCount,
+  assistedVisitCount: 0,
   revenuePaise,
   utilisation: util(ratio, clinicHours),
 });

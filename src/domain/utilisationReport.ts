@@ -1,6 +1,6 @@
-import { therapistUtilisation, type Utilisation } from './utilisation';
+import { therapistUtilisation, visitInvolvement, type Utilisation, type UtilisationVisit } from './utilisation';
 import type { UtilisationBucket } from './utilisationPeriods';
-import type { Visit, WorkingHours } from './types';
+import type { WorkingHours } from './types';
 
 export type ReportTherapist = {
   id: string;
@@ -17,6 +17,10 @@ export type TherapistBucketRow = {
   utilisation: Utilisation;
   /** Visits this therapist was the primary therapist on in the period. */
   visitCount: number;
+  /** Visits this therapist delivered at least one service line on (visits without lines: as primary), each once. */
+  patientsTreated: number;
+  /** Visits this therapist delivered a line on without being the primary. */
+  assistedVisitCount: number;
   /** Total billed revenue in paise attributed to this therapist in the period. */
   revenuePaise: number;
 };
@@ -42,7 +46,7 @@ export type BucketReport = {
   rows: TherapistBucketRow[];
 };
 
-type ReportVisit = Pick<Visit, 'therapistId' | 'visitDate' | 'sharedTherapistId' | 'sharedPct'> & {
+type ReportVisit = UtilisationVisit & {
   actualBillPaise?: number;
 };
 
@@ -67,17 +71,21 @@ export function clinicUtilisationReport(input: {
     for (const v of inRange) {
       worked.add(v.therapistId);
       if (v.sharedTherapistId) worked.add(v.sharedTherapistId);
+      for (const i of v.items ?? []) if (!i.deleted && i.assistingTherapistId) worked.add(i.assistingTherapistId);
     }
     const rows = input.therapists
       .filter((t) => t.active || worked.has(t.id))
       .map((t): TherapistBucketRow => {
         const therapistVisits = inRange.filter((v) => v.therapistId === t.id);
         const revenuePaise = therapistVisits.reduce((sum, v) => sum + (v.actualBillPaise ?? 0), 0);
+        const involvement = inRange.map((v) => visitInvolvement(v, t.id));
         return {
           therapistId: t.id,
           name: t.name,
           photoPath: t.photoPath,
           visitCount: therapistVisits.length,
+          patientsTreated: involvement.filter((i) => i.treated).length,
+          assistedVisitCount: involvement.filter((i) => i.assisted).length,
           revenuePaise,
           utilisation: therapistUtilisation({
             visits: inRange,

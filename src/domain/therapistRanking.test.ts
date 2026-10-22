@@ -4,7 +4,7 @@ import { columnLeaders, type RankableRow } from './therapistRanking';
 const row = (name: string, over: Partial<RankableRow> = {}): RankableRow => ({
   therapistName: name,
   netPostTaxPaise: 1000,
-  visitCount: 30,
+  patientsTreated: 30,
   retentionPct: 50,
   utilisation: 0.6,
   ...over,
@@ -14,7 +14,7 @@ const all = ['net', 'visits', 'retention', 'utilisation'] as const;
 describe('columnLeaders', () => {
   it('picks the best value in each column independently', () => {
     const l = columnLeaders(
-      [row('A', { netPostTaxPaise: 5000, retentionPct: 40 }), row('B', { visitCount: 60, retentionPct: 70 })],
+      [row('A', { netPostTaxPaise: 5000, retentionPct: 40 }), row('B', { patientsTreated: 60, retentionPct: 70 })],
       [...all]
     );
     expect([...l.net]).toEqual(['A']);
@@ -24,14 +24,14 @@ describe('columnLeaders', () => {
 
   it('leaves out therapists below the visit minimum', () => {
     const l = columnLeaders(
-      [row('Few', { visitCount: 5, retentionPct: 100 }), row('A', { retentionPct: 50 }), row('B', { retentionPct: 40 })],
+      [row('Few', { patientsTreated: 5, retentionPct: 100 }), row('A', { retentionPct: 50 }), row('B', { retentionPct: 40 })],
       ['retention']
     );
     expect([...l.retention]).toEqual(['A']);
   });
 
   it('needs two eligible therapists before anyone leads', () => {
-    const l = columnLeaders([row('A'), row('Few', { visitCount: 3 })], [...all]);
+    const l = columnLeaders([row('A'), row('Few', { patientsTreated: 3 })], [...all]);
     expect(l.net.size).toBe(0);
   });
 

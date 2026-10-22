@@ -1,8 +1,20 @@
 import { addDays, isClosedDay, workingIntervals } from './schedule';
-import type { Visit, WorkingHours } from './types';
+import type { Visit, VisitItem, WorkingHours } from './types';
+import { deliverer, therapistMinutes } from './visitLines';
+
+/**
+ * A visit as utilisation sees it. Visits with live service lines (`items`) count each therapist's
+ * minutes from those lines; visits without keep the legacy "one slot x share" rule.
+ */
+export type UtilisationVisit = Pick<Visit, 'therapistId' | 'visitDate' | 'sharedTherapistId' | 'sharedPct'> & {
+  /** The visit's service lines (soft-deleted ones are ignored). */
+  items?: VisitItem[];
+  /** The sitting's length: the linked appointment's, else the clinic slot. Defaults to `slotMinutes`. */
+  sittingMinutes?: number;
+};
 
 export type UtilisationInput = {
-  visits: Pick<Visit, 'therapistId' | 'visitDate' | 'sharedTherapistId' | 'sharedPct'>[];
+  visits: UtilisationVisit[];
   therapistId: string;
   workingHours: WorkingHours | null | undefined;
   /** Inclusive yyyy-mm-dd range. */
@@ -28,6 +40,21 @@ export type Utilisation = {
   usesClinicHours: boolean;
 };
 
+function liveItems(v: UtilisationVisit): VisitItem[] {
+  return (v.items ?? []).filter((i) => !i.deleted);
+}
+
+/**
+ * How a visit counts for one therapist in "patients treated" terms: `treated` = they delivered at least
+ * one live line (visits without lines: they are the primary); `assisted` = treated but not the primary.
+ */
+export function visitInvolvement(v: UtilisationVisit, therapistId: string): { treated: boolean; assisted: boolean } {
+  const items = liveItems(v);
+  if (items.length === 0) return { treated: v.therapistId === therapistId, assisted: false };
+  const treated = items.some((i) => deliverer(i, v.therapistId) === therapistId);
+  return { treated, assisted: treated && v.therapistId !== therapistId };
+}
+
 function visitShare(
   v: UtilisationInput['visits'][number],
   therapistId: string
@@ -46,9 +73,13 @@ function visitShare(
 export function therapistUtilisation(input: UtilisationInput): Utilisation {
   const byDate = new Map<string, number>();
   for (const v of input.visits) {
-    const share = visitShare(v, input.therapistId);
-    if (share <= 0) continue;
-    byDate.set(v.visitDate, (byDate.get(v.visitDate) ?? 0) + share * input.slotMinutes);
+    const items = liveItems(v);
+    const minutes =
+      items.length > 0
+        ? therapistMinutes(items, v.therapistId, input.therapistId, v.sittingMinutes ?? input.slotMinutes)
+        : visitShare(v, input.therapistId) * input.slotMinutes;
+    if (minutes <= 0) continue;
+    byDate.set(v.visitDate, (byDate.get(v.visitDate) ?? 0) + minutes);
   }
 
   let workedMinutes = 0;

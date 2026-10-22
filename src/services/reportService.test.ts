@@ -527,6 +527,26 @@ describe('reportService.monthly — service lines and revenue shares', () => {
     updatedAt: '',
   });
 
+  it('patients treated counts assisted visits once; the total is the number of visits', async () => {
+    const v1 = visit({ id: 'v1', therapistId: PREM, actualBillPaise: rs(1000) });
+    const v2 = visit({ id: 'v2', therapistId: PREM });
+    const v3 = visit({ id: 'v3', therapistId: AISH });
+    const items = [
+      lineItem('v1', { position: 0, pricePaise: rs(500) }),
+      lineItem('v1', { position: 1, pricePaise: rs(500), assistingTherapistId: AISH }),
+      lineItem('v1', { position: 2, pricePaise: rs(500), assistingTherapistId: AISH }),
+      lineItem('v3', { position: 0, pricePaise: rs(500), assistingTherapistId: PREM }),
+      lineItem('v3', { position: 1, pricePaise: rs(500), assistingTherapistId: PREM, deleted: true }),
+    ];
+    const report = await createReportService(makeFakeRepos([v1, v2, v3], { items })).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    // v3's only live line was delivered by Prem, so the primary (Aish) delivered nothing there.
+    expect(prem).toMatchObject({ visitCount: 2, patientsTreated: 3, assistedVisitCount: 1 });
+    expect(aish).toMatchObject({ visitCount: 1, patientsTreated: 1, assistedVisitCount: 1 }); // v1 assisted, v3 delivered nothing
+    expect(report.total).toMatchObject({ visitCount: 3, patientsTreated: 3, assistedVisitCount: 0 });
+  });
+
   it("moves an assistant's revenue share into Shared and Net, loading lines and shares once per table", async () => {
     const v = visit({ id: 'lv1', therapistId: PREM, actualBillPaise: rs(1300), clinicSharePaise: rs(975), postTaxPaise: rs(878) });
     const items = [
