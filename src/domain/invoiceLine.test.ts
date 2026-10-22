@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  billingUnits,
   buildLineItems,
   groupVisitsForInvoicing,
   invoiceLineGroupKey,
@@ -12,7 +13,7 @@ import {
   sessionCountLabel,
   sessionDatesDisplay,
 } from './invoiceLine';
-import type { InvoiceLineItem, Visit } from './types';
+import type { InvoiceLineItem, Visit, VisitItem } from './types';
 import { rupeesToPaise as rs } from './money';
 
 let seq = 0;
@@ -547,5 +548,131 @@ describe('groupVisitsForInvoicing + buildLineItems', () => {
     const forward = buildLineItems(groupVisitsForInvoicing([first, second]), CATALOG_NAMES);
     const reverse = buildLineItems(groupVisitsForInvoicing([second, first]), CATALOG_NAMES);
     expect(forward.lineItems).toEqual(reverse.lineItems);
+  });
+});
+
+function makeItem(over: Partial<VisitItem> & Pick<VisitItem, 'id' | 'visitId'>): VisitItem {
+  return {
+    clinicId: 'clinic-1',
+    position: 0,
+    serviceCatalogId: 'svc-1',
+    serviceName: 'Physiotherapy',
+    catalogPricePaise: rs(1000),
+    pricePaise: rs(1000),
+    assistingTherapistId: null,
+    durationMinutes: null,
+    isPackageLine: false,
+    deleted: false,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function build(visits: Visit[], items: VisitItem[]) {
+  const byVisit = new Map<string, VisitItem[]>();
+  for (const i of items) byVisit.set(i.visitId, [...(byVisit.get(i.visitId) ?? []), i]);
+  return buildLineItems(groupVisitsForInvoicing(billingUnits(visits, byVisit)), CATALOG_NAMES);
+}
+
+describe('invoice lines per service', () => {
+  it('a two-service visit prints two lines that add up to the bill', () => {
+    const v = makeVisit({ id: 'v1', catalogPricePaise: rs(1000), actualBillPaise: rs(1500) });
+    const items = [
+      makeItem({ id: 'i1', visitId: 'v1', position: 0 }),
+      makeItem({
+        id: 'i2', visitId: 'v1', position: 1, serviceCatalogId: 'svc-2', serviceName: 'Manual Therapy',
+        catalogPricePaise: rs(500), pricePaise: rs(500),
+      }),
+    ];
+    const { lineItems, totalPaise } = build([v], items);
+    expect(lineItems.map((l) => l.serviceName)).toEqual(['Physiotherapy', 'Manual Therapy']);
+    expect(lineItems.map((l) => l.totalPaise)).toEqual([rs(1000), rs(500)]);
+    expect(lineItems.reduce((s, l) => s + l.totalPaise, 0)).toBe(rs(1500));
+    expect(totalPaise).toBe(rs(1500));
+    for (const l of lineItems) expect(lineReconciles(l)).toBe(true);
+  });
+
+  it('discount spread keeps every line reconciling', () => {
+    const v = makeVisit({
+      id: 'v1', catalogPricePaise: rs(1000), actualBillPaise: rs(1300), adjustmentPaise: -rs(200),
+      adjustmentReason: 'Loyalty',
+    });
+    const items = [
+      makeItem({ id: 'i1', visitId: 'v1', position: 0 }),
+      makeItem({
+        id: 'i2', visitId: 'v1', position: 1, serviceCatalogId: 'svc-2', serviceName: 'Manual Therapy',
+        catalogPricePaise: rs(500), pricePaise: rs(500),
+      }),
+    ];
+    const { lineItems, totalPaise } = build([v], items);
+    expect(lineItems.map((l) => l.totalPaise)).toEqual([rs(867), rs(433)]);
+    expect(lineItems.map((l) => l.adjustmentPaise)).toEqual([-rs(133), -rs(67)]);
+    expect(lineItems.every((l) => l.adjustmentReason === 'Loyalty')).toBe(true);
+    expect(totalPaise).toBe(rs(1300));
+    for (const l of lineItems) {
+      expect(l.catalogPricePaise + l.adjustmentPaise).toBe(l.totalPaise);
+      expect(lineReconciles(l)).toBe(true);
+    }
+  });
+
+  it('a visit without lines prints exactly as before', () => {
+    const v = makeVisit({ id: 'v1', actualBillPaise: rs(900), catalogPricePaise: rs(1000), adjustmentPaise: -rs(100), adjustmentReason: 'Loyalty' });
+    const viaUnits = buildLineItems(groupVisitsForInvoicing(billingUnits([v], new Map())), CATALOG_NAMES);
+    const legacy = buildLineItems(groupVisitsForInvoicing([v]), CATALOG_NAMES);
+    expect(viaUnits).toEqual(legacy);
+    expect(legacy.lineItems[0]).toEqual({
+      serviceName: 'Physiotherapy', sessionCount: 1, sessionDates: ['2026-01-01'],
+      catalogPricePaise: rs(1000), adjustmentPaise: -rs(100), adjustmentReason: 'Loyalty',
+      totalPaise: rs(900), lineItemVersion: 2, billedSessionCount: 1, authorizedSessionCount: null,
+      ratePerSessionPaise: rs(1000), rateBasis: 'per_session', adjustmentReasons: ['Loyalty'],
+      therapistIds: ['therapist-1'],
+    });
+  });
+
+  it('package continuation plus add-on prints the package and the add-on', () => {
+    const pkg = 'pkg-1';
+    const v1 = makeVisit({
+      id: 'v1', packageGroupId: pkg, sessionIndex: 1, packageTotal: 2, visitDate: '2026-01-01',
+      catalogPricePaise: rs(2000), actualBillPaise: rs(2000),
+    });
+    const v2 = makeVisit({
+      id: 'v2', packageGroupId: pkg, sessionIndex: 2, packageTotal: 2, visitDate: '2026-01-02',
+      catalogPricePaise: 0, actualBillPaise: rs(500),
+    });
+    const items = [
+      makeItem({ id: 'a1', visitId: 'v1', isPackageLine: true, catalogPricePaise: rs(2000), pricePaise: rs(2000) }),
+      makeItem({ id: 'b1', visitId: 'v2', isPackageLine: true, catalogPricePaise: 0, pricePaise: 0 }),
+      makeItem({
+        id: 'b2', visitId: 'v2', position: 1, serviceCatalogId: 'svc-2', serviceName: 'Manual Therapy',
+        catalogPricePaise: rs(500), pricePaise: rs(500),
+      }),
+    ];
+    const { lineItems, totalPaise } = build([v1, v2], items);
+    expect(lineItems).toHaveLength(2);
+    const [pk, addOn] = lineItems;
+    expect(pk).toMatchObject({
+      serviceName: 'Physiotherapy', sessionCount: 2, billedSessionCount: 2, authorizedSessionCount: 2,
+      rateBasis: 'package_upfront', totalPaise: rs(2000), sessionDates: ['2026-01-01', '2026-01-02'],
+    });
+    expect(addOn).toMatchObject({
+      serviceName: 'Manual Therapy', sessionCount: 1, authorizedSessionCount: null,
+      rateBasis: 'per_session', totalPaise: rs(500), sessionDates: ['2026-01-02'],
+    });
+    expect(totalPaise).toBe(rs(2500));
+    for (const l of lineItems) expect(lineReconciles(l)).toBe(true);
+  });
+
+  it('the invoice therapist is the primary of the visits, never an assistant', () => {
+    const v = makeVisit({ id: 'v1', therapistId: 'primary', catalogPricePaise: rs(1000), actualBillPaise: rs(1500) });
+    const items = [
+      makeItem({ id: 'i1', visitId: 'v1', catalogPricePaise: rs(500), pricePaise: rs(500) }),
+      makeItem({
+        id: 'i2', visitId: 'v1', position: 1, serviceCatalogId: 'svc-2', serviceName: 'Manual Therapy',
+        assistingTherapistId: 'assistant',
+      }),
+    ];
+    const { therapistId, lineItems } = build([v], items);
+    expect(therapistId).toBe('primary');
+    expect(lineItems.every((l) => l.therapistIds?.join() === 'primary')).toBe(true);
   });
 });

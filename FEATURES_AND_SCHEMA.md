@@ -1784,6 +1784,23 @@ separate ₹0-context rows. A merged line's `catalogPricePaise` is always the
 is what keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding
 exactly for every line, by construction.
 
+**One invoice line per service.** Billing units, not visits, are what get
+grouped: a visit with live `visit_items` contributes one unit per line,
+carrying that line's net (`lineNets` — the visit's bill spread pro rata, whole
+rupees, exact sum); a visit without live lines is one unit and prints exactly
+as before. A unit's catalog snapshot is the line's `catalogPricePaise` and its
+adjustment is net − catalog price (with the visit's adjustment reason), so
+`lineReconciles` stays true. Only the PACKAGE line groups by `packageGroupId`
+(and takes `authorizedSessionCount` from the visit's package total); an add-on
+line on a package visit groups by `svc:{serviceCatalogId}:{catalogPricePaise}`
+like any other service. The invoice shows only the primary therapist: line
+`therapistIds` and the invoice-level `p_therapist_id` (highest total billed
+wins) are computed over the visits' primaries, never assistants. Issuing and
+amending refuse ("Some of these services are still syncing…") while any of
+the visits, their lines or their shares still has an outbox entry
+(`hasPendingVisitSync`), because the server freezes a visit's lines once it
+has an invoice and a line pushed afterwards would be rejected and reverted.
+
 **Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
 Nothing in the schema or invoicing logic caps a package's session count —
 a 24-session package invoices through the exact same line-item build as a
@@ -3686,6 +3703,23 @@ separate ₹0-context rows. A merged line's `catalogPricePaise` is always the
 **sum** of every visit's own snapshot in the group (not one visit's), which
 is what keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding
 exactly for every line, by construction.
+
+**One invoice line per service.** Billing units, not visits, are what get
+grouped: a visit with live `visit_items` contributes one unit per line,
+carrying that line's net (`lineNets` — the visit's bill spread pro rata, whole
+rupees, exact sum); a visit without live lines is one unit and prints exactly
+as before. A unit's catalog snapshot is the line's `catalogPricePaise` and its
+adjustment is net − catalog price (with the visit's adjustment reason), so
+`lineReconciles` stays true. Only the PACKAGE line groups by `packageGroupId`
+(and takes `authorizedSessionCount` from the visit's package total); an add-on
+line on a package visit groups by `svc:{serviceCatalogId}:{catalogPricePaise}`
+like any other service. The invoice shows only the primary therapist: line
+`therapistIds` and the invoice-level `p_therapist_id` (highest total billed
+wins) are computed over the visits' primaries, never assistants. Issuing and
+amending refuse ("Some of these services are still syncing…") while any of
+the visits, their lines or their shares still has an outbox entry
+(`hasPendingVisitSync`), because the server freezes a visit's lines once it
+has an invoice and a line pushed afterwards would be rejected and reverted.
 
 **Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
 Nothing in the schema or invoicing logic caps a package's session count —

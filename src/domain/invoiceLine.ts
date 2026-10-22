@@ -1,5 +1,6 @@
-import type { InvoiceLineItem, UUID, Visit } from './types';
+import type { InvoiceLineItem, UUID, Visit, VisitItem } from './types';
 import type { Paise } from './money';
+import { lineNets } from './visitLines';
 
 /**
  * `packageTotal: 0` is storable today (the CSV importer can write it) and is
@@ -121,6 +122,36 @@ export function lineReconciles(li: InvoiceLineItem): boolean {
 }
 
 /**
+ * What an invoice line is built from: one service line of a visit with its net amount (the visit's
+ * bill spread over its lines, `lineNets`), or — for a visit without live lines — the whole visit
+ * (`item: null`, `netPaise` = the bill), which prints exactly as it always did.
+ */
+export interface BillingUnit {
+  visit: Visit;
+  item: VisitItem | null;
+  netPaise: Paise;
+}
+
+/** Turns visits (and their lines, keyed by visit id) into billing units: one per live line. */
+export function billingUnits(visits: Visit[], itemsByVisitId: Map<UUID, VisitItem[]>): BillingUnit[] {
+  const units: BillingUnit[] = [];
+  for (const visit of visits) {
+    const live = (itemsByVisitId.get(visit.id) ?? []).filter((i) => !i.deleted);
+    if (live.length === 0) {
+      units.push({ visit, item: null, netPaise: visit.actualBillPaise });
+      continue;
+    }
+    const nets = lineNets(live, visit.actualBillPaise);
+    for (const item of live) units.push({ visit, item, netPaise: nets.get(item.id) ?? 0 });
+  }
+  return units;
+}
+
+function asUnit(x: Visit | BillingUnit): BillingUnit {
+  return 'visit' in x ? x : { visit: x, item: null, netPaise: x.actualBillPaise };
+}
+
+/**
  * Groups visits into invoice line items. `packageGroupId` still wins when
  * present; otherwise visits fall back to a `svc:` key namespaced by service
  * + price, so several independently-logged (non-package) visits of the
@@ -136,34 +167,45 @@ export function invoiceLineGroupKey(
   return v.packageGroupId ?? `svc:${v.serviceCatalogId}:${v.catalogPricePaise}`;
 }
 
+/** A unit's group key: the package group only for the PACKAGE line; any other line of a package
+ *  visit (an add-on) groups by its own service + catalog price like any other service. */
+export function unitGroupKey(u: BillingUnit): string {
+  if (!u.item) return invoiceLineGroupKey(u.visit);
+  if (u.item.isPackageLine && u.visit.packageGroupId) return u.visit.packageGroupId;
+  return `svc:${u.item.serviceCatalogId}:${u.item.catalogPricePaise}`;
+}
+
 /**
  * Pure grouping over an already-resolved, already-package-expanded flat
- * visit list (the caller — `invoiceService.ts` — is responsible for
- * fetching a visit's full package siblings before calling this; that part
- * needs `repos`, so it can't live in this pure module). Dedupes by id
- * defensively, since the same visit can appear twice when two selected
- * visits belong to the same package.
+ * list (the caller — `invoiceService.ts` — is responsible for fetching a
+ * visit's full package siblings before calling this; that part needs
+ * `repos`, so it can't live in this pure module). Takes billing units, or
+ * plain visits (each a single line-less unit). Dedupes defensively, since the
+ * same visit can appear twice when two selected visits belong to the same package.
  */
-export function groupVisitsForInvoicing(visits: Visit[]): Map<string, Visit[]> {
-  const seen = new Set<UUID>();
-  const groups = new Map<string, Visit[]>();
-  for (const v of visits) {
-    if (seen.has(v.id)) continue;
-    seen.add(v.id);
-    const key = invoiceLineGroupKey(v);
+export function groupVisitsForInvoicing(input: Array<Visit | BillingUnit>): Map<string, BillingUnit[]> {
+  const seen = new Set<string>();
+  const groups = new Map<string, BillingUnit[]>();
+  for (const x of input) {
+    const u = asUnit(x);
+    const id = `${u.visit.id}:${u.item?.id ?? ''}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const key = unitGroupKey(u);
     const existing = groups.get(key) ?? [];
-    groups.set(key, [...existing, v]);
+    groups.set(key, [...existing, u]);
   }
   return groups;
 }
 
-/** Sorted once (visitDate then id, both ascending) and reused everywhere
+/** Sorted once (visitDate, id, then line position) and reused everywhere
  *  within a group — makes every "which visit wins" pick below deterministic
  *  and date-anchored, instead of depending on input array order. */
-function sortGroup(visits: Visit[]): Visit[] {
-  return [...visits].sort((a, b) => {
-    if (a.visitDate !== b.visitDate) return a.visitDate < b.visitDate ? -1 : 1;
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+function sortGroup(units: BillingUnit[]): BillingUnit[] {
+  return [...units].sort((a, b) => {
+    if (a.visit.visitDate !== b.visit.visitDate) return a.visit.visitDate < b.visit.visitDate ? -1 : 1;
+    if (a.visit.id !== b.visit.id) return a.visit.id < b.visit.id ? -1 : 1;
+    return (a.item?.position ?? 0) - (b.item?.position ?? 0);
   });
 }
 
@@ -184,7 +226,7 @@ export interface BuildLineItemsResult {
  * names once and passes the map in.
  */
 export function buildLineItems(
-  groups: Map<string, Visit[]>,
+  groups: Map<string, BillingUnit[]>,
   serviceNameById: Map<UUID, string>
 ): BuildLineItemsResult {
   const lineItems: InvoiceLineItem[] = [];
@@ -194,33 +236,47 @@ export function buildLineItems(
   for (const rawGroup of groups.values()) {
     if (rawGroup.length === 0) continue;
     const ordered = sortGroup(rawGroup);
-    const groupBilled = ordered.find((v) => v.actualBillPaise > 0) ?? ordered[0];
-    const serviceName = serviceNameById.get(groupBilled.serviceCatalogId);
+    const groupBilled = ordered.find((u) => u.netPaise > 0) ?? ordered[0];
+    const serviceId = groupBilled.item?.serviceCatalogId ?? groupBilled.visit.serviceCatalogId;
+    const serviceName =
+      serviceNameById.get(serviceId) ?? (groupBilled.item ? groupBilled.item.serviceName : undefined);
     if (!serviceName) throw new Error('Service not found');
 
     const billedSessionCount = ordered.length;
-    const authorizedSessionCount = normalizeAuthorizedCount(groupBilled.packageTotal);
+    // An add-on line on a package visit is not the package: the visit's package columns describe
+    // the package line only.
+    const authorizedSessionCount = groupBilled.item && !groupBilled.item.isPackageLine
+      ? null
+      : normalizeAuthorizedCount(groupBilled.visit.packageTotal);
     const sessionCount = authorizedSessionCount ?? billedSessionCount;
-    const sessionDates = ordered.map((v) => v.visitDate);
-    // Sum of every visit's own snapshot, not one visit's — the fix that
-    // keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding by
-    // construction for a merged non-package group too, not just packages
-    // (whose ₹0 continuations already summed to the right total by luck).
-    const catalogPricePaise = ordered.reduce((sum, v) => sum + v.catalogPricePaise, 0);
-    const adjustmentPaise = ordered.reduce((sum, v) => sum + v.adjustmentPaise, 0);
-    const adjustmentReasons = Array.from(
-      new Set(ordered.map((v) => v.adjustmentReason?.trim()).filter((r): r is string => Boolean(r)))
+    const sessionDates = ordered.map((u) => u.visit.visitDate);
+    // Sum of every unit's own snapshot, not one's — the fix that keeps
+    // `catalogPricePaise + adjustmentPaise = totalPaise` holding by construction for a merged
+    // non-package group too. A service line's adjustment is its net less its catalog price.
+    const catalogPricePaise = ordered.reduce(
+      (sum, u) => sum + (u.item ? u.item.catalogPricePaise : u.visit.catalogPricePaise),
+      0
     );
-    const groupTotalPaise = ordered.reduce((sum, v) => sum + v.actualBillPaise, 0);
-    const therapistIds = Array.from(new Set(ordered.map((v) => v.therapistId)));
+    const adjustmentPaise = ordered.reduce(
+      (sum, u) => sum + (u.item ? u.netPaise - u.item.catalogPricePaise : u.visit.adjustmentPaise),
+      0
+    );
+    const adjustmentReasons = Array.from(
+      new Set(
+        ordered.map((u) => u.visit.adjustmentReason?.trim()).filter((r): r is string => Boolean(r))
+      )
+    );
+    const groupTotalPaise = ordered.reduce((sum, u) => sum + u.netPaise, 0);
+    // The invoice names the primary therapist only (never an assistant).
+    const therapistIds = Array.from(new Set(ordered.map((u) => u.visit.therapistId)));
     const ratePerSessionPaise = Math.round(
       catalogPricePaise / Math.max(1, authorizedSessionCount ?? billedSessionCount)
     );
 
-    for (const v of ordered) {
+    for (const u of ordered) {
       billedByTherapist.set(
-        v.therapistId,
-        (billedByTherapist.get(v.therapistId) ?? 0) + v.actualBillPaise
+        u.visit.therapistId,
+        (billedByTherapist.get(u.visit.therapistId) ?? 0) + u.netPaise
       );
     }
 

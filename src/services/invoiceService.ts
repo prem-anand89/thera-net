@@ -1,6 +1,15 @@
-import type { Invoice, InvoiceClinicalSnapshot, PaymentMode, UUID, Visit } from '@/domain/types';
+import type {
+  Invoice,
+  InvoiceClinicalSnapshot,
+  PaymentMode,
+  UUID,
+  Visit,
+  VisitItem,
+} from '@/domain/types';
+import { db } from '@/lib/db';
 import { fiscalYearOf } from '@/domain/fiscalYear';
 import {
+  billingUnits,
   buildLineItems as buildLineItemsPure,
   groupVisitsForInvoicing,
 } from '@/domain/invoiceLine';
@@ -8,6 +17,30 @@ import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 import { rowToDomain } from '@/repositories/rowMapping';
 import { createPaymentService } from './paymentService';
+
+export const STILL_SYNCING =
+  'Some of these services are still syncing. Try again in a moment.';
+
+/**
+ * True while any of these visits, their service lines or their revenue shares still has an entry in
+ * the outbox. The server freezes a visit's lines the moment it has an invoice, so a line pushed after
+ * issuing would be rejected and reverted — issue only once everything has reached the server. Reads
+ * the tables directly (not the repos) so a soft-deleted line still waiting to push counts too.
+ */
+export async function hasPendingVisitSync(visitIds: UUID[]): Promise<boolean> {
+  if (visitIds.length === 0) return false;
+  const [items, credits] = await Promise.all([
+    db.visit_items.where('visitId').anyOf(visitIds).toArray(),
+    db.visit_credits.where('visitId').anyOf(visitIds).toArray(),
+  ]);
+  const wanted = new Set<string>([
+    ...visitIds.map((id) => `visits:${id}`),
+    ...items.map((i) => `visit_items:${i.id}`),
+    ...credits.map((c) => `visit_credits:${c.id}`),
+  ]);
+  const pending = await db.outbox.where('table').anyOf('visits', 'visit_items', 'visit_credits').toArray();
+  return pending.some((e) => wanted.has(`${e.table}:${e.rowId}`));
+}
 
 /**
  * Invoice issuance is ONLINE-ONLY by design: gap-free sequential numbers per
@@ -68,9 +101,16 @@ export function createInvoiceService(repos: Repos) {
     therapistId: UUID;
   }> {
     const allVisits = await resolveVisits(visitIds, allowInvoiceId);
-    const groups = groupVisitsForInvoicing(allVisits);
+    // One invoice line per service line (a visit without live lines stays one unit, as before).
+    const items = await repos.visitItems.listByVisitIds(allVisits.map((v) => v.id));
+    const itemsByVisit = new Map<UUID, VisitItem[]>();
+    for (const i of items) itemsByVisit.set(i.visitId, [...(itemsByVisit.get(i.visitId) ?? []), i]);
+    const groups = groupVisitsForInvoicing(billingUnits(allVisits, itemsByVisit));
 
-    const serviceIds = new Set(allVisits.map((v) => v.serviceCatalogId));
+    const serviceIds = new Set([
+      ...allVisits.map((v) => v.serviceCatalogId),
+      ...items.map((i) => i.serviceCatalogId),
+    ]);
     const catalogItems = await Promise.all(
       Array.from(serviceIds).map((id) => repos.catalog.get(id))
     );
@@ -151,6 +191,7 @@ export function createInvoiceService(repos: Repos) {
       if (!clinic || !patient) throw new Error('Missing clinic/patient data');
 
       const { allVisits, lineItems, totalPaise, therapistId } = await buildLineItems(visitIds);
+      if (await hasPendingVisitSync(allVisits.map((v) => v.id))) throw new Error(STILL_SYNCING);
 
       const fy = fiscalYearOf(new Date(), clinic.fyStartMonth);
       const { data, error } = await supabase.rpc('issue_invoice', {
@@ -222,6 +263,7 @@ export function createInvoiceService(repos: Repos) {
         visitIds,
         originalInvoiceId
       );
+      if (await hasPendingVisitSync(allVisits.map((v) => v.id))) throw new Error(STILL_SYNCING);
 
       const { data, error } = await supabase.rpc('amend_invoice', {
         p_original_invoice_id: originalInvoiceId,

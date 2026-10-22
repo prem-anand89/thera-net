@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Invoice, InvoicePayment, Payment, Visit } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
@@ -7,6 +8,7 @@ const rpc = vi.fn();
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => ({ rpc }) }));
 
 import { createInvoiceService } from './invoiceService';
+import { db } from '@/lib/db';
 
 function visit(over: Partial<Visit> = {}): Visit {
   return {
@@ -31,6 +33,8 @@ function setup(payments: Payment[]) {
       listByPackageGroup: async () => [],
       markInvoiced: async () => {},
     },
+    visitItems: { listByVisitIds: async () => [] },
+    visitCredits: { listByVisitIds: async () => [] },
     catalog: { get: async () => ({ id: 's1', name: 'Physio' }) },
     payments: { listByVisit: async () => payments, list: async () => payments },
     invoicePayments: {
@@ -46,6 +50,22 @@ describe('invoiceService.amendInvoice', () => {
     rpc.mockReset();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     rpc.mockResolvedValue({ data: { id: 'inv-new', clinic_id: 'c1', total_paise: rs(500), invoice_no: 'X/1' }, error: null });
+  });
+
+  it('refuses to amend while a visit, line or share is still waiting to sync', async () => {
+    await db.outbox.clear();
+    await db.outbox.add({ table: 'visit_items', rowId: 'line-9', ts: 1 });
+    const { repos } = setup([]);
+    await db.visit_items.put({ id: 'line-9', visitId: 'v1' } as never);
+    await expect(createInvoiceService(repos).amendInvoice('inv-old', ['v1'], 'Cash')).rejects.toThrow(
+      'Some of these services are still syncing. Try again in a moment.'
+    );
+    expect(rpc).not.toHaveBeenCalled();
+    await db.outbox.clear();
+    await db.outbox.add({ table: 'visits', rowId: 'v1', ts: 2 });
+    await expect(createInvoiceService(repos).amendInvoice('inv-old', ['v1'], 'Cash')).rejects.toThrow('still syncing');
+    await db.outbox.clear();
+    await db.visit_items.clear();
   });
 
   it('gives an amendment of an unpaid invoice an explicit outstanding status', async () => {
