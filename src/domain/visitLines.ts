@@ -63,8 +63,15 @@ export function lineNets(items: VisitItem[], billPaise: Paise): Map<UUID, Paise>
   });
   let leftover = units - shares.reduce((s, x) => s + x.rupees, 0);
 
-  // Largest remainder first; `lines` is already in position/id order, so idx breaks ties.
-  const ranking = [...shares].sort((a, b) => b.remainder - a.remainder || a.idx - b.idx);
+  // Largest remainder first; `lines` is already in position/id order, so idx breaks ties. Zero-price
+  // lines rank last so stray paise never land on a ₹0 line while a priced line exists (they have no
+  // remainder, so this never changes who gets a whole rupee).
+  const ranking = [...shares].sort(
+    (a, b) =>
+      Number(lines[a.idx].pricePaise <= 0) - Number(lines[b.idx].pricePaise <= 0) ||
+      b.remainder - a.remainder ||
+      a.idx - b.idx,
+  );
   let next = 0;
   while (leftover > 0) {
     ranking[next].rupees += 1;
@@ -86,7 +93,9 @@ export function lineNets(items: VisitItem[], billPaise: Paise): Map<UUID, Paise>
  * they delivered. The package line's net therefore always goes to that line's deliverer (package money
  * is never redistributed here). The primary is always present (first), even at ₹0; others follow in
  * the order they first appear on the visit, one merged row each.
- * Split off (`clinics.enable_therapist_split` false) or a ₹0 bill → a single primary row for the bill.
+ * Split off (`clinics.enable_therapist_split` false) overrides the package rule: every rupee, package
+ * money included, goes to the primary. A ₹0 bill, or a visit with no live lines, also gives a single
+ * primary row for the whole bill, so the shares always add up to the bill.
  */
 export function autoCredits(
   items: VisitItem[],
@@ -94,7 +103,7 @@ export function autoCredits(
   billPaise: Paise,
   opts: { splitEnabled: boolean },
 ): CreditShare[] {
-  if (!opts.splitEnabled || billPaise === 0) {
+  if (!opts.splitEnabled || billPaise === 0 || liveLines(items).length === 0) {
     return [{ therapistId: primaryId, amountPaise: billPaise }];
   }
   const nets = lineNets(items, billPaise);
@@ -107,28 +116,42 @@ export function autoCredits(
 }
 
 export const SHARE_TOO_LARGE = "A share can't be more than the bill (less package money).";
+export const SHARE_BELOW_PACKAGE = "A share can't be less than the package money it holds.";
+export const SHARE_BELOW_ZERO = "A share can't be less than ₹0.";
+export const SHARE_MISSING = 'Enter the share in ₹ or as a % of the bill.';
 
 /**
- * Applies one hand edit in the share editor. Sets a non-primary therapist's share — by ₹, or by % of
- * the bill (rounded to the rupee, half-up); ₹ wins if both are given — and lets the primary's row
- * absorb the difference, so the shares always total the bill. A therapist not yet in `current` gets a
- * row. Package money (`lockedPaise`) is not hand-editable, so no share may exceed the editable pool
- * `billPaise − lockedPaise`, and no row (including the primary's remainder) may go below ₹0; either
- * throws SHARE_TOO_LARGE. Keeping the package money with its holder is the caller's job (it knows
- * which row holds it); this function only guards the pool.
+ * Applies one hand edit in the share editor. Rows are each therapist's TOTAL share of the bill. Sets a
+ * non-primary therapist's share — by ₹, or by % of the bill (rounded to the rupee, half-up); ₹ wins if
+ * both are given — and lets the primary's row absorb the difference, so the shares always total the
+ * bill. A therapist not yet in `current` gets a row.
+ *
+ * Package money is not hand-editable (it moves only through package attribution), so `locked` names
+ * the row holding it — the package line's deliverer, who may be an assistant — and that row may never
+ * go below `locked.amountPaise`; every other row never below ₹0. Editing the holder's row to at least
+ * its package money is fine. Throws SHARE_BELOW_PACKAGE / SHARE_BELOW_ZERO if the edited row breaks
+ * its floor, SHARE_TOO_LARGE if the primary's resulting remainder would, and SHARE_MISSING if the edit
+ * carries neither a ₹ amount nor a finite %.
  */
 export function rebalanceCredits(
   current: CreditShare[],
   edit: { therapistId: UUID; amountPaise?: Paise; pct?: number },
   primaryId: UUID,
   billPaise: Paise,
-  lockedPaise: Paise,
+  locked: { therapistId: UUID; amountPaise: Paise } | null,
 ): CreditShare[] {
   if (edit.therapistId === primaryId) {
     throw new Error("The primary therapist's share is the remainder; edit another therapist's share.");
   }
-  const amount = edit.amountPaise ?? roundToRupeeHalfUp((billPaise * (edit.pct ?? 0)) / 100);
-  if (amount < 0 || amount > billPaise - lockedPaise) throw new Error(SHARE_TOO_LARGE);
+  let amount: Paise;
+  if (edit.amountPaise != null && Number.isFinite(edit.amountPaise)) amount = edit.amountPaise;
+  else if (edit.pct != null && Number.isFinite(edit.pct)) amount = roundToRupeeHalfUp((billPaise * edit.pct) / 100);
+  else throw new Error(SHARE_MISSING);
+
+  const floor = (therapistId: UUID): Paise => (locked && locked.therapistId === therapistId ? locked.amountPaise : 0);
+  if (amount < floor(edit.therapistId)) {
+    throw new Error(floor(edit.therapistId) > 0 ? SHARE_BELOW_PACKAGE : SHARE_BELOW_ZERO);
+  }
 
   const rows = current.map((r) => ({ ...r }));
   if (!rows.some((r) => r.therapistId === primaryId)) rows.unshift({ therapistId: primaryId, amountPaise: 0 });
@@ -138,7 +161,7 @@ export function rebalanceCredits(
 
   const others = rows.filter((r) => r.therapistId !== primaryId).reduce((s, r) => s + r.amountPaise, 0);
   const primaryAmount = billPaise - others;
-  if (primaryAmount < 0) throw new Error(SHARE_TOO_LARGE);
+  if (primaryAmount < floor(primaryId)) throw new Error(SHARE_TOO_LARGE);
   for (const r of rows) if (r.therapistId === primaryId) r.amountPaise = primaryAmount;
   return rows;
 }
@@ -146,7 +169,7 @@ export function rebalanceCredits(
 /**
  * Minutes a therapist is counted for on one visit (utilisation). Nobody enters time:
  * - not delivering any live line → 0;
- * - every line they delivered has a duration → the sum of those durations;
+ * - every line they delivered has a duration → the sum of those durations, capped at the sitting;
  * - otherwise → the sitting's length (`sittingMinutes`: the linked appointment's length, else the clinic
  *   slot), once — more services in one sitting never count as more sittings.
  * Revenue shares never move time.
@@ -164,5 +187,5 @@ export function therapistMinutes(
     if (l.durationMinutes == null) return sittingMinutes;
     sum += l.durationMinutes;
   }
-  return sum;
+  return Math.min(sum, sittingMinutes);
 }

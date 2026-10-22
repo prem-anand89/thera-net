@@ -91,6 +91,16 @@ describe('lineNets', () => {
     expect(nets.get('b')).toBe(rs(433) + 50);
   });
 
+  it('never puts stray paise on a zero-price line while a priced line exists', () => {
+    const items = [
+      line({ id: 'free', position: 0, pricePaise: 0, isPackageLine: true }),
+      line({ id: 'paid', position: 1, pricePaise: rs(1000) }),
+    ];
+    const nets = lineNets(items, rs(1000) + 50);
+    expect(nets.get('free')).toBe(0);
+    expect(nets.get('paid')).toBe(rs(1000) + 50);
+  });
+
   it('breaks ties by position, then id', () => {
     const items = [
       line({ id: 'z', position: 1, pricePaise: rs(100) }),
@@ -160,6 +170,16 @@ describe('autoCredits', () => {
     ]);
   });
 
+  it('no live lines gives one primary row equal to the bill', () => {
+    expect(autoCredits([], R, rs(500), { splitEnabled: true })).toEqual([
+      { therapistId: R, amountPaise: rs(500) },
+    ]);
+    const onlyDeleted = [line({ position: 0, pricePaise: rs(500), deleted: true, assistingTherapistId: S })];
+    expect(autoCredits(onlyDeleted, R, rs(500), { splitEnabled: true })).toEqual([
+      { therapistId: R, amountPaise: rs(500) },
+    ]);
+  });
+
   it('split off gives everything to the primary', () => {
     const items = [
       line({ position: 0, pricePaise: rs(1000) }),
@@ -178,20 +198,20 @@ describe('rebalanceCredits', () => {
   ];
 
   it('rebalance keeps the total and moves the remainder to the primary', () => {
-    const byAmount = rebalanceCredits(current, { therapistId: S, amountPaise: rs(600) }, R, rs(1300), 0);
+    const byAmount = rebalanceCredits(current, { therapistId: S, amountPaise: rs(600) }, R, rs(1300), null);
     expect(byAmount).toEqual([
       { therapistId: R, amountPaise: rs(700) },
       { therapistId: S, amountPaise: rs(600) },
     ]);
 
-    const byPct = rebalanceCredits(current, { therapistId: S, pct: 50 }, R, rs(1300), 0);
+    const byPct = rebalanceCredits(current, { therapistId: S, pct: 50 }, R, rs(1300), null);
     expect(byPct).toEqual([
       { therapistId: R, amountPaise: rs(650) },
       { therapistId: S, amountPaise: rs(650) },
     ]);
 
     // ₹ wins over %; a new therapist gets a row; total stays the bill.
-    const added = rebalanceCredits(current, { therapistId: T, amountPaise: rs(100), pct: 90 }, R, rs(1300), 0);
+    const added = rebalanceCredits(current, { therapistId: T, amountPaise: rs(100), pct: 90 }, R, rs(1300), null);
     expect(added).toEqual([
       { therapistId: R, amountPaise: rs(767) },
       { therapistId: S, amountPaise: rs(433) },
@@ -203,22 +223,57 @@ describe('rebalanceCredits', () => {
   it('rebalance refuses a share above bill less package money', () => {
     const msg = "A share can't be more than the bill (less package money).";
     expect(() =>
-      rebalanceCredits(current, { therapistId: S, amountPaise: rs(1100) }, R, rs(1300), rs(300)),
+      rebalanceCredits(current, { therapistId: S, amountPaise: rs(1100) }, R, rs(1300), { therapistId: R, amountPaise: rs(300) }),
     ).toThrow(msg);
     expect(() =>
-      rebalanceCredits(current, { therapistId: S, amountPaise: -100 }, R, rs(1300), 0),
-    ).toThrow(msg);
+      rebalanceCredits(current, { therapistId: S, amountPaise: -100 }, R, rs(1300), null),
+    ).toThrow("A share can't be less than ₹0.");
     // Another row's share pushes the primary below ₹0.
     expect(() =>
-      rebalanceCredits(current, { therapistId: T, amountPaise: rs(1000) }, R, rs(1300), 0),
+      rebalanceCredits(current, { therapistId: T, amountPaise: rs(1000) }, R, rs(1300), null),
     ).toThrow(msg);
     // Exactly bill less package money is fine.
     expect(
-      rebalanceCredits(current, { therapistId: S, amountPaise: rs(1000) }, R, rs(1300), rs(300)),
+      rebalanceCredits(current, { therapistId: S, amountPaise: rs(1000) }, R, rs(1300), { therapistId: R, amountPaise: rs(300) }),
     ).toEqual([
       { therapistId: R, amountPaise: rs(300) },
       { therapistId: S, amountPaise: rs(1000) },
     ]);
+  });
+});
+
+describe('rebalanceCredits with package money', () => {
+  it('package delivered by an assistant keeps its money when shares are edited', () => {
+    // Package ₹5,000 delivered by S; S also did a ₹300 add-on; R did the ₹1,000 consultation.
+    const current = [
+      { therapistId: R, amountPaise: rs(1000) },
+      { therapistId: S, amountPaise: rs(5300) },
+    ];
+    const locked = { therapistId: S, amountPaise: rs(5000) };
+    expect(rebalanceCredits(current, { therapistId: S, amountPaise: rs(5300) }, R, rs(6300), locked)).toEqual(
+      current,
+    );
+    expect(() =>
+      rebalanceCredits(current, { therapistId: S, amountPaise: rs(1000) }, R, rs(6300), locked),
+    ).toThrow("A share can't be less than the package money it holds.");
+    expect(rebalanceCredits(current, { therapistId: S, amountPaise: rs(6000) }, R, rs(6300), locked)).toEqual([
+      { therapistId: R, amountPaise: rs(300) },
+      { therapistId: S, amountPaise: rs(6000) },
+    ]);
+    // The primary holds no package money here, so its floor is ₹0.
+    expect(() =>
+      rebalanceCredits(current, { therapistId: S, amountPaise: rs(6400) }, R, rs(6300), locked),
+    ).toThrow("A share can't be more than the bill (less package money).");
+  });
+
+  it('an edit with neither ₹ nor a finite % is refused', () => {
+    const current = [{ therapistId: R, amountPaise: rs(1000) }];
+    const msg = 'Enter the share in ₹ or as a % of the bill.';
+    expect(() => rebalanceCredits(current, { therapistId: S }, R, rs(1000), null)).toThrow(msg);
+    expect(() => rebalanceCredits(current, { therapistId: S, pct: Number.NaN }, R, rs(1000), null)).toThrow(msg);
+    expect(() =>
+      rebalanceCredits(current, { therapistId: S, amountPaise: Number.NaN }, R, rs(1000), null),
+    ).toThrow(msg);
   });
 });
 
@@ -229,9 +284,17 @@ describe('therapistMinutes', () => {
       line({ position: 1, pricePaise: rs(500), durationMinutes: 15 }),
       line({ position: 2, pricePaise: rs(500), assistingTherapistId: S, durationMinutes: 10 }),
     ];
+    expect(therapistMinutes(items, R, R, 60)).toBe(45);
+    expect(therapistMinutes(items, R, S, 60)).toBe(10);
+    expect(therapistMinutes(items, R, T, 60)).toBe(0);
+  });
+
+  it('durations longer than the sitting are capped at the sitting', () => {
+    const items = [
+      line({ position: 0, pricePaise: rs(1000), durationMinutes: 30 }),
+      line({ position: 1, pricePaise: rs(500), durationMinutes: 30 }),
+    ];
     expect(therapistMinutes(items, R, R, 45)).toBe(45);
-    expect(therapistMinutes(items, R, S, 45)).toBe(10);
-    expect(therapistMinutes(items, R, T, 45)).toBe(0);
   });
 
   it('minutes: any missing duration counts the sitting once', () => {
