@@ -107,10 +107,23 @@ export interface VisitRepo {
   listByIds(ids: UUID[]): Promise<Visit[]>;
   listByPackageGroup(packageGroupId: UUID): Promise<Visit[]>;
   listByInvoiceId(invoiceId: UUID): Promise<Visit[]>;
-  /** Indexed count, not a full fetch — gates whether a catalog item has
-   *  ever been used (and so can only be deactivated, not hard-deleted). */
+  /** Gates whether a catalog item has ever been used (and so can only be
+   *  deactivated, not hard-deleted): visits on it plus live service lines on it. */
   countByService(serviceCatalogId: UUID): Promise<number>;
   put(visit: Visit): Promise<void>;
+  /**
+   * Writes a visit with its service lines and revenue shares in ONE transaction, and queues them for
+   * sync in that order — visit, then lines (in array order), then shares — so the parent reaches the
+   * server before its children. `itemsFirst` queues the lines before the visit row instead, for the one
+   * change the server would reject the other way round (a primary therapist change that must clear an
+   * assistant tag first).
+   */
+  putWithChildren(
+    visit: Visit,
+    items: VisitItem[],
+    credits: VisitCredit[],
+    opts?: { itemsFirst?: boolean }
+  ): Promise<void>;
   softDelete(id: UUID): Promise<void>;
   /** Local stamp after the server-side issue_invoice RPC succeeds */
   markInvoiced(ids: UUID[], invoiceId: UUID): Promise<void>;

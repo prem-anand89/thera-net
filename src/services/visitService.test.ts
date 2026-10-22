@@ -3,7 +3,7 @@ import { createVisitService } from './visitService';
 import { createReportService } from './reportService';
 import { createPatientService } from './patientService';
 import type { Repos, VisitFilter } from '@/repositories/types';
-import type { CatalogItem, Clinic, Patient, Therapist, Visit } from '@/domain/types';
+import type { CatalogItem, Clinic, Patient, Therapist, Visit, VisitCredit, VisitItem } from '@/domain/types';
 import { rupeesToPaise as rs } from '@/domain/money';
 
 // In-memory Repos double — services never touch Dexie or Supabase directly,
@@ -32,6 +32,8 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
   const therapists: Therapist[] = [
     { id: 'th-prem', clinicId: 'clinic-1', name: 'Prem', active: true, updatedAt: '' },
     { id: 'th-aish', clinicId: 'clinic-1', name: 'Aishwarya', active: true, updatedAt: '' },
+    { id: 'th-ravi', clinicId: 'clinic-1', name: 'Ravi', active: true, updatedAt: '' },
+    { id: 'th-away', clinicId: 'clinic-2', name: 'Elsewhere', active: true, updatedAt: '' },
   ];
   const catalog: CatalogItem[] = [
     {
@@ -54,9 +56,36 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       active: true,
       updatedAt: '',
     },
+    {
+      id: 'svc-physio5',
+      clinicId: 'clinic-1',
+      category: 'Physiotherapy',
+      name: 'Physiotherapy 5 Days',
+      sessionCount: 5,
+      basePricePaise: rs(3500),
+      active: true,
+      updatedAt: '',
+    },
+    {
+      id: 'svc-taping',
+      clinicId: 'clinic-1',
+      category: 'Add-on',
+      name: 'Taping',
+      sessionCount: 1,
+      basePricePaise: rs(500),
+      durationMinutes: 20,
+      active: true,
+      updatedAt: '',
+    },
   ];
   const patients = new Map<string, Patient>();
   const visits = new Map<string, Visit>();
+  const items = new Map<string, VisitItem>();
+  const credits = new Map<string, VisitCredit>();
+  // Every row write, in the order it was queued: `${table}:${id}`.
+  const writes: string[] = [];
+  const liveOf = <T extends { visitId: string; deleted: boolean }>(m: Map<string, T>, ids: string[]) =>
+    [...m.values()].filter((r) => ids.includes(r.visitId) && !r.deleted);
 
   const repos: Repos = {
     clinics: {
@@ -66,7 +95,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       putLocal: async () => {},
     },
     therapists: {
-      list: async () => therapists,
+      list: async (clinicId) => therapists.filter((t) => t.clinicId === clinicId),
       put: async () => {},
       removeLocal: async () => {},
     },
@@ -114,7 +143,25 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
         [...visits.values()].filter((v) => v.invoiceId === invId && !v.deleted),
       countByService: async (serviceCatalogId) =>
         [...visits.values()].filter((v) => v.serviceCatalogId === serviceCatalogId).length,
-      put: async (v) => void visits.set(v.id, v),
+      put: async (v) => {
+        visits.set(v.id, v);
+        writes.push(`visits:${v.id}`);
+      },
+      putWithChildren: async (v, its, crs, opts) => {
+        const putItems = () =>
+          its.forEach((i) => {
+            items.set(i.id, i);
+            writes.push(`visit_items:${i.id}`);
+          });
+        if (opts?.itemsFirst) putItems();
+        visits.set(v.id, v);
+        writes.push(`visits:${v.id}`);
+        if (!opts?.itemsFirst) putItems();
+        crs.forEach((c) => {
+          credits.set(c.id, c);
+          writes.push(`visit_credits:${c.id}`);
+        });
+      },
       softDelete: async (id) => {
         const v = visits.get(id);
         if (v) visits.set(id, { ...v, deleted: true });
@@ -122,8 +169,16 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       markInvoiced: async () => {},
       markUninvoiced: async () => {},
     },
-    visitItems: { listByVisitIds: async () => [], listByClinic: async () => [], bulkPut: async () => {} },
-    visitCredits: { listByVisitIds: async () => [], listByClinic: async () => [], bulkPut: async () => {} },
+    visitItems: {
+      listByVisitIds: async (ids) => liveOf(items, ids),
+      listByClinic: async () => [],
+      bulkPut: async (rows) => rows.forEach((r) => items.set(r.id, r)),
+    },
+    visitCredits: {
+      listByVisitIds: async (ids) => liveOf(credits, ids),
+      listByClinic: async () => [],
+      bulkPut: async (rows) => rows.forEach((r) => credits.set(r.id, r)),
+    },
     invoices: {
       get: async () => undefined,
       list: async () => [],
@@ -210,7 +265,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       setEnabled: async () => undefined,
     },
   };
-  return { repos, visits };
+  return { repos, visits, items, credits, writes };
 }
 
 describe('visitService.create', () => {
@@ -507,5 +562,296 @@ describe('patientService MRNO fallback', () => {
     await expect(
       svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Dup' })
     ).rejects.toThrow(/already exists/);
+  });
+});
+
+describe('visitService: lines and shares', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  let svc: ReturnType<typeof createVisitService>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+    svc = createVisitService(fake.repos);
+  });
+
+  const base = {
+    clinicId: 'clinic-1',
+    patientId: 'pat-1',
+    therapistId: 'th-prem',
+    visitDate: '2026-05-04',
+  };
+  const liveItems = (visitId: string) =>
+    [...fake.items.values()].filter((i) => i.visitId === visitId && !i.deleted);
+  const liveCredits = (visitId: string) =>
+    [...fake.credits.values()].filter((c) => c.visitId === visitId && !c.deleted);
+  const shareOf = (visitId: string, therapistId: string) =>
+    liveCredits(visitId).find((c) => c.therapistId === therapistId)?.amountPaise;
+
+  it('creates one line per service and auto shares', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [
+        { serviceCatalogId: 'svc-consult' },
+        { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' },
+      ],
+    });
+    expect(v.serviceCatalogId).toBe('svc-consult');
+    expect(v.catalogPricePaise).toBe(rs(1300));
+    expect(v.actualBillPaise).toBe(rs(1300));
+    expect(v.creditsMode).toBe('auto');
+    const items = liveItems(v.id).sort((a, b) => a.position - b.position);
+    expect(items.map((i) => [i.serviceName, i.pricePaise, i.assistingTherapistId, i.durationMinutes])).toEqual([
+      ['Consultation', rs(800), null, null],
+      ['Taping', rs(500), 'th-aish', 20],
+    ]);
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(800));
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(500));
+    // visit first, then lines, then shares
+    const tables = fake.writes.map((w) => w.split(':')[0]);
+    expect(tables).toEqual(['visits', 'visit_items', 'visit_items', 'visit_credits', 'visit_credits']);
+  });
+
+  it('continuation plus add-on keeps the package line at ₹0 and bills the add-on', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [
+        {
+          serviceCatalogId: 'svc-physio3',
+          packageContinuation: { packageGroupId: 'grp-1', sessionIndex: 2, packageTotal: 3 },
+        },
+        { serviceCatalogId: 'svc-taping' },
+      ],
+    });
+    expect(v.actualBillPaise).toBe(rs(500));
+    expect(v.packageGroupId).toBe('grp-1');
+    expect(v.sessionIndex).toBe(2);
+    expect(v.packageTotal).toBe(3);
+    const pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+    expect(pkg.pricePaise).toBe(0);
+    expect(pkg.catalogPricePaise).toBe(rs(2200));
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(500));
+  });
+
+  it('rejects a second package line', async () => {
+    await expect(
+      svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-physio3' }, { serviceCatalogId: 'svc-physio5' }],
+      })
+    ).rejects.toThrow('Only one package per visit.');
+    expect(fake.writes).toEqual([]);
+  });
+
+  it('rejects an assistant equal to the primary, or from another clinic', async () => {
+    await expect(
+      svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-prem' }],
+      })
+    ).rejects.toThrow("The assisting therapist must be someone other than the visit's therapist.");
+    await expect(
+      svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-away' }],
+      })
+    ).rejects.toThrow(/isn't part of this clinic/);
+  });
+
+  it('old single-service input still creates one line', async () => {
+    const v = await svc.create({ ...base, serviceCatalogId: 'svc-physio3' });
+    const items = liveItems(v.id);
+    expect(items).toHaveLength(1);
+    expect(items[0].isPackageLine).toBe(true);
+    expect(items[0].pricePaise).toBe(rs(2200));
+    expect(v.packageTotal).toBe(3);
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(2200));
+  });
+
+  it('a clinic with the therapist split off gets one primary share equal to the bill', async () => {
+    const off = makeFakeRepos({ enableTherapistSplit: false });
+    const v = await createVisitService(off.repos).create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    const rows = [...off.credits.values()];
+    expect(rows).toHaveLength(1);
+    expect([rows[0].therapistId, rows[0].amountPaise]).toEqual(['th-prem', v.actualBillPaise]);
+  });
+
+  it('changing the primary to the tagged assistant clears that tag, queued before the visit row', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    fake.writes.length = 0;
+    const out = await svc.updateBilling(v.id, { therapistId: 'th-aish' });
+    expect(out.sharesOutdated).toBe(false);
+    const taping = liveItems(v.id).find((i) => i.serviceCatalogId === 'svc-taping')!;
+    expect(taping.assistingTherapistId).toBeNull();
+    expect(fake.writes[0]).toBe(`visit_items:${taping.id}`);
+    expect(fake.writes[1]).toBe(`visits:${v.id}`);
+    // everything now delivered by the new primary
+    expect(liveCredits(v.id).map((c) => [c.therapistId, c.amountPaise])).toEqual([['th-aish', rs(1300)]]);
+  });
+
+  it('a bill change rewrites auto shares to the new bill', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    await svc.updateBilling(v.id, { actualBillPaise: rs(1000), adjustmentReason: 'discount' });
+    const total = liveCredits(v.id).reduce((s, c) => s + c.amountPaise, 0);
+    expect(total).toBe(rs(1000));
+  });
+
+  it('invoiced visit refuses line changes but accepts shares', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping' }],
+    });
+    fake.visits.set(v.id, { ...v, invoiceId: 'inv-1' });
+    await expect(svc.updateLines(v.id, [{ serviceCatalogId: 'svc-consult' }])).rejects.toThrow(
+      'This visit is on an invoice; its services are frozen.'
+    );
+    const out = await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(1000) },
+      { therapistId: 'th-aish', amountPaise: rs(300) },
+    ]);
+    expect(out.creditsMode).toBe('manual');
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(300));
+  });
+
+  it('setShares validates total, floors, membership and the primary row', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-physio3' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    // bill 2700; package line (2200) held by the primary
+    const ok = [
+      { therapistId: 'th-prem', amountPaise: rs(2300) },
+      { therapistId: 'th-aish', amountPaise: rs(400) },
+    ];
+    await expect(svc.setShares(v.id, [ok[0]])).rejects.toThrow('The shares must add up to the bill.');
+    await expect(
+      svc.setShares(v.id, [
+        { therapistId: 'th-prem', amountPaise: rs(2000) },
+        { therapistId: 'th-aish', amountPaise: rs(700) },
+      ])
+    ).rejects.toThrow("A share can't be less than the package money it holds.");
+    await expect(
+      svc.setShares(v.id, [
+        { therapistId: 'th-prem', amountPaise: rs(2800) },
+        { therapistId: 'th-aish', amountPaise: rs(-100) },
+      ])
+    ).rejects.toThrow("A share can't be less than ₹0.");
+    await expect(
+      svc.setShares(v.id, [
+        { therapistId: 'th-prem', amountPaise: rs(2300) },
+        { therapistId: 'th-aish', amountPaise: rs(500) },
+      ])
+    ).rejects.toThrow("A share can't be more than the bill (less package money).");
+    await expect(
+      svc.setShares(v.id, [
+        { therapistId: 'th-aish', amountPaise: rs(2700) },
+      ])
+    ).rejects.toThrow(/needs a share/);
+    await expect(
+      svc.setShares(v.id, [
+        { therapistId: 'th-prem', amountPaise: rs(2300) },
+        { therapistId: 'th-away', amountPaise: rs(400) },
+      ])
+    ).rejects.toThrow(/isn't part of this clinic/);
+    await svc.setShares(v.id, ok);
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(2300));
+  });
+
+  it('manual shares survive a line change and report sharesOutdated', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping' }],
+    });
+    await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(1000) },
+      { therapistId: 'th-aish', amountPaise: rs(300) },
+    ]);
+    const out = await svc.updateLines(v.id, [
+      { serviceCatalogId: 'svc-consult' },
+      { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-ravi' },
+    ]);
+    expect(out.sharesOutdated).toBe(true);
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(1000));
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(300));
+    expect(shareOf(v.id, 'th-ravi')).toBeUndefined();
+  });
+
+  it('updateLines in auto mode rewrites shares and writes only the rows that changed', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping' }],
+    });
+    const [consult] = liveItems(v.id).sort((a, b) => a.position - b.position);
+    fake.writes.length = 0;
+    const out = await svc.updateLines(v.id, [
+      { serviceCatalogId: 'svc-consult' },
+      { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' },
+    ]);
+    expect(out.sharesOutdated).toBe(false);
+    expect(fake.writes.some((w) => w === `visit_items:${consult.id}`)).toBe(false);
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(500));
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(800));
+  });
+
+  it('replacing the package line queues the old one out before the new one in', async () => {
+    const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3' }] });
+    const oldPkg = liveItems(v.id)[0];
+    fake.writes.length = 0;
+    await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio5' }]);
+    const newPkg = liveItems(v.id)[0];
+    expect(newPkg.id).not.toBe(oldPkg.id);
+    expect(fake.items.get(oldPkg.id)!.deleted).toBe(true);
+    expect(fake.writes.indexOf(`visit_items:${oldPkg.id}`)).toBeLessThan(
+      fake.writes.indexOf(`visit_items:${newPkg.id}`)
+    );
+  });
+
+  it('editing a line and a share on different rows never overwrite each other', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    // Two writers start from the same snapshot of the rows.
+    const lineCopy = { ...liveItems(v.id).find((i) => i.serviceCatalogId === 'svc-taping')! };
+    const shareCopy = { ...liveCredits(v.id).find((c) => c.therapistId === 'th-aish')! };
+    await fake.repos.visitItems.bulkPut([{ ...lineCopy, assistingTherapistId: 'th-ravi', updatedAt: 'a' }]);
+    await fake.repos.visitCredits.bulkPut([{ ...shareCopy, amountPaise: rs(450), updatedAt: 'b' }]);
+    expect(liveItems(v.id).find((i) => i.serviceCatalogId === 'svc-taping')!.assistingTherapistId).toBe('th-ravi');
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(450));
+    expect(liveItems(v.id)).toHaveLength(2);
+    expect(liveCredits(v.id)).toHaveLength(2);
+  });
+
+  it('recalculateShares puts manual shares back to the automatic ones', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(1300) },
+      { therapistId: 'th-aish', amountPaise: 0 },
+    ]);
+    const back = await svc.recalculateShares(v.id);
+    expect(back.creditsMode).toBe('auto');
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(500));
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(800));
+  });
+
+  it('legacy setSplit writes two manual share rows and keeps the old columns', async () => {
+    const v = await svc.create({ ...base, serviceCatalogId: 'svc-physio3' });
+    const out = await svc.setSplit(v.id, { sharedTherapistId: 'th-aish', sharedPct: 33.33 });
+    expect(out.sharedPct).toBe(33.33);
+    expect(out.creditsMode).toBe('manual');
+    expect(shareOf(v.id, 'th-aish')).toBe(rs(733)); // 2200 x 33.33% = 733.26 -> whole rupees
+    expect(shareOf(v.id, 'th-prem')).toBe(rs(2200) - rs(733));
+    await svc.setSplit(v.id, { sharedTherapistId: null });
+    expect(liveCredits(v.id).map((c) => [c.therapistId, c.amountPaise])).toEqual([['th-prem', rs(2200)]]);
   });
 });

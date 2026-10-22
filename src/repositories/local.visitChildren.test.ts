@@ -144,4 +144,38 @@ describe('local repos: visitItems / visitCredits (real Dexie)', () => {
     const credits = await repos.visitCredits.listByClinic('clinic-1', { from: '2026-06-10', to: '2026-06-20' });
     expect(credits.map((r) => r.id)).toEqual(['c-from']);
   });
+
+  it('putWithChildren writes visit, lines and shares in one go and queues them in that order', async () => {
+    const visit = makeVisit({ id: 'v-1' });
+    await repos.visits.putWithChildren(
+      visit,
+      [makeItem({ id: 'i-old', deleted: true }), makeItem({ id: 'i-new', position: 1 })],
+      [makeCredit({ id: 'c-1' })]
+    );
+    expect((await db.visits.get('v-1'))?.id).toBe('v-1');
+    expect(await db.visit_items.count()).toBe(2);
+    expect(await db.visit_credits.count()).toBe(1);
+    const outbox = (await db.outbox.orderBy('seq').toArray()).map((e) => `${e.table}:${e.rowId}`);
+    expect(outbox).toEqual(['visits:v-1', 'visit_items:i-old', 'visit_items:i-new', 'visit_credits:c-1']);
+  });
+
+  it('putWithChildren with itemsFirst queues the lines before the visit row', async () => {
+    await repos.visits.putWithChildren(makeVisit({ id: 'v-1' }), [makeItem({ id: 'i-1' })], [], {
+      itemsFirst: true,
+    });
+    const outbox = (await db.outbox.orderBy('seq').toArray()).map((e) => `${e.table}:${e.rowId}`);
+    expect(outbox).toEqual(['visit_items:i-1', 'visits:v-1']);
+  });
+
+  it('countByService counts visits on the service and live lines on it, not deleted lines', async () => {
+    await db.visits.bulkPut([makeVisit({ id: 'v-a', serviceCatalogId: 'svc-a' })]);
+    await db.visit_items.bulkPut([
+      makeItem({ id: 'l-1', visitId: 'v-a', serviceCatalogId: 'svc-a' }),
+      makeItem({ id: 'l-2', visitId: 'v-a', serviceCatalogId: 'svc-extra' }),
+      makeItem({ id: 'l-3', visitId: 'v-a', serviceCatalogId: 'svc-gone', deleted: true }),
+    ]);
+    expect(await repos.visits.countByService('svc-extra')).toBe(1); // only ever a later line
+    expect(await repos.visits.countByService('svc-a')).toBe(2);
+    expect(await repos.visits.countByService('svc-gone')).toBe(0);
+  });
 });

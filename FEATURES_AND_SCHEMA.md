@@ -614,7 +614,7 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Active toggle (deactivate, not delete) — inactive items are shown in their own
   collapsed "Inactive services" section below the active groups, not interspersed
 - **Permanent delete** (`hard_delete_catalog_item` RPC) — admin-only, zero-history
-  items only (blocked if any visit references the row, same shape as
+  items only (blocked if any visit or visit service line references the row, same shape as
   `hard_delete_therapist`/`hard_delete_patient`); only offered once deactivated.
   A service with any usage must stay on Deactivate.
 - Unique constraint per clinic
@@ -1704,6 +1704,27 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
   outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
   clinicId, visitId, [clinicId+updatedAt]`; `visit_credits: id, clinicId, visitId, therapistId`.
+- **Saving visits (`visitService`)**: `create` takes `lines: {serviceCatalogId, assistingTherapistId?,
+  packageContinuation?}[]` (the old single `serviceCatalogId` input still works and becomes one line) and
+  writes the visit, its lines and its auto shares (`autoCredits`; a clinic with the therapist split off
+  gets one primary share = the bill) through `repos.visits.putWithChildren(visit, items, credits)` — ONE
+  Dexie transaction, outbox entries queued visit, then lines, then shares. `visits.service_catalog_id` =
+  first line; package columns come from the package line (a continuation, or a multi-session service).
+  `updateLines(visitId, lines, adjustment)` refuses invoiced visits ("its services are frozen"), writes
+  only rows that changed, recomputes bill and rate snapshot as `updateBilling` does, rewrites shares in
+  `auto` mode and returns `sharesOutdated: true` in `manual` mode. `setShares(visitId, rows)` (allowed on
+  invoiced visits) requires Σ = bill, no negative share, the package holder (deliverer of the package
+  line; the primary with split off) never below that line's net, the primary present, everyone in the
+  visit's clinic, and sets `credits_mode = 'manual'`; `recalculateShares` returns to `auto`.
+  `updateBilling` follows a bill or primary change (auto shares rewritten, manual → `sharesOutdated`);
+  a line tagged with the new primary has its tag cleared. **Push order matters** (the server rejects
+  some intermediate states permanently and the sync would revert the local row): a line that frees the
+  visit's single package slot (removed, or no longer the package line) is queued BEFORE the one that
+  takes it, and a tag-clearing line write is queued BEFORE the visit row (`putWithChildren` option
+  `itemsFirst`). Legacy `setSplit` still writes `shared_therapist_id/shared_pct` and now also two manual
+  share rows (assistant = bill × pct rounded to the rupee, primary = remainder).
+- **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
+  on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
 
 #### `invoices`
 ```sql
@@ -3579,6 +3600,27 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
   outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
   clinicId, visitId, [clinicId+updatedAt]`; `visit_credits: id, clinicId, visitId, therapistId`.
+- **Saving visits (`visitService`)**: `create` takes `lines: {serviceCatalogId, assistingTherapistId?,
+  packageContinuation?}[]` (the old single `serviceCatalogId` input still works and becomes one line) and
+  writes the visit, its lines and its auto shares (`autoCredits`; a clinic with the therapist split off
+  gets one primary share = the bill) through `repos.visits.putWithChildren(visit, items, credits)` — ONE
+  Dexie transaction, outbox entries queued visit, then lines, then shares. `visits.service_catalog_id` =
+  first line; package columns come from the package line (a continuation, or a multi-session service).
+  `updateLines(visitId, lines, adjustment)` refuses invoiced visits ("its services are frozen"), writes
+  only rows that changed, recomputes bill and rate snapshot as `updateBilling` does, rewrites shares in
+  `auto` mode and returns `sharesOutdated: true` in `manual` mode. `setShares(visitId, rows)` (allowed on
+  invoiced visits) requires Σ = bill, no negative share, the package holder (deliverer of the package
+  line; the primary with split off) never below that line's net, the primary present, everyone in the
+  visit's clinic, and sets `credits_mode = 'manual'`; `recalculateShares` returns to `auto`.
+  `updateBilling` follows a bill or primary change (auto shares rewritten, manual → `sharesOutdated`);
+  a line tagged with the new primary has its tag cleared. **Push order matters** (the server rejects
+  some intermediate states permanently and the sync would revert the local row): a line that frees the
+  visit's single package slot (removed, or no longer the package line) is queued BEFORE the one that
+  takes it, and a tag-clearing line write is queued BEFORE the visit row (`putWithChildren` option
+  `itemsFirst`). Legacy `setSplit` still writes `shared_therapist_id/shared_pct` and now also two manual
+  share rows (assistant = bill × pct rounded to the rupee, primary = remainder).
+- **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
+  on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
 
 #### `invoices`
 ```sql

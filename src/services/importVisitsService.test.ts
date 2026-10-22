@@ -114,6 +114,7 @@ function makeFakeRepos() {
       countByService: async (serviceCatalogId) =>
         [...visits.values()].filter((v) => v.serviceCatalogId === serviceCatalogId).length,
       put: async (v) => void visits.set(v.id, v),
+      putWithChildren: async (v) => void visits.set(v.id, v),
       softDelete: async (id) => {
         const v = visits.get(id);
         if (v) visits.set(id, { ...v, deleted: true });

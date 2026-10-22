@@ -222,9 +222,45 @@ const visits: VisitRepo = {
     const rows = await db.visits.where('packageGroupId').equals(packageGroupId).toArray();
     return rows.filter((v) => !v.deleted).sort((a, b) => a.visitDate.localeCompare(b.visitDate));
   },
-  countByService: (serviceCatalogId) =>
-    db.visits.where('serviceCatalogId').equals(serviceCatalogId).count(),
+  // A service can be on a visit's own column (older visits, and every visit's first line) or only on a
+  // later line of a multi-service visit, so both count. `visit_items` has no index on the service
+  // (this runs once per deactivated catalog row on the Settings page), so it filters the table.
+  async countByService(serviceCatalogId) {
+    const onVisits = await db.visits.where('serviceCatalogId').equals(serviceCatalogId).count();
+    const onLines = await db.visit_items
+      .filter((i) => i.serviceCatalogId === serviceCatalogId && !i.deleted)
+      .count();
+    return onVisits + onLines;
+  },
   put: (v) => putWithOutbox('visits', v),
+  async putWithChildren(visit, items, credits, opts) {
+    await db.transaction('rw', db.visits, db.visit_items, db.visit_credits, db.outbox, async () => {
+      const ts = Date.now();
+      const writeVisit = async () => {
+        await db.visits.put(visit);
+        await db.outbox.add({ table: 'visits', rowId: visit.id, ts });
+      };
+      const writeItems = async () => {
+        // Row order is queue order: callers put a line that frees the package slot before the one that takes it.
+        for (const item of items) {
+          await db.visit_items.put(item);
+          await db.outbox.add({ table: 'visit_items', rowId: item.id, ts });
+        }
+      };
+      if (opts?.itemsFirst) {
+        await writeItems();
+        await writeVisit();
+      } else {
+        await writeVisit();
+        await writeItems();
+      }
+      for (const credit of credits) {
+        await db.visit_credits.put(credit);
+        await db.outbox.add({ table: 'visit_credits', rowId: credit.id, ts });
+      }
+    });
+    notifySync?.();
+  },
   async softDelete(id) {
     const visit = await db.visits.get(id);
     if (!visit) return;
