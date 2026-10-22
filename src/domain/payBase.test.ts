@@ -344,7 +344,7 @@ describe('payBase', () => {
       expect(totalOf(base)).toEqual(sums(all));
     });
 
-    it('split off: the package biller is the visit primary, who holds the money', () => {
+    it('package billed with split off (everything on the primary) keeps the primary as biller', () => {
       const pkg = { packageGroupId: 'gs', packageTotal: 3 };
       const v1 = visit({ ...pkg, id: 'gs-1', sessionIndex: 1, therapistId: PREM, visitDate: '2026-07-01', actualBillPaise: rs(3000), clinicSharePaise: rs(2250), postTaxPaise: rs(2025) });
       const v2 = visit({ ...pkg, id: 'gs-2', sessionIndex: 2, therapistId: AISH, visitDate: '2026-07-08', actualBillPaise: 0, clinicSharePaise: 0, postTaxPaise: 0 });
@@ -354,10 +354,74 @@ describe('payBase', () => {
       ];
       const credits = [credit('gs-1', PREM, rs(3000)), credit('gs-2', AISH, 0)];
       const all = [v1, v2];
-      const movements = attributionMovements(input(all, all, { items, credits, splitEnabled: false }));
-      expect(movements).toEqual([
+      const expected = [
         { mechanism: 'package_attribution', visitId: 'gs-2', fromTherapistId: PREM, toTherapistId: AISH, grossPaise: 0, clinicSharePaise: rs(750), postTaxPaise: rs(675) },
+      ];
+      expect(attributionMovements(input(all, all, { items, credits, splitEnabled: false }))).toEqual(expected);
+      // The biller follows the stored shares, not the live setting: switching split on later changes nothing.
+      expect(attributionMovements(input(all, all, { items, credits, splitEnabled: true }))).toEqual(expected);
+    });
+
+    it('stored shares give the package to the assistant: still the biller after split is switched off', () => {
+      const pkg = { packageGroupId: 'gh', packageTotal: 3 };
+      const v1 = visit({ ...pkg, id: 'gh-1', sessionIndex: 1, therapistId: PREM, visitDate: '2026-07-01', actualBillPaise: rs(3000), clinicSharePaise: rs(2250), postTaxPaise: rs(2025) });
+      const v2 = visit({ ...pkg, id: 'gh-2', sessionIndex: 2, therapistId: RAVI, visitDate: '2026-07-08', actualBillPaise: 0, clinicSharePaise: 0, postTaxPaise: 0 });
+      const items = [
+        item('gh-1', { pricePaise: rs(3000), isPackageLine: true, assistingTherapistId: AISH }),
+        item('gh-2', { pricePaise: 0, isPackageLine: true }),
+      ];
+      const credits = [credit('gh-1', PREM, 0), credit('gh-1', AISH, rs(3000)), credit('gh-2', RAVI, 0)];
+      const all = [v1, v2];
+      const on = attributionMovements(input(all, all, { items, credits, splitEnabled: true }));
+      const off = attributionMovements(input(all, all, { items, credits, splitEnabled: false }));
+      expect(off).toEqual(on);
+      expect(off.find((m) => m.mechanism === 'package_attribution')).toMatchObject({ fromTherapistId: AISH, toTherapistId: RAVI, postTaxPaise: rs(675) });
+      expect(payBaseByTherapist(input(all, all, { items, credits, splitEnabled: false }))).toEqual(
+        payBaseByTherapist(input(all, all, { items, credits, splitEnabled: true }))
+      );
+    });
+
+    it('split off: a session stays with its visit primary even when the package line names an assistant', () => {
+      const pkg = { packageGroupId: 'gr', packageTotal: 3 };
+      const v1 = visit({ ...pkg, id: 'gr-1', sessionIndex: 1, therapistId: RAVI, visitDate: '2026-07-01', actualBillPaise: rs(3000), clinicSharePaise: rs(2250), postTaxPaise: rs(2025) });
+      const v2 = visit({ ...pkg, id: 'gr-2', sessionIndex: 2, therapistId: PREM, visitDate: '2026-07-08', actualBillPaise: 0, clinicSharePaise: 0, postTaxPaise: 0 });
+      const items = [
+        item('gr-1', { pricePaise: rs(3000), isPackageLine: true }),
+        item('gr-2', { pricePaise: 0, isPackageLine: true, assistingTherapistId: AISH }),
+      ];
+      const credits = [credit('gr-1', RAVI, rs(3000)), credit('gr-2', PREM, 0)];
+      const all = [v1, v2];
+      const off = attributionMovements(input(all, all, { items, credits, splitEnabled: false }));
+      expect(off.map((m) => [m.mechanism, m.fromTherapistId, m.toTherapistId])).toEqual([['package_attribution', RAVI, PREM]]);
+      expect(off.some((m) => m.toTherapistId === AISH)).toBe(false);
+      // Split on: the session's runner is the package line's deliverer.
+      const on = attributionMovements(input(all, all, { items, credits, splitEnabled: true }));
+      expect(on.map((m) => [m.mechanism, m.fromTherapistId, m.toTherapistId])).toEqual([['package_attribution', RAVI, AISH]]);
+    });
+
+    it('credit rows without a row for the primary are repaired and flagged', () => {
+      const v = visit({ id: 'np', therapistId: PREM, actualBillPaise: rs(1300), clinicSharePaise: rs(975), postTaxPaise: rs(878) });
+      const items = [item('np', { pricePaise: rs(1000) }), item('np', { pricePaise: rs(500), assistingTherapistId: AISH })];
+      // Sums to the bill, but no primary row.
+      const credits = [credit('np', AISH, rs(1300))];
+      expect(attributionMovements(input([v], [v], { items, credits }))).toEqual([
+        { mechanism: 'line_share', visitId: 'np', fromTherapistId: PREM, toTherapistId: AISH, grossPaise: rs(433), clinicSharePaise: rs(325), postTaxPaise: rs(292), repaired: true },
       ]);
+    });
+
+    it('a group whose visits all have lines but no priced package line attributes nothing', () => {
+      const pkg = { packageGroupId: 'gz', packageTotal: 3 };
+      const v1 = visit({ ...pkg, id: 'gz-1', sessionIndex: 1, therapistId: PREM, visitDate: '2026-07-01', actualBillPaise: rs(500), clinicSharePaise: rs(375), postTaxPaise: rs(338) });
+      const v2 = visit({ ...pkg, id: 'gz-2', sessionIndex: 2, therapistId: AISH, visitDate: '2026-07-08', actualBillPaise: rs(800), clinicSharePaise: rs(600), postTaxPaise: rs(540) });
+      const items = [
+        item('gz-1', { pricePaise: 0, isPackageLine: true }),
+        item('gz-1', { pricePaise: rs(500) }),
+        item('gz-2', { pricePaise: 0, isPackageLine: true }),
+        item('gz-2', { pricePaise: rs(800) }),
+      ];
+      const credits = [credit('gz-1', PREM, rs(500)), credit('gz-2', AISH, rs(800))];
+      const all = [v1, v2];
+      expect(attributionMovements(input(all, all, { items, credits }))).toEqual([]);
     });
 
     it('mixed group: a billing visit without lines keeps the max-bill rule over an add-on continuation', () => {

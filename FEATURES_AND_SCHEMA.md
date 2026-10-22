@@ -4894,21 +4894,32 @@ the month) and (2) an automatic package-attribution delta, computed
    billed before lines existed, today's rule over the visits **without
    lines** — the largest bill (everything else is logged at ₹0 by
    convention) — so a continuation with a paid add-on (a bigger bill) can
-   never become the billing visit; mixed groups work.
-2. The package's **base**: with a package line, that line's net
-   (`lineNets`) ÷ the bill × the billing visit's Post-Tax (and clinic share),
-   `roundToRupeeHalfUp` — so a consultation billed in the same visit never
-   leaks into the sessions; without lines, the visit's whole figures.
+   never become the billing visit; mixed groups work. A group where every
+   visit has lines but none has a priced package line has **nothing to
+   attribute** (no max-bill fallback over visits with lines).
+2. The package's **base**: with a package line, that line's part of the
+   billing visit's Post-Tax (and clinic share) when those are split over the
+   visit's live lines by their nets (`lineNets`) with
+   `largestRemainderRupees` — the same rule `line_share` uses, so the
+   biller's held amount and the base agree — so a consultation billed in the
+   same visit never leaks into the sessions; without lines, the visit's
+   whole figures.
    `perSessionShare = floor(base / 100 / packageTotal) × 100` — a fixed
    whole-rupee amount, computed from the package's **declared** session
    count so it stays stable as later sessions get logged.
-3. The **biller** is whoever holds the package money: the package line's
-   deliverer (`assisting_therapist_id ?? visit therapist`) on the billing
-   visit — the credits rule always gives the package line's net to it — or
-   the billing visit's therapist when it has no lines or the clinic's
-   therapist split is off (every rupee then sits with the primary). A
-   session's **runner** is the deliverer of that visit's package line, or
-   the visit's therapist for a visit without lines. For every *other*
+3. The **biller** is whoever holds the package money, read from the
+   **stored shares, never the live setting**: the package line's deliverer
+   (`assisting_therapist_id ?? visit therapist`) on the billing visit if that
+   therapist's effective credit there (stored rows if valid, else the
+   repaired ones) is ≥ the package line's net; otherwise the billing visit's
+   primary (e.g. the visit was billed with split off, so every rupee sits
+   with the primary). A visit without lines: its therapist. So switching the
+   setting never changes who billed a package. A session's **runner**
+   follows the **current** setting: split on → the deliverer of that
+   session visit's package line; split off → the session visit's primary;
+   a visit without lines → its therapist. Consequence: toggling the
+   therapist-split setting re-attributes package sessions whose package line
+   names an assistant, in every month (closed ones included). For every *other*
    logged session whose runner is **not** the biller, move one
    `perSessionShare` from the biller's row to the runner's. A session the
    biller ran themselves needs no delta.
@@ -4980,13 +4991,19 @@ the same loader. Rules:
 - **A visit with live credit rows** moves one `line_share` per non-primary
   therapist, from the primary: gross = that therapist's ₹ share; clinic share
   and post-tax = the same proportion (share ÷ bill) of the visit's own
-  figures, in whole rupees by **largest remainder** across all the visit's
-  shares (primary first in line on ties, stray paise stay on the primary), so
+  figures, split over all the visit's shares (primary at index 0) with
+  `largestRemainderRupees` (`src/domain/money.ts` — the ONE proportional
+  money-split rule, also behind `lineNets` and the package base: floor each
+  part's whole rupees, leftover rupees to the largest remainders, ties to
+  the lower index, zero weights last, stray paise to the next in line), so
   each base sums exactly to the visit's figure. Credit rows replace the
-  legacy split — the two never both apply. Rows that don't sum to the bill
-  (or hold a negative share) are recomputed with `autoCredits(lines, primary,
-  bill, { splitEnabled })` for the report, and every movement from them
-  carries `repaired: true`.
+  legacy split — the two never both apply. Rows are valid only if they
+  include a row for the primary, hold no negative share and sum to the bill;
+  otherwise they are recomputed with `autoCredits(lines, primary, bill,
+  { splitEnabled })` for the report, and every movement from them carries
+  `repaired: true`. A repair that moves nothing (e.g. everything lands on
+  the primary) produces no movement and so **no audit row** — the repair is
+  then invisible in the audit.
 - **A visit without credit rows** keeps the legacy formula, so closed months
   reproduce to the rupee: `sharedPct` moves `roundToRupeeHalfUp(amount ×
   sharedPct / 100)` of the bill, clinic share and post-tax each

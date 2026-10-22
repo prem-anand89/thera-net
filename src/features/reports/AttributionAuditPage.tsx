@@ -183,7 +183,7 @@ export function AttributionAuditPage() {
                         {e.repaired && (
                           <span
                             className="ml-1 text-[10px] font-semibold text-[#b45309]"
-                            title="The visit's saved shares didn't add up to its bill, so they were recalculated from its services for this report."
+                            title="The visit's saved shares were incomplete (no row for the primary, a negative share, or not adding up to the bill), so they were recalculated from its services for this report."
                           >
                             Repaired
                           </span>

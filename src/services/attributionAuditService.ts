@@ -40,7 +40,7 @@ export interface AttributionEntry {
   packageSessionCount: number | null;
   sessionIndex: number | null;
   /**
-   * `line_share` only: the visit's stored shares didn't add up to its bill,
+   * `line_share` only: the visit's stored shares weren't valid (no primary row, a negative share, or not summing to the bill),
    * so this entry comes from shares recomputed from its service lines.
    * Always false for the other mechanisms.
    */
@@ -102,8 +102,7 @@ export function createAttributionAuditService(repos: Repos) {
           case 'package_attribution': {
             const { packagePricePaise, packageTotal } = packageSessionShares(
               input.packageGroups.get(v.packageGroupId!)!,
-              input.items,
-              input.splitEnabled
+              input
             );
             return {
               ...common,

@@ -1,4 +1,4 @@
-import { type Paise, roundToRupeeHalfUp } from './money';
+import { type Paise, largestRemainderRupees, roundToRupeeHalfUp } from './money';
 import type { UUID, VisitItem } from './types';
 
 /**
@@ -39,7 +39,7 @@ function liveLines(items: VisitItem[]): VisitItem[] {
  *   (ties: line position, then id);
  * - if the bill itself has stray paise (not a whole rupee), they go to the line that would have been
  *   next in line for a rupee, so the sum is still exact.
- * Integer arithmetic throughout (remainders compared as `units × price mod Σprice`), so no float drift.
+ * Integer arithmetic throughout (`largestRemainderRupees`, the one rule shared with the pay base).
  * All-zero prices (e.g. a ₹0 package session) → the whole bill on the first line.
  * Worked example: ₹1,000 + ₹500 billed at ₹1,300 → ₹867 and ₹433.
  */
@@ -54,37 +54,11 @@ export function lineNets(items: VisitItem[], billPaise: Paise): Map<UUID, Paise>
     return nets;
   }
 
-  const units = Math.floor(billPaise / 100); // whole rupees to share out
-  const strayPaise = billPaise - units * 100;
-
-  const shares = lines.map((l, idx) => {
-    const exact = units * l.pricePaise;
-    return { id: l.id, idx, rupees: Math.floor(exact / totalPrice), remainder: exact % totalPrice };
-  });
-  let leftover = units - shares.reduce((s, x) => s + x.rupees, 0);
-
-  // Largest remainder first; `lines` is already in position/id order, so idx breaks ties. Zero-price
-  // lines rank last so stray paise never land on a ₹0 line while a priced line exists (they have no
-  // remainder, so this never changes who gets a whole rupee).
-  const ranking = [...shares].sort(
-    (a, b) =>
-      Number(lines[a.idx].pricePaise <= 0) - Number(lines[b.idx].pricePaise <= 0) ||
-      b.remainder - a.remainder ||
-      a.idx - b.idx,
+  const parts = largestRemainderRupees(
+    lines.map((l) => l.pricePaise),
+    billPaise,
   );
-  let next = 0;
-  while (leftover > 0) {
-    ranking[next].rupees += 1;
-    next += 1;
-    leftover -= 1;
-  }
-
-  for (const s of shares) nets.set(s.id, s.rupees * 100);
-  // `next` < lines.length always: the handed-out rupees are fewer than the lines (Σ fractions < n).
-  if (strayPaise > 0) {
-    const target = ranking[next];
-    nets.set(target.id, (nets.get(target.id) ?? 0) + strayPaise);
-  }
+  lines.forEach((l, idx) => nets.set(l.id, parts[idx]));
   return nets;
 }
 
