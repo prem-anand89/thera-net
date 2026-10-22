@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -238,6 +238,24 @@ describe('slot-aligned free time', () => {
       { start: 570, end: 600 }, // 9:10 -> 9:30
       { start: 660, end: 720 },
     ]);
+  });
+});
+
+describe('visit from an appointment', () => {
+  it("starts with the appointment's therapist and day", () => {
+    const a = appt({ id: '1', therapistId: 't-sneha', scheduledAt: at('2026-10-20', '16:30') });
+    expect(visitPrefillFromAppointment(a)).toEqual({ therapistId: 't-sneha', visitDate: '2026-10-20' });
+    expect(visitPrefillFromAppointment(appt({ id: '2', therapistId: null, scheduledAt: at('2026-10-20', '09:00') })).therapistId).toBeNull();
+  });
+
+  it('holds back the "seen last" default while loading and when the appointment names a therapist', () => {
+    const named = appt({ id: '1', therapistId: 't-sneha', scheduledAt: at('2026-10-20', '16:30') });
+    const unassigned = appt({ id: '2', therapistId: null, scheduledAt: at('2026-10-20', '16:30') });
+    expect(appointmentSetsTherapist(undefined, undefined)).toBe(false);
+    expect(appointmentSetsTherapist('1', undefined)).toBe(true);
+    expect(appointmentSetsTherapist('1', named)).toBe(true);
+    expect(appointmentSetsTherapist('2', unassigned)).toBe(false);
+    expect(appointmentSetsTherapist('9', null)).toBe(false);
   });
 });
 

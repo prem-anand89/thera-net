@@ -514,6 +514,29 @@ export function dateForAppointment(appointment: Appointment): string {
 }
 
 /**
+ * A visit completed from an appointment starts with that appointment's therapist and day, not with
+ * whoever saw the patient last. `therapistId` is null for an unassigned appointment (the usual default
+ * then applies).
+ */
+export function visitPrefillFromAppointment(appointment: Appointment): { therapistId: string | null; visitDate: string } {
+  return { therapistId: appointment.therapistId ?? null, visitDate: dateForAppointment(appointment) };
+}
+
+/**
+ * Whether the "whoever saw them last" therapist default should stand back for an appointment: while the
+ * appointment is still loading (undefined) and when it names a therapist. An unassigned appointment, or
+ * one not found on this device (null), lets the usual default apply.
+ */
+export function appointmentSetsTherapist(
+  appointmentId: string | undefined,
+  appointment: Appointment | null | undefined
+): boolean {
+  if (!appointmentId) return false;
+  if (appointment === undefined) return true;
+  return Boolean(appointment?.therapistId);
+}
+
+/**
  * Calculates start and end hours for rendering schedule grid.
  * Widens clinic hours if non-cancelled appointments fall earlier or later,
  * filtering strictly to the displayed week in week mode.

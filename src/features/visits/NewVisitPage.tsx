@@ -18,7 +18,7 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { formatINR } from '@/domain/money';
-import { toLocalDateStr } from '@/domain/schedule';
+import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { findSimilarPatients } from '@/domain/similarPatients';
@@ -356,6 +356,25 @@ export function NewVisitPage() {
     return open.sort((a, b) => b.startedOn.localeCompare(a.startedOn));
   }, [clinic.id, patient?.id]);
 
+  // "Complete visit" from an appointment: the visit is that appointment's — its therapist and its day —
+  // not whoever saw the patient last. Applied once per appointment, so a manual change afterwards sticks.
+  const fromAppointment = useLiveQuery(
+    async () =>
+      search.appointmentId
+        ? // null = not on this device, so the usual therapist default applies instead of waiting forever.
+          ((await repos.appointments.listByClinic(clinic.id)).find((a) => a.id === search.appointmentId) ?? null)
+        : undefined,
+    [clinic.id, search.appointmentId]
+  );
+  const appliedAppointmentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fromAppointment || appliedAppointmentRef.current === fromAppointment.id) return;
+    appliedAppointmentRef.current = fromAppointment.id;
+    const prefill = visitPrefillFromAppointment(fromAppointment);
+    if (prefill.therapistId) setTherapistId(prefill.therapistId);
+    setVisitDate(prefill.visitDate);
+  }, [fromAppointment]);
+
   // "Repeat last visit": pre-fill patient/therapist/condition from the
   // visit being repeated, then — once that patient's open packages have
   // loaded — select the matching package so this becomes its next session.
@@ -473,11 +492,13 @@ export function NewVisitPage() {
   // recent one, and shouldn't be silently overwritten once it resolves.
   useEffect(() => {
     if (!patient || patientVisits === undefined || search.repeatVisitId) return;
+    // An appointment's own therapist wins (see fromAppointment above).
+    if (appointmentSetsTherapist(search.appointmentId, fromAppointment)) return;
     // Returning patients default to whoever saw them last. First visits
     // leave the current pick alone — blanking it raced with the user's
     // (or myTherapistId's) selection once Dexie resolved an empty history.
     if (lastVisit?.therapistId) setTherapistId(lastVisit.therapistId);
-  }, [patient, patientVisits, lastVisit?.therapistId, search.repeatVisitId]);
+  }, [patient, patientVisits, lastVisit?.therapistId, search.repeatVisitId, search.appointmentId, fromAppointment]);
 
   useEffect(() => {
     if (!repeatVisit?.packageGroupId || openPackages === undefined) return;

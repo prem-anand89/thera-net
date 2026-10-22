@@ -960,7 +960,12 @@ still falls through to the existing share sheet, unchanged.
     discipline as every RPC in this module). `link_appointment_visit` is
     the one `NewVisitPage.tsx` calls right after a visit saves, when that
     visit was started via `?appointmentId=...` — sets `patient_id`,
-    `visit_id`, and flips `status` to `arrived` in one call. **It is
+    `visit_id`, and flips `status` to `arrived` in one call. A visit started
+    via `?appointmentId=...` also starts with **that appointment's therapist
+    and date** (`visitPrefillFromAppointment` in `domain/schedule.ts`),
+    applied once so a manual change sticks; the usual "whoever saw them
+    last" default stands back for it (`appointmentSetsTherapist`) unless the
+    appointment is unassigned or not on the device. **It is
     queued, not called inline** (`src/sync/pendingLinks.ts`, persisted in
     `meta`): `appointments.visit_id` is a foreign key to `visits`, and the
     visit only reaches the server on the next push, so calling the RPC right
@@ -2777,7 +2782,12 @@ Team's Invite form locks (with the same informational-only copy) once
     discipline as every RPC in this module). `link_appointment_visit` is
     the one `NewVisitPage.tsx` calls right after a visit saves, when that
     visit was started via `?appointmentId=...` — sets `patient_id`,
-    `visit_id`, and flips `status` to `arrived` in one call. **It is
+    `visit_id`, and flips `status` to `arrived` in one call. A visit started
+    via `?appointmentId=...` also starts with **that appointment's therapist
+    and date** (`visitPrefillFromAppointment` in `domain/schedule.ts`),
+    applied once so a manual change sticks; the usual "whoever saw them
+    last" default stands back for it (`appointmentSetsTherapist`) unless the
+    appointment is unassigned or not on the device. **It is
     queued, not called inline** (`src/sync/pendingLinks.ts`, persisted in
     `meta`): `appointments.visit_id` is a foreign key to `visits`, and the
     visit only reaches the server on the next push, so calling the RPC right
