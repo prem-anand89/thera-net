@@ -10,7 +10,7 @@ import type { PatientProfileBackTarget } from '@/app/router';
 import type { VisitCardData, VisitSelectionProps } from './visit/types';
 import { treatmentsDisplayText, patientIdentityLine } from './visit/formatters';
 import { PatientNameBlock } from './visit/VisitPatientBlock';
-import { SharedSplitLine } from './visit/VisitSharedSplit';
+import { SharedSplitLine, SharesRing } from './visit/VisitSharedSplit';
 import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './visit/VisitServiceDetails';
 import { PAYMENT_CHIP } from './visit/VisitPaymentDisplay';
 import { VisitNoteLink, VisitFeedbackLink } from './visit/VisitNotesFeedback';
@@ -48,7 +48,7 @@ export function CardDetailRow({
   );
 }
 
-function VisitCardDetails({ data }: { data: VisitCardData }) {
+function VisitCardDetails({ data, onSplit }: { data: VisitCardData; onSplit?: () => void }) {
   const hasSession = Boolean(data.sessionIndex && data.packageTotal);
   const hasDetails =
     data.serviceName ||
@@ -65,6 +65,14 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
         <CardDetailRow label="Therapist">
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
             <TherapistPill>{data.therapistName}</TherapistPill>
+            {data.details?.shares && (
+              <SharesRing
+                shares={data.details.shares}
+                primaryName={data.therapistName}
+                edited={data.creditsManual}
+                onEdit={data.canSplit && onSplit ? onSplit : undefined}
+              />
+            )}
             {data.hasSplit && data.sharedPct != null && (
               <SharedSplitLine
                 pct={data.sharedPct}
@@ -213,7 +221,7 @@ export function SharedVisitCard({
         </div>
       </div>
 
-      <VisitCardDetails data={data} />
+      <VisitCardDetails data={data} onSplit={onSplit} />
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
         {showCollect ? (

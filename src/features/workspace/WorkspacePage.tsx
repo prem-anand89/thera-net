@@ -181,6 +181,7 @@ export function todayRowToCardData(
     canSplit: therapistSplit && row.billPaise > 0 && canModify,
     // Share rows rule whenever they exist; the old one-assistant line only for a visit without them.
     hasSplit: splitDisplay(details, { sharedTherapistId: row.sharedTherapistId }).hasSplit,
+    creditsManual: row.creditsManual,
     details,
     sharedPct: splitDisplay(details, { sharedTherapistId: row.sharedTherapistId }).legacySplit ? row.sharedPct : null,
     sharedTherapistName: splitDisplay(details, { sharedTherapistId: row.sharedTherapistId }).legacySplit

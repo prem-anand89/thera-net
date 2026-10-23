@@ -218,7 +218,7 @@ export function VisitTable({
                       return (
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           {hasServiceDetails(row.details) && row.details.services.length > 0 ? (
-                            <VisitServicesList services={row.details.services} />
+                            <VisitServicesList services={row.details.services} max={2} />
                           ) : (
                             <div>{row.serviceName}</div>
                           )}
@@ -241,7 +241,12 @@ export function VisitTable({
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <TherapistPill>{row.therapistName}</TherapistPill>
                             {row.details?.shares && (
-                              <SharesRing shares={row.details.shares} primaryName={row.therapistName} />
+                              <SharesRing
+                                shares={row.details.shares}
+                                primaryName={row.therapistName}
+                                edited={row.creditsManual}
+                                onEdit={row.canSplit && onSplit ? () => onSplit(row) : undefined}
+                              />
                             )}
                             {row.hasSplit && row.sharedPct != null && (
                               <SharedSplitLine

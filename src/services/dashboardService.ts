@@ -233,6 +233,8 @@ export interface TodayVisitRow {
    *  `VisitCard.tsx`. */
   sharedPct: number | null;
   sharedTherapistName: string | null;
+  /** The shares were edited by hand (credits_mode = manual). */
+  creditsManual?: boolean;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote: boolean;
   /** Set once this visit's note is completed. */
@@ -1091,6 +1093,7 @@ export function createDashboardService(repos: Repos) {
             paymentState,
             sharedTherapistId: v.sharedTherapistId ?? null,
             sharedPct: v.sharedPct ?? null,
+            creditsManual: v.creditsMode === 'manual',
             sharedTherapistName: v.sharedTherapistId
               ? (therapistNameById.get(v.sharedTherapistId) ?? null)
               : null,

@@ -11,16 +11,38 @@ export function hasServiceDetails(d: VisitServiceDetailsData | undefined): d is 
   return Boolean(d && (d.services.length > 1 || d.services.some((s) => s.assistantName) || d.shares));
 }
 
-/** The visit's services, one per line, with "· Dr X assisting" tags. Read-only. */
-export function VisitServicesList({ services }: { services: VisitServiceDetailsData['services'] }) {
+function initials(name: string): string {
+  const parts = name.replace(/^dr\.?\s+/i, '').split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?';
+}
+
+/** The visit's services, one per line; a service with an assistant carries their initials as a chip.
+ *  With `max`, the rest collapse into "+N more" (the full list is in the title). Read-only. */
+export function VisitServicesList({
+  services,
+  max,
+}: {
+  services: VisitServiceDetailsData['services'];
+  max?: number;
+}) {
+  const shown = max && services.length > max ? services.slice(0, max) : services;
+  const hidden = services.length - shown.length;
   return (
-    <ul>
-      {services.map((s, i) => (
+    <ul title={hidden > 0 ? services.map((s) => s.name).join(', ') : undefined}>
+      {shown.map((s, i) => (
         <li key={`${s.name}-${i}`}>
           {s.name}
-          {s.assistantName && <span className="text-[var(--muted)]"> · {s.assistantName} assisting</span>}
+          {s.assistantName && (
+            <span
+              className="ml-1 rounded bg-[var(--surface-2,rgba(0,0,0,0.06))] px-1 text-[10px] font-medium text-[var(--muted)]"
+              title={`${s.assistantName} assisting`}
+            >
+              {initials(s.assistantName)}
+            </span>
+          )}
         </li>
       ))}
+      {hidden > 0 && <li className="text-xs text-[var(--muted)]">+{hidden} more</li>}
     </ul>
   );
 }

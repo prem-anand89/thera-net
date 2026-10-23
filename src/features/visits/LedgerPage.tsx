@@ -181,6 +181,7 @@ export function visitToCardData(
     canEdit: canModify,
     canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
     hasSplit: split.hasSplit,
+    creditsManual: v.creditsMode === 'manual',
     details,
     // The old one-assistant line only for a visit with no share rows; share rows are shown as details.
     sharedPct: split.legacySplit ? (v.sharedPct ?? null) : null,

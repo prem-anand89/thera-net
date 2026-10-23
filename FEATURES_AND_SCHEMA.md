@@ -114,9 +114,14 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     the primary:** these rows are never part of the assistant's Dues, Collected, the Ledger totals line, the
     Workspace tiles or any needs-payment list (all filter by the visit's own `therapist_id`), so a visit's bill is
     counted once across the assistant and the primary.
-  - **Visit details** (Ledger rows/cards, patient history): the services are listed with "· {assistant}
-    assisting" and, when the bill is shared between several therapists, a read-only "Revenue share — A ₹867 · B
-    ₹433" line (`features/visits/visitDetails.ts`, `components/visit/VisitServiceDetails.tsx`). Share rows rule
+  - **Visit details** (Today's visits, Ledger, patient history): the Service column lists service names (two, then
+    "+N more") with the assistant's initials as a chip; the Therapist column shows the primary's pill and, when
+    the bill is shared, the split ring with the others' combined % (`SharesRing` in
+    `components/visit/VisitSharedSplit.tsx`; hover = each therapist's ₹). For anyone who may edit the split the
+    ring is a button opening the same share editor as "Edit split"; a dot marks a split set by hand
+    (`credits_mode = manual`). Cards keep a text "Share" line for touch (`features/visits/visitDetails.ts`,
+    `components/visit/VisitServiceDetails.tsx`). An assisting therapist sees only their own services and share
+    in their "Assisted" rows, never the ring or the bill. Share rows rule
     whenever they exist (also for a visit without services, which shows a shares-only line); the old
     `shared_therapist_id`/`shared_pct` line shows only for a visit with no share rows (`splitDisplay`), and the
     row action reads "Edit split" for a shared or legacy-split visit, else "Split revenue".

@@ -57,27 +57,51 @@ export function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
 }
 
 /** The ring for a visit whose bill is shared by several therapists (share rows): the rust arc is everything
- *  that goes to someone other than the primary therapist, and hovering shows each therapist's rupee share. */
+ *  that goes to someone other than the primary therapist, and hovering shows each therapist's rupee share.
+ *  With `onEdit` it is a button that opens the split editor; `edited` marks a split set by hand. */
 export function SharesRing({
   shares,
   primaryName,
+  onEdit,
+  edited,
 }: {
   shares: { name: string; amountPaise: number }[];
   primaryName: string;
+  onEdit?: () => void;
+  edited?: boolean;
 }) {
   const total = shares.reduce((sum, s) => sum + s.amountPaise, 0);
   if (total <= 0) return null;
   const primary = shares.find((s) => s.name === primaryName)?.amountPaise ?? 0;
   const pct = Math.round(((total - primary) / total) * 100);
   const line = shares.map((s) => `${s.name} ₹${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-[11px] leading-tight"
-      style={{ color: RING_RUST }}
-      title={`Revenue share — ${line}`}
-    >
+  const title = `Revenue share — ${line}${edited ? ' (set by hand)' : ''}${onEdit ? '. Click to edit.' : ''}`;
+  const label = `Revenue share: ${pct}% to others`;
+  const body = (
+    <>
       <IconSplit pct={pct} className="shrink-0" />
       <span>{pct}%</span>
+      {edited && <span aria-hidden="true" className="h-1 w-1 rounded-full" style={{ background: RING_RUST }} />}
+    </>
+  );
+  const cls = 'inline-flex items-center gap-1 text-[11px] leading-tight';
+  if (onEdit) {
+    return (
+      <button
+        type="button"
+        onClick={onEdit}
+        className={`${cls} rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2`}
+        style={{ color: RING_RUST }}
+        title={title}
+        aria-label={`${label}. Edit split`}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <span className={cls} style={{ color: RING_RUST }} title={title} aria-label={label}>
+      {body}
     </span>
   );
 }

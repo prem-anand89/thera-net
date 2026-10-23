@@ -50,6 +50,8 @@ export interface VisitCardData {
   canEdit?: boolean;
   canSplit?: boolean;
   hasSplit?: boolean;
+  /** The shares were edited by hand (credits_mode = manual). */
+  creditsManual?: boolean;
   /** The assisting therapist's share, set together with `hasSplit` — the
    *  row previously only showed *whether* a split existed (via the kebab
    *  menu's "Edit split" vs "Split revenue" label), with no indication of
