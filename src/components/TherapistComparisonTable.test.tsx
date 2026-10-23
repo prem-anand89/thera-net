@@ -98,3 +98,22 @@ describe('TherapistComparisonTable ranking', () => {
     expect(names()[0]).toBe('Priya');
   });
 });
+
+describe('TherapistComparisonTable assisted column', () => {
+  it('shows Assisted and the once-per-visit note only when someone assisted', () => {
+    const { rerender } = render(
+      <TherapistComparisonTable rows={[row({ assistedVisitCount: 0 })]} total={row({ therapistName: 'Total' })} showPostTax={false} ownLabel="BM" />
+    );
+    expect(screen.queryByText('Assisted')).not.toBeInTheDocument();
+    rerender(
+      <TherapistComparisonTable
+        rows={[row({ assistedVisitCount: 2 })]}
+        total={row({ therapistName: 'Total' })}
+        showPostTax={false}
+        ownLabel="BM"
+      />
+    );
+    expect(screen.getByText('Assisted')).toBeInTheDocument();
+    expect(screen.getByText(/Total counts each visit once/)).toBeInTheDocument();
+  });
+});

@@ -58,6 +58,8 @@ export type TherapistComparisonRow = {
   visitCount: number;
   /** Visits the therapist delivered a service on, assisted ones included; what the Visits column ranks by. */
   patientsTreated: number;
+  /** Visits delivered on without being the primary (already inside `patientsTreated`). */
+  assistedVisitCount?: number;
   retentionPct: number | null;
   newPackages: number;
   /** Work done / time available, 0-1. Undefined = not computed; null = nothing was available. */
@@ -78,6 +80,7 @@ export function TherapistComparisonTable({
   ownLabel: string;
 }) {
   const showUtilisation = rows.some((r) => r.utilisation !== undefined);
+  const showAssisted = rows.some((r) => (r.assistedVisitCount ?? 0) > 0);
   const [sortBy, setSortBy] = useState<RankMetric | null>(null);
   const toggleSort = (metric: RankMetric) => setSortBy((c) => (c === metric ? null : metric));
   const leaders = useMemo(
@@ -117,6 +120,9 @@ export function TherapistComparisonTable({
               )}
               <TableColumnHead title="Net" detail="After splits & package attribution" onSort={() => toggleSort('net')} sorted={sortBy === 'net'} />
               <TableColumnHead title="Visits" detail="Sessions in period" onSort={() => toggleSort('visits')} sorted={sortBy === 'visits'} />
+              {showAssisted && (
+                <TableColumnHead title="Assisted" detail="Of those, on a colleague's visit" />
+              )}
               <TableColumnHead title="Packages" detail="New packages started in period" />
               <TableColumnHead title="Retention" detail="30-day repeat visit rate (% of visits)" onSort={() => toggleSort('retention')} sorted={sortBy === 'retention'} />
               {showUtilisation && (
@@ -136,6 +142,7 @@ export function TherapistComparisonTable({
                 {showPostTax && <td className={tdN}>{formatINR(row.postTaxPaise)}</td>}
                 <td className={tdN}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
                 <td className={tdN}>{row.patientsTreated}{lead('visits', row.therapistName)}</td>
+                {showAssisted && <td className={tdN}>{row.assistedVisitCount ?? 0}</td>}
                 <td className={tdN}>{row.newPackages}</td>
                 <td className={tdN}>
                   {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
@@ -194,6 +201,7 @@ export function TherapistComparisonTable({
                 {showPostTax && <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.patientsTreated}</td>
+                {showAssisted && <td className={tdN}>—</td>}
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
                 <td className={tdN}>—</td>
                 {showUtilisation && (
@@ -235,6 +243,11 @@ export function TherapistComparisonTable({
       <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] tab:hidden">
         Swipe sideways for more columns.
       </p>
+      {showAssisted && total && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
+          Total counts each visit once; therapists&apos; patients treated can add up to more.
+        </p>
+      )}
       {anyLeader && (
         <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
           Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} patients treated in the period.

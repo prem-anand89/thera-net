@@ -47,7 +47,9 @@ export function MonthlyReportTable({
    *  surfaces, which have no in-app navigation to link to. */
   auditLinkMonth?: FyMonth;
 }) {
-  const cells = (r: TherapistMonthRow) => (
+  // Only when someone actually assisted on a colleague's visit this month.
+  const showAssisted = (report?.rows ?? []).some((r) => r.assistedVisitCount > 0);
+  const cells = (r: TherapistMonthRow, isTotal = false) => (
     <>
       <td className={tdNum}>{formatINR(r.billPaise)}</td>
       {partnerSplit && <td className={tdNum}>{formatINR(r.clinicSharePaise)}</td>}
@@ -68,12 +70,18 @@ export function MonthlyReportTable({
         )}
       </td>
       <td className={tdNum}>{r.visitCount}</td>
+      {showAssisted && <td className={tdNum}>{isTotal ? '—' : r.assistedVisitCount}</td>}
       <td className={tdNum}>{r.uniquePatients}</td>
     </>
   );
 
   return (
     <table className="min-w-full divide-y divide-[var(--border)]">
+      {showAssisted && (
+        <caption className="caption-bottom px-3 py-2 text-left text-xs text-[var(--muted)]">
+          Total counts each visit once; therapists&apos; patients treated can add up to more.
+        </caption>
+      )}
       <thead className="bg-[var(--paper)]">
         <tr>
           <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}>
@@ -118,7 +126,16 @@ export function MonthlyReportTable({
             Net
             <InfoTip text={`Post Tax ${own}, adjusted for same-visit splits and for a multi-session package's total spread evenly across the therapists who ran its sessions — the real figure for "how much did this therapist generate," not just whoever it was billed under.`} />
           </th>
-          <th className={thNum}>Visits</th>
+          <th className={thNum}>
+            Visits
+            {showShared && <InfoTip text="Visits billed under this therapist's name. The bill, share, TDS and partner columns use the same visits." />}
+          </th>
+          {showAssisted && (
+            <th className={thNum}>
+              Assisted
+              {showShared && <InfoTip text="Visits billed under a colleague where this therapist delivered a service. They are not in the Visits count; the revenue share from them is in Shared and Net." />}
+            </th>
+          )}
           <th className={thNum}>Patients</th>
         </tr>
       </thead>
@@ -142,7 +159,7 @@ export function MonthlyReportTable({
             >
               Total
             </td>
-            {cells(report.total)}
+            {cells(report.total, true)}
           </tr>
         </tfoot>
       )}

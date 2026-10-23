@@ -168,6 +168,7 @@ export function TrendsReviewPrintPage() {
         netPostTaxPaise: r.netPostTaxPaise,
         visitCount: r.visitCount,
         patientsTreated: r.patientsTreated,
+        assistedVisitCount: r.assistedVisitCount,
         retentionPct: live?.retentionPct ?? null,
         newPackages: live?.newPackages ?? 0,
         utilisation: utilisationById?.get(r.therapistId)?.ratio,

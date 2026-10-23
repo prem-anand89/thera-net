@@ -54,6 +54,8 @@ import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard'
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import { visitPermissions } from './visitPermissions';
 import { splitDisplay, useVisitDetails, type VisitDetails } from './visitDetails';
+import { useAssistedVisits } from './assistedVisits';
+import { AssistedVisitList } from './AssistedVisitList';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
@@ -364,12 +366,25 @@ export function LedgerPage() {
   // The share editor needs someone to share with: split on and more than one active therapist.
   const canShareRevenue = therapistSplit && (therapists ?? []).filter((t) => t.active).length > 1;
   const visitDetails = useVisitDetails(visitIds, nameOfTherapist, therapistSplit);
+  // Visits the filtered (or signed-in) therapist assisted on: listed below the visits, but never in the
+  // visit list's totals, Dues or Collected -- those belong to the primary's own visits only.
+  const assistantId = therapistId || (isClinicWideView ? undefined : myTherapistId);
+  const listedVisitIds = useMemo(() => new Set(visitIds), [visitIds]);
+  const assistedVisits = useAssistedVisits(
+    clinic.id,
+    assistantId,
+    { from: from || undefined, to: to || undefined, patientId: search.patientId },
+    nameOfTherapist,
+    therapistSplit,
+    listedVisitIds
+  );
   const therapistNameByUserId = useMemo(
     () =>
       new Map((therapists ?? []).filter((t) => t.userId).map((t) => [t.userId as string, t.name])),
     [therapists]
   );
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
+  const assistedPatientName = useCallback((id: UUID) => patientById.get(id)?.name ?? 'Patient', [patientById]);
   const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
   const failedVisitSyncs = useLiveQuery(
     () => db.outbox.filter((e) => e.table === 'visits' && !!e.error).toArray(),
@@ -1085,6 +1100,12 @@ export function LedgerPage() {
               </tbody>
             </table>
           </div>
+        </SectionCard>
+      )}
+
+      {recordsView === 'visits' && assistedVisits.length > 0 && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented && (
+        <SectionCard title={`Assisted visits · ${assistedVisits.length}`}>
+          <AssistedVisitList rows={assistedVisits} patientName={assistedPatientName} />
         </SectionCard>
       )}
 

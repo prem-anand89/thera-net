@@ -63,6 +63,8 @@ import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueI
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import { visitPermissions } from '@/features/visits/visitPermissions';
 import { splitDisplay, useVisitDetails, type VisitDetails } from '@/features/visits/visitDetails';
+import { useAssistedVisits } from '@/features/visits/assistedVisits';
+import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -462,6 +464,24 @@ export function WorkspacePage() {
     [therapists, therapistRoster]
   );
   const todayDetails = useVisitDetails(todayDetailIds, nameOfTherapist, therapistSplit);
+  // Visits a colleague billed where this therapist delivered a service: listed for them, never counted
+  // in their Dues, Collected or visit count (those stay with the primary).
+  const todayStr = toLocalDateStr(new Date());
+  const assistedToday = useAssistedVisits(
+    clinic.id,
+    scope.isClinicWideView ? undefined : scope.myTherapistId,
+    { from: todayStr, to: todayStr },
+    nameOfTherapist,
+    therapistSplit
+  );
+  const allPatients = useLiveQuery(
+    () => (assistedToday.length ? repos.patients.list(clinic.id) : undefined),
+    [clinic.id, assistedToday.length]
+  );
+  const patientNameOf = useCallback(
+    (id: string) => (allPatients ?? []).find((p) => p.id === id)?.name ?? 'Patient',
+    [allPatients]
+  );
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(
     () => new Map((treatments ?? []).map((t) => [t.id, t.name])),
@@ -965,6 +985,12 @@ export function WorkspacePage() {
         )}
       </SectionCard>
 
+
+      {assistedToday.length > 0 && (
+        <SectionCard title={`Assisted today · ${assistedToday.length}`}>
+          <AssistedVisitList rows={assistedToday} patientName={patientNameOf} showDate={false} />
+        </SectionCard>
+      )}
 
       <SectionCard title="Packages">
         <p className="mb-3 text-xs text-[var(--muted)]">

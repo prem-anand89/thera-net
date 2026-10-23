@@ -103,6 +103,17 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     before invoicing; an assisting therapist who is not the primary sees no edit controls. The share editor is
     offered only when the clinic's therapist split is on and it has more than one active therapist (Ledger and Workspace
     row action `canSplit` included).
+  - **Assisted visits in the assistant's lists** (`features/visits/assistedVisits.ts`, `AssistedVisitList.tsx`): a
+    visit where a therapist delivered at least one live service line but is NOT the primary appears for them as a
+    read-only "Assisted" row — the patient, the services they delivered, "with {primary}", "Your share ₹X" (their
+    share row; "revenue not shared" when the clinic's therapist split is off or they have no share row) and "Not on
+    your schedule. Logged on {primary}'s visit." No bill, payment pill, Collect, invoice or edit/delete. Shown in
+    Workspace ("Assisted today", for a non-clinic-wide viewer), the Ledger (below the visits when filtered to that
+    therapist, or for a therapist's own view; hidden under the payment filters) and patient history (replacing the
+    colleague's full row for that therapist). `assistedVisitsFor` is the one pure selection rule. **Money stays with
+    the primary:** these rows are never part of the assistant's Dues, Collected, the Ledger totals line, the
+    Workspace tiles or any needs-payment list (all filter by the visit's own `therapist_id`), so a visit's bill is
+    counted once across the assistant and the primary.
   - **Visit details** (Ledger rows/cards, patient history): the services are listed with "· {assistant}
     assisting" and, when the bill is shared between several therapists, a read-only "Revenue share — A ₹867 · B
     ₹433" line (`features/visits/visitDetails.ts`, `components/visit/VisitServiceDetails.tsx`). Share rows rule
@@ -443,7 +454,7 @@ queued with a visible error.
 
 #### Monthly Report
 - **Fiscal-year-aware** (Apr–Mar)
-- **Per-therapist metrics**: Bill, BM Share, TDS, Post-Tax, HV, unique patients, total. Each row also carries `visitCount` (visits as primary), `patientsTreated` (visits the therapist delivered at least one service line on, or as primary for visits without lines; each visit once per therapist, so a primary who also delivers counts once) and `assistedVisitCount` (delivered a line without being the primary). The Total row's `patientsTreated` is the number of visits (no double count) and its `assistedVisitCount` is 0. Every therapist who delivered a live line in the period has a row (zero money when nothing moved to them: ₹0 visits, therapist split off), so assisted work is always listed; `treatedTherapists` in `domain/visitLines` is the one rule for who was treated on a visit.
+- **Per-therapist metrics**: Bill, BM Share, TDS, Post-Tax, HV, unique patients, total. Each row also carries `visitCount` (visits as primary), `patientsTreated` (visits the therapist delivered at least one service line on, or as primary for visits without lines; each visit once per therapist, so a primary who also delivers counts once) and `assistedVisitCount` (delivered a line without being the primary). The Total row's `patientsTreated` is the number of visits (no double count) and its `assistedVisitCount` is 0. Every therapist who delivered a live line in the period has a row (zero money when nothing moved to them: ₹0 visits, therapist split off), so assisted work is always listed. **Monthly statement / comparison table:** an "Assisted" column (from `assistedVisitCount`) sits next to Visits and appears only when any row has assisted visits, with the note "Total counts each visit once; therapists' patients treated can add up to more."; Bill/Share/TDS/Post-Tax/Partner stay "billed under my name" and Shared/Net come from the pay base (`MonthlyReportTable`, `TherapistComparisonTable`). `treatedTherapists` in `domain/visitLines` is the one rule for who was treated on a visit.
 - **Service mix** (`dashboardService.serviceUsage`, "frequently used services"): a visit with service lines contributes one entry per live line (count +1, amount = that line's net from `lineNets`, so the discount lands pro rata); a visit without lines keeps its single entry. The name comes from the catalog, else the line's name snapshot.
 - **CSV export** capability
 - **Attribution audit tab** (Reports → "Attribution audit"): a per-visit

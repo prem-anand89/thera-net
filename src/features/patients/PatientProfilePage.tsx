@@ -13,6 +13,8 @@ import {
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useVisitDetails } from '@/features/visits/visitDetails';
+import { useAssistedVisits } from '@/features/visits/assistedVisits';
+import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
@@ -57,7 +59,7 @@ const NOTE_STATUS_PILL: Record<
 export function PatientProfilePage() {
   const clinic = useClinic();
   const { canBill, canViewClinicalNotes, isAdmin } = usePermissions();
-  const { myTherapistId } = useWorkspaceScope();
+  const { myTherapistId, isClinicWideView } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
   const [editOpen, setEditOpen] = useState(false);
@@ -142,15 +144,25 @@ export function PatientProfilePage() {
     () => new Map((invoices ?? []).map((inv) => [inv.id, inv.issuedAt])),
     [invoices]
   );
+  const nameOfTherapist = useCallback((id: string) => therapistName.get(id) ?? 'Therapist', [therapistName]);
+  // Visits a colleague billed where the signed-in therapist delivered a service: shown to them as
+  // "Assisted" rows (their share only), not as the colleague's full visit with its bill.
+  const assistedVisits = useAssistedVisits(
+    clinic.id,
+    isClinicWideView ? undefined : myTherapistId,
+    { patientId },
+    nameOfTherapist,
+    clinicBillingConfig(clinic).therapistSplit
+  );
+  const assistedIds = useMemo(() => new Set(assistedVisits.map((a) => a.visitId)), [assistedVisits]);
   const visitRows = useMemo(
     () =>
       [...(visits ?? [])]
-        .filter((v) => !v.deleted)
+        .filter((v) => !v.deleted && !assistedIds.has(v.id))
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
-    [visits]
+    [visits, assistedIds]
   );
   const visitIds = useMemo(() => visitRows.map((v) => v.id), [visitRows]);
-  const nameOfTherapist = useCallback((id: string) => therapistName.get(id) ?? 'Therapist', [therapistName]);
   const visitDetails = useVisitDetails(visitIds, nameOfTherapist, clinicBillingConfig(clinic).therapistSplit);
   const allAppointments = useLiveQuery(
     () => repos.appointments.listByClinic(clinic.id),
@@ -786,7 +798,12 @@ export function PatientProfilePage() {
                 </button>
               </div>
             )}
-            {visitRows.length === 0 ? (
+            {assistedVisits.length > 0 && (
+              <div className="border-b border-[var(--border)] px-5 pb-2">
+                <AssistedVisitList rows={assistedVisits} patientName={() => patient?.name ?? 'Patient'} />
+              </div>
+            )}
+            {visitRows.length === 0 && assistedVisits.length > 0 ? null : visitRows.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="text-sm text-[var(--muted)]">No visits recorded yet.</p>
                 <div className="mt-3">

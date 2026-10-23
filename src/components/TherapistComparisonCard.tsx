@@ -159,6 +159,7 @@ export function TherapistComparisonCard({
         netPostTaxPaise: row?.netPostTaxPaise ?? 0,
         visitCount: row?.visitCount ?? 0,
         patientsTreated: row?.patientsTreated ?? 0,
+        assistedVisitCount: row?.assistedVisitCount ?? 0,
         retentionPct: live?.retentionPct ?? null,
         newPackages: live?.newPackages ?? 0,
         utilisation: util ? util.ratio : undefined,

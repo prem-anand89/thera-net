@@ -427,6 +427,28 @@ describe('dashboardService.duesSummary', () => {
   });
 });
 
+describe('dashboardService money stays with the primary on an assisted visit', () => {
+  it('a visit\'s bill is counted exactly once across the assistant and the primary', async () => {
+    const fake = makeFakeRepos();
+    // Billed under th-prem; th-ravi delivered one of its services.
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(1300), therapistId: 'th-prem', visitDate: '2026-06-10' }));
+    fake.payments.set('pay-1', { id: 'pay-1', clinicId: 'clinic-1', visitId: 'v1', amountPaise: rs(300), method: 'cash', receivedDate: '2026-06-10', notes: null, updatedAt: '' });
+    const svc = createDashboardService(fake.repos);
+    const clinicDues = await svc.duesSummary('clinic-1');
+    const primary = await svc.duesSummary('clinic-1', 'th-prem');
+    const assistant = await svc.duesSummary('clinic-1', 'th-ravi');
+    expect(assistant).toEqual({ totalPaise: 0, visitCount: 0, patientCount: 0 });
+    expect(primary.totalPaise + assistant.totalPaise).toBe(clinicDues.totalPaise);
+    expect(primary.totalPaise).toBe(rs(1000));
+    const received = await svc.receivedOnDate('clinic-1', '2026-06-10');
+    expect((await svc.receivedOnDate('clinic-1', '2026-06-10', 'th-prem')) + (await svc.receivedOnDate('clinic-1', '2026-06-10', 'th-ravi'))).toBe(received);
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10', 'th-ravi')).toBe(0);
+    const today = new Date('2026-06-10T12:00:00Z');
+    expect((await svc.todayWorklist('clinic-1', today, 'th-ravi')).visitCount).toBe(0);
+    expect((await svc.todayWorklist('clinic-1', today, 'th-prem')).outstandingPaise).toBe(rs(1000));
+  });
+});
+
 describe('dashboardService.outstandingInvoices', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {
