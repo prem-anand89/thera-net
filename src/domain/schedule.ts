@@ -538,7 +538,7 @@ export function appointmentSetsTherapist(
 
 /**
  * Calculates start and end hours for rendering schedule grid.
- * Widens clinic hours if non-cancelled appointments fall earlier or later,
+ * Widens clinic hours by the staff booking buffer, and further if non-cancelled appointments fall earlier or later,
  * filtering strictly to the displayed week in week mode.
  */
 export function displayHoursFor({
@@ -547,15 +547,18 @@ export function displayHoursFor({
   mode,
   date,
   slotMinutes,
+  bufferHours = 0,
 }: {
   clinicHours: { startHour: number; endHour: number };
   appointments: Appointment[];
   mode: 'day' | 'week';
   date: string;
   slotMinutes: number;
+  /** Staff booking buffer: rows shown before opening and after closing so a block can be dragged or stretched outside clinic hours. */
+  bufferHours?: number;
 }): { startHour: number; endHour: number } {
-  let minHour = clinicHours.startHour;
-  let maxHour = clinicHours.endHour;
+  let minHour = Math.max(0, clinicHours.startHour - bufferHours);
+  let maxHour = Math.min(24, clinicHours.endHour + bufferHours);
   const currentWeekDates = mode === 'week' ? new Set(weekDays(date)) : null;
   const apptsToCheck = mode === 'week'
     ? appointments.filter((a) => currentWeekDates?.has(dateForAppointment(a)))

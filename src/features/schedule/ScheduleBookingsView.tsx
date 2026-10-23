@@ -326,9 +326,10 @@ export function ScheduleBookingsView({
       ),
     [scopedAppointments, threeDayTherapist?.id, showCancelled, threeDays]
   );
+  const bufferHours = clinic.staffBookingBufferHours ?? 3;
   const phoneHours = useMemo(() => {
     if (phoneView !== '3day') {
-      return displayHoursFor({ clinicHours: hours, appointments: dayAppointments, mode: 'day', date, slotMinutes });
+      return displayHoursFor({ clinicHours: hours, appointments: dayAppointments, mode: 'day', date, slotMinutes, bufferHours });
     }
     return displayHoursFor({
       clinicHours: hours,
@@ -336,8 +337,9 @@ export function ScheduleBookingsView({
       mode: 'day',
       date,
       slotMinutes,
+      bufferHours,
     });
-  }, [phoneView, hours, dayAppointments, threeDayAppointments, date, slotMinutes]);
+  }, [phoneView, hours, dayAppointments, threeDayAppointments, date, slotMinutes, bufferHours]);
 
   const displayHours = useMemo(
     () =>
@@ -347,8 +349,9 @@ export function ScheduleBookingsView({
         mode,
         date,
         slotMinutes,
+        bufferHours,
       }),
-    [hours, mode, date, visibleAppointments, dayAppointments, slotMinutes]
+    [hours, mode, date, visibleAppointments, dayAppointments, slotMinutes, bufferHours]
   );
 
   const closedFor = useCallback(
@@ -1011,7 +1014,7 @@ export function ScheduleBookingsView({
               </div>
             )}
 
-            {canManageAll && pendingShiftRequestCount > 0 && (
+            {scope.role === 'admin' && pendingShiftRequestCount > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
                 <span>
                   <strong>{pendingShiftRequestCount}</strong> shift request{pendingShiftRequestCount === 1 ? '' : 's'} pending.

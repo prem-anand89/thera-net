@@ -592,6 +592,13 @@ describe('displayHoursFor', () => {
   const clinicHours = { startHour: 9, endHour: 17 };
   const targetDate = '2026-10-15'; // Thursday of week Mon 2026-10-12 to Sun 2026-10-18
 
+  it('adds the staff booking buffer on both sides, clamped to the day', () => {
+    const base = { clinicHours, appointments: [], mode: 'day' as const, date: targetDate, slotMinutes: 30 };
+    expect(displayHoursFor({ ...base, bufferHours: 3 })).toEqual({ startHour: 6, endHour: 20 });
+    expect(displayHoursFor({ ...base, bufferHours: 12 })).toEqual({ startHour: 0, endHour: 24 });
+    expect(displayHoursFor(base)).toEqual({ startHour: 9, endHour: 17 });
+  });
+
   it('widens the grid when a 7:30 AM appointment falls in this week', () => {
     const appts = [
       appt({

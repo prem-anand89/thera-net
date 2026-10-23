@@ -12,6 +12,8 @@ let clinic: Clinic;
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (query: () => unknown) => query() }));
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => clinic }));
+let isAdmin = true;
+vi.mock('@/app/usePermissions', () => ({ usePermissions: () => ({ isAdmin }) }));
 
 const approveShiftAssignment = vi.fn();
 const declineShiftAssignment = vi.fn();
@@ -41,6 +43,7 @@ afterEach(() => {
 
 describe('ShiftAssignmentsSection', () => {
   beforeEach(() => {
+    isAdmin = true;
     clinic = {
       id: 'c1',
       name: 'Physio Clinic',
@@ -99,6 +102,17 @@ describe('ShiftAssignmentsSection', () => {
     therapists = [{ id: 'th1', clinicId: 'c1', name: 'Priya', active: true, userId: null, updatedAt: '' } as Therapist];
     templates = [];
     assignments = [];
+
+    render(<ShiftAssignmentsSection />);
+    expect(screen.queryByTestId('pending-requests-strip')).not.toBeInTheDocument();
+    expect(screen.getByTestId('shift-coverage-grid')).toBeInTheDocument();
+  });
+
+  it('hides the pending strip from non-admins even when requests exist', () => {
+    isAdmin = false;
+    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Priya', active: true, userId: null, updatedAt: '' } as Therapist];
+    templates = [];
+    assignments = [{ id: 'a1', clinicId: 'c1', therapistId: 'th1', shiftTemplateId: null, customHours: null, weekdays: [1], breakStartMinute: null, status: 'pending', note: null, decisionNote: null, requestedBy: null, decidedBy: null, decidedAt: null, createdAt: '', updatedAt: '' }];
 
     render(<ShiftAssignmentsSection />);
     expect(screen.queryByTestId('pending-requests-strip')).not.toBeInTheDocument();
