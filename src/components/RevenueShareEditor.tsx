@@ -414,7 +414,7 @@ export function RevenueShareEditor({
               </>
             ) : null}
           </p>
-          <div className="flex gap-2">
+          <div className="ml-auto flex gap-2">
             <button type="button" className={btnSecondary} onClick={onClose}>
               Cancel
             </button>
