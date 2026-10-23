@@ -3,6 +3,7 @@ import { formatINR } from '@/domain/money';
 export interface VisitServiceDetailsData {
   services: { name: string; assistantName: string | null }[];
   shares: { name: string; amountPaise: number }[] | null;
+  hasShareRows?: boolean;
 }
 
 /** True when there is more to show than the single service name already on the row. */

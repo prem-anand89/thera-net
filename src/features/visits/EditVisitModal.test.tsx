@@ -64,6 +64,7 @@ const line = (id: string, name: string, price: number, assist: string | null, po
   updatedAt: '',
 });
 
+const setErrorMock = vi.fn();
 function setup(visit: Partial<Visit>, items: VisitItem[]) {
   visitRef.current = {
     id: 'v1',
@@ -79,11 +80,12 @@ function setup(visit: Partial<Visit>, items: VisitItem[]) {
     ...visit,
   };
   itemsRef.current = items;
-  render(<EditVisitModal visitId="v1" onClose={() => {}} setError={() => {}} />);
+  render(<EditVisitModal visitId="v1" onClose={() => {}} setError={setErrorMock} />);
 }
 
 beforeEach(() => {
   updateBilling.mockReset().mockResolvedValue({ sharesOutdated: false });
+  setErrorMock.mockReset();
   updateLines.mockReset().mockResolvedValue({ sharesOutdated: false });
 });
 afterEach(cleanup);
@@ -117,5 +119,22 @@ describe('EditVisitModal', () => {
     setup({}, []);
     expect(screen.queryByText(/Subtotal/)).toBeNull();
     expect(screen.getByText(/Catalog — Assessment/)).toBeInTheDocument();
+  });
+
+  it('saving an invoiced visit never calls updateLines', async () => {
+    setup({ invoiceId: 'inv1' }, items);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(updateBilling).toHaveBeenCalledTimes(1));
+    expect(updateBilling.mock.calls[0][1]).toEqual({ condition: null, treatmentNotes: null, treatmentIds: [] });
+    expect(updateLines).not.toHaveBeenCalled();
+  });
+
+  it('refuses to save when the visit was invoiced after the editor opened, before any write', async () => {
+    setup({}, items);
+    visitRef.current = { ...visitRef.current, invoiceId: 'inv9' };
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(setErrorMock).toHaveBeenCalled());
+    expect(updateBilling).not.toHaveBeenCalled();
+    expect(updateLines).not.toHaveBeenCalled();
   });
 });

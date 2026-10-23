@@ -78,10 +78,17 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     (package lock, "outdated" test, typed edits, add/remove, last editor) is the pure `features/visits/shareEdit.ts`.
     Errors show inline and Save is disabled while invalid. Save calls `visitService.setShares` (mode becomes
     'manual'); "Last edited by {name} · {when}" comes from the credit rows' `updatedBy`/`updatedAt` (name omitted
-    when the login can't be matched to a therapist). When the visit is 'manual' and the auto result from its
-    services differs from the stored rows, a banner "Services changed. Update shares from services?" offers
-    "Recalculate from services" (`recalculateShares`). A legacy one-assistant split opens as two rows. Shares stay
-    editable after invoicing and never change the patient's bill.
+    when the login can't be matched to a therapist). The banner "Services changed. Update shares from services?" with "Recalculate from services"
+    (`recalculateShares`) shows only for a 'manual' visit that has services and whose services or bill changed
+    after the shares were last edited (`sharesAreOutdated`: a line saved later than the newest share row, or
+    stored rows that no longer add up to the bill); a hand edit alone never shows it, nor does a visit without
+    services. The editor opens with the primary absorbing any difference between the bill and the other stored
+    shares (`initialShares`, primary row added if missing); if the bill fell below the other shares it shows the
+    stored rows with "The bill is now lower than the shares. Recalculate from services or lower a share." and
+    Save disabled. A legacy one-assistant split opens as two rows. Escape closes it, focus starts on the first
+    field, and validation and save errors are shown separately. Shares stay editable after invoicing and never
+    change the patient's bill. The package holder rule (`packageHolder` in `domain/visitLines.ts`) is shared by
+    the editor and `setShares`.
   - **Visit editor** (`EditVisitModal`): a visit with services shows the same `ServiceRows` plus Subtotal /
     discount / Total (`updateLines`; the discount is kept per the `updateLines` rule; the therapist/date go
     through `updateBilling` first so the new services are checked against the right therapist). If a save
@@ -92,10 +99,14 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Who can modify a saved visit** (`features/visits/visitPermissions.ts`, mirrors RLS): admin, front desk, or
     the visit's primary therapist can edit it and its revenue share; delete stays admin or the primary and only
     before invoicing; an assisting therapist who is not the primary sees no edit controls. The share editor is
-    offered only when the clinic's therapist split is on and it has more than one active therapist.
+    offered only when the clinic's therapist split is on and it has more than one active therapist (Ledger and Workspace
+    row action `canSplit` included).
   - **Visit details** (Ledger rows/cards, patient history): the services are listed with "· {assistant}
     assisting" and, when the bill is shared between several therapists, a read-only "Revenue share — A ₹867 · B
-    ₹433" line (`features/visits/visitDetails.ts`, `components/visit/VisitServiceDetails.tsx`).
+    ₹433" line (`features/visits/visitDetails.ts`, `components/visit/VisitServiceDetails.tsx`). Share rows rule
+    whenever they exist (also for a visit without services, which shows a shares-only line); the old
+    `shared_therapist_id`/`shared_pct` line shows only for a visit with no share rows (`splitDisplay`), and the
+    row action reads "Edit split" for a shared or legacy-split visit, else "Split revenue".
   - **Phone save bar** (`VisitSaveBar`, below `sm:`): fixed above the bottom navigation
     (`bottom: calc(64px + env(safe-area-inset-bottom))`, 64 = `PHONE_BOTTOM_NAV`), reads "₹1,300 · 2 services ·
     UPI, collected now" (or "to collect later"; "No service yet" until a service is chosen) with Save visit; tapping the summary scrolls to Payment. The

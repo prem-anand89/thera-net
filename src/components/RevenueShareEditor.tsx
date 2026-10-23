@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '@/services';
 import { formatINR } from '@/domain/money';
 import type { Therapist, Visit, VisitCredit, VisitItem } from '@/domain/types';
-import type { CreditShare } from '@/domain/visitLines';
+import { packageHolder, type CreditShare } from '@/domain/visitLines';
 import {
+  BILL_BELOW_SHARES,
   addShareRow,
   applyShareEdit,
   initialShares,
   lastEditedBy,
-  packageLock,
   removeShareRow,
+  sharesTotalMismatch,
   sharesAreOutdated,
   type ShareContext,
 } from '@/features/visits/shareEdit';
@@ -50,17 +51,32 @@ export function RevenueShareEditor({
 }) {
   const bill = visit.actualBillPaise;
   const ctx: ShareContext = useMemo(
-    () => ({ primaryId: visit.therapistId, billPaise: bill, locked: packageLock(visit, items, splitEnabled) }),
+    () => ({ primaryId: visit.therapistId, billPaise: bill, locked: packageHolder(visit, items, splitEnabled) }),
     [visit, items, splitEnabled, bill]
   );
-  const [rows, setRows] = useState<CreditShare[]>(() => initialShares(visit, credits));
+  const [rows, setRows] = useState<CreditShare[]>(() => initialShares(visit, credits, ctx.locked));
   const [draft, setDraft] = useState<{ id: string; field: 'rupees' | 'pct'; text: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Stored shares that can't be made to add up to the (lowered) bill start with this message and no Save.
+  const [error, setError] = useState<string | null>(() =>
+    sharesTotalMismatch(initialShares(visit, credits, ctx.locked), bill) ? BILL_BELOW_SHARES : null
+  );
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dialogRef.current?.querySelector<HTMLElement>('input, select')?.focus();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const nameOf = (id: string) => therapists.find((t) => t.id === id)?.name ?? 'Therapist';
-  const outdated = sharesAreOutdated(visit, items, credits, splitEnabled);
+  const outdated = sharesAreOutdated(visit, items, credits);
   const editor = lastEditedBy(credits, therapists);
   const total = rows.reduce((s, r) => s + r.amountPaise, 0);
   const primaryRow = rows.find((r) => r.therapistId === visit.therapistId);
@@ -96,7 +112,9 @@ export function RevenueShareEditor({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4">
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Revenue share"
         className="dialog-panel flex max-h-[90vh] w-full max-w-md flex-col space-y-4 overflow-y-auto rounded-[10px] bg-[var(--surface)] p-5"
       >
@@ -211,7 +229,8 @@ export function RevenueShareEditor({
         {invalid && !error && (
           <p className="text-xs text-[var(--rust)]">The shares must add up to {formatINR(bill)}.</p>
         )}
-        <ErrorNote message={error ?? saveError} />
+        <ErrorNote message={error} />
+        <ErrorNote message={saveError} />
 
         <div className="flex justify-end gap-2">
           <button type="button" className={btnSecondary} onClick={onClose}>

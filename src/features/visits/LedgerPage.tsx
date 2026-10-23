@@ -53,7 +53,7 @@ import { EditVisitModal } from './EditVisitModal';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import { visitPermissions } from './visitPermissions';
-import { useVisitDetails, type VisitDetails } from './visitDetails';
+import { splitDisplay, useVisitDetails, type VisitDetails } from './visitDetails';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
@@ -93,7 +93,7 @@ export function filterLedgerTabs({
 const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function visitToCardData(
+export function visitToCardData(
   v: Visit,
   patientById: Map<UUID, Patient>,
   therapistName: Map<UUID, string>,
@@ -140,6 +140,7 @@ function visitToCardData(
     visitTherapistId: v.therapistId,
     invoiced: Boolean(v.invoiceId),
   });
+  const split = splitDisplay(details, v);
   const needsNote = v.clinicalStatus === 'pending';
   const linkedNote = noteForVisit(consultationNotes ?? [], v.id, v.patientId, needsNote);
   const feedbackRequest = feedbackRequestByVisitId.get(v.id);
@@ -177,12 +178,12 @@ function visitToCardData(
     // that server-side too).
     canEdit: canModify,
     canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
-    hasSplit: Boolean(details?.shares) || Boolean(v.sharedTherapistId),
+    hasSplit: split.hasSplit,
     details,
-    sharedPct: v.sharedPct ?? null,
-    sharedTherapistName: v.sharedTherapistId
-      ? (therapistName.get(v.sharedTherapistId) ?? null)
-      : null,
+    // The old one-assistant line only for a visit with no share rows; share rows are shown as details.
+    sharedPct: split.legacySplit ? (v.sharedPct ?? null) : null,
+    sharedTherapistName:
+      split.legacySplit && v.sharedTherapistId ? (therapistName.get(v.sharedTherapistId) ?? null) : null,
     canDelete,
     needsNote,
     canViewNotes: canViewClinicalNotes,
@@ -360,6 +361,8 @@ export function LedgerPage() {
   );
   const visitIds = useMemo(() => (visits ?? []).map((v) => v.id), [visits]);
   const nameOfTherapist = useCallback((id: UUID) => therapistName.get(id) ?? 'Therapist', [therapistName]);
+  // The share editor needs someone to share with: split on and more than one active therapist.
+  const canShareRevenue = therapistSplit && (therapists ?? []).filter((t) => t.active).length > 1;
   const visitDetails = useVisitDetails(visitIds, nameOfTherapist, therapistSplit);
   const therapistNameByUserId = useMemo(
     () =>
@@ -540,7 +543,7 @@ export function LedgerPage() {
           treatmentName,
           syncErrorByVisitId,
           openPackageGroupIds,
-          therapistSplit,
+          canShareRevenue,
           statusByInvoiceId,
           directPaymentByVisitId,
           issuedAtByInvoiceId,
@@ -567,7 +570,7 @@ export function LedgerPage() {
       treatmentName,
       syncErrorByVisitId,
       openPackageGroupIds,
-      therapistSplit,
+      canShareRevenue,
       statusByInvoiceId,
       directPaymentByVisitId,
       issuedAtByInvoiceId,
@@ -1112,7 +1115,7 @@ export function LedgerPage() {
                   setEditing(row.visitId);
                 }}
                 onSplit={
-                  therapistSplit
+                  canShareRevenue
                     ? (row) => {
                       const v = visitById.get(row.visitId);
                       if (!v) return;

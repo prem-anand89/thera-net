@@ -89,6 +89,24 @@ export function autoCredits(
   return [...totals].map(([therapistId, amountPaise]) => ({ therapistId, amountPaise }));
 }
 
+/**
+ * Who holds the visit's package money and how much: the live package line's deliverer (the primary
+ * when the clinic's therapist split is off), with that line's net. null when there is no package line.
+ * The one rule behind the share editor's floor and `setShares`' check.
+ */
+export function packageHolder(
+  visit: { therapistId: UUID; actualBillPaise: Paise },
+  items: VisitItem[],
+  splitEnabled: boolean,
+): { therapistId: UUID; amountPaise: Paise } | null {
+  const line = items.find((l) => !l.deleted && l.isPackageLine);
+  if (!line) return null;
+  return {
+    therapistId: splitEnabled ? deliverer(line, visit.therapistId) : visit.therapistId,
+    amountPaise: lineNets(items, visit.actualBillPaise).get(line.id) ?? 0,
+  };
+}
+
 export const SHARE_TOO_LARGE = "A share can't be more than the bill (less package money).";
 export const SHARE_BELOW_PACKAGE = "A share can't be less than the package money it holds.";
 export const SHARE_BELOW_ZERO = "A share can't be less than ₹0.";

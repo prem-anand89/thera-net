@@ -4,9 +4,10 @@ import {
   addShareRow,
   applyShareEdit,
   initialShares,
-  packageLock,
   removeShareRow,
   sharesAreOutdated,
+  sharesTotalMismatch,
+  BILL_BELOW_SHARES,
   lastEditedBy,
 } from './shareEdit';
 import { SHARE_BELOW_PACKAGE, SHARE_TOO_LARGE } from '@/domain/visitLines';
@@ -95,6 +96,9 @@ describe('add / remove rows', () => {
     ];
     expect(removeShareRow(withShare, 's', ctx)).toEqual([{ therapistId: 'p', amountPaise: 130000 }]);
   });
+  it('remove returns the amount to a primary row, creating it when missing', () => {
+    expect(removeShareRow([{ therapistId: 's', amountPaise: 50000 }], 's', ctx)).toEqual([{ therapistId: 'p', amountPaise: 50000 }]);
+  });
   it('will not remove the primary or the package holder', () => {
     const rows = [
       { therapistId: 'p', amountPaise: 80000 },
@@ -105,33 +109,59 @@ describe('add / remove rows', () => {
   });
 });
 
-describe('packageLock', () => {
-  const items = [line('a1', 80000), line('pk2', 0, { isPackageLine: true, assistingTherapistId: 's' })];
-  it('is null without a package line', () => {
-    expect(packageLock(visit(), [line('a1', 1000)], true)).toBeNull();
-  });
-  it('is the package line net held by its deliverer (or the primary with split off)', () => {
-    const v = visit({ actualBillPaise: 80000 });
-    expect(packageLock(v, items, true)).toEqual({ therapistId: 's', amountPaise: 0 });
-    const paid = [line('a1', 80000), line('pk2', 50000, { isPackageLine: true, assistingTherapistId: 's' })];
-    expect(packageLock(visit({ actualBillPaise: 130000 }), paid, true)).toEqual({ therapistId: 's', amountPaise: 50000 });
-    expect(packageLock(visit({ actualBillPaise: 130000 }), paid, false)).toEqual({ therapistId: 'p', amountPaise: 50000 });
-  });
-});
-
 describe('sharesAreOutdated', () => {
-  const items = [line('a1', 100000), line('b2', 30000, { assistingTherapistId: 's' })];
+  const stamp = (iso: string) => ({ updatedAt: iso });
+  const lines = [line('a1', 100000, stamp('2026-10-22T10:00:00Z')), line('b2', 30000, { assistingTherapistId: 's', updatedAt: '2026-10-22T10:00:00Z' })];
+  const manual = visit({ creditsMode: 'manual' });
+  const rows = (at: string) => [credit('p', 100000, { updatedAt: at }), credit('s', 30000, { id: 'x', updatedAt: at })];
   it('is false in auto mode', () => {
-    expect(sharesAreOutdated(visit(), items, [credit('p', 70000)], true)).toBe(false);
+    expect(sharesAreOutdated(visit(), lines, rows('2026-10-21T00:00:00Z'))).toBe(false);
   });
-  it('is true when manual and the auto result differs from the stored rows', () => {
-    const v = visit({ creditsMode: 'manual' });
-    expect(sharesAreOutdated(v, items, [credit('p', 100000), credit('s', 30000, { id: 'x' })], true)).toBe(false);
-    expect(sharesAreOutdated(v, items, [credit('p', 130000)], true)).toBe(true);
+  it('a hand edit alone gives no banner', () => {
+    expect(sharesAreOutdated(manual, lines, rows('2026-10-23T00:00:00Z'))).toBe(false);
+  });
+  it('a line edited after the last share edit gives the banner', () => {
+    expect(sharesAreOutdated(manual, lines, rows('2026-10-21T00:00:00Z'))).toBe(true);
+  });
+  it('a changed bill (rows no longer add up) gives the banner', () => {
+    expect(sharesAreOutdated(manual, lines, [credit('p', 80000, { updatedAt: '2026-10-23T00:00:00Z' })])).toBe(true);
+  });
+  it('a legacy visit without lines never does', () => {
+    expect(sharesAreOutdated(manual, [], [credit('p', 80000)])).toBe(false);
+    expect(sharesAreOutdated(manual, [line('d', 1, { deleted: true })], [credit('p', 80000)])).toBe(false);
   });
 });
 
 describe('initialShares / lastEditedBy', () => {
+  it('the primary absorbs a bill changed after a hand edit (and gets a row if missing)', () => {
+    const v = visit({ actualBillPaise: 100000 });
+    expect(initialShares(v, [credit('p', 80000), credit('s', 50000, { id: 'y' })])).toEqual([
+      { therapistId: 'p', amountPaise: 50000 },
+      { therapistId: 's', amountPaise: 50000 },
+    ]);
+    expect(initialShares(v, [credit('s', 30000, { id: 'y' })])).toEqual([
+      { therapistId: 'p', amountPaise: 70000 },
+      { therapistId: 's', amountPaise: 30000 },
+    ]);
+  });
+  it('shows stored rows unchanged when the primary would fall below its floor', () => {
+    const v = visit({ actualBillPaise: 40000 });
+    const stored = [credit('p', 80000), credit('s', 50000, { id: 'y' })];
+    const rows = initialShares(v, stored);
+    expect(rows).toEqual([
+      { therapistId: 'p', amountPaise: 80000 },
+      { therapistId: 's', amountPaise: 50000 },
+    ]);
+    expect(sharesTotalMismatch(rows, 40000)).toBe(true);
+    expect(BILL_BELOW_SHARES).toMatch(/lower than the shares/);
+    // package money held by the primary is a floor too
+    expect(
+      initialShares(visit({ actualBillPaise: 100000 }), [credit('p', 70000), credit('s', 60000, { id: 'y' })], { therapistId: 'p', amountPaise: 50000 })
+    ).toHaveLength(2);
+    expect(sharesTotalMismatch(
+      initialShares(visit({ actualBillPaise: 100000 }), [credit('p', 70000), credit('s', 60000, { id: 'y' })], { therapistId: 'p', amountPaise: 50000 }), 100000)).toBe(true);
+  });
+
   it('uses live credit rows, else the old one-assistant split, else all to the primary', () => {
     expect(initialShares(visit(), [credit('p', 80000), credit('s', 50000, { id: 'y' })])).toEqual([
       { therapistId: 'p', amountPaise: 80000 },

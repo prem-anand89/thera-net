@@ -8,6 +8,20 @@ export interface VisitDetails {
   services: { name: string; assistantName: string | null }[];
   /** Only when the bill is shared between several therapists; null otherwise. */
   shares: { name: string; amountPaise: number }[] | null;
+  /** The visit has share rows at all (even a single one): then the old shared_* columns are not shown. */
+  hasShareRows: boolean;
+}
+
+/**
+ * The split flags for a row: share rows rule whenever they exist; the old one-assistant split
+ * (`sharedTherapistId`/`sharedPct`) shows only for a visit with no share rows.
+ */
+export function splitDisplay(
+  details: VisitDetails | undefined,
+  legacy: { sharedTherapistId?: UUID | null; sharedPct?: number | null }
+): { hasSplit: boolean; legacySplit: boolean } {
+  const legacySplit = Boolean(legacy.sharedTherapistId) && !details?.hasShareRows;
+  return { hasSplit: Boolean(details?.shares) || legacySplit, legacySplit };
 }
 
 /** Pure: lines and shares per visit → the read-only details. Visits with no lines get nothing. */
@@ -28,10 +42,11 @@ export function buildVisitDetails(
     if (c.deleted) continue;
     sharesBy.set(c.visitId, [...(sharesBy.get(c.visitId) ?? []), c]);
   }
-  for (const [visitId, lines] of linesBy) {
+  for (const visitId of new Set([...linesBy.keys(), ...sharesBy.keys()])) {
+    const lines = linesBy.get(visitId) ?? [];
     const shares = sharesBy.get(visitId) ?? [];
     out.set(visitId, {
-      services: lines
+      services: [...lines]
         .sort((a, b) => a.position - b.position)
         .map((l) => ({
           name: l.serviceName,
@@ -41,6 +56,7 @@ export function buildVisitDetails(
         splitEnabled && shares.length > 1
           ? shares.map((c) => ({ name: nameOf(c.therapistId), amountPaise: c.amountPaise }))
           : null,
+      hasShareRows: shares.length > 0,
     });
   }
   return out;

@@ -1,13 +1,6 @@
 import { roundToRupeeHalfUp, type Paise } from '@/domain/money';
 import type { UUID, Visit, VisitCredit, VisitItem } from '@/domain/types';
-import {
-  SHARE_MISSING,
-  autoCredits,
-  deliverer,
-  lineNets,
-  rebalanceCredits,
-  type CreditShare,
-} from '@/domain/visitLines';
+import { SHARE_MISSING, rebalanceCredits, type CreditShare } from '@/domain/visitLines';
 
 /**
  * The share editor's logic, kept out of the component: which row holds package money, whether the
@@ -22,30 +15,30 @@ export interface ShareContext {
   locked: { therapistId: UUID; amountPaise: Paise } | null;
 }
 
-/** Who holds the package line's money and how much: its deliverer (the primary when split is off). */
-export function packageLock(
-  visit: Pick<Visit, 'therapistId' | 'actualBillPaise'>,
-  items: VisitItem[],
-  splitEnabled: boolean
-): ShareContext['locked'] {
-  const line = items.find((l) => !l.deleted && l.isPackageLine);
-  if (!line) return null;
-  return {
-    therapistId: splitEnabled ? deliverer(line, visit.therapistId) : visit.therapistId,
-    amountPaise: lineNets(items, visit.actualBillPaise).get(line.id) ?? 0,
-  };
-}
+export const BILL_BELOW_SHARES =
+  'The bill is now lower than the shares. Recalculate from services or lower a share.';
 
-/** The shares the editor starts from: stored rows, else the old one-assistant split, else all to the primary. */
+/**
+ * The shares the editor starts from: stored rows, else the old one-assistant split, else all to the
+ * primary. The primary absorbs any difference between the bill and the other shares (their row is added
+ * when missing), so a bill changed after a hand edit opens as a valid split. If that would leave the
+ * primary below its floor (₹0, or the package money it holds) the stored rows are shown unchanged —
+ * they no longer add up to the bill (`sharesTotalMismatch`) and the editor blocks Save.
+ */
 export function initialShares(
   visit: Pick<Visit, 'therapistId' | 'actualBillPaise' | 'sharedTherapistId' | 'sharedPct'>,
-  credits: VisitCredit[]
+  credits: VisitCredit[],
+  locked: ShareContext['locked'] = null
 ): CreditShare[] {
   const live = credits.filter((c) => !c.deleted);
   if (live.length > 0) {
-    const rows = live.map((c) => ({ therapistId: c.therapistId, amountPaise: c.amountPaise }));
-    rows.sort((a, b) => Number(b.therapistId === visit.therapistId) - Number(a.therapistId === visit.therapistId));
-    return rows;
+    const stored = live.map((c) => ({ therapistId: c.therapistId, amountPaise: c.amountPaise }));
+    stored.sort((a, b) => Number(b.therapistId === visit.therapistId) - Number(a.therapistId === visit.therapistId));
+    const others = stored.filter((r) => r.therapistId !== visit.therapistId);
+    const primaryAmount = visit.actualBillPaise - others.reduce((s, r) => s + r.amountPaise, 0);
+    const floor = locked && locked.therapistId === visit.therapistId ? locked.amountPaise : 0;
+    if (primaryAmount < floor) return stored;
+    return [{ therapistId: visit.therapistId, amountPaise: primaryAmount }, ...others];
   }
   if (visit.sharedTherapistId && visit.sharedPct) {
     const shared = roundToRupeeHalfUp((visit.actualBillPaise * visit.sharedPct) / 100);
@@ -57,23 +50,29 @@ export function initialShares(
   return [{ therapistId: visit.therapistId, amountPaise: visit.actualBillPaise }];
 }
 
-/** Hand-edited shares that no longer match what the services would give (so offer "Recalculate"). */
+/** True when the rows do not add up to the bill (only possible for stored rows that could not be fixed). */
+export function sharesTotalMismatch(rows: CreditShare[], billPaise: Paise): boolean {
+  return rows.reduce((s, r) => s + r.amountPaise, 0) !== billPaise;
+}
+
+/**
+ * Whether to offer "Update shares from services?". Only for hand-edited ('manual') shares on a visit that
+ * has services, and only when the services or bill changed after the shares were last edited — a line
+ * saved later than the newest share row, or stored rows that no longer add up to the bill. A hand edit
+ * alone never triggers it (recalculating would erase a deliberate split), nor does a visit without lines.
+ */
 export function sharesAreOutdated(
-  visit: Pick<Visit, 'therapistId' | 'actualBillPaise' | 'creditsMode'>,
+  visit: Pick<Visit, 'actualBillPaise' | 'creditsMode'>,
   items: VisitItem[],
-  credits: VisitCredit[],
-  splitEnabled: boolean
+  credits: VisitCredit[]
 ): boolean {
   if ((visit.creditsMode ?? 'auto') !== 'manual') return false;
-  const toMap = (rows: CreditShare[]) =>
-    new Map(rows.filter((r) => r.amountPaise !== 0).map((r) => [r.therapistId, r.amountPaise]));
-  const auto = toMap(autoCredits(items, visit.therapistId, visit.actualBillPaise, { splitEnabled }));
-  const stored = toMap(
-    credits.filter((c) => !c.deleted).map((c) => ({ therapistId: c.therapistId, amountPaise: c.amountPaise }))
-  );
-  if (auto.size !== stored.size) return true;
-  for (const [id, amount] of auto) if (stored.get(id) !== amount) return true;
-  return false;
+  const lines = items.filter((i) => !i.deleted);
+  if (lines.length === 0) return false;
+  const shares = credits.filter((c) => !c.deleted);
+  if (shares.reduce((s, c) => s + c.amountPaise, 0) !== visit.actualBillPaise) return true;
+  const newest = (rows: { updatedAt: string }[]) => rows.reduce((m, r) => (r.updatedAt > m ? r.updatedAt : m), '');
+  return newest(lines) > newest(shares);
 }
 
 /**
@@ -114,14 +113,17 @@ export function addShareRow(rows: CreditShare[], therapistId: UUID, ctx: ShareCo
   }
 }
 
-/** Drops a therapist's row, their share going back to the primary. The primary and the package holder stay. */
+/**
+ * Drops a therapist's row, their share going back to the primary (whose row is created if it is missing).
+ * The primary and the package holder stay.
+ */
 export function removeShareRow(rows: CreditShare[], therapistId: UUID, ctx: ShareContext): CreditShare[] {
   if (therapistId === ctx.primaryId || ctx.locked?.therapistId === therapistId) return rows;
   const gone = rows.find((r) => r.therapistId === therapistId);
   if (!gone) return rows;
-  return rows
-    .filter((r) => r.therapistId !== therapistId)
-    .map((r) => (r.therapistId === ctx.primaryId ? { ...r, amountPaise: r.amountPaise + gone.amountPaise } : r));
+  const kept = rows.filter((r) => r.therapistId !== therapistId);
+  if (!kept.some((r) => r.therapistId === ctx.primaryId)) kept.unshift({ therapistId: ctx.primaryId, amountPaise: 0 });
+  return kept.map((r) => (r.therapistId === ctx.primaryId ? { ...r, amountPaise: r.amountPaise + gone.amountPaise } : r));
 }
 
 /** Who last changed the shares, and when (name null when the login can't be matched to a therapist). */

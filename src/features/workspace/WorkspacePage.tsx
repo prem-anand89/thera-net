@@ -62,6 +62,7 @@ import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import { visitPermissions } from '@/features/visits/visitPermissions';
+import { splitDisplay, useVisitDetails, type VisitDetails } from '@/features/visits/visitDetails';
 
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -117,7 +118,7 @@ function SplitChangeBanner({ clinicId, changedAt }: { clinicId: string; changedA
   );
 }
 
-function todayRowToCardData(
+export function todayRowToCardData(
   row: TodayVisitRow,
   openPackageGroupIds: Set<string>,
   isAdmin: boolean,
@@ -132,7 +133,8 @@ function todayRowToCardData(
   feedbackRequestByVisitId: Map<string, FeedbackRequest>,
   responseByRequestId: Map<string, FeedbackResponse>,
   googleReviewEligibleIds: Set<string>,
-  googleReviewUrl: string | null
+  googleReviewUrl: string | null,
+  details?: VisitDetails
 ): VisitCardData {
   const { canModify, canDelete } = visitPermissions({
     isAdmin,
@@ -175,9 +177,13 @@ function todayRowToCardData(
     issuedAt: row.issuedAt,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
     canSplit: therapistSplit && row.billPaise > 0 && canModify,
-    hasSplit: Boolean(row.sharedTherapistId),
-    sharedPct: row.sharedPct,
-    sharedTherapistName: row.sharedTherapistName,
+    // Share rows rule whenever they exist; the old one-assistant line only for a visit without them.
+    hasSplit: splitDisplay(details, { sharedTherapistId: row.sharedTherapistId }).hasSplit,
+    details,
+    sharedPct: splitDisplay(details, { sharedTherapistId: row.sharedTherapistId }).legacySplit ? row.sharedPct : null,
+    sharedTherapistName: splitDisplay(details, { sharedTherapistId: row.sharedTherapistId }).legacySplit
+      ? row.sharedTherapistName
+      : null,
     // Delete stays admin / the visit's own therapist (front desk can correct a visit, not delete it).
     canDelete,
     needsNote: row.needsNote,
@@ -448,6 +454,14 @@ export function WorkspacePage() {
     () => (therapistSplit ? repos.therapists.list(clinic.id, true) : undefined),
     [clinic.id, therapistSplit]
   );
+  // The share editor needs someone to share with: split on and more than one active therapist.
+  const canShareRevenue = therapistSplit && (therapists ?? []).filter((t) => t.active).length > 1;
+  const todayDetailIds = useMemo(() => (today?.visits ?? []).map((v) => v.visitId), [today]);
+  const nameOfTherapist = useCallback(
+    (id: string) => (therapists ?? []).find((t) => t.id === id)?.name ?? therapistRoster.get(id)?.name ?? 'Therapist',
+    [therapists, therapistRoster]
+  );
+  const todayDetails = useVisitDetails(todayDetailIds, nameOfTherapist, therapistSplit);
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(
     () => new Map((treatments ?? []).map((t) => [t.id, t.name])),
@@ -627,7 +641,7 @@ export function WorkspacePage() {
       scope.isFrontDesk,
       scope.myTherapistId,
       canViewClinicalNotes,
-      therapistSplit,
+      canShareRevenue,
       treatmentName,
       invoicedSiblingGroupIds ?? new Set(),
       consultationNotes,
@@ -635,7 +649,8 @@ export function WorkspacePage() {
       feedbackRequestByVisitId,
       responseByRequestId,
       googleReviewEligibleIds,
-      clinic.googleReviewUrl ?? null
+      clinic.googleReviewUrl ?? null,
+      todayDetails.get(row.visitId)
     );
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
@@ -911,7 +926,7 @@ export function WorkspacePage() {
               setEditingVisitId(row.visitId);
             }}
             onSplit={
-              therapistSplit
+              canShareRevenue
                 ? (row) => {
                   void repos.visits.get(row.visitId).then((v) => {
                     if (v) setSplitting(v);

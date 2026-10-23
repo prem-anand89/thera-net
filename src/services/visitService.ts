@@ -13,8 +13,7 @@ import {
   SHARE_BELOW_ZERO,
   SHARE_TOO_LARGE,
   autoCredits,
-  deliverer,
-  lineNets,
+  packageHolder,
   type CreditShare,
 } from '@/domain/visitLines';
 import type { Repos } from '@/repositories/types';
@@ -581,14 +580,8 @@ export function createVisitService(repos: Repos) {
         throw new Error("The visit's therapist needs a share, even if it's ₹0.");
       }
 
-      const packageLine = items.find((l) => !l.deleted && l.isPackageLine);
       const { therapistSplit } = clinicBillingConfig(clinic);
-      const locked = packageLine
-        ? {
-            therapistId: therapistSplit ? deliverer(packageLine, visit.therapistId) : visit.therapistId,
-            amountPaise: lineNets(items, visit.actualBillPaise).get(packageLine.id) ?? 0,
-          }
-        : null;
+      const locked = packageHolder(visit, items, therapistSplit);
       for (const r of rows) {
         if (!Number.isInteger(r.amountPaise)) throw new Error('Share amounts must be whole paise.');
         if (r.amountPaise < 0) throw new Error(SHARE_BELOW_ZERO);

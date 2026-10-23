@@ -217,14 +217,12 @@ export function VisitTable({
                     case 'service':
                       return (
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
-                          {hasServiceDetails(row.details) ? (
-                            <>
-                              <VisitServicesList services={row.details.services} />
-                              {row.details.shares && <VisitSharesLine shares={row.details.shares} />}
-                            </>
+                          {hasServiceDetails(row.details) && row.details.services.length > 0 ? (
+                            <VisitServicesList services={row.details.services} />
                           ) : (
                             <div>{row.serviceName}</div>
                           )}
+                          {row.details?.shares && <VisitSharesLine shares={row.details.shares} />}
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                               <PackageThread

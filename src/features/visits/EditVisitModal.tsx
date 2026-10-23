@@ -232,7 +232,12 @@ export function EditVisitModal({
     if (!visit) return;
     setBusy(true);
     try {
-      if (frozen) {
+      // Re-read the visit before the first write: it may have been invoiced or deleted since this
+      // editor opened (another device, front desk), and a stale edit must not go half through.
+      const current = await repos.visits.get(visitId);
+      if (!current || current.deleted) throw new Error('This visit was deleted.');
+      if (frozen || current.invoiceId) {
+        if (!frozen) throw new Error("This visit was invoiced while you were editing. Close and reopen it.");
         await visitService.updateBilling(visitId, {
           condition: condition.trim() || null,
           treatmentNotes: treatmentNotes.trim() || null,
@@ -245,6 +250,11 @@ export function EditVisitModal({
         throw new Error('Enter a reason for the bill adjustment');
       }
       let outdated = false;
+      const details = {
+        condition: condition.trim() || null,
+        treatmentNotes: treatmentNotes.trim() || null,
+        treatmentIds,
+      };
       if (hasLines) {
         if (rowProblems(rows, catalog).size > 0) throw new Error('Fix the service marked above.');
         const built = draftLinesToVisitLines(rows, ownPackages);
@@ -252,31 +262,30 @@ export function EditVisitModal({
           setRowErrors(built.errors);
           throw new Error('Fix the service marked above.');
         }
-        // The therapist and date first, so the new services are checked against the right therapist.
-        const moved = await visitService.updateBilling(visitId, {
-          therapistId,
-          visitDate,
-          condition: condition.trim() || null,
-          treatmentNotes: treatmentNotes.trim() || null,
-          treatmentIds,
-        });
-        outdated = moved.sharesOutdated;
-        if (rowsChanged) {
+        const writeLines = async () => {
           const res = await visitService.updateLines(visitId, built.lines, {
             actualBillPaise: billPaise,
             adjustmentReason: adjustmentPaise !== 0 ? adjustmentReason.trim() : null,
           });
           outdated = outdated || res.sharesOutdated;
-        }
+        };
+        // updateLines can still be refused by the service (for example a package that has later
+        // sessions). With the therapist unchanged the services go first, so a refusal leaves nothing
+        // half saved. A therapist change must be written first (the new services are checked against
+        // the new therapist), so a refusal there leaves the therapist/date saved and the services as
+        // they were; the error is shown and saving again is safe.
+        const therapistMoved = therapistId !== current.therapistId;
+        if (rowsChanged && !therapistMoved) await writeLines();
+        const moved = await visitService.updateBilling(visitId, { therapistId, visitDate, ...details });
+        outdated = outdated || moved.sharesOutdated;
+        if (rowsChanged && therapistMoved) await writeLines();
       } else {
         const res = await visitService.updateBilling(visitId, {
           actualBillPaise: billPaise,
           adjustmentReason: adjustmentPaise !== 0 ? adjustmentReason.trim() : null,
           therapistId,
           visitDate,
-          condition: condition.trim() || null,
-          treatmentNotes: treatmentNotes.trim() || null,
-          treatmentIds,
+          ...details,
         });
         outdated = res.sharesOutdated;
       }

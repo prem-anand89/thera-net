@@ -3,6 +3,7 @@ import {
   autoCredits,
   deliverer,
   lineNets,
+  packageHolder,
   rebalanceCredits,
   therapistMinutes,
 } from './visitLines';
@@ -316,5 +317,24 @@ describe('therapistMinutes', () => {
     expect(therapistMinutes(items, R, R, 45)).toBe(45);
     // Deleted lines don't put a therapist on the visit.
     expect(therapistMinutes(items, R, T, 45)).toBe(0);
+  });
+});
+
+describe('packageHolder', () => {
+  const visit = { therapistId: R, actualBillPaise: rs(1300) };
+  const items = [
+    line({ position: 0, pricePaise: rs(800) }),
+    line({ position: 1, pricePaise: rs(500), isPackageLine: true, assistingTherapistId: S }),
+  ];
+  it('is null without a package line', () => {
+    expect(packageHolder(visit, [line({ position: 0, pricePaise: rs(800) })], true)).toBeNull();
+  });
+  it('is the deliverer of the package line with its net, or the primary with split off', () => {
+    expect(packageHolder(visit, items, true)).toEqual({ therapistId: S, amountPaise: rs(500) });
+    expect(packageHolder(visit, items, false)).toEqual({ therapistId: R, amountPaise: rs(500) });
+  });
+  it('ignores a deleted package line', () => {
+    const gone = items.map((i) => (i.isPackageLine ? { ...i, deleted: true } : i));
+    expect(packageHolder(visit, gone, true)).toBeNull();
   });
 });

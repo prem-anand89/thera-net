@@ -94,7 +94,7 @@ describe('RevenueShareEditor', () => {
   });
 
   it('shows the recalculate banner only when manual shares fell behind the services', () => {
-    open({ visit: visit({ creditsMode: 'manual' }), credits: [credit('p', 130000)] });
+    open({ visit: visit({ creditsMode: 'manual' }), credits: [credit('p', 100000)] });
     expect(screen.getByText('Services changed. Update shares from services?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Recalculate from services' }));
     expect(recalculateShares).toHaveBeenCalledWith('v1');
@@ -113,5 +113,57 @@ describe('RevenueShareEditor', () => {
     open();
     fireEvent.change(screen.getByLabelText('Add a therapist'), { target: { value: 'x' } });
     expect(screen.getByLabelText('Dr Extra share in rupees')).toHaveValue(0);
+  });
+
+  it('shows the banner when a line was edited after the shares', () => {
+    const later = [item('a1', 100000, { updatedAt: '2026-10-23T00:00:00Z' }), item('b2', 30000, { assistingTherapistId: 's' })];
+    open({ visit: visit({ creditsMode: 'manual' }), items: later, credits });
+    expect(screen.getByText('Services changed. Update shares from services?')).toBeInTheDocument();
+  });
+
+  it('Remove returns a share to the primary', () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(screen.queryByLabelText('Dr Sneha share in rupees')).toBeNull();
+    expect(screen.getByText('₹1,300')).toBeInTheDocument();
+  });
+
+  it('opens an old one-assistant split as two rows (40% not the old 25%)', () => {
+    open({ visit: visit({ sharedTherapistId: 's', sharedPct: 40 }), items: [], credits: [] });
+    expect(screen.getByLabelText('Dr Sneha share in percent')).toHaveValue(40);
+    expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(520);
+  });
+
+  it('after the bill changed while shares were manual, the primary takes the difference and Save works', () => {
+    open({
+      visit: visit({ creditsMode: 'manual', actualBillPaise: 100000 }),
+      credits: [credit('p', 100000), credit('s', 30000)],
+    });
+    expect(screen.getByText('₹700')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it('when the bill dropped below the shares it says so and blocks Save', () => {
+    open({
+      visit: visit({ creditsMode: 'manual', actualBillPaise: 20000 }),
+      credits: [credit('p', 100000), credit('s', 30000)],
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The bill is now lower than the shares. Recalculate from services or lower a share.'
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('stored rows missing the primary get a primary remainder row', () => {
+    open({ credits: [credit('s', 30000)] });
+    expect(screen.getByText('₹1,000')).toBeInTheDocument();
+  });
+
+  it('is a modal that closes on Escape and focuses the first field', () => {
+    const onClose = open();
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
   });
 });

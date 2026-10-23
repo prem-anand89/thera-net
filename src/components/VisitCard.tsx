@@ -80,19 +80,17 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
           {treatmentsDisplayText(data.treatmentNames, data.treatmentNotes)}
         </CardDetailRow>
       )}
-      {hasServiceDetails(data.details) ? (
-        <>
-          <CardDetailRow label="Services">
-            <VisitServicesList services={data.details.services} />
-          </CardDetailRow>
-          {data.details.shares && (
-            <CardDetailRow label="Share">
-              <VisitSharesLine shares={data.details.shares} />
-            </CardDetailRow>
-          )}
-        </>
+      {hasServiceDetails(data.details) && data.details.services.length > 0 ? (
+        <CardDetailRow label="Services">
+          <VisitServicesList services={data.details.services} />
+        </CardDetailRow>
       ) : (
         data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>
+      )}
+      {data.details?.shares && (
+        <CardDetailRow label="Share">
+          <VisitSharesLine shares={data.details.shares} />
+        </CardDetailRow>
       )}
       {hasSession && (
         <CardDetailRow label="Session">

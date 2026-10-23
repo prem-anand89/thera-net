@@ -57,7 +57,7 @@ export interface VisitCardData {
   sharedPct?: number | null;
   sharedTherapistName?: string | null;
   /** The visit's services (with assistants) and revenue shares, for the read-only details. */
-  details?: { services: { name: string; assistantName: string | null }[]; shares: { name: string; amountPaise: number }[] | null };
+  details?: { services: { name: string; assistantName: string | null }[]; shares: { name: string; amountPaise: number }[] | null; hasShareRows?: boolean };
   canDelete: boolean;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote?: boolean;
