@@ -56,6 +56,8 @@ export interface VisitCardData {
    *  the percentage or who it went to short of opening that dialog. */
   sharedPct?: number | null;
   sharedTherapistName?: string | null;
+  /** The visit's services (with assistants) and revenue shares, for the read-only details. */
+  details?: { services: { name: string; assistantName: string | null }[]; shares: { name: string; amountPaise: number }[] | null };
   canDelete: boolean;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote?: boolean;

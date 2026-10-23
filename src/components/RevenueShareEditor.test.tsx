@@ -1,0 +1,117 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { Therapist, Visit, VisitCredit, VisitItem } from '@/domain/types';
+
+const setShares = vi.fn();
+const recalculateShares = vi.fn();
+vi.mock('@/services', () => ({
+  visitService: {
+    setShares: (...a: unknown[]) => setShares(...a),
+    recalculateShares: (...a: unknown[]) => recalculateShares(...a),
+  },
+}));
+
+import { RevenueShareEditor } from './RevenueShareEditor';
+
+const th = (id: string, name: string, extra: Partial<Therapist> = {}) =>
+  ({ id, clinicId: 'c1', name, active: true, ...extra }) as Therapist;
+const therapists = [th('p', 'Dr Raghavender'), th('s', 'Dr Sneha', { userId: 'u2' }), th('x', 'Dr Extra')];
+const visit = (over: Partial<Visit> = {}) =>
+  ({ id: 'v1', clinicId: 'c1', therapistId: 'p', actualBillPaise: 130000, creditsMode: 'auto', ...over }) as Visit;
+const item = (id: string, price: number, over: Partial<VisitItem> = {}): VisitItem => ({
+  id,
+  clinicId: 'c1',
+  visitId: 'v1',
+  position: Number(id.slice(-1)),
+  serviceCatalogId: id,
+  serviceName: id,
+  catalogPricePaise: price,
+  pricePaise: price,
+  assistingTherapistId: null,
+  durationMinutes: null,
+  isPackageLine: false,
+  deleted: false,
+  updatedAt: '',
+  ...over,
+});
+const credit = (t: string, amount: number, over: Partial<VisitCredit> = {}): VisitCredit => ({
+  id: `cr-${t}`,
+  clinicId: 'c1',
+  visitId: 'v1',
+  therapistId: t,
+  amountPaise: amount,
+  deleted: false,
+  updatedAt: '2026-10-22T10:00:00Z',
+  ...over,
+});
+
+const items = [item('a1', 100000), item('b2', 30000, { assistingTherapistId: 's' })];
+const credits = [credit('p', 100000), credit('s', 30000)];
+
+function open(props: Partial<React.ComponentProps<typeof RevenueShareEditor>> = {}) {
+  const onClose = vi.fn();
+  render(
+    <RevenueShareEditor visit={visit()} items={items} credits={credits} therapists={therapists} onClose={onClose} {...props} />
+  );
+  return onClose;
+}
+
+beforeEach(() => {
+  setShares.mockReset().mockResolvedValue(undefined);
+  recalculateShares.mockReset().mockResolvedValue(undefined);
+});
+afterEach(cleanup);
+
+describe('RevenueShareEditor', () => {
+  it('editing % updates ₹ and the remainder', () => {
+    open();
+    expect(screen.getByText('(remainder)')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Dr Sneha share in percent'), { target: { value: '50' } });
+    expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(650);
+    expect(screen.getByText('₹650')).toBeInTheDocument(); // the primary's remainder
+  });
+
+  it('saves the edited rows through setShares', () => {
+    const onClose = open();
+    fireEvent.change(screen.getByLabelText('Dr Sneha share in rupees'), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(setShares).toHaveBeenCalledWith('v1', [
+      { therapistId: 'p', amountPaise: 80000 },
+      { therapistId: 's', amountPaise: 50000 },
+    ]);
+    return vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('refuses more than bill less package money and blocks Save', () => {
+    const pkgItems = [item('a1', 80000), item('pk2', 50000, { isPackageLine: true })];
+    open({ items: pkgItems, credits: [credit('p', 130000), credit('s', 0)] });
+    expect(screen.getByText('Package money stays with Dr Raghavender: ₹500')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Dr Sneha share in rupees'), { target: { value: '900' } });
+    expect(screen.getByRole('alert')).toHaveTextContent("A share can't be more than the bill (less package money).");
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('shows the recalculate banner only when manual shares fell behind the services', () => {
+    open({ visit: visit({ creditsMode: 'manual' }), credits: [credit('p', 130000)] });
+    expect(screen.getByText('Services changed. Update shares from services?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Recalculate from services' }));
+    expect(recalculateShares).toHaveBeenCalledWith('v1');
+  });
+
+  it('has no banner when the shares still match, and shows who edited last', () => {
+    open({
+      visit: visit({ creditsMode: 'manual' }),
+      credits: [credit('p', 100000), credit('s', 30000, { updatedBy: 'u2', updatedAt: '2026-10-23T09:30:00Z' })],
+    });
+    expect(screen.queryByText('Services changed. Update shares from services?')).toBeNull();
+    expect(screen.getByText(/Last edited by Dr Sneha · /)).toBeInTheDocument();
+  });
+
+  it('adds a therapist from the picker', () => {
+    open();
+    fireEvent.change(screen.getByLabelText('Add a therapist'), { target: { value: 'x' } });
+    expect(screen.getByLabelText('Dr Extra share in rupees')).toHaveValue(0);
+  });
+});

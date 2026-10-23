@@ -60,7 +60,8 @@ import {
 } from '@/features/schedule/scheduleSignals';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
-import { SplitModal } from '@/components/SplitModal';
+import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
+import { visitPermissions } from '@/features/visits/visitPermissions';
 
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -133,7 +134,13 @@ function todayRowToCardData(
   googleReviewEligibleIds: Set<string>,
   googleReviewUrl: string | null
 ): VisitCardData {
-  const canModify = isAdmin || row.therapistId === myTherapistId;
+  const { canModify, canDelete } = visitPermissions({
+    isAdmin,
+    isFrontDesk,
+    myTherapistId,
+    visitTherapistId: row.therapistId,
+    invoiced: Boolean(row.invoiceId),
+  });
   const linkedNote = noteForVisit(
     consultationNotes ?? [],
     row.visitId,
@@ -171,10 +178,8 @@ function todayRowToCardData(
     hasSplit: Boolean(row.sharedTherapistId),
     sharedPct: row.sharedPct,
     sharedTherapistName: row.sharedTherapistName,
-    // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
-    // is_own_therapist). front_desk is never either, so this always comes
-    // out false for them — matching RLS, which rejects their delete too.
-    canDelete: !row.invoiceId && canModify,
+    // Delete stays admin / the visit's own therapist (front desk can correct a visit, not delete it).
+    canDelete,
     needsNote: row.needsNote,
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
@@ -537,7 +542,6 @@ export function WorkspacePage() {
     });
   }
 
-  const therapistNameById = new Map((therapists ?? []).map((t) => [t.id, t.name]));
 
   const needsItem =
     'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded font-medium text-[var(--ink)] underline-offset-4 hover:text-[var(--teal)] hover:underline [&>svg]:h-4 [&>svg]:w-4';
@@ -1199,10 +1203,9 @@ export function WorkspacePage() {
       )}
 
       {splitting && (
-        <SplitModal
+        <RevenueShareEditorLoader
           visit={splitting}
-          therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
-          primaryName={therapistNameById.get(splitting.therapistId) ?? '-'}
+          therapists={therapists ?? []}
           onClose={() => setSplitting(null)}
         />
       )}

@@ -51,7 +51,9 @@ import { PatientOverview } from './PatientOverview';
 import { useDueLandingScope } from './useDueLandingScope';
 import { EditVisitModal } from './EditVisitModal';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
-import { SplitModal } from '@/components/SplitModal';
+import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
+import { visitPermissions } from './visitPermissions';
+import { useVisitDetails, type VisitDetails } from './visitDetails';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
@@ -105,6 +107,7 @@ function visitToCardData(
   directPaymentByVisitId: Map<UUID, number>,
   issuedAtByInvoiceId: Map<UUID, string>,
   isAdmin: boolean,
+  isFrontDesk: boolean,
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
   invoicedSiblingGroupIds: Set<UUID>,
@@ -113,7 +116,8 @@ function visitToCardData(
   feedbackRequestByVisitId: Map<UUID, FeedbackRequest>,
   responseByRequestId: Map<UUID, FeedbackResponse>,
   googleReviewEligibleIds: Set<UUID>,
-  googleReviewUrl: string | null
+  googleReviewUrl: string | null,
+  details?: VisitDetails
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -126,11 +130,16 @@ function visitToCardData(
     directPaymentByVisitId.get(v.id) ?? 0,
     v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
   );
-  // Pre-flight mirror of visits_update/visits_delete's RLS check
-  // (is_clinic_admin or is_own_therapist) — without this, a therapist saw
-  // a clickable Delete/Split on every colleague's visit in this clinic-wide
-  // list and only found out it was blocked after the server rejected it.
-  const canModify = isAdmin || v.therapistId === myTherapistId;
+  // Pre-flight mirror of the visit policies: admin and front desk may correct any visit, a therapist
+  // only their own (as its primary); delete stays admin / own, before invoicing. An assisting therapist
+  // sees no edit controls on a colleague's visit.
+  const { canModify, canDelete, isOwn } = visitPermissions({
+    isAdmin,
+    isFrontDesk,
+    myTherapistId,
+    visitTherapistId: v.therapistId,
+    invoiced: Boolean(v.invoiceId),
+  });
   const needsNote = v.clinicalStatus === 'pending';
   const linkedNote = noteForVisit(consultationNotes ?? [], v.id, v.patientId, needsNote);
   const feedbackRequest = feedbackRequestByVisitId.get(v.id);
@@ -168,17 +177,18 @@ function visitToCardData(
     // that server-side too).
     canEdit: canModify,
     canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
-    hasSplit: v.sharedTherapistId ? true : false,
+    hasSplit: Boolean(details?.shares) || Boolean(v.sharedTherapistId),
+    details,
     sharedPct: v.sharedPct ?? null,
     sharedTherapistName: v.sharedTherapistId
       ? (therapistName.get(v.sharedTherapistId) ?? null)
       : null,
-    canDelete: !v.invoiceId && canModify,
+    canDelete,
     needsNote,
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    canAskForFeedback: enablePatientComms && canModify,
+    canAskForFeedback: enablePatientComms && (isAdmin || isOwn),
     feedbackRequest: feedbackRequest
       ? {
         id: feedbackRequest.id,
@@ -245,7 +255,7 @@ export function LedgerPage() {
   const clinic = useClinic();
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
-  const { myTherapistId, isClinicWideView } = useWorkspaceScope();
+  const { myTherapistId, isClinicWideView, isFrontDesk } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView; filter?: 'not_collected' };
@@ -348,6 +358,9 @@ export function LedgerPage() {
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
     [therapists]
   );
+  const visitIds = useMemo(() => (visits ?? []).map((v) => v.id), [visits]);
+  const nameOfTherapist = useCallback((id: UUID) => therapistName.get(id) ?? 'Therapist', [therapistName]);
+  const visitDetails = useVisitDetails(visitIds, nameOfTherapist, therapistSplit);
   const therapistNameByUserId = useMemo(
     () =>
       new Map((therapists ?? []).filter((t) => t.userId).map((t) => [t.userId as string, t.name])),
@@ -532,6 +545,7 @@ export function LedgerPage() {
           directPaymentByVisitId,
           issuedAtByInvoiceId,
           isAdmin,
+          isFrontDesk,
           myTherapistId,
           canViewClinicalNotes,
           invoicedSiblingGroupIds ?? new Set(),
@@ -540,7 +554,8 @@ export function LedgerPage() {
           feedbackRequestByVisitId,
           responseByRequestId,
           googleReviewEligibleIds,
-          clinic.googleReviewUrl ?? null
+          clinic.googleReviewUrl ?? null,
+          visitDetails.get(v.id)
         )
       ),
     [
@@ -557,6 +572,7 @@ export function LedgerPage() {
       directPaymentByVisitId,
       issuedAtByInvoiceId,
       isAdmin,
+      isFrontDesk,
       myTherapistId,
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
@@ -566,6 +582,7 @@ export function LedgerPage() {
       responseByRequestId,
       googleReviewEligibleIds,
       clinic.googleReviewUrl,
+      visitDetails,
     ]
   );
 
@@ -1318,10 +1335,9 @@ export function LedgerPage() {
       )}
 
       {splitting && (
-        <SplitModal
+        <RevenueShareEditorLoader
           visit={splitting}
-          therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
-          primaryName={therapistName.get(splitting.therapistId) ?? '-'}
+          therapists={therapists ?? []}
           onClose={() => setSplitting(null)}
         />
       )}

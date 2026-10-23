@@ -11,6 +11,7 @@ import type { VisitCardData, VisitSelectionProps } from './visit/types';
 import { treatmentsDisplayText, patientIdentityLine } from './visit/formatters';
 import { PatientNameBlock } from './visit/VisitPatientBlock';
 import { SharedSplitLine } from './visit/VisitSharedSplit';
+import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './visit/VisitServiceDetails';
 import { PAYMENT_CHIP } from './visit/VisitPaymentDisplay';
 import { VisitNoteLink, VisitFeedbackLink } from './visit/VisitNotesFeedback';
 import { RowActionsMenu } from './visit/VisitRowActions';
@@ -79,7 +80,20 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
           {treatmentsDisplayText(data.treatmentNames, data.treatmentNotes)}
         </CardDetailRow>
       )}
-      {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
+      {hasServiceDetails(data.details) ? (
+        <>
+          <CardDetailRow label="Services">
+            <VisitServicesList services={data.details.services} />
+          </CardDetailRow>
+          {data.details.shares && (
+            <CardDetailRow label="Share">
+              <VisitSharesLine shares={data.details.shares} />
+            </CardDetailRow>
+          )}
+        </>
+      ) : (
+        data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>
+      )}
       {hasSession && (
         <CardDetailRow label="Session">
           <span className="inline-flex items-center gap-1.5">

@@ -63,10 +63,39 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Revenue share** is a read-only line under Total ("Revenue share · from services — Dr A ₹867 (67%) · Dr B
     ₹433 (33%)", `RevenueShareSummary`, from `autoCredits`) shown only when an assistant is tagged and the clinic's
     therapist split is on; a ₹0 package session on the visit therapist adds "Package sessions are credited through
-    package attribution." "Edit split" appears only when the caller passes `onEdit` (New Visit does not yet).
+    package attribution." "Edit split" appears only when the caller passes `onEdit` (New Visit does not: an unsaved visit
+    has no stored shares to edit; the editor is for saved visits, see below).
     Assistant tagging and the share line are hidden for a solo clinic (`clinicType` 'individual') or one with a
     single active therapist; with the split off only the share line is hidden. Changing the visit's therapist
     untags that person as an assistant.
+  - **Revenue share editor** (`src/components/RevenueShareEditor.tsx`, replaces the old one-assistant
+    `SplitModal`; opened by "Edit split"/"Split revenue" on a saved visit in Ledger, Workspace and the visit
+    editor via `RevenueShareEditorLoader`). Each non-primary therapist has linked ₹ and % fields (% of the bill,
+    rupee-rounded); the visit's therapist is the "(remainder)" so the total always equals the bill; therapists
+    are added from a picker of active clinic therapists or removed (their share returns to the primary). Package
+    money is read-only ("Package money stays with {name}: ₹X"; the holder is the live package line's deliverer,
+    the primary with split off) and no share can go below it. The rules are `rebalanceCredits`; the editor logic
+    (package lock, "outdated" test, typed edits, add/remove, last editor) is the pure `features/visits/shareEdit.ts`.
+    Errors show inline and Save is disabled while invalid. Save calls `visitService.setShares` (mode becomes
+    'manual'); "Last edited by {name} · {when}" comes from the credit rows' `updatedBy`/`updatedAt` (name omitted
+    when the login can't be matched to a therapist). When the visit is 'manual' and the auto result from its
+    services differs from the stored rows, a banner "Services changed. Update shares from services?" offers
+    "Recalculate from services" (`recalculateShares`). A legacy one-assistant split opens as two rows. Shares stay
+    editable after invoicing and never change the patient's bill.
+  - **Visit editor** (`EditVisitModal`): a visit with services shows the same `ServiceRows` plus Subtotal /
+    discount / Total (`updateLines`; the discount is kept per the `updateLines` rule; the therapist/date go
+    through `updateBilling` first so the new services are checked against the right therapist). If a save
+    leaves manual shares behind (`sharesOutdated`) the share editor opens. An INVOICED visit shows its services
+    and bill read-only ("This visit is on an invoice. Its services and bill can't be changed.") while notes and
+    the revenue share ("Does not change the patient's bill.") stay editable. A visit saved before services were
+    tracked keeps the single-bill editor.
+  - **Who can modify a saved visit** (`features/visits/visitPermissions.ts`, mirrors RLS): admin, front desk, or
+    the visit's primary therapist can edit it and its revenue share; delete stays admin or the primary and only
+    before invoicing; an assisting therapist who is not the primary sees no edit controls. The share editor is
+    offered only when the clinic's therapist split is on and it has more than one active therapist.
+  - **Visit details** (Ledger rows/cards, patient history): the services are listed with "· {assistant}
+    assisting" and, when the bill is shared between several therapists, a read-only "Revenue share — A ₹867 · B
+    ₹433" line (`features/visits/visitDetails.ts`, `components/visit/VisitServiceDetails.tsx`).
   - **Phone save bar** (`VisitSaveBar`, below `sm:`): fixed above the bottom navigation
     (`bottom: calc(64px + env(safe-area-inset-bottom))`, 64 = `PHONE_BOTTOM_NAV`), reads "₹1,300 · 2 services ·
     UPI, collected now" (or "to collect later"; "No service yet" until a service is chosen) with Save visit; tapping the summary scrolls to Payment. The
@@ -98,7 +127,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Daybook tab — end-of-day cash reconciliation log tracking payments, advances, and discounts (`/ledger?tab=daybook`)
 - **Shared Date Preset Bar** — unified `DatePresetBar` control (`This week`, `This month`, `Last month`, `All time`, `Custom`) across Visits and Invoices tabs, preserving tab defaults (Visits = This week, Invoices = This month)
 - **Filtering** — therapist dropdown, date range search, consistent segmented control styling
-- **Bulk actions** on individual rows — Invoice, Repeat, Split, Delete
+- **Bulk actions** on individual rows — Invoice, Repeat, Edit split (revenue share editor), Delete
 - **Only real visits can be invoiced** — no standalone "manual invoice" path
 
 ---
@@ -1384,7 +1413,7 @@ src/features/            UI pages and components (React + TanStack Router)
 
 src/components/          Shared UI components — VisitCard (shared card/table
                          list), BodyChart, ScaleWidget, IssueInvoiceDialog,
-                         TakePaymentDialog, SplitModal, UpiQrModal, SyncBadge,
+                         TakePaymentDialog, RevenueShareEditor, UpiQrModal, SyncBadge,
                          BarChart/PieChart/IndexedTrendChart, MonthlyReportTable,
                          TherapistComparisonCard, SearchableSelect, ui.tsx
                          (shared primitives: Pill, buttons, table cells)
@@ -3304,7 +3333,7 @@ src/features/            UI pages and components (React + TanStack Router)
 
 src/components/          Shared UI components — VisitCard (shared card/table
                          list), BodyChart, ScaleWidget, IssueInvoiceDialog,
-                         TakePaymentDialog, SplitModal, UpiQrModal, SyncBadge,
+                         TakePaymentDialog, RevenueShareEditor, UpiQrModal, SyncBadge,
                          BarChart/PieChart/IndexedTrendChart, MonthlyReportTable,
                          TherapistComparisonCard, SearchableSelect, ui.tsx
                          (shared primitives: Pill, buttons, table cells)

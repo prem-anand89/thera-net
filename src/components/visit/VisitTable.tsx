@@ -13,6 +13,7 @@ import type { VisitCardData, VisitSelectionProps } from './types';
 import { treatmentsDisplayText } from './formatters';
 import { PatientNameBlock } from './VisitPatientBlock';
 import { SharedSplitLine } from './VisitSharedSplit';
+import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './VisitServiceDetails';
 import { PaymentStatusDisplay } from './VisitPaymentDisplay';
 import { NoteCell } from './VisitNotesFeedback';
 import { RowActionsMenu } from './VisitRowActions';
@@ -216,7 +217,14 @@ export function VisitTable({
                     case 'service':
                       return (
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
-                          <div>{row.serviceName}</div>
+                          {hasServiceDetails(row.details) ? (
+                            <>
+                              <VisitServicesList services={row.details.services} />
+                              {row.details.shares && <VisitSharesLine shares={row.details.shares} />}
+                            </>
+                          ) : (
+                            <div>{row.serviceName}</div>
+                          )}
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                               <PackageThread

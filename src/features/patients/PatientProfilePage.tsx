@@ -12,6 +12,7 @@ import {
   advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useVisitDetails } from '@/features/visits/visitDetails';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
@@ -22,6 +23,7 @@ import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import {
   REFERRING_SOURCE_LABELS,
+  clinicBillingConfig,
   type ConsultationNote,
   type ConsultationNoteStatus,
 } from '@/domain/types';
@@ -147,6 +149,9 @@ export function PatientProfilePage() {
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
     [visits]
   );
+  const visitIds = useMemo(() => visitRows.map((v) => v.id), [visitRows]);
+  const nameOfTherapist = useCallback((id: string) => therapistName.get(id) ?? 'Therapist', [therapistName]);
+  const visitDetails = useVisitDetails(visitIds, nameOfTherapist, clinicBillingConfig(clinic).therapistSplit);
   const allAppointments = useLiveQuery(
     () => repos.appointments.listByClinic(clinic.id),
     [clinic.id]
@@ -287,6 +292,7 @@ export function PatientProfilePage() {
           sex: patient?.sex,
           condition: v.condition ?? null,
           serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+          details: visitDetails.get(v.id),
           sessionIndex: v.sessionIndex ?? null,
           packageTotal: v.packageTotal ?? null,
           therapistName: therapistName.get(v.therapistId) ?? '—',
@@ -342,6 +348,7 @@ export function PatientProfilePage() {
       canViewClinicalNotes,
       invoicedPackageGroupIds,
       notes,
+      visitDetails,
     ]
   );
 
