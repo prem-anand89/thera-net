@@ -14,12 +14,12 @@ const RING_RUST = '#c65f2f';
  *  two-color hint), traced over a teal track standing for the rest, so
  *  the icon itself carries real information rather than only decorating
  *  the "N% → colleague" text next to it. */
-export function IconSplit({ pct, className }: { pct: number; className?: string }) {
+export function IconSplit({ pct, className, size = 12 }: { pct: number; className?: string; size?: number }) {
   const r = 4.5;
   const circumference = 2 * Math.PI * r;
   const shared = (Math.min(Math.max(pct, 0), 100) / 100) * circumference;
   return (
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={className}>
+    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true" className={className} overflow="visible">
       <circle cx="6" cy="6" r={r} fill="none" stroke={RING_TEAL} strokeWidth="2.4" />
       <circle
         cx="6"
@@ -76,15 +76,19 @@ export function SharesRing({
   const pct = Math.round(((total - primary) / total) * 100);
   const line = shares.map((s) => `${s.name} ₹${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
   const title = `Revenue share — ${line}${edited ? ' (set by hand)' : ''}${onEdit ? '. Click to edit.' : ''}`;
+  const others = shares
+    .filter((s) => s.name !== primaryName && s.amountPaise > 0)
+    .map((s) => s.name)
+    .join(', ');
   const label = `Revenue share: ${pct}% to others`;
   const body = (
     <>
-      <IconSplit pct={pct} className="shrink-0" />
-      <span>{pct}%</span>
-      {edited && <span aria-hidden="true" className="h-1 w-1 rounded-full" style={{ background: RING_RUST }} />}
+      <IconSplit pct={pct} size={18} className="shrink-0" />
+      <span className="font-medium">{pct}%</span>
+      {others && <span className="max-w-[7rem] truncate">· {others}</span>}
     </>
   );
-  const cls = 'inline-flex items-center gap-1 text-[11px] leading-tight';
+  const cls = 'inline-flex items-center gap-1.5 py-0.5 text-xs leading-tight';
   if (onEdit) {
     return (
       <button
