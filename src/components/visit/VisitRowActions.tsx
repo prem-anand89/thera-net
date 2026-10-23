@@ -21,6 +21,7 @@ export function RowActionsMenu({
   onDelete,
   onInvoice,
   canInvoice,
+  canCollect = canInvoice,
 }: {
   data: VisitCardData;
   onEdit?: () => void;
@@ -28,13 +29,15 @@ export function RowActionsMenu({
   onDelete: () => void;
   onInvoice?: () => void;
   canInvoice?: boolean;
+  /** Recording / chasing a payment; defaults to `canInvoice`. */
+  canCollect?: boolean;
 }) {
   const clinic = useClinic();
   const canIssueInvoice =
     Boolean(canInvoice) &&
     Boolean(onInvoice) &&
     paymentActions(data.paymentState).includes('issue_invoice');
-  const showReminder = canInvoice && paymentActions(data.paymentState).includes('take_payment');
+  const showReminder = canCollect && paymentActions(data.paymentState).includes('take_payment');
   // Direct ask, independent of the feedback flow's own nudge
   // (`VisitFeedbackLink`'s "⭐ Google review", which only shows after a
   // 5* response) — this one is for staff who already know the patient is

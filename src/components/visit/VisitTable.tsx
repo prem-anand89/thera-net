@@ -306,6 +306,7 @@ export function VisitTable({
                     onDelete={() => onDelete(row)}
                     onInvoice={() => onInvoice(row)}
                     canInvoice={canInvoice}
+                    canCollect={canCollect}
                   />
                 </td>
               </tr>

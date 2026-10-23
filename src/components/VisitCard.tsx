@@ -221,6 +221,7 @@ export function SharedVisitCard({
             onDelete={onDelete}
             onInvoice={onInvoice}
             canInvoice={canInvoice}
+            canCollect={canCollect}
           />
         </div>
       </div>
