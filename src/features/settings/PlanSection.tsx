@@ -2,6 +2,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
 import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
 import { SectionCard, Pill, StatTile } from '@/components/ui';
+import { VisitCapNotice } from '@/components/VisitCapNotice';
 
 const PLAN_STATUS_LABELS: Record<'active' | 'past_due' | 'read_only', string> = {
   active: 'Active',
@@ -30,6 +31,7 @@ export function PlanSection() {
     { key: 'team', label: 'Multiple team logins' },
     { key: 'revenueSplit', label: 'Hospital revenue split & attribution audit' },
     { key: 'advancedModules', label: 'Advanced assessment modules' },
+    { key: 'notePrinting', label: 'Print / PDF of notes' },
   ];
 
   return (
@@ -53,6 +55,9 @@ export function PlanSection() {
             stay fully visible.
           </p>
         )}
+        <div className="mt-3">
+          <VisitCapNotice />
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-2">
           <StatTile
             label="Seats"

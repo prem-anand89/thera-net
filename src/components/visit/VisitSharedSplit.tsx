@@ -56,6 +56,18 @@ export function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
   );
 }
 
+/** Assistants' names for the ring: one assistant in full when it fits, else "First L."; several by first name. */
+export function assistantNamesShort(names: string[], maxChars = 14): string {
+  const first = (n: string) => n.replace(/^dr\.?\s+/i, '').trim().split(/\s+/)[0] ?? n;
+  if (names.length === 1) {
+    const n = names[0]!.trim();
+    if (n.length <= maxChars) return n;
+    const parts = n.replace(/^dr\.?\s+/i, '').trim().split(/\s+/);
+    return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]![0]!.toUpperCase()}.` : n;
+  }
+  return names.map(first).join(', ');
+}
+
 /** The ring for a visit whose bill is shared by several therapists (share rows): the rust arc is everything
  *  that goes to someone other than the primary therapist, and hovering shows each therapist's rupee share.
  *  With `onEdit` it is a button that opens the split editor; `edited` marks a split set by hand. */
@@ -76,16 +88,15 @@ export function SharesRing({
   const pct = Math.round(((total - primary) / total) * 100);
   const line = shares.map((s) => `${s.name} ₹${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
   const title = `Revenue share — ${line}${edited ? ' (set by hand)' : ''}${onEdit ? '. Click to edit.' : ''}`;
-  const others = shares
-    .filter((s) => s.name !== primaryName && s.amountPaise > 0)
-    .map((s) => s.name)
-    .join(', ');
+  const others = assistantNamesShort(
+    shares.filter((s) => s.name !== primaryName && s.amountPaise > 0).map((s) => s.name)
+  );
   const label = `Revenue share: ${pct}% to others`;
   const body = (
     <>
       <IconSplit pct={pct} size={18} className="shrink-0" />
       <span className="font-medium">{pct}%</span>
-      {others && <span className="max-w-[7rem] truncate">· {others}</span>}
+      {others && <span className="max-w-[9rem] truncate">· {others}</span>}
     </>
   );
   const cls = 'inline-flex items-center gap-1.5 py-0.5 text-xs leading-tight';

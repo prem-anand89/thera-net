@@ -62,3 +62,17 @@ export function currentMonthRange(now = new Date()): { from: string; to: string 
   
   return { from, to };
 }
+
+/** Share of the monthly visit cap at which the app starts warning. */
+export const VISIT_CAP_WARN_AT = 0.8;
+
+/**
+ * Where a clinic stands against its monthly visit cap: 'ok' (or no cap),
+ * 'near' from 80% of it, 'reached' once it is used up. Drives the heads-up
+ * banner so the cap's block on saving never comes as a surprise.
+ */
+export function visitCapStatus(used: number, cap: number | null): 'ok' | 'near' | 'reached' {
+  if (cap == null || cap <= 0) return 'ok';
+  if (used >= cap) return 'reached';
+  return used >= Math.ceil(cap * VISIT_CAP_WARN_AT) ? 'near' : 'ok';
+}

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 afterEach(cleanup);
-import { SharesRing } from './VisitSharedSplit';
+import { SharesRing, assistantNamesShort } from './VisitSharedSplit';
 import { VisitServicesList } from './VisitServiceDetails';
 
 const shares = [
@@ -47,5 +47,15 @@ describe('VisitServicesList', () => {
     expect(screen.getByText('BR')).toBeTruthy();
     expect(screen.getByText('+2 more')).toBeTruthy();
     expect(screen.queryByText('C')).toBeNull();
+  });
+});
+
+describe('assistantNamesShort', () => {
+  it('keeps a short name, shortens a long one, and uses first names for several', () => {
+    expect(assistantNamesShort(['Sneha Reddy'])).toBe('Sneha Reddy');
+    expect(assistantNamesShort(['BM'])).toBe('BM');
+    expect(assistantNamesShort(['Venkata Subramanian'])).toBe('Venkata S.');
+    expect(assistantNamesShort(['Dr Sneha Reddy', 'BM'])).toBe('Sneha, BM');
+    expect(assistantNamesShort([])).toBe('');
   });
 });

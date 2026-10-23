@@ -20,7 +20,7 @@ type InsightsView = 'overview' | 'monthly' | 'audit';
  * already admin or front_desk.
  */
 export function ReportsPage() {
-  const { canViewPayouts, role, entitlementsLoading } = usePermissions();
+  const { canViewPayouts, canViewMonthlyStatement, role, entitlementsLoading } = usePermissions();
   const { isClinicWideView } = useWorkspaceScope();
   const navigate = useNavigate();
   const search = useSearch({ from: '/insights' });
@@ -55,8 +55,9 @@ export function ReportsPage() {
   // already covers for role, but from a different, newer source.
   useEffect(() => {
     if (entitlementsLoading) return;
-    if (view !== 'overview' && role !== 'unknown' && !canViewPayouts) setView('overview');
-  }, [view, canViewPayouts, role, entitlementsLoading, setView]);
+    if (view === 'monthly' && role !== 'unknown' && !canViewMonthlyStatement) setView('overview');
+    if (view === 'audit' && role !== 'unknown' && !canViewPayouts) setView('overview');
+  }, [view, canViewPayouts, canViewMonthlyStatement, role, entitlementsLoading, setView]);
 
   // Nav already hides the Reports link for a plain therapist (Shell.tsx);
   // this guard covers a direct URL hit (old bookmark, typed link) instead
@@ -87,7 +88,12 @@ export function ReportsPage() {
             { key: 'audit', label: 'Attribution audit' },
           ] as const
         )
-          .filter((v) => v.key === 'overview' || canViewPayouts || entitlementsLoading)
+          .filter(
+            (v) =>
+              v.key === 'overview' ||
+              entitlementsLoading ||
+              (v.key === 'monthly' ? canViewMonthlyStatement : canViewPayouts)
+          )
           .map((v) => (
             <button
               key={v.key}
@@ -105,7 +111,7 @@ export function ReportsPage() {
       </div>
 
       {view === 'overview' && <ReportsOverviewPage />}
-      {view === 'monthly' && canViewPayouts && <MonthlyStatementPage />}
+      {view === 'monthly' && canViewMonthlyStatement && <MonthlyStatementPage />}
       {view === 'audit' && canViewPayouts && <AttributionAuditPage />}
     </div>
   );

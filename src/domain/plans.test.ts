@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tierIncludes, PLAN_TIER_LABELS, currentMonthRange, minimumTierFor, type PlanFeature } from './plans';
+import { visitCapStatus, tierIncludes, PLAN_TIER_LABELS, currentMonthRange, minimumTierFor, type PlanFeature } from './plans';
 import type { PlanTier } from './types';
 
 const TIERS: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
@@ -72,5 +72,18 @@ describe('currentMonthRange', () => {
 
   it('handles a leap-year February', () => {
     expect(currentMonthRange(new Date('2028-02-01T12:00:00Z'))).toEqual({ from: '2028-02-01', to: '2028-02-29' });
+  });
+});
+
+describe('visitCapStatus', () => {
+  it('is ok with no cap or well under it', () => {
+    expect(visitCapStatus(500, null)).toBe('ok');
+    expect(visitCapStatus(39, 50)).toBe('ok');
+  });
+  it('warns from 80% and reports reached at the cap', () => {
+    expect(visitCapStatus(40, 50)).toBe('near');
+    expect(visitCapStatus(49, 50)).toBe('near');
+    expect(visitCapStatus(50, 50)).toBe('reached');
+    expect(visitCapStatus(61, 50)).toBe('reached');
   });
 });

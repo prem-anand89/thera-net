@@ -691,14 +691,17 @@ function ColorClashNotice({ therapists }: { therapists: Therapist[] }) {
 function AddTeamMemberForm({
   clinicId,
   onAdded,
+  loginsLocked = false,
 }: {
   clinicId: string;
   onAdded: () => void;
+  /** The plan's login seats are used up: only roster (no-login) therapists can still be added. */
+  loginsLocked?: boolean;
 }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Exclude<ClinicRole, 'unknown'>>('therapist');
-  const [needsLogin, setNeedsLogin] = useState(true);
+  const [needsLogin, setNeedsLogin] = useState(!loginsLocked);
   const [bookable, setBookable] = useState(true);
   
   const [busy, setBusy] = useState(false);
@@ -761,7 +764,7 @@ function AddTeamMemberForm({
       setName('');
       setEmail('');
       setRole('therapist');
-      setNeedsLogin(true);
+      setNeedsLogin(!loginsLocked);
       onAdded();
     } catch (err) {
       setError(toFriendlyMessage(err));
@@ -813,10 +816,16 @@ function AddTeamMemberForm({
           <input
             type="checkbox"
             checked={needsLogin}
+            disabled={loginsLocked}
             onChange={(e) => setNeedsLogin(e.target.checked)}
           />
           Needs login (can sign in to Theranet)
         </label>
+        {loginsLocked && (
+          <p className="-mt-1 ml-6 text-xs text-[var(--muted)]">
+            Team logins are included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above. You can still add a therapist to the schedule without a login.
+          </p>
+        )}
         {role !== 'front_desk' && (
           <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
             <input
@@ -1173,21 +1182,14 @@ export function Therapists() {
       <ErrorNote message={membersError || rosterError} />
 
       <div className="border-t border-[var(--border)] pt-6">
-        {atSeatCap ? (
-          <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-center">
-            <p className="text-sm font-medium text-[var(--ink)]">
-              This clinic's plan allows up to {entitlements.maxMembers} team login
-              {entitlements.maxMembers === 1 ? '' : 's'}.
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              Included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above.
-            </p>
-          </div>
-        ) : (
-          <div className="max-w-xl">
-            <AddTeamMemberForm clinicId={clinic.id} onAdded={() => void refetchMembers()} />
-          </div>
-        )}
+        <div className="max-w-xl">
+          <AddTeamMemberForm
+            key={atSeatCap ? 'roster-only' : 'full'}
+            clinicId={clinic.id}
+            loginsLocked={Boolean(atSeatCap)}
+            onAdded={() => void refetchMembers()}
+          />
+        </div>
       </div>
 
       {deleteTarget && (

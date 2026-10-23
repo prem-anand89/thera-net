@@ -17,6 +17,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
+import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { formatINR } from '@/domain/money';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
@@ -696,7 +697,7 @@ export function NewVisitPage() {
       entitlements.visitsThisMonth >= entitlements.visitCapPerMonth
     ) {
       return setError(
-        `This clinic's plan allows ${entitlements.visitCapPerMonth} visits per month, and that limit's been reached. Upgrade to log more.`
+        `This clinic's plan allows ${entitlements.visitCapPerMonth} visits per month and ${entitlements.visitsThisMonth} are logged. Nothing you entered is lost. Visits can be saved again next month, or after an upgrade.`
       );
     }
     if (savingRef.current) return;
@@ -1468,6 +1469,7 @@ export function NewVisitPage() {
     // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+      <VisitCapNotice />
 
       {/* Same two-column shape (reference panel left, form right) whether or
           not a patient is picked yet — the *content* inside the left panel

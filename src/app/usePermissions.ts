@@ -36,6 +36,13 @@ export interface Permissions {
   /** Print / save-as-PDF of notes, session logs and insurer packets (Solo and above). Fails closed while the plan loads. */
   canPrintNotes: boolean;
   /**
+   * Reports → Monthly statement. Admin on every plan: with no partner or
+   * therapist split configured (Lite/Solo cannot set one) the page is just
+   * billed totals, visits and patients. The split-shaped Attribution audit
+   * stays on `canViewPayouts`.
+   */
+  canViewMonthlyStatement: boolean;
+  /**
    * Recording a payment against a visit. Same two clinic preferences as `canBill`
    * but not the plan: Lite can't issue invoices, yet still collects (a direct
    * payment on the visit) — there is no billing desk for it to defer to.
@@ -76,6 +83,7 @@ export function usePermissions(): Permissions {
       (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
     entitlementsLoading: entitlements.loading,
     canPrintNotes: entitlements.can('notePrinting'),
+    canViewMonthlyStatement: scope.isAdmin,
     canCollectPayment: billingEnabled && (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
   };
 }
