@@ -9,9 +9,18 @@
 -- `set local role authenticated`, and ends by raising 'RESULT ...' -- the raise rolls the whole block back,
 -- so nothing is left behind. Read the outcome from the error message: each check prints PASS or FAIL.
 --
--- Ids are looked up, not hard-coded: a clinic that has an admin, a front-desk member, two therapists linked
--- to users whose membership role is 'therapist', a patient and a service. If no clinic qualifies the block
--- reports 'RESULT skipped: ...'.
+-- Ids are looked up, not hard-coded, and each block picks the first clinic (ordered by name) that has just the
+-- roles THAT block simulates -- no single clinic needs to have everything:
+--   * front-desk blocks need a front-desk member (+ admin / a therapist login only where the block acts as one);
+--   * blocks acting as a therapist need that therapist linked to a login whose membership role is 'therapist';
+--     a second therapist used only as "assisting_therapist_id" or as another visit's primary is plain data and
+--     needs no login;
+--   * block 8 (delete policies) mixes a front desk with an assistant login, so its assistant check runs in a
+--     separate clinic when needed; block 5's cross-clinic check needs a second clinic.
+-- Every clinic needs a service; if it has no patient a throwaway patient is inserted (rolled back with the block).
+-- Every RESULT string starts with the clinic name(s) the block ran on, in square brackets. If no clinic qualifies
+-- the block reports 'RESULT skipped: ...'. A sub-check marked SKIPPED inside a result is NOT a failure; it
+-- only means the data has no clinic that can supply that actor combination.
 --
 -- RLS hides rows rather than erroring on UPDATE/DELETE, so "cannot" is checked as row_count = 0; trigger and
 -- constraint rejections are checked by catching the error code.
@@ -23,30 +32,27 @@ do $$
 declare
   v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_item uuid; v_credit uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
   -- lookup (as owner)
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members d where d.clinic_id = c.id and d.role = 'front_desk')
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a front-desk member, 2 therapist rows, a service';
   end if;
-  select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+   where t.clinic_id = v_clinic order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and t.id <> v_t1 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   -- test visit (primary t1) with one line assisted by t2, and a share row (as owner)
@@ -89,7 +95,7 @@ begin
   get diagnostics n = row_count;
   r := r || format('desk cannot delete visit: %s', case when n = 0 then 'PASS' else 'FAIL' end);
 
-  raise exception 'RESULT front desk -- %', r;
+  raise exception 'RESULT [%] front desk -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -100,27 +106,26 @@ do $$
 declare
   v_clinic uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_item uuid; v_credit uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a therapist login and a second therapist row, a service';
   end if;
-  select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+  select t.id, t.user_id into v_t1, v_t1_user from therapists t
+   where t.clinic_id = v_clinic and t.id <> v_t2 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
@@ -168,7 +173,7 @@ begin
                      case when sqlstate = '42501' then 'PASS' else 'FAIL' end, sqlstate);
   end;
 
-  raise exception 'RESULT assisting therapist -- %', r;
+  raise exception 'RESULT [%] assisting therapist -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -178,28 +183,28 @@ do $$
 declare
   v_clinic uuid; v_admin uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_item uuid; v_credit uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with an admin, a therapist login, a second therapist row, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
    where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and t.id <> v_t1 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
@@ -237,7 +242,7 @@ begin
   get diagnostics n = row_count;
   r := r || format('admin updates share: %s', case when n = 1 then 'PASS' else 'FAIL' end);
 
-  raise exception 'RESULT primary + admin -- %', r;
+  raise exception 'RESULT [%] primary + admin -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -248,25 +253,24 @@ do $$
 declare
   v_clinic uuid; v_admin uuid; v_t1 uuid; v_t1_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_item uuid; v_credit uuid; v_invoice uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with an admin, a therapist row, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+   where t.clinic_id = v_clinic order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
@@ -318,7 +322,7 @@ begin
   get diagnostics n = row_count;
   r := r || format('invoiced: admin still updates share: %s', case when n = 1 then 'PASS' else 'FAIL' end);
 
-  raise exception 'RESULT invoiced -- %', r;
+  raise exception 'RESULT [%] invoiced -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -329,24 +333,23 @@ do $$
 declare
   v_clinic uuid; v_t1 uuid; v_t1_user uuid; v_patient uuid; v_service uuid; v_visit uuid; v_pkg uuid;
   v_other_clinic uuid;
-  r text := '';
+  v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a therapist login, a service';
   end if;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
    where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
   select id into v_other_clinic from clinics where id <> v_clinic limit 1;
 
@@ -399,9 +402,11 @@ begin
       r := r || format('share pointing at another clinic refused: %s (%s)',
                        case when sqlstate = '23514' then 'PASS' else 'FAIL' end, sqlstate);
     end;
+  else
+    r := r || 'share pointing at another clinic refused: SKIPPED (needs a second clinic)';
   end if;
 
-  raise exception 'RESULT row rules -- %', r;
+  raise exception 'RESULT [%] row rules -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -413,29 +418,26 @@ declare
   v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_visit_b uuid; v_item uuid; v_credit uuid;
   v_i1 uuid; v_i2 uuid; v_i3 uuid; v_i4 uuid; v_other_ther uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a therapist login and a second therapist row, a service';
   end if;
-  select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
-  select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
-  select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+  select t.id, t.user_id into v_t1, v_t1_user from therapists t
+   where t.clinic_id = v_clinic and t.id <> v_t2 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
@@ -460,7 +462,7 @@ begin
     r := r || format('non-primary non-creator credits themselves refused: %s (%s %s); ', case when sqlstate = '42501' then 'PASS' else 'FAIL' end, sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT non-creator insert -- %', r;
+  raise exception 'RESULT [%] non-creator insert -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -472,29 +474,26 @@ declare
   v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_visit_b uuid; v_item uuid; v_credit uuid;
   v_i1 uuid; v_i2 uuid; v_i3 uuid; v_i4 uuid; v_other_ther uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a therapist login and a second therapist row, a service';
   end if;
-  select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
-  select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
-  select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+  select t.id, t.user_id into v_t1, v_t1_user from therapists t
+   where t.clinic_id = v_clinic and t.id <> v_t2 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   -- create the visit as t2 (owner role, but auth.uid() = t2 so set_updated_at stamps created_by = t2)
@@ -525,7 +524,7 @@ begin
   get diagnostics n = row_count;
   r := r || format('creator cannot change a line afterwards: %s; ', case when n = 0 then 'PASS' else 'FAIL' end);
 
-  raise exception 'RESULT creator insert -- %', r;
+  raise exception 'RESULT [%] creator insert -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -534,33 +533,64 @@ end $$;
 -- ===========================================================================
 do $$
 declare
-  v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
-  v_patient uuid; v_service uuid; v_visit uuid; v_visit_b uuid; v_item uuid; v_credit uuid;
-  v_i1 uuid; v_i2 uuid; v_i3 uuid; v_i4 uuid; v_other_ther uuid;
+  v_clinic uuid; v_clinic_name text; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid;
+  v_patient uuid; v_service uuid; v_visit uuid; v_i1 uuid; v_i2 uuid; v_i3 uuid;
+  -- part B (assistant), possibly a different clinic
+  v_clinic_b uuid; v_clinic_b_name text; v_pt uuid; v_pt_user uuid; v_pa uuid; v_pa_user uuid;
+  v_patient_b uuid; v_service_b uuid; v_visit_b uuid; v_i4 uuid;
   n int; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  -- part A: front desk + admin + primary therapist login
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members d where d.clinic_id = c.id and d.role = 'front_desk')
+     and exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a front-desk member, an admin, a therapist login, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
    where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
-  select t.id, t.user_id into v_t2, v_t2_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
+
+  -- part B: the assistant is a therapist login; needs only a therapist login plus another therapist row
+  select c.id, c.name into v_clinic_b, v_clinic_b_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
+  if v_clinic_b is null then
+    r := r || 'assistant cannot delete line: SKIPPED (needs a clinic with a therapist login and a second therapist row); ';
+  else
+    select t.id, t.user_id into v_pa, v_pa_user from therapists t
+      join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
+     where t.clinic_id = v_clinic_b and m.role = 'therapist' order by t.id limit 1;
+    select t.id, t.user_id into v_pt, v_pt_user from therapists t
+     where t.clinic_id = v_clinic_b and t.id <> v_pa order by t.id limit 1;
+    select id into v_patient_b from patients where clinic_id = v_clinic_b limit 1;
+    if v_patient_b is null then  -- throwaway patient (rolled back with the block)
+      insert into patients (clinic_id, mrno, name)
+      values (v_clinic_b, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient_b;
+    end if;
+    select id into v_service_b from service_catalog where clinic_id = v_clinic_b limit 1;
+    insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
+                        actual_bill_paise, clinic_split_pct, tax_pct, tds_basis, clinic_share_paise, post_tax_paise,
+                        tds_paise, partner_share_paise)
+    values (v_clinic_b, v_patient_b, v_pt, current_date, v_service_b, 100000, 100000, 50, 0, 'gross_bill', 50000, 50000, 0, 50000)
+    returning id into v_visit_b;
+    insert into visit_items (clinic_id, visit_id, position, service_catalog_id, service_name, catalog_price_paise,
+                             price_paise, assisting_therapist_id)
+    values (v_clinic_b, v_visit_b, 0, v_service_b, 'Verify service', 100000, 100000, v_pa) returning id into v_i4;
+  end if;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
                       actual_bill_paise, clinic_split_pct, tax_pct, tds_basis, clinic_share_paise, post_tax_paise,
@@ -576,10 +606,6 @@ begin
   insert into visit_items (clinic_id, visit_id, position, service_catalog_id, service_name, catalog_price_paise,
                            price_paise, assisting_therapist_id)
   values (v_clinic, v_visit, 2, v_service, 'Verify service', 100000, 100000, null) returning id into v_i3;
-  insert into visit_items (clinic_id, visit_id, position, service_catalog_id, service_name, catalog_price_paise,
-                           price_paise, assisting_therapist_id)
-  values (v_clinic, v_visit, 3, v_service, 'Verify service', 100000, 100000, v_t2) returning id into v_i4;
-  execute 'reset role';
   perform set_config('request.jwt.claims', json_build_object('sub', v_desk, 'role', 'authenticated')::text, true);
   execute 'set local role authenticated';
   delete from visit_items where id = v_i1;
@@ -597,14 +623,16 @@ begin
   delete from visit_items where id = v_i3;
   get diagnostics n = row_count;
   r := r || format('primary deletes line: %s; ', case when n = 1 then 'PASS' else 'FAIL' end);
-  execute 'reset role';
-  perform set_config('request.jwt.claims', json_build_object('sub', v_t2_user, 'role', 'authenticated')::text, true);
-  execute 'set local role authenticated';
-  delete from visit_items where id = v_i4;
-  get diagnostics n = row_count;
-  r := r || format('assistant cannot delete line: %s; ', case when n = 0 then 'PASS' else 'FAIL' end);
+  if v_i4 is not null then
+    execute 'reset role';
+    perform set_config('request.jwt.claims', json_build_object('sub', v_pa_user, 'role', 'authenticated')::text, true);
+    execute 'set local role authenticated';
+    delete from visit_items where id = v_i4;
+    get diagnostics n = row_count;
+    r := r || format('assistant cannot delete line: %s; ', case when n = 0 then 'PASS' else 'FAIL' end);
+  end if;
 
-  raise exception 'RESULT delete policies -- %', r;
+  raise exception 'RESULT [%] delete policies -- %', v_clinic_name || coalesce(' / ' || v_clinic_b_name, ''), r;
 end $$;
 
 -- ===========================================================================
@@ -615,29 +643,26 @@ declare
   v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_visit_b uuid; v_item uuid; v_credit uuid;
   v_i1 uuid; v_i2 uuid; v_i3 uuid; v_i4 uuid; v_other_ther uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a therapist login, a second therapist row, a service';
   end if;
-  select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
-  select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
    where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and t.id <> v_t1 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
@@ -671,7 +696,7 @@ begin
     r := r || format('primary moves share to another visit refused: %s (%s %s); ', case when sqlstate = '42501' then 'PASS' else 'FAIL' end, sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT with check -- %', r;
+  raise exception 'RESULT [%] with check -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -682,29 +707,24 @@ declare
   v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_visit_b uuid; v_item uuid; v_credit uuid;
   v_i1 uuid; v_i2 uuid; v_i3 uuid; v_i4 uuid; v_other_ther uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with an admin, a therapist row, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
-  select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
-  select t.id, t.user_id into v_t2, v_t2_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   select id into v_other_ther from therapists where clinic_id <> v_clinic limit 1;
@@ -733,7 +753,7 @@ begin
     r := r || format('other-clinic credit refused: %s (%s %s); ', case when sqlstate = '23514' then 'PASS' else 'FAIL' end, sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT other-clinic therapist -- %', r;
+  raise exception 'RESULT [%] other-clinic therapist -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -749,19 +769,16 @@ do $$
 declare
   v_clinic uuid; v_admin uuid; v_desk uuid; v_t1 uuid; v_t1_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_visit_b uuid; v_visit_c uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members d where d.clinic_id = c.id and d.role = 'front_desk')
+     and exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a front-desk member, an admin, a therapist login, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select user_id into v_desk from clinic_members where clinic_id = v_clinic and role = 'front_desk' limit 1;
@@ -769,6 +786,10 @@ begin
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
    where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   -- three test visits, primary t1 (as owner)
@@ -851,7 +872,7 @@ begin
     r := r || format('no-user server work soft-deletes: FAIL (%s %s)', sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT visit soft-delete -- %', r;
+  raise exception 'RESULT [%] visit soft-delete -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -862,25 +883,24 @@ do $$
 declare
   v_clinic uuid; v_admin uuid; v_t1 uuid; v_t1_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_item uuid; v_invoice uuid;
-  n int; r text := '';
+  n int; v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with an admin, a therapist row, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+   where t.clinic_id = v_clinic order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   insert into visits (clinic_id, patient_id, therapist_id, visit_date, service_catalog_id, catalog_price_paise,
@@ -946,7 +966,7 @@ begin
                      case when sqlstate = '42501' and sqlerrm = 'This visit is on an invoice; its services are frozen.' then 'PASS' else 'FAIL' end, sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT invoiced no-op update -- %', r;
+  raise exception 'RESULT [%] invoiced no-op update -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -958,27 +978,26 @@ do $$
 declare
   v_clinic uuid; v_t1 uuid; v_t1_user uuid; v_t2 uuid; v_t2_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid; v_invoice uuid;
-  r text := '';
+  v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id where t.clinic_id = c.id and m.role = 'therapist') >= 1
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 2
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with a therapist login and a second therapist row, a service';
   end if;
-  select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
   select t.id, t.user_id into v_t2, v_t2_user from therapists t
     join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' and t.user_id <> v_t1_user order by t.id limit 1;
+   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+  select t.id, t.user_id into v_t1, v_t1_user from therapists t
+   where t.clinic_id = v_clinic and t.id <> v_t2 order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   -- t2 logs the visit for t1 (owner role, auth.uid() = t2, so created_by = t2)
@@ -1034,7 +1053,7 @@ begin
                      case when sqlstate = '42501' then 'PASS' else 'FAIL' end, sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT creator after invoice -- %', r;
+  raise exception 'RESULT [%] creator after invoice -- %', v_clinic_name, r;
 end $$;
 
 -- ===========================================================================
@@ -1047,25 +1066,24 @@ declare
   v_clinic uuid; v_admin uuid; v_t1 uuid; v_t1_user uuid;
   v_patient uuid; v_service uuid; v_visit uuid;
   v_share_only uuid; v_assist_only uuid; v_assist_deleted uuid; v_unlinked uuid;
-  r text := '';
+  v_clinic_name text; r text := '';
 begin
-  select cm.clinic_id into v_clinic
-    from clinic_members cm
-   where cm.role = 'front_desk'
-     and exists (select 1 from clinic_members a where a.clinic_id = cm.clinic_id and a.role = 'admin')
-     and (select count(*) from therapists t join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-           where t.clinic_id = cm.clinic_id and m.role = 'therapist') >= 2
-     and exists (select 1 from patients p where p.clinic_id = cm.clinic_id)
-     and exists (select 1 from service_catalog s where s.clinic_id = cm.clinic_id)
-   limit 1;
+  select c.id, c.name into v_clinic, v_clinic_name from clinics c
+   where exists (select 1 from clinic_members a where a.clinic_id = c.id and a.role = 'admin')
+     and (select count(*) from therapists t where t.clinic_id = c.id) >= 1
+     and exists (select 1 from service_catalog s where s.clinic_id = c.id)
+   order by c.name, c.id limit 1;
   if v_clinic is null then
-    raise exception 'RESULT skipped: no clinic with admin + front desk + 2 linked therapists + patient + service';
+    raise exception 'RESULT skipped: no clinic with an admin, a therapist row, a service';
   end if;
   select user_id into v_admin from clinic_members where clinic_id = v_clinic and role = 'admin' limit 1;
   select t.id, t.user_id into v_t1, v_t1_user from therapists t
-    join clinic_members m on m.clinic_id = t.clinic_id and m.user_id = t.user_id
-   where t.clinic_id = v_clinic and m.role = 'therapist' order by t.id limit 1;
+   where t.clinic_id = v_clinic order by t.id limit 1;
   select id into v_patient from patients where clinic_id = v_clinic limit 1;
+  if v_patient is null then  -- throwaway patient (rolled back with the block)
+    insert into patients (clinic_id, mrno, name)
+    values (v_clinic, 'VERIFY-' || substr(gen_random_uuid()::text, 1, 8), 'Verify patient') returning id into v_patient;
+  end if;
   select id into v_service from service_catalog where clinic_id = v_clinic limit 1;
 
   -- throwaway roster rows (as owner); a seat/plan rule refusing them means this check can't run here
@@ -1122,5 +1140,5 @@ begin
     r := r || format('unlinked therapist deleted: FAIL (%s %s)', sqlstate, sqlerrm);
   end;
 
-  raise exception 'RESULT hard_delete_therapist -- %', r;
+  raise exception 'RESULT [%] hard_delete_therapist -- %', v_clinic_name, r;
 end $$;
