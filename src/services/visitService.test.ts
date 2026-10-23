@@ -631,6 +631,21 @@ describe('visitService: lines and shares', () => {
     expect(shareOf(v.id, 'th-prem')).toBe(rs(500));
   });
 
+  it('refuses a package group that belongs to another patient', async () => {
+    const first = await svc.create({ ...base, patientId: 'pat-other', lines: [{ serviceCatalogId: 'svc-physio3' }] });
+    await expect(
+      svc.create({
+        ...base,
+        lines: [
+          {
+            serviceCatalogId: 'svc-physio3',
+            packageContinuation: { packageGroupId: first.packageGroupId!, sessionIndex: 2, packageTotal: 3 },
+          },
+        ],
+      })
+    ).rejects.toThrow('That package belongs to another patient.');
+  });
+
   it('rejects a second package line', async () => {
     await expect(
       svc.create({

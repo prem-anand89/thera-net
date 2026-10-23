@@ -1,0 +1,61 @@
+import type { VisitLineInput } from '@/services/visitService';
+import type { BillAdjustmentMode, BillAdjustmentValueType } from '@/domain/billAdjustment';
+import { continuationLine, emptyDraftLine, hasService, type DraftLine, type OpenPackage } from './ServiceRows';
+
+export const PACKAGE_NOT_OPEN =
+  'That package is no longer open for this patient. Remove it or pick another service.';
+
+/**
+ * The rows as `NewVisitInput.lines`. Every package session is checked against the patient's CURRENT open
+ * packages (not the snapshot the row carries): the same package must still be open, and the session
+ * number comes from the fresh entry. Returns the lines, or the problem per row index.
+ */
+export function draftLinesToVisitLines(
+  rows: DraftLine[],
+  openPackages: OpenPackage[]
+): { lines: VisitLineInput[] } | { errors: Map<number, string> } {
+  const errors = new Map<number, string>();
+  const lines: VisitLineInput[] = [];
+  rows.forEach((r, i) => {
+    if (r.continuation) {
+      const fresh = openPackages.find((p) => p.packageGroupId === r.continuation!.packageGroupId);
+      if (!fresh) {
+        errors.set(i, PACKAGE_NOT_OPEN);
+        return;
+      }
+      lines.push({
+        serviceCatalogId: fresh.serviceCatalogId,
+        assistingTherapistId: r.assistingTherapistId,
+        packageContinuation: {
+          packageGroupId: fresh.packageGroupId,
+          sessionIndex: fresh.logged + 1,
+          packageTotal: fresh.packageTotal,
+        },
+      });
+      return;
+    }
+    if (!hasService(r)) {
+      errors.set(i, 'Pick a service.');
+      return;
+    }
+    lines.push({ serviceCatalogId: r.serviceCatalogId!, assistingTherapistId: r.assistingTherapistId });
+  });
+  return errors.size > 0 ? { errors } : { lines };
+}
+
+/** Whether the discount / extra the user typed still makes sense for a new subtotal (false = clear it). */
+export function adjustmentSurvives(
+  subtotalPaise: number,
+  mode: BillAdjustmentMode,
+  valueType: BillAdjustmentValueType,
+  value: string
+): boolean {
+  if (mode === 'none') return true;
+  if (subtotalPaise <= 0) return false;
+  return !(mode === 'discount' && valueType === 'amount' && Math.round(Number(value || 0) * 100) > subtotalPaise);
+}
+
+/** A patient's starting rows: their one open package is continued automatically; otherwise one empty row. */
+export function initialRowsForPatient(openPackages: OpenPackage[]): DraftLine[] {
+  return openPackages.length === 1 ? [continuationLine(openPackages[0])] : [emptyDraftLine()];
+}

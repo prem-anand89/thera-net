@@ -76,6 +76,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
+import { adjustmentSurvives, draftLinesToVisitLines, initialRowsForPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 
@@ -86,6 +87,7 @@ import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 // `?? []` literal on every render would change identity each time and
 // defeat the useMemo that ranks treatments by usage.
 const EMPTY_TREATMENTS: TreatmentItem[] = [];
+const EMPTY_PACKAGES: OpenPackage[] = [];
 const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -337,8 +339,10 @@ export function NewVisitPage() {
     return out;
   }, [recentVisitRows]);
 
-  const openPackages = useLiveQuery(async (): Promise<OpenPackage[]> => {
-    if (!patient) return [];
+  // Tagged with the patient it was read for: after a patient change the live query can still hold the
+  // previous patient's list for a moment, and that must never be mistaken for the new patient's.
+  const openPackagesResult = useLiveQuery(async (): Promise<{ patientId: UUID | null; list: OpenPackage[] }> => {
+    if (!patient) return { patientId: null, list: [] };
     const visits = await repos.visits.list({ clinicId: clinic.id, patientId: patient.id });
     const groups = new Map<string, typeof visits>();
     for (const v of visits) {
@@ -362,8 +366,12 @@ export function NewVisitPage() {
         startedOn: sorted[0].visitDate,
       });
     }
-    return open.sort((a, b) => b.startedOn.localeCompare(a.startedOn));
+    return { patientId: patient.id, list: open.sort((a, b) => b.startedOn.localeCompare(a.startedOn)) };
   }, [clinic.id, patient?.id]);
+  const openPackages = useMemo((): OpenPackage[] | undefined => {
+    if (!patient) return EMPTY_PACKAGES;
+    return openPackagesResult?.patientId === patient.id ? openPackagesResult.list : undefined;
+  }, [patient, openPackagesResult]);
 
   // "Complete visit" from an appointment: the visit is that appointment's — its therapist and its day —
   // not whoever saw the patient last. Applied once per appointment, so a manual change afterwards sticks.
@@ -442,6 +450,13 @@ export function NewVisitPage() {
       // involved) this IS the whole pre-fill. (Only the main service is
       // repeated, not the visit's other lines.)
       setRows([{ ...emptyDraftLine(), serviceCatalogId: repeatVisit.serviceCatalogId }]);
+      // The discount is pre-filled only when the original had one service: against several lines
+      // the old amount no longer means the same thing.
+      const lineCount = (await repos.visitItems.listByVisitIds([repeatVisit.id])).filter((i) => !i.deleted).length;
+      if (lineCount > 1) {
+        resetBillAdjustment();
+        return;
+      }
       const inferred = inferBillAdjustment(
         repeatVisit.catalogPricePaise,
         repeatVisit.actualBillPaise
@@ -506,8 +521,12 @@ export function NewVisitPage() {
     if (lastVisit?.therapistId) setTherapistId(lastVisit.therapistId);
   }, [patient, patientVisits, lastVisit?.therapistId, search.repeatVisitId, search.appointmentId, fromAppointment]);
 
+  // Once per repeated visit: a later openPackages update must not re-insert a package row the user removed.
+  const repeatPackageAppliedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!repeatVisit?.packageGroupId || openPackages === undefined) return;
+    if (repeatPackageAppliedRef.current === repeatVisit.id) return;
+    repeatPackageAppliedRef.current = repeatVisit.id;
     const match = openPackages.find((op) => op.packageGroupId === repeatVisit.packageGroupId);
     // If the package this visit belonged to has since closed (every session
     // logged), the plain repeat of the same service from the effect above
@@ -523,15 +542,29 @@ export function NewVisitPage() {
   // deliberately in the service picker. Runs once per patient (tracked by id,
   // not by re-deriving "untouched" state), so removing the package row isn't
   // silently reverted if openPackages happens to re-emit.
-  const autoContinuationForPatientRef = useRef<UUID | null>(null);
+  // The rows belong to one patient: choosing another (or clearing the patient) starts over, so one
+  // patient's package session can never ride along onto the next patient's visit.
+  const rowsPatientRef = useRef<UUID | null>(null);
   useEffect(() => {
-    if (!patient || repeatVisit || openPackages === undefined) return;
-    if (autoContinuationForPatientRef.current === patient.id) return;
-    autoContinuationForPatientRef.current = patient.id;
-    if (openPackages.length === 1) {
-      // The session joins whatever services were already picked (empty rows make way for it).
-      setRows((prev) => [continuationLine(openPackages[0]), ...prev.filter(hasService)]);
+    if (!patient) {
+      if (rowsPatientRef.current) {
+        rowsPatientRef.current = null;
+        setRows([emptyDraftLine()]);
+        setRowErrors(new Map());
+        resetBillAdjustment();
+      }
+      return;
     }
+    if (repeatVisit && patient.id === repeatVisit.patientId) {
+      // The repeat flow fills the rows itself.
+      rowsPatientRef.current = patient.id;
+      return;
+    }
+    if (openPackages === undefined || rowsPatientRef.current === patient.id) return;
+    rowsPatientRef.current = patient.id;
+    setRows(initialRowsForPatient(openPackages));
+    setRowErrors(new Map());
+    resetBillAdjustment();
   }, [patient, repeatVisit, openPackages]);
 
   // An assistant can't also be the visit's therapist: changing the therapist untags that person.
@@ -582,11 +615,7 @@ export function NewVisitPage() {
     setRows(next);
     setRowErrors(new Map());
     const subtotal = draftSubtotalPaise(next, catalogItems);
-    const tooBig =
-      adjustmentMode === 'discount' &&
-      adjustmentValueType === 'amount' &&
-      Math.round(Number(adjustmentValue || 0) * 100) > subtotal;
-    if (subtotal === 0 || tooBig) resetBillAdjustment();
+    if (!adjustmentSurvives(subtotal, adjustmentMode, adjustmentValueType, adjustmentValue)) resetBillAdjustment();
   }
 
   function selectPatientFromSearch(p: Patient) {
@@ -639,13 +668,17 @@ export function NewVisitPage() {
     setError(null);
     if (!patient) return setError('Select or create a patient first');
     if (!therapistId) return setError('Select a therapist');
-    const missing = new Map<number, string>();
-    rows.forEach((r, i) => {
-      if (!hasService(r)) missing.set(i, 'Pick a service.');
-    });
-    if (missing.size > 0) {
-      setRowErrors(missing);
-      return setError(rows.length === 1 ? 'Select a service' : 'Pick a service for each row, or remove the empty one.');
+    const built = draftLinesToVisitLines(rows, openPackages ?? []);
+    if ('errors' in built) {
+      setRowErrors(built.errors);
+      const onlyEmpty = [...built.errors.values()].every((m) => m === 'Pick a service.');
+      return setError(
+        !onlyEmpty
+          ? 'Fix the service marked above.'
+          : rows.length === 1
+            ? 'Select a service'
+            : 'Pick a service for each row, or remove the empty one.'
+      );
     }
     if (rowProblems(rows, catalogItems).size > 0) return setError('Fix the service marked above.');
     if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
@@ -669,19 +702,7 @@ export function NewVisitPage() {
         patientId: patient.id,
         therapistId,
         visitDate,
-        lines: rows.map((r) => ({
-          serviceCatalogId: r.continuation?.serviceCatalogId ?? r.serviceCatalogId!,
-          assistingTherapistId: r.assistingTherapistId,
-          ...(r.continuation
-            ? {
-                packageContinuation: {
-                  packageGroupId: r.continuation.packageGroupId,
-                  sessionIndex: r.continuation.logged + 1,
-                  packageTotal: r.continuation.packageTotal,
-                },
-              }
-            : {}),
-        })),
+        lines: built.lines,
         condition,
         treatmentNotes: notes,
         treatmentIds,
@@ -1454,7 +1475,7 @@ export function NewVisitPage() {
 
       <VisitSaveBar
         totalPaise={billPaise}
-        serviceCount={rows.filter(hasService).length || rows.length}
+        serviceCount={rows.filter(hasService).length}
         payment={savePayment}
         busy={busy}
         onSave={() => void save()}

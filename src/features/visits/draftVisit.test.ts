@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import { adjustmentSurvives, draftLinesToVisitLines, initialRowsForPatient, PACKAGE_NOT_OPEN } from './draftVisit';
+import type { DraftLine, OpenPackage } from './ServiceRows';
+
+const pkg = (logged: number): OpenPackage => ({
+  packageGroupId: 'g1',
+  serviceCatalogId: 'rehab',
+  serviceName: 'Rehab',
+  logged,
+  packageTotal: 10,
+  startedOn: '2026-09-01',
+});
+const plain = (id: string, assist: string | null = null): DraftLine => ({ key: id, serviceCatalogId: id, assistingTherapistId: assist });
+const pkgRow = (p: OpenPackage): DraftLine => ({ key: 'p', continuation: p, assistingTherapistId: null });
+
+describe('draftLinesToVisitLines', () => {
+  it('uses the fresh session number, not the row snapshot', () => {
+    const out = draftLinesToVisitLines([pkgRow(pkg(4)), plain('a', 't2')], [pkg(5)]);
+    expect('lines' in out && out.lines).toEqual([
+      { serviceCatalogId: 'rehab', assistingTherapistId: null, packageContinuation: { packageGroupId: 'g1', sessionIndex: 6, packageTotal: 10 } },
+      { serviceCatalogId: 'a', assistingTherapistId: 't2' },
+    ]);
+  });
+  it('blocks a package that is no longer open, on its row', () => {
+    const out = draftLinesToVisitLines([plain('a'), pkgRow(pkg(4))], []);
+    expect('errors' in out && out.errors.get(1)).toBe(PACKAGE_NOT_OPEN);
+  });
+  it('flags an empty row', () => {
+    const out = draftLinesToVisitLines([{ key: 'x', assistingTherapistId: null }], []);
+    expect('errors' in out && out.errors.get(0)).toBe('Pick a service.');
+  });
+});
+
+describe('adjustmentSurvives', () => {
+  it('keeps a discount that still fits', () => expect(adjustmentSurvives(50000, 'discount', 'amount', '200')).toBe(true));
+  it('drops a rupee discount larger than the subtotal', () => expect(adjustmentSurvives(50000, 'discount', 'amount', '600')).toBe(false));
+  it('keeps a percent discount and an extra', () => {
+    expect(adjustmentSurvives(50000, 'discount', 'percent', '50')).toBe(true);
+    expect(adjustmentSurvives(50000, 'extra', 'amount', '900')).toBe(true);
+  });
+  it('drops any adjustment at a zero subtotal', () => expect(adjustmentSurvives(0, 'extra', 'amount', '10')).toBe(false));
+});
+
+describe('initialRowsForPatient', () => {
+  it('continues the only open package', () => {
+    const rows = initialRowsForPatient([pkg(4)]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].continuation?.packageGroupId).toBe('g1');
+  });
+  it('starts empty with none or several', () => {
+    for (const list of [[], [pkg(1), { ...pkg(2), packageGroupId: 'g2' }]]) {
+      const rows = initialRowsForPatient(list);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].continuation).toBeUndefined();
+      expect(rows[0].serviceCatalogId).toBeUndefined();
+    }
+  });
+});

@@ -27,9 +27,12 @@ export function VisitSaveBar({
   onSave: () => void;
   onSummaryClick: () => void;
 }) {
-  const parts = [formatINR(totalPaise), `${serviceCount} ${serviceCount === 1 ? 'service' : 'services'}`];
-  if (payment.kind === 'now') parts.push(`${payment.methodLabel}, collected now`);
-  if (payment.kind === 'later') parts.push('to collect later');
+  const parts =
+    serviceCount === 0
+      ? ['No service yet']
+      : [formatINR(totalPaise), `${serviceCount} ${serviceCount === 1 ? 'service' : 'services'}`];
+  if (serviceCount > 0 && payment.kind === 'now') parts.push(`${payment.methodLabel}, collected now`);
+  if (serviceCount > 0 && payment.kind === 'later') parts.push('to collect later');
   return (
     <div
       data-testid="visit-save-bar"

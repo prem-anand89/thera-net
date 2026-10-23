@@ -228,6 +228,11 @@ export function ServiceRows({
         return (
           <div
             key={row.key}
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return;
+              setChanging(null);
+              setAssigning(null);
+            }}
             className={`rounded-lg border bg-[var(--surface)] p-3 ${
               error ? 'border-[var(--rust)]' : 'border-[var(--border)]'
             }`}

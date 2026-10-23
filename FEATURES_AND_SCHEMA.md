@@ -45,6 +45,15 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     (a continuation or a multi-session service). With an open package and no package row, a note reads
     "{patient} has an open package (session n of N). It isn't used on this visit." with "Add package session";
     it never blocks saving. Save sends `visitService.create({ lines })`.
+  - **Rows belong to one patient.** Changing the patient (or clearing it) restarts the rows and the discount
+    (one auto continuation row if the new patient has exactly one open package, else one empty row;
+    `initialRowsForPatient`). At Save every package row is re-checked against the patient's current open packages
+    (`draftLinesToVisitLines`): a package that is no longer open blocks the save on its row ("That package is no
+    longer open for this patient. Remove it or pick another service."), and the session number comes from the
+    fresh package, not the row. `visitService.create` also refuses a `packageContinuation` whose group has a
+    visit for another patient ("That package belongs to another patient."). "Repeat last visit" applies its
+    package row once, and pre-fills the discount only when the original visit had a single service. Esc closes
+    an opened change-service / assistant picker.
   - **Bill.** Subtotal = the rows' catalog prices (₹0 for a continuation). The discount / extra control
     (`BillAdjustmentFields`, ₹ or %, reason required whenever the bill differs from the subtotal) applies to the
     subtotal and **survives row changes**; it is cleared only when a ₹ discount no longer fits the new subtotal
@@ -59,7 +68,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     untags that person as an assistant.
   - **Phone save bar** (`VisitSaveBar`, below `sm:`): fixed above the bottom navigation
     (`bottom: calc(64px + env(safe-area-inset-bottom))`, 64 = `PHONE_BOTTOM_NAV`), reads "₹1,300 · 2 services ·
-    UPI, collected now" (or "to collect later") with Save visit; tapping the summary scrolls to Payment. The
+    UPI, collected now" (or "to collect later"; "No service yet" until a service is chosen) with Save visit; tapping the summary scrolls to Payment. The
     page gets extra bottom padding on phones; tablet/desktop keep Save under Payment.
   - After saving: the "Visit logged" screen and the bill dialog name the services ("Assessment + Dry needling"),
     and the extra-visit button reads "Log a separate visit for {patient}".

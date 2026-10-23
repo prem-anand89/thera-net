@@ -339,6 +339,14 @@ export function createVisitService(repos: Repos) {
         specs = withPackageFlags(specs, catalog);
       }
       await checkSpecs(input.clinicId, input.therapistId, specs);
+      // A package session can only continue this patient's own package.
+      for (const sp of specs) {
+        if (!sp.continuation) continue;
+        const group = await repos.visits.listByPackageGroup(sp.continuation.packageGroupId);
+        if (group.some((v) => !v.deleted && v.patientId !== input.patientId)) {
+          throw new Error('That package belongs to another patient.');
+        }
+      }
 
       const visitId = crypto.randomUUID();
       const now = new Date().toISOString();

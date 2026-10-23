@@ -181,6 +181,18 @@ describe('ServiceRows', () => {
     expect(screen.getByText('Pick a service.')).toBeInTheDocument();
   });
 
+  it('escape cancels an opened change-service picker and assistant picker', () => {
+    render(<Harness initial={[row('a', 'assess')]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Assessment' }));
+    expect(screen.getByRole('combobox', { name: 'Service' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Service' }), { key: 'Escape' });
+    expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '+ Assign assistant' }));
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Assistant' }), { key: 'Escape' });
+    expect(screen.queryByRole('combobox', { name: 'Assistant' })).toBeNull();
+    expect(screen.getByRole('button', { name: '+ Assign assistant' })).toBeInTheDocument();
+  });
+
   it('adds another service row', () => {
     const seen: DraftLine[][] = [];
     render(<Harness initial={[row('a', 'assess')]} onRows={(r) => seen.push(r)} />);
@@ -250,6 +262,10 @@ describe('VisitSaveBar', () => {
     fireEvent.click(within(bar).getByText(/₹1,300/));
     expect(onSummary).toHaveBeenCalled();
     expect(bar.className).toContain('sm:hidden');
+    rerender(
+      <VisitSaveBar totalPaise={0} serviceCount={0} payment={{ kind: 'none' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
+    );
+    expect(within(bar).getByText('No service yet')).toBeInTheDocument();
     rerender(
       <VisitSaveBar totalPaise={50000} serviceCount={1} payment={{ kind: 'later' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
     );
