@@ -12,8 +12,12 @@ import type {
   Therapist,
   UUID,
   Visit,
+  VisitCredit,
+  VisitItem,
 } from '@/domain/types';
 
+// Version 3 stays current: visitItems / visitCredits were added as optional
+// keys (an older v3 file without them restores as "none").
 const BACKUP_VERSION = 3;
 
 export interface BackupBundle {
@@ -25,6 +29,9 @@ export interface BackupBundle {
   catalog: CatalogItem[];
   patients: Patient[];
   visits: Visit[];
+  /** Service lines and revenue shares of the visits. Absent in backups taken before multi-service visits. */
+  visitItems?: VisitItem[];
+  visitCredits?: VisitCredit[];
   invoices: Invoice[];
   invoicePayments: InvoicePayment[];
   payments: Payment[];
@@ -38,6 +45,8 @@ export interface RestoreSummary {
   catalog: number;
   patients: number;
   visits: number;
+  visitItems: number;
+  visitCredits: number;
   invoices: number;
   invoicePayments: number;
   payments: number;
@@ -55,6 +64,8 @@ export function createBackupService(repos: Repos) {
       catalog,
       patients,
       visits,
+      visitItems,
+      visitCredits,
       invoices,
       invoicePayments,
       payments,
@@ -67,6 +78,8 @@ export function createBackupService(repos: Repos) {
       repos.catalog.list(clinicId, true),
       repos.patients.list(clinicId),
       repos.visits.list({ clinicId }),
+      repos.visitItems.listByClinic(clinicId),
+      repos.visitCredits.listByClinic(clinicId),
       repos.invoices.list(clinicId),
       repos.invoicePayments.list(clinicId),
       repos.payments.list(clinicId),
@@ -85,6 +98,8 @@ export function createBackupService(repos: Repos) {
       catalog,
       patients,
       visits,
+      visitItems,
+      visitCredits,
       invoices,
       invoicePayments,
       payments,
@@ -136,6 +151,9 @@ export function createBackupService(repos: Repos) {
         throw new Error('This backup was exported from a different clinic — restore is only supported into the same clinic it came from.');
       }
       const settlementPayments = bundle.settlementPayments ?? [];
+      // Backups from before multi-service visits have no lines or shares.
+      const visitItems = bundle.visitItems ?? [];
+      const visitCredits = bundle.visitCredits ?? [];
 
       // A voided invoice stays void. The server owns that (void_invoice()
       // releases the visits and rejects any client write of status 'void' or
@@ -165,12 +183,18 @@ export function createBackupService(repos: Repos) {
         ...settlementPayments.map((p) => repos.settlementPayments.put(p)),
         ...bundle.consultationNotes.map((n) => repos.consultationNotes.put(n)),
       ]);
+      // Children after their visits: the outbox pushes in queue order, and a
+      // line or share row needs its visit row on the server first.
+      await repos.visitItems.bulkPut(visitItems);
+      await repos.visitCredits.bulkPut(visitCredits);
 
       return {
         therapists: bundle.therapists.length,
         catalog: bundle.catalog.length,
         patients: bundle.patients.length,
         visits: bundle.visits.length,
+        visitItems: visitItems.length,
+        visitCredits: visitCredits.length,
         invoices: bundle.invoices.length,
         invoicePayments: statusRowsToRestore.length,
         payments: bundle.payments.length,

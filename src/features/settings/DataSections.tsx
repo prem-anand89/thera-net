@@ -111,7 +111,7 @@ export function DataBackup() {
       </div>
       {summary && (
         <p className="mt-3 text-sm text-[var(--moss)]">
-          Restored {summary.patients} patients, {summary.visits} visits, {summary.invoices}{' '}
+          Restored {summary.patients} patients, {summary.visits} visits ({summary.visitItems} service lines, {summary.visitCredits} revenue shares), {summary.invoices}{' '}
           invoices, {summary.payments + summary.invoicePayments} payment records, {summary.catalog}{' '}
           catalog items, {summary.therapists} therapists, and {summary.settlements} settlements.
         </p>

@@ -13,6 +13,8 @@ import type {
   SettlementPayment,
   Therapist,
   Visit,
+  VisitCredit,
+  VisitItem,
 } from '@/domain/types';
 
 function makeFakeRepos() {
@@ -38,6 +40,9 @@ function makeFakeRepos() {
   const catalog: CatalogItem[] = [];
   const patients = new Map<string, Patient>();
   const visits = new Map<string, Visit>();
+  const visitItems = new Map<string, VisitItem>();
+  const visitCredits = new Map<string, VisitCredit>();
+  const calls: string[] = [];
   const invoices = new Map<string, Invoice>();
   const invoicePayments = new Map<string, InvoicePayment>();
   const payments = new Map<string, Payment>();
@@ -55,7 +60,24 @@ function makeFakeRepos() {
     },
     visits: {
       list: async () => [...visits.values()],
-      put: async (v: Visit) => void visits.set(v.id, v),
+      put: async (v: Visit) => {
+        calls.push('visits');
+        visits.set(v.id, v);
+      },
+    },
+    visitItems: {
+      listByClinic: async () => [...visitItems.values()],
+      bulkPut: async (rows: VisitItem[]) => {
+        calls.push('visitItems');
+        rows.forEach((r) => visitItems.set(r.id, r));
+      },
+    },
+    visitCredits: {
+      listByClinic: async () => [...visitCredits.values()],
+      bulkPut: async (rows: VisitCredit[]) => {
+        calls.push('visitCredits');
+        rows.forEach((r) => visitCredits.set(r.id, r));
+      },
     },
     invoices: {
       list: async () => [...invoices.values()],
@@ -88,6 +110,9 @@ function makeFakeRepos() {
     clinic,
     patients,
     visits,
+    visitItems,
+    visitCredits,
+    calls,
     invoices,
     invoicePayments,
     payments,
@@ -211,5 +236,40 @@ describe('backupService.restoreBundle with voided invoices', () => {
     expect(fake.visits.get('v1')?.invoiceId).toBeNull();
     expect(fake.invoicePayments.get('now')?.status).toBe('void');
     expect(fake.invoicePayments.has('old')).toBe(false);
+  });
+});
+
+describe('backupService with visit service lines and revenue shares', () => {
+  const item = { id: 'li1', clinicId: 'clinic-1', visitId: 'v1' } as unknown as VisitItem;
+  const credit = { id: 'cr1', clinicId: 'clinic-1', visitId: 'v1' } as unknown as VisitCredit;
+
+  it('round-trips lines and shares, restoring visits before them', async () => {
+    const fake = makeFakeRepos();
+    fake.visits.set('v1', { id: 'v1', clinicId: 'clinic-1', invoiceId: null } as unknown as Visit);
+    fake.visitItems.set('li1', item);
+    fake.visitCredits.set('cr1', credit);
+    const svc = createBackupService(fake.repos);
+    const bundle = await svc.exportBundle('clinic-1');
+    expect(bundle.visitItems).toEqual([item]);
+    expect(bundle.visitCredits).toEqual([credit]);
+
+    const target = makeFakeRepos();
+    const summary = await createBackupService(target.repos).restoreBundle(bundle, 'clinic-1');
+    expect(target.visitItems.get('li1')).toEqual(item);
+    expect(target.visitCredits.get('cr1')).toEqual(credit);
+    expect(summary.visitItems).toBe(1);
+    expect(summary.visitCredits).toBe(1);
+    expect(target.calls).toEqual(['visits', 'visitItems', 'visitCredits']);
+  });
+
+  it('restores an older backup without these keys as empty', async () => {
+    const fake = makeFakeRepos();
+    const svc = createBackupService(fake.repos);
+    const bundle = await svc.exportBundle('clinic-1');
+    delete bundle.visitItems;
+    delete bundle.visitCredits;
+    const summary = await svc.restoreBundle(bundle, 'clinic-1');
+    expect(summary.visitItems).toBe(0);
+    expect(summary.visitCredits).toBe(0);
   });
 });
