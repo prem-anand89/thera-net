@@ -90,7 +90,7 @@ describe('RevenueShareEditor', () => {
 
   it('editing % updates ₹ and the remainder', () => {
     open();
-    expect(screen.getByText('(takes the rest)')).toBeInTheDocument();
+    expect(screen.getByText('Takes the rest')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Dr Sneha share in percent'), { target: { value: '50' } });
     expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(650);
     expect(screen.getByLabelText('Dr Raghavender share in rupees')).toHaveValue(650); // the primary's remainder
@@ -149,7 +149,7 @@ describe('RevenueShareEditor', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(screen.queryByLabelText('Dr Sneha share in rupees')).toBeNull();
-    expect(screen.getByText('₹1,300')).toBeInTheDocument();
+    expect(screen.getAllByText('₹1,300')).toHaveLength(2); // the bill in the header and the primary's share
   });
 
   it('opens an old one-assistant split as two rows (40% not the old 25%)', () => {
