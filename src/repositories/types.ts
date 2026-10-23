@@ -139,6 +139,11 @@ export interface VisitRepo {
 export interface VisitChildRepo<T> {
   listByVisitIds(ids: UUID[]): Promise<T[]>;
   listByClinic(clinicId: UUID, range?: { from: string; to: string }): Promise<T[]>;
+  /**
+   * Every row of the clinic, soft-deleted ones INCLUDED. Only for "is anything still pointing at this?"
+   * checks (a soft-deleted row still holds its foreign keys on the server, e.g. deleting a therapist).
+   */
+  listByClinicIncludingDeleted(clinicId: UUID): Promise<T[]>;
   /** Writes every row and queues each for sync, in one transaction. */
   bulkPut(rows: T[]): Promise<void>;
 }

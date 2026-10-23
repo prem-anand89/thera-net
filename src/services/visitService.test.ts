@@ -173,11 +173,13 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     visitItems: {
       listByVisitIds: async (ids) => liveOf(items, ids),
       listByClinic: async () => [],
+      listByClinicIncludingDeleted: async () => [...items.values()],
       bulkPut: async (rows) => rows.forEach((r) => items.set(r.id, r)),
     },
     visitCredits: {
       listByVisitIds: async (ids) => liveOf(credits, ids),
       listByClinic: async () => [],
+      listByClinicIncludingDeleted: async () => [...credits.values()],
       bulkPut: async (rows) => rows.forEach((r) => credits.set(r.id, r)),
     },
     invoices: {
@@ -980,5 +982,68 @@ describe('visitService: lines and shares', () => {
     expect(shareOf(v.id, 'th-prem')).toBe(rs(2200) - rs(733));
     await svc.setSplit(v.id, { sharedTherapistId: null });
     expect(liveCredits(v.id).map((c) => [c.therapistId, c.amountPaise])).toEqual([['th-prem', rs(2200)]]);
+  });
+});
+
+describe('visitService: final review fixes', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  let svc: ReturnType<typeof createVisitService>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+    svc = createVisitService(fake.repos);
+  });
+  const base = { clinicId: 'clinic-1', patientId: 'pat-1', therapistId: 'th-prem', visitDate: '2026-05-04' };
+
+  it('records how many live lines a visit was saved with, on create and on a line edit', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    expect(v.serviceLinesCount).toBe(2);
+    expect(fake.visits.get(v.id)!.serviceLinesCount).toBe(2);
+    const legacyShape = await svc.create({ ...base, serviceCatalogId: 'svc-consult' });
+    expect(legacyShape.serviceLinesCount).toBe(1);
+    const { visit } = await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-consult' }]);
+    expect(visit.serviceLinesCount).toBe(1);
+    expect(fake.visits.get(v.id)!.serviceLinesCount).toBe(1);
+    const grown = await svc.updateLines(v.id, [
+      { serviceCatalogId: 'svc-consult' },
+      { serviceCatalogId: 'svc-taping' },
+      { serviceCatalogId: 'svc-physio3' },
+    ]);
+    expect(grown.visit.serviceLinesCount).toBe(3);
+  });
+
+  it("refuses another patient's package through the old single-service input too", async () => {
+    const first = await svc.create({ ...base, patientId: 'pat-other', serviceCatalogId: 'svc-physio3' });
+    await expect(
+      svc.create({
+        ...base,
+        serviceCatalogId: 'svc-physio3',
+        isContinuation: true,
+        packageGroupId: first.packageGroupId!,
+        sessionIndex: 2,
+        packageTotal: 3,
+      })
+    ).rejects.toThrow('That package belongs to another patient.');
+    // the patient's own package still continues
+    const own = await svc.create({
+      ...base,
+      patientId: 'pat-other',
+      serviceCatalogId: 'svc-physio3',
+      isContinuation: true,
+      packageGroupId: first.packageGroupId!,
+      sessionIndex: 2,
+      packageTotal: 3,
+    });
+    expect(own.packageGroupId).toBe(first.packageGroupId);
+  });
+
+  it('recalculateShares refuses a deleted visit', async () => {
+    const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-consult' }] });
+    fake.visits.set(v.id, { ...fake.visits.get(v.id)!, deleted: true });
+    const before = fake.writes.length;
+    await expect(svc.recalculateShares(v.id)).rejects.toThrow('This visit was deleted.');
+    expect(fake.writes.length).toBe(before);
   });
 });

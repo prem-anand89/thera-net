@@ -331,6 +331,7 @@ function visitChildRepo<T extends { id: string; visitId: string; deleted: boolea
         .map((v) => v.id);
       return this.listByVisitIds(visitIds);
     },
+    listByClinicIncludingDeleted: (clinicId) => t().where('clinicId').equals(clinicId).toArray(),
     bulkPut: (rows) => bulkPutWithOutbox(table, rows),
   };
 }

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Invoice, InvoicePayment, Payment, Visit } from '@/domain/types';
+import type { Invoice, InvoicePayment, Payment, Visit, VisitItem } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { rupeesToPaise as rs } from '@/domain/money';
 
@@ -99,5 +99,62 @@ describe('invoiceService.amendInvoice', () => {
     const { repos, statuses } = setup([paid]);
     await createInvoiceService(repos).amendInvoice('inv-old', ['v1'], 'Cash');
     expect([...statuses.values()][0]?.status).toBe('paid');
+  });
+});
+
+describe('invoiceService: a visit whose services have not all arrived', () => {
+  const ARRIVING = "This visit's services haven't all arrived on this device yet. Try again in a moment.";
+  const line = (id: string, position: number, pricePaise: number): VisitItem =>
+    ({
+      id, clinicId: 'c1', visitId: 'v1', position, serviceCatalogId: 's1', serviceName: 'Physio',
+      catalogPricePaise: pricePaise, pricePaise, assistingTherapistId: null, durationMinutes: null,
+      isPackageLine: false, deleted: false, updatedAt: '',
+    }) as VisitItem;
+
+  function setupLines(v: Visit, lines: VisitItem[]) {
+    const { repos } = setup([]);
+    const r = repos as unknown as {
+      patients: unknown;
+      visits: { get: unknown };
+      visitItems: { listByVisitIds: unknown };
+    };
+    r.patients = { get: async () => ({ id: 'p1' }) };
+    r.visits.get = async () => v;
+    r.visitItems.listByVisitIds = async () => lines;
+    return createInvoiceService(repos);
+  }
+
+  beforeEach(async () => {
+    rpc.mockReset();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    rpc.mockResolvedValue({ data: { id: 'inv-new', clinic_id: 'c1', total_paise: rs(800), invoice_no: 'X/1' }, error: null });
+    await db.outbox.clear();
+  });
+
+  it('refuses to preview, issue or amend when 1 of its 2 lines is on this device', async () => {
+    const svc = setupLines(visit({ invoiceId: null, serviceLinesCount: 2, actualBillPaise: rs(800) }), [line('l1', 0, rs(500))]);
+    await expect(svc.previewLineItems(['v1'])).rejects.toThrow(ARRIVING);
+    await expect(svc.issueForVisits(['v1'], 'Cash')).rejects.toThrow(ARRIVING);
+    await expect(svc.amendInvoice('inv-old', ['v1'], 'Cash')).rejects.toThrow(ARRIVING);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('bills the visit once all of its lines are here, and preview matches issue', async () => {
+    const svc = setupLines(visit({ invoiceId: null, serviceLinesCount: 2, actualBillPaise: rs(800) }), [
+      line('l1', 0, rs(500)),
+      line('l2', 1, rs(300)),
+    ]);
+    const preview = await svc.previewLineItems(['v1']);
+    expect(preview.totalPaise).toBe(rs(800));
+    await svc.issueForVisits(['v1'], 'Cash');
+    expect(rpc).toHaveBeenCalledWith('issue_invoice', expect.objectContaining({ p_total_paise: preview.totalPaise }));
+  });
+
+  it('leaves an older visit with no line count alone', async () => {
+    const svc = setupLines(visit({ invoiceId: null }), []);
+    const preview = await svc.previewLineItems(['v1']);
+    expect(preview.totalPaise).toBe(rs(500));
+    await svc.issueForVisits(['v1'], 'Cash');
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

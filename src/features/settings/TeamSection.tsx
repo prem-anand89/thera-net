@@ -18,6 +18,7 @@ import { type Clinic, type Therapist, type ShiftTemplate, type TherapistShiftAss
 import { memberOnboardingStatus, MEMBER_ONBOARDING_LABELS, type MemberOnboardingStatus } from '@/domain/memberOnboarding';
 import { Field, inputCls, btnPrimary, ErrorNote, SectionCard, ConfirmDialog, InfoTip } from '@/components/ui';
 import { describeSchedule } from './shiftUtils';
+import { countTherapistLinkedRecords } from './therapistLinks';
 import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Accent, ACCENT_VARS } from './settingsShared';
@@ -936,17 +937,7 @@ export function Therapists() {
   async function startDeleteTherapist(t: Therapist) {
     setRosterError(null);
     try {
-      const [allVisits, allNotes, allInvoices] = await Promise.all([
-        repos.visits.list({ clinicId: clinic.id }),
-        repos.consultationNotes.listByClinic(clinic.id),
-        repos.invoices.list(clinic.id),
-      ]);
-      const linkedVisits = allVisits.filter(
-        (v) => v.therapistId === t.id || v.sharedTherapistId === t.id
-      ).length;
-      const linkedNotes = allNotes.filter((n) => n.therapistId === t.id).length;
-      const linkedInvoices = allInvoices.filter((i) => i.therapistId === t.id).length;
-      const linked = linkedVisits + linkedNotes + linkedInvoices;
+      const linked = await countTherapistLinkedRecords(repos, clinic.id, t.id);
       if (linked > 0) {
         setRosterError(
           `${t.name} has ${linked} linked record(s) (visits, notes, or invoices), so they can't be permanently deleted — deactivate instead.`

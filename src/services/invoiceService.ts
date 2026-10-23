@@ -24,6 +24,9 @@ export const REFUSED_CHANGE =
 export const STILL_SYNCING =
   'Some of these services are still syncing. Try again in a moment.';
 
+export const LINES_NOT_ARRIVED =
+  "This visit's services haven't all arrived on this device yet. Try again in a moment.";
+
 /**
  * True while any of these visits, their service lines or their revenue shares still has an entry in
  * the outbox. The server freezes a visit's lines the moment it has an invoice, so a line pushed after
@@ -117,6 +120,15 @@ export function createInvoiceService(repos: Repos) {
     const items = await repos.visitItems.listByVisitIds(allVisits.map((v) => v.id));
     const itemsByVisit = new Map<UUID, VisitItem[]>();
     for (const i of items) itemsByVisit.set(i.visitId, [...(itemsByVisit.get(i.visitId) ?? []), i]);
+    // A visit can reach the server before its lines (its device went offline mid-push). Billing it here
+    // with only the lines that have arrived would invoice the wrong services — and the invoice then
+    // freezes the late lines out. Older visits (no count) are not checked.
+    for (const v of allVisits) {
+      const expected = v.serviceLinesCount ?? null;
+      if (expected !== null && (itemsByVisit.get(v.id)?.length ?? 0) < expected) {
+        throw new Error(LINES_NOT_ARRIVED);
+      }
+    }
     const groups = groupVisitsForInvoicing(billingUnits(allVisits, itemsByVisit));
 
     const serviceIds = new Set([

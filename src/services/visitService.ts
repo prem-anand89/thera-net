@@ -338,10 +338,14 @@ export function createVisitService(repos: Repos) {
         specs = withPackageFlags(specs, catalog);
       }
       await checkSpecs(input.clinicId, input.therapistId, specs);
-      // A package session can only continue this patient's own package.
-      for (const sp of specs) {
-        if (!sp.continuation) continue;
-        const group = await repos.visits.listByPackageGroup(sp.continuation.packageGroupId);
+      // A package session can only continue this patient's own package — given on a line, or (the old
+      // single-service shape) as `packageGroupId` on the input.
+      const continuedGroups = [
+        ...specs.flatMap((sp) => (sp.continuation ? [sp.continuation.packageGroupId] : [])),
+        ...(legacyPackage && input.packageGroupId ? [input.packageGroupId] : []),
+      ];
+      for (const groupId of continuedGroups) {
+        const group = await repos.visits.listByPackageGroup(groupId);
         if (group.some((v) => !v.deleted && v.patientId !== input.patientId)) {
           throw new Error('That package belongs to another patient.');
         }
@@ -415,6 +419,7 @@ export function createVisitService(repos: Repos) {
         invoiceId: null,
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         creditsMode: 'auto',
+        serviceLinesCount: items.length,
         deleted: false,
         // Flags the visit for a clinical note until one is completed against
         // it (see consultationNoteService.saveAssessment, which closes this
@@ -528,6 +533,7 @@ export function createVisitService(repos: Repos) {
         adjustmentReason: adjustmentPaise !== 0 ? (reason?.trim() ?? null) : null,
         ...pkg,
         ...split,
+        serviceLinesCount: live.length,
         updatedAt: now,
       };
 
@@ -616,6 +622,7 @@ export function createVisitService(repos: Repos) {
     async recalculateShares(visitId: UUID): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
       if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
+      if (visit.deleted) throw new Error(VISIT_DELETED);
       const clinic = await loadClinic(visit.clinicId);
       const [items, existing] = await Promise.all([
         repos.visitItems.listByVisitIds([visitId]),

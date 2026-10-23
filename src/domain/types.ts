@@ -584,6 +584,12 @@ export interface Visit {
    * alone. Absent (older cached rows) = 'auto'.
    */
   creditsMode?: 'auto' | 'manual';
+  /**
+   * How many live service lines (VisitItem rows) the visit was saved with — set whenever its lines are
+   * written. The invoice builder refuses a visit with fewer live lines on this device than this: its lines
+   * were pushed after the visit and haven't been pulled here yet. Null/absent = an older visit (no check).
+   */
+  serviceLinesCount?: number | null;
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
   createdBy?: UUID | null;
