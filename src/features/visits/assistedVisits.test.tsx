@@ -75,6 +75,15 @@ describe('AssistedVisitList', () => {
     expect(screen.queryByText(/credit/i)).toBeNull();
   });
 
+  it('labels the list neutrally unless the viewer is the assistant', () => {
+    const rows = assistedVisitsFor('ravi', visits, items, credits, nameOf, true);
+    const { unmount } = render(<AssistedVisitList rows={rows} patientName={() => 'Asha'} assistantName="Dr Ravi" viewerIsAssistant />);
+    expect(screen.getByRole('list', { name: 'Visits you assisted on' })).toBeInTheDocument();
+    unmount();
+    render(<AssistedVisitList rows={rows} patientName={() => 'Asha'} assistantName="Dr Ravi" viewerIsAssistant={false} />);
+    expect(screen.getByRole('list', { name: 'Visits assisted on' })).toBeInTheDocument();
+  });
+
   it('for an admin viewing the assistant, it names the assistant instead of "Your"', () => {
     const rows = assistedVisitsFor('ravi', visits, items, credits, nameOf, true);
     render(<AssistedVisitList rows={rows} patientName={() => 'Asha'} assistantName="Dr Ravi" viewerIsAssistant={false} />);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, draftLinesToVisitLines, initialRowsForPatient, PACKAGE_NOT_OPEN, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, PACKAGE_NOT_OPEN, rowsForNewPatient } from './draftVisit';
 import type { DraftLine, OpenPackage } from './ServiceRows';
 
 const pkg = (logged: number): OpenPackage => ({
@@ -87,5 +87,15 @@ describe('rowsForNewPatient', () => {
     const rows = rowsForNewPatient([plain('bigpack'), plain('a')], [pkg(4)], null, (r) => r.serviceCatalogId === 'bigpack');
     expect(rows.map((r) => r.serviceCatalogId)).toEqual(['bigpack', 'a']);
     expect(rows.some((r) => r.continuation)).toBe(false);
+  });
+});
+
+describe('canChangePatient', () => {
+  it('is offered when the patient was picked on the page', () => {
+    expect(canChangePatient({})).toBe(true);
+  });
+  it('is hidden for a linked patient and for the repeat-visit flow', () => {
+    expect(canChangePatient({ patientId: 'p1' })).toBe(false);
+    expect(canChangePatient({ repeatVisitId: 'v1' })).toBe(false);
   });
 });

@@ -77,7 +77,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 
@@ -535,16 +535,18 @@ export function NewVisitPage() {
     if (match) setRows((prev) => [continuationLine(match, prev[0]?.assistingTherapistId ?? null), ...prev.slice(1)]);
   }, [repeatVisit, openPackages]);
 
-  // An ordinary patient pick (not the "repeat visit" shortcut above, which
-  // already resolves its own package) with exactly one open package is, in
-  // practice, almost always here for the next session of it — defaulting to
-  // an empty "New service" picker made the common case the extra-click one.
-  // Two or more open packages isn't guessed at; the front desk picks
-  // deliberately in the service picker. Runs once per patient (tracked by id,
-  // not by re-deriving "untouched" state), so removing the package row isn't
-  // silently reverted if openPackages happens to re-emit.
-  // The rows belong to one patient: choosing another (or clearing the patient) starts over, so one
-  // patient's package session can never ride along onto the next patient's visit.
+  // The rows belong to one patient, and this effect keeps them in step:
+  // - Choosing a different patient (or clearing it) resets the rows and the
+  //   discount, so one patient's package session never rides onto the next.
+  // - The FIRST patient pick merges: services chosen before any patient stay
+  //   (with the discount), and the patient's single open package, if any,
+  //   is added as a continuation row (two or more open packages are not
+  //   guessed at; the front desk picks in the service picker).
+  // - No continuation is added beside a package row that was kept.
+  // - It runs once per patient (tracked by id, not by re-deriving "untouched"
+  //   state), so removing the package row isn't silently reverted if
+  //   openPackages re-emits.
+  // - The repeat-visit shortcut fills its own rows and is skipped here.
   const catalogItems = useMemo(() => catalog ?? [], [catalog]);
   const rowsPatientRef = useRef<UUID | null>(null);
   useEffect(() => {
@@ -1031,7 +1033,7 @@ export function NewVisitPage() {
             </SummaryTile>
           )}
 
-          {!search.patientId && (
+          {canChangePatient(search) && (
             <button
               type="button"
               className={`${btnSecondary} w-full`}

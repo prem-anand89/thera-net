@@ -79,3 +79,12 @@ export function rowsForNewPatient(
   const rows = [...lead, ...kept];
   return rows.length > 0 ? rows : [emptyDraftLine()];
 }
+
+/**
+ * "Change patient" is offered only when the patient was chosen on this page:
+ * not when the link named one (?patientId) and not in the repeat-visit flow
+ * (?repeatVisitId), where the repeated patient is re-selected immediately.
+ */
+export function canChangePatient(search: { patientId?: string; repeatVisitId?: string }): boolean {
+  return !search.patientId && !search.repeatVisitId;
+}

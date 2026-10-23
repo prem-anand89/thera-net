@@ -32,7 +32,7 @@ export function AssistedVisitList({
 }) {
   if (rows.length === 0) return null;
   return (
-    <ul className="divide-y divide-[var(--border)]" aria-label="Visits you assisted on">
+    <ul className="divide-y divide-[var(--border)]" aria-label={viewerIsAssistant ? 'Visits you assisted on' : 'Visits assisted on'}>
       {rows.map((r) => (
         <li key={r.visitId} className="space-y-1 py-3">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
