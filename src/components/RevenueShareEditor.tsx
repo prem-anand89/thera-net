@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '@/services';
 import { formatINR } from '@/domain/money';
 import type { Therapist, Visit, VisitCredit, VisitItem } from '@/domain/types';
-import { packageHolder, type CreditShare } from '@/domain/visitLines';
+import { autoCredits, packageHolder, type CreditShare } from '@/domain/visitLines';
 import {
   BILL_BELOW_SHARES,
   addShareRow,
@@ -113,8 +113,26 @@ export function RevenueShareEditor({
 
   const nameOf = (id: string) => therapists.find((t) => t.id === id)?.name ?? 'Therapist';
   const outdated = sharesAreOutdated(visit, items, credits);
-  const liveItems = items.filter((i) => !i.deleted).sort((a, b) => a.position - b.position);
   const byHand = (visit.creditsMode ?? 'auto') === 'manual';
+  // What "automatic" would give right now, to tell an untouched split from an edited one and to preview a reset.
+  const autoRows = useMemo(
+    () => autoCredits(items, visit.therapistId, bill, { splitEnabled }),
+    [items, visit.therapistId, bill, splitEnabled]
+  );
+  const sameShares = (a: CreditShare[], b: CreditShare[]) => {
+    const m = (x: CreditShare[]) =>
+      x.filter((r) => r.amountPaise > 0).map((r) => `${r.therapistId}:${r.amountPaise}`).sort().join('|');
+    return m(a) === m(b);
+  };
+  const editedNow = !byHand && !sameShares(rows, autoRows);
+  const sharedNow = rows.some((r) => r.therapistId !== visit.therapistId && r.amountPaise > 0);
+  const resetPreview = useMemo(() => {
+    const saved = initialShares(visit, credits, ctx.locked);
+    const ids = [...new Set([...saved, ...autoRows].map((r) => r.therapistId))];
+    const amt = (list: CreditShare[], id: string) => list.find((r) => r.therapistId === id)?.amountPaise ?? 0;
+    return ids.map((id) => ({ id, from: amt(saved, id), to: amt(autoRows, id) }));
+  }, [visit, credits, ctx.locked, autoRows]);
+  const liveItems = items.filter((i) => !i.deleted).sort((a, b) => a.position - b.position);
   const editor = lastEditedBy(credits, therapists);
   const total = rows.reduce((s, r) => s + r.amountPaise, 0);
   const primaryRow = rows.find((r) => r.therapistId === visit.therapistId);
@@ -263,19 +281,44 @@ export function RevenueShareEditor({
                     </button>
                   </span>
                 )
-              ) : (
+              ) : editedNow ? (
+                <span
+                  className="rounded-full bg-[var(--amber-light,rgba(184,137,43,0.15))] px-2 py-0.5 text-xs font-medium text-[var(--ink)]"
+                  title="Saving this makes the split set by hand: it won't follow the services any more."
+                >
+                  Edited · saves as set by hand
+                </span>
+              ) : sharedNow ? (
                 <span
                   className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--ink)]"
                   title="Based on who did each service. Saving your changes makes it set by hand."
                 >
                   Automatic
                 </span>
-              )}
+              ) : null}
             </div>
 
             {byHand && confirmReset && (
               <div className="flex flex-wrap items-center gap-2 rounded-md bg-[var(--paper)] p-2.5 text-xs text-[var(--ink)]">
-                <span className="flex-1">Use the split from the services instead?</span>
+                <span className="w-full font-medium">Reset to the split from the services?</span>
+                <ul className="w-full space-y-0.5">
+                  {resetPreview.every((r) => r.from === r.to) ? (
+                    <li className="text-[var(--muted)]">
+                      The amounts stay the same; it just goes back to automatic.
+                    </li>
+                  ) : (
+                    resetPreview
+                      .filter((r) => r.from !== r.to)
+                      .map((r) => (
+                        <li key={r.id} className="flex justify-between gap-2">
+                          <span>{nameOf(r.id)}</span>
+                          <span className="font-num">
+                            {formatINR(r.from)} → {formatINR(r.to)}
+                          </span>
+                        </li>
+                      ))
+                  )}
+                </ul>
                 <button
                   type="button"
                   className={btnSecondary}

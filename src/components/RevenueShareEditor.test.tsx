@@ -83,6 +83,28 @@ describe('RevenueShareEditor', () => {
     expect(screen.queryByLabelText('Add a therapist')).toBeNull();
   });
 
+  it('shows Automatic only for a shared, untouched split; Edited once amounts are changed', () => {
+    open();
+    expect(screen.getByText('Automatic')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Dr Sneha share in rupees'), { target: { value: '500' } });
+    expect(screen.queryByText('Automatic')).toBeNull();
+    expect(screen.getByText('Edited · saves as set by hand')).toBeInTheDocument();
+  });
+
+  it('shows no status chip when nobody is shared with', () => {
+    open({ credits: [credit('p', 130000)], items: [] });
+    expect(screen.queryByText('Automatic')).toBeNull();
+    expect(screen.queryByText(/Edited/)).toBeNull();
+  });
+
+  it('previews what Reset to services will change before asking', () => {
+    open({ visit: visit({ creditsMode: 'manual' }), credits: [credit('p', 80000), credit('s', 50000)] });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to services' }));
+    expect(screen.getByText('Reset to the split from the services?')).toBeInTheDocument();
+    expect(screen.getByText('₹800 → ₹1,000')).toBeInTheDocument();
+    expect(screen.getByText('₹500 → ₹300')).toBeInTheDocument();
+  });
+
   it('lists the services on the visit', () => {
     open();
     expect(screen.getByText('Services on this visit')).toBeInTheDocument();
