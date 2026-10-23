@@ -65,12 +65,23 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('RevenueShareEditor', () => {
+  it('lets the primary\'s amount be typed when there is one assistant: the assistant takes the rest', () => {
+    open();
+    fireEvent.change(screen.getByLabelText('Dr Raghavender share in rupees'), { target: { value: '1000' } });
+    expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(300);
+  });
+
+  it('lists the services on the visit', () => {
+    open();
+    expect(screen.getByText('Services on this visit')).toBeInTheDocument();
+  });
+
   it('editing % updates ₹ and the remainder', () => {
     open();
-    expect(screen.getByText('(remainder)')).toBeInTheDocument();
+    expect(screen.getByText('(takes the rest)')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Dr Sneha share in percent'), { target: { value: '50' } });
     expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(650);
-    expect(screen.getByText('₹650')).toBeInTheDocument(); // the primary's remainder
+    expect(screen.getByLabelText('Dr Raghavender share in rupees')).toHaveValue(650); // the primary's remainder
   });
 
   it('saves the edited rows through setShares', () => {
@@ -111,6 +122,7 @@ describe('RevenueShareEditor', () => {
 
   it('adds a therapist from the picker', () => {
     open();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add another therapist' }));
     fireEvent.change(screen.getByLabelText('Add a therapist'), { target: { value: 'x' } });
     expect(screen.getByLabelText('Dr Extra share in rupees')).toHaveValue(0);
   });
@@ -139,7 +151,7 @@ describe('RevenueShareEditor', () => {
       visit: visit({ creditsMode: 'manual', actualBillPaise: 100000 }),
       credits: [credit('p', 100000), credit('s', 30000)],
     });
-    expect(screen.getByText('₹700')).toBeInTheDocument();
+    expect(screen.getByLabelText('Dr Raghavender share in rupees')).toHaveValue(700);
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 

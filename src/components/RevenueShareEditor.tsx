@@ -21,6 +21,32 @@ const rupeesText = (paise: number) => String(Math.round(paise) / 100);
 const pctText = (paise: number, bill: number) =>
   bill > 0 ? String(Math.round((paise / bill) * 1000) / 10) : '0';
 
+const noSpin =
+  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+const BAR_COLORS = ['var(--teal)', '#c65f2f', '#b8892b', '#6b6fb5', '#7a8f4a'];
+
+/** A stacked bar of each therapist's share of the bill. */
+function ShareBar({ parts, bill }: { parts: { id: string; name: string; paise: number }[]; bill: number }) {
+  if (bill <= 0) return null;
+  return (
+    <div
+      className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--border)]"
+      role="img"
+      aria-label={parts.map((p) => `${p.name} ${Math.round((p.paise / bill) * 100)}%`).join(', ')}
+    >
+      {parts.map((p, i) =>
+        p.paise > 0 ? (
+          <span
+            key={p.id}
+            title={`${p.name} ${formatINR(p.paise)}`}
+            style={{ width: `${(p.paise / bill) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length] }}
+          />
+        ) : null
+      )}
+    </div>
+  );
+}
+
 function when(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -63,7 +89,7 @@ export function RevenueShareEditor({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    dialogRef.current?.querySelector<HTMLElement>('input, select')?.focus();
+    dialogRef.current?.querySelector<HTMLElement>('[data-first-field]')?.focus();
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,9 +101,11 @@ export function RevenueShareEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const nameOf = (id: string) => therapists.find((t) => t.id === id)?.name ?? 'Therapist';
   const outdated = sharesAreOutdated(visit, items, credits);
+  const liveItems = items.filter((i) => !i.deleted).sort((a, b) => a.position - b.position);
   const byHand = (visit.creditsMode ?? 'auto') === 'manual';
   const editor = lastEditedBy(credits, therapists);
   const total = rows.reduce((s, r) => s + r.amountPaise, 0);
@@ -86,9 +114,25 @@ export function RevenueShareEditor({
   const addable = therapists.filter((t) => t.active && !rows.some((r) => r.therapistId === t.id));
   const invalid = error !== null || total !== bill;
 
+  // With one assistant and no package money, the primary's own field can be typed in: the assistant takes the rest.
+  const primaryEditable = others.length === 1 && !ctx.locked;
+
   function edit(id: string, field: 'rupees' | 'pct', text: string) {
     setDraft({ id, field, text });
-    const out = applyShareEdit(rows, { therapistId: id, [field]: text }, ctx);
+    let target = id;
+    let value = text;
+    if (id === visit.therapistId && primaryEditable) {
+      target = others[0]!.therapistId;
+      const n = Number(text);
+      if (text.trim() === '' || !Number.isFinite(n)) {
+        value = '';
+      } else if (field === 'rupees') {
+        value = String(Math.max(0, Math.round((bill - n * 100)) / 100));
+      } else {
+        value = String(Math.max(0, Math.round((100 - n) * 10) / 10));
+      }
+    }
+    const out = applyShareEdit(rows, { therapistId: target, [field]: value }, ctx);
     setRows(out.rows);
     setError(out.error);
   }
@@ -109,6 +153,51 @@ export function RevenueShareEditor({
   function fieldValue(r: CreditShare, field: 'rupees' | 'pct') {
     if (draft && draft.id === r.therapistId && draft.field === field) return draft.text;
     return field === 'rupees' ? rupeesText(r.amountPaise) : pctText(r.amountPaise, bill);
+  }
+
+  function amountFields(r: CreditShare, id: string) {
+    return (
+      <>
+        <label className="flex-1 text-xs text-[var(--muted)]">
+          <span className="mb-0.5 block">Share (₹)</span>
+          <span className="relative block">
+            <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+              ₹
+            </span>
+            <input
+              type="number"
+              min={0}
+              inputMode="decimal"
+              aria-label={`${nameOf(id)} share in rupees`}
+              {...(id !== visit.therapistId && id === others[0]?.therapistId ? { 'data-first-field': true } : {})}
+              className={`${inputCls} ${noSpin} pl-7`}
+              value={fieldValue(r, 'rupees')}
+              onChange={(e) => edit(id, 'rupees', e.target.value)}
+              onBlur={() => !error && setDraft(null)}
+            />
+          </span>
+        </label>
+        <label className="w-24 text-xs text-[var(--muted)]">
+          <span className="mb-0.5 block">Share (%)</span>
+          <span className="relative block">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              inputMode="decimal"
+              aria-label={`${nameOf(id)} share in percent`}
+              className={`${inputCls} ${noSpin} pr-7`}
+              value={fieldValue(r, 'pct')}
+              onChange={(e) => edit(id, 'pct', e.target.value)}
+              onBlur={() => !error && setDraft(null)}
+            />
+            <span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+              %
+            </span>
+          </span>
+        </label>
+      </>
+    );
   }
 
   return (
@@ -180,12 +269,51 @@ export function RevenueShareEditor({
           </div>
         )}
 
+        {liveItems.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-[var(--muted)]">Services on this visit</p>
+            <ul className="space-y-0.5 text-xs text-[var(--ink)]">
+              {liveItems.map((i) => (
+                <li key={i.id} className="flex justify-between gap-2">
+                  <span>
+                    {i.serviceName}
+                    <span className="text-[var(--muted)]">
+                      {' '}
+                      · {i.assistingTherapistId ? nameOf(i.assistingTherapistId) : nameOf(visit.therapistId)}
+                    </span>
+                  </span>
+                  <span className="font-num">{formatINR(i.pricePaise)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <ShareBar
+          bill={bill}
+          parts={[primaryRow, ...others]
+            .filter((r): r is CreditShare => Boolean(r))
+            .map((r) => ({ id: r.therapistId, name: nameOf(r.therapistId), paise: r.amountPaise }))}
+        />
+
         <div className="space-y-3">
-          <div className="flex items-baseline justify-between text-sm">
-            <span className="font-medium text-[var(--ink)]">
-              {nameOf(visit.therapistId)} <span className="text-xs font-normal text-[var(--muted)]">(remainder)</span>
-            </span>
-            <span className="font-num text-[var(--ink)]">{formatINR(primaryRow?.amountPaise ?? 0)}</span>
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between text-sm">
+              <span className="font-medium text-[var(--ink)]">
+                {nameOf(visit.therapistId)}{' '}
+                <span className="text-xs font-normal text-[var(--muted)]">
+                  {primaryEditable ? '(takes the rest)' : '(remainder)'}
+                </span>
+              </span>
+              {!primaryEditable && (
+                <span className="font-num text-[var(--ink)]">{formatINR(primaryRow?.amountPaise ?? 0)}</span>
+              )}
+            </div>
+            {primaryEditable && primaryRow && (
+              <div className="flex gap-2">
+                {amountFields(primaryRow, visit.therapistId)}
+              </div>
+            )}
           </div>
 
           {others.map((r) => (
@@ -206,55 +334,39 @@ export function RevenueShareEditor({
                   </button>
                 )}
               </div>
-              <div className="flex gap-2">
-                <label className="flex-1 text-xs text-[var(--muted)]">
-                  <span className="mb-0.5 block">Share (₹)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    inputMode="decimal"
-                    aria-label={`${nameOf(r.therapistId)} share in rupees`}
-                    className={inputCls}
-                    value={fieldValue(r, 'rupees')}
-                    onChange={(e) => edit(r.therapistId, 'rupees', e.target.value)}
-                    onBlur={() => !error && setDraft(null)}
-                  />
-                </label>
-                <label className="w-24 text-xs text-[var(--muted)]">
-                  <span className="mb-0.5 block">Share (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    inputMode="decimal"
-                    aria-label={`${nameOf(r.therapistId)} share in percent`}
-                    className={inputCls}
-                    value={fieldValue(r, 'pct')}
-                    onChange={(e) => edit(r.therapistId, 'pct', e.target.value)}
-                    onBlur={() => !error && setDraft(null)}
-                  />
-                </label>
-              </div>
+              <div className="flex gap-2">{amountFields(r, r.therapistId)}</div>
             </div>
           ))}
 
-          {addable.length > 0 && (
-            <select
-              aria-label="Add a therapist"
-              className={inputCls}
-              value=""
-              onChange={(e) => {
-                if (e.target.value) setRows(addShareRow(rows, e.target.value, ctx));
-              }}
-            >
-              <option value="">Add a therapist…</option>
-              {addable.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          )}
+          {addable.length > 0 &&
+            (adding ? (
+              <select
+                aria-label="Add a therapist"
+                className={inputCls}
+                value=""
+                autoFocus
+                onChange={(e) => {
+                  if (e.target.value) setRows(addShareRow(rows, e.target.value, ctx));
+                  setAdding(false);
+                }}
+                onBlur={() => setAdding(false)}
+              >
+                <option value="">Choose a therapist…</option>
+                {addable.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--teal)] hover:underline"
+                onClick={() => setAdding(true)}
+              >
+                + Add another therapist
+              </button>
+            ))}
         </div>
 
         {ctx.locked && ctx.locked.amountPaise > 0 && (
