@@ -44,7 +44,7 @@ export interface Permissions {
   canViewMonthlyStatement: boolean;
   /**
    * Recording a payment against a visit. Same two clinic preferences as `canBill`
-   * but not the plan: Lite can't issue invoices, yet still collects (a direct
+   * but not the plan (and on a plan without invoicing, not the billing switch either — see `collectPaymentAllowed`): Lite can't issue invoices, yet still collects (a direct
    * payment on the visit) — there is no billing desk for it to defer to.
    */
   canCollectPayment: boolean;
@@ -60,6 +60,26 @@ export interface Permissions {
  * check should use `useWorkspaceScope`'s `isClinicWideView` instead — that's
  * a different question from what this hook answers.
  */
+/**
+ * Recording a payment against a visit. The clinic's "Billing module" switch
+ * means "someone else bills" and stops collecting on a plan that has invoicing;
+ * on a plan without it (Lite) the switch is out of reach (the Billing tab is
+ * locked) and collecting cash isn't billing, so it is ignored there. While the
+ * plan is still loading it is not ignored, so a paid clinic with the switch
+ * off never flashes payment buttons.
+ */
+export function collectPaymentAllowed(input: {
+  billingEnabled: boolean;
+  invoicingAccess: 'everyone' | 'billing_staff';
+  isAdmin: boolean;
+  isFrontDesk: boolean;
+  planHasInvoicing: boolean;
+  planLoading: boolean;
+}): boolean {
+  const switchOk = input.billingEnabled || (!input.planLoading && !input.planHasInvoicing);
+  return switchOk && (input.invoicingAccess === 'everyone' || input.isAdmin || input.isFrontDesk);
+}
+
 export function usePermissions(): Permissions {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
@@ -84,6 +104,13 @@ export function usePermissions(): Permissions {
     entitlementsLoading: entitlements.loading,
     canPrintNotes: entitlements.can('notePrinting'),
     canViewMonthlyStatement: scope.isAdmin,
-    canCollectPayment: billingEnabled && (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
+    canCollectPayment: collectPaymentAllowed({
+      billingEnabled,
+      invoicingAccess,
+      isAdmin: scope.isAdmin,
+      isFrontDesk: scope.isFrontDesk,
+      planHasInvoicing: entitlements.can('invoicing'),
+      planLoading: entitlements.loading,
+    }),
   };
 }
