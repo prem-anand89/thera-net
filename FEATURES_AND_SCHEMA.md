@@ -86,7 +86,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     shares (`initialShares`, primary row added if missing); if the bill fell below the other shares it shows the
     stored rows with "The bill is now lower than the shares. Recalculate from services or lower a share." and
     Save disabled. A legacy one-assistant split opens as two rows. Escape closes it, focus starts on the first
-    field, and validation and save errors are shown separately. Shares stay editable after invoicing and never
+    field, and validation and save errors are shown separately. Saving always confirms the shares: `setShares` rewrites every live share row (even unchanged) with an
+    `updatedAt` later than the newest service line's, which clears the banner. Shares stay editable after
+    invoicing and never
     change the patient's bill. The package holder rule (`packageHolder` in `domain/visitLines.ts`) is shared by
     the editor and `setShares`.
   - **Visit editor** (`EditVisitModal`): a visit with services shows the same `ServiceRows` plus Subtotal /

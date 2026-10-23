@@ -596,9 +596,19 @@ export function createVisitService(repos: Repos) {
       if (total > visit.actualBillPaise) throw new Error(SHARE_TOO_LARGE);
       if (total !== visit.actualBillPaise) throw new Error(SHARES_DONT_ADD_UP);
 
-      const now = new Date().toISOString();
+      // Saving the shares confirms them: every live share row is rewritten (even with the same amount) so
+      // its updatedAt is later than the newest service line's, which clears the "services changed" prompt
+      // (`sharesAreOutdated` compares them with `>`). The stamp is never earlier than a line's, plus 1ms,
+      // so identical-millisecond writes can't leave the prompt showing.
+      const newestLine = items.reduce((m, l) => Math.max(m, Date.parse(l.updatedAt) || 0), 0);
+      const now = new Date(Math.max(Date.now(), newestLine + 1)).toISOString();
       const updated: Visit = { ...visit, creditsMode: 'manual', updatedAt: now };
-      await repos.visits.putWithChildren(updated, [], creditRows(updated, existing, rows, now));
+      const changed = creditRows(updated, existing, rows, now);
+      const touched = existing
+        .filter((c) => !c.deleted && rows.some((r) => r.therapistId === c.therapistId))
+        .filter((c) => !changed.some((w) => w.id === c.id))
+        .map((c) => ({ ...c, updatedAt: now }));
+      await repos.visits.putWithChildren(updated, [], [...changed, ...touched]);
       return updated;
     },
 

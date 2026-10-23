@@ -5,6 +5,7 @@ import { createPatientService } from './patientService';
 import type { Repos, VisitFilter } from '@/repositories/types';
 import type { CatalogItem, Clinic, Patient, Therapist, Visit, VisitCredit, VisitItem } from '@/domain/types';
 import { rupeesToPaise as rs } from '@/domain/money';
+import { sharesAreOutdated } from '@/features/visits/shareEdit';
 
 // In-memory Repos double — services never touch Dexie or Supabase directly,
 // which is exactly what makes them testable (and the backend swappable).
@@ -733,6 +734,31 @@ describe('visitService: lines and shares', () => {
     ]);
     expect(out.creditsMode).toBe('manual');
     expect(shareOf(v.id, 'th-aish')).toBe(rs(300));
+  });
+
+  it('saving unchanged shares after a line edit confirms them and clears the services-changed prompt', async () => {
+    const v = await svc.create({
+      ...base,
+      lines: [{ serviceCatalogId: 'svc-consult' }, { serviceCatalogId: 'svc-taping', assistingTherapistId: 'th-aish' }],
+    });
+    await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(1000) },
+      { therapistId: 'th-aish', amountPaise: rs(300) },
+    ]);
+    // a line is edited afterwards (manual shares stay), landing in the same millisecond as anything else
+    const line = liveItems(v.id)[0];
+    const stamp = new Date(Date.now() + 5000).toISOString();
+    fake.items.set(line.id, { ...line, updatedAt: stamp });
+    const outdated = () =>
+      sharesAreOutdated(fake.visits.get(v.id)!, liveItems(v.id), liveCredits(v.id));
+    expect(outdated()).toBe(true);
+    fake.writes.length = 0;
+    await svc.setShares(v.id, [
+      { therapistId: 'th-prem', amountPaise: rs(1000) },
+      { therapistId: 'th-aish', amountPaise: rs(300) },
+    ]);
+    expect(fake.writes.filter((w) => w.startsWith('visit_credits:'))).toHaveLength(2);
+    expect(outdated()).toBe(false);
   });
 
   it('setShares validates total, floors, membership and the primary row', async () => {
