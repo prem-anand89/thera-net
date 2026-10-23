@@ -327,9 +327,10 @@ export function ScheduleBookingsView({
     [scopedAppointments, threeDayTherapist?.id, showCancelled, threeDays]
   );
   const bufferHours = clinic.staffBookingBufferHours ?? 3;
+  const therapistHours = useMemo(() => roster.filter((t) => t.active !== false).map((t) => t.workingHours), [roster]);
   const phoneHours = useMemo(() => {
     if (phoneView !== '3day') {
-      return displayHoursFor({ clinicHours: hours, appointments: dayAppointments, mode: 'day', date, slotMinutes, bufferHours });
+      return displayHoursFor({ clinicHours: hours, appointments: dayAppointments, mode: 'day', date, slotMinutes, bufferHours, therapistHours });
     }
     return displayHoursFor({
       clinicHours: hours,
@@ -338,8 +339,9 @@ export function ScheduleBookingsView({
       date,
       slotMinutes,
       bufferHours,
+      therapistHours,
     });
-  }, [phoneView, hours, dayAppointments, threeDayAppointments, date, slotMinutes, bufferHours]);
+  }, [phoneView, hours, dayAppointments, threeDayAppointments, date, slotMinutes, bufferHours, therapistHours]);
 
   const displayHours = useMemo(
     () =>
@@ -350,8 +352,9 @@ export function ScheduleBookingsView({
         date,
         slotMinutes,
         bufferHours,
+        therapistHours,
       }),
-    [hours, mode, date, visibleAppointments, dayAppointments, slotMinutes, bufferHours]
+    [hours, mode, date, visibleAppointments, dayAppointments, slotMinutes, bufferHours, therapistHours]
   );
 
   const closedFor = useCallback(

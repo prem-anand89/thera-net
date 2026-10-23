@@ -592,6 +592,18 @@ describe('displayHoursFor', () => {
   const clinicHours = { startHour: 9, endHour: 17 };
   const targetDate = '2026-10-15'; // Thursday of week Mon 2026-10-12 to Sun 2026-10-18
 
+  it('widens the grid to a therapist shift that runs past clinic hours', () => {
+    const res = displayHoursFor({
+      clinicHours,
+      appointments: [],
+      mode: 'day',
+      date: targetDate,
+      slotMinutes: 30,
+      therapistHours: [null, { 1: [[540, 840], [900, 1110]] }],
+    });
+    expect(res).toEqual({ startHour: 9, endHour: 19 });
+  });
+
   it('adds the staff booking buffer on both sides, clamped to the day', () => {
     const base = { clinicHours, appointments: [], mode: 'day' as const, date: targetDate, slotMinutes: 30 };
     expect(displayHoursFor({ ...base, bufferHours: 3 })).toEqual({ startHour: 6, endHour: 20 });

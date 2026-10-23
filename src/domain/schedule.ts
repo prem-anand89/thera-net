@@ -548,6 +548,7 @@ export function displayHoursFor({
   date,
   slotMinutes,
   bufferHours = 0,
+  therapistHours = [],
 }: {
   clinicHours: { startHour: number; endHour: number };
   appointments: Appointment[];
@@ -556,9 +557,22 @@ export function displayHoursFor({
   slotMinutes: number;
   /** Staff booking buffer: rows shown before opening and after closing so a block can be dragged or stretched outside clinic hours. */
   bufferHours?: number;
+  /** Working hours of the therapists in view: a shift that runs past clinic hours must still have grid rows. */
+  therapistHours?: (WorkingHours | null | undefined)[];
 }): { startHour: number; endHour: number } {
   let minHour = Math.max(0, clinicHours.startHour - bufferHours);
   let maxHour = Math.min(24, clinicHours.endHour + bufferHours);
+  for (const hours of therapistHours) {
+    if (!hours || typeof hours !== 'object') continue;
+    for (const day of Object.values(hours)) {
+      if (!Array.isArray(day)) continue;
+      for (const pair of day) {
+        if (!Array.isArray(pair) || typeof pair[0] !== 'number' || typeof pair[1] !== 'number') continue;
+        minHour = Math.min(minHour, Math.floor(pair[0] / 60));
+        maxHour = Math.max(maxHour, Math.ceil(pair[1] / 60));
+      }
+    }
+  }
   const currentWeekDates = mode === 'week' ? new Set(weekDays(date)) : null;
   const apptsToCheck = mode === 'week'
     ? appointments.filter((a) => currentWeekDates?.has(dateForAppointment(a)))
