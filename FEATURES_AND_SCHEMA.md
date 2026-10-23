@@ -108,9 +108,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     read-only "Assisted" row — the patient, the services they delivered, "with {primary}", "Your share ₹X" (their
     share row; "revenue not shared" when the clinic's therapist split is off or they have no share row) and "Not on
     your schedule. Logged on {primary}'s visit." No bill, payment pill, Collect, invoice or edit/delete. Shown in
-    Workspace ("Assisted today", for a non-clinic-wide viewer), the Ledger (below the visits when filtered to that
-    therapist, or for a therapist's own view; hidden under the payment filters) and patient history (replacing the
-    colleague's full row for that therapist). `assistedVisitsFor` is the one pure selection rule. **Money stays with
+    Workspace ("Assisted today", for a non-clinic-wide viewer), the Ledger (below the visits only when filtered to that
+    therapist; the unfiltered Ledger already lists every visit in full; hidden under the payment filters) and patient history (replacing the
+    colleague's full row for that therapist). When someone else (admin, front desk) filters the Ledger to the assistant, the rows read "{name}'s share" and "Logged on {primary}'s visit." `assistedVisitsFor` is the one pure selection rule. **Money stays with
     the primary:** these rows are never part of the assistant's Dues, Collected, the Ledger totals line, the
     Workspace tiles or any needs-payment list (all filter by the visit's own `therapist_id`), so a visit's bill is
     counted once across the assistant and the primary.

@@ -478,10 +478,8 @@ export function WorkspacePage() {
     () => (assistedToday.length ? repos.patients.list(clinic.id) : undefined),
     [clinic.id, assistedToday.length]
   );
-  const patientNameOf = useCallback(
-    (id: string) => (allPatients ?? []).find((p) => p.id === id)?.name ?? 'Patient',
-    [allPatients]
-  );
+  const patientNameById = useMemo(() => new Map((allPatients ?? []).map((p) => [p.id, p.name])), [allPatients]);
+  const patientNameOf = useCallback((id: string) => patientNameById.get(id) ?? 'Patient', [patientNameById]);
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(
     () => new Map((treatments ?? []).map((t) => [t.id, t.name])),
@@ -988,7 +986,13 @@ export function WorkspacePage() {
 
       {assistedToday.length > 0 && (
         <SectionCard title={`Assisted today · ${assistedToday.length}`}>
-          <AssistedVisitList rows={assistedToday} patientName={patientNameOf} showDate={false} />
+          <AssistedVisitList
+            rows={assistedToday}
+            patientName={patientNameOf}
+            showDate={false}
+            assistantName={nameOfTherapist(scope.myTherapistId ?? '')}
+            viewerIsAssistant
+          />
         </SectionCard>
       )}
 

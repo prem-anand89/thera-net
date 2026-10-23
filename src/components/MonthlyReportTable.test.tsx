@@ -56,8 +56,12 @@ describe('MonthlyReportTable assisted column', () => {
     const ravi = screen.getByText('Dr Ravi').closest('tr') as HTMLElement;
     const cells = within(ravi).getAllByRole('cell').map((c) => c.textContent);
     // Billed-under-my-name columns stay at zero for the assistant; Visits stays 0; Assisted is 1.
-    expect(cells[1]).toBe('₹0');
-    expect(cells).toContain('1');
+    const heads = screen.getAllByRole('columnheader').map((h) => h.textContent ?? '');
+    const col = (name: string) => heads.findIndex((h) => h.startsWith(name));
+    expect(cells[col('Bill Amount')]).toBe('₹0');
+    expect(cells[col('Visits')]).toBe('0');
+    expect(cells[col('Assisted')]).toBe('1');
+    expect(col('Assisted')).toBe(col('Visits') + 1);
     const prem = screen.getByText('Dr Prem').closest('tr') as HTMLElement;
     expect(within(prem).getAllByRole('cell')[1].textContent).toBe('₹1,300');
     expect(

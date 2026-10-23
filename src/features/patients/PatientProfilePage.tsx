@@ -800,7 +800,12 @@ export function PatientProfilePage() {
             )}
             {assistedVisits.length > 0 && (
               <div className="border-b border-[var(--border)] px-5 pb-2">
-                <AssistedVisitList rows={assistedVisits} patientName={() => patient?.name ?? 'Patient'} />
+                <AssistedVisitList
+                  rows={assistedVisits}
+                  patientName={() => patient?.name ?? 'Patient'}
+                  assistantName={nameOfTherapist(myTherapistId ?? '')}
+                  viewerIsAssistant
+                />
               </div>
             )}
             {visitRows.length === 0 && assistedVisits.length > 0 ? null : visitRows.length === 0 ? (

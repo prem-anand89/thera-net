@@ -6,8 +6,9 @@ import type { UUID } from '@/domain/types';
 import type { AssistedVisit } from './assistedVisits';
 
 /** What the assistant's own share line reads: their amount, or that the revenue isn't shared. */
-export function assistedShareText(sharePaise: number | null): string {
-  return sharePaise == null ? 'revenue not shared' : `Your share ${formatINR(sharePaise)}`;
+export function assistedShareText(sharePaise: number | null, assistantName?: string): string {
+  if (sharePaise == null) return 'revenue not shared';
+  return `${assistantName ? `${assistantName}'s` : 'Your'} share ${formatINR(sharePaise)}`;
 }
 
 /**
@@ -18,10 +19,16 @@ export function AssistedVisitList({
   rows,
   patientName,
   showDate = true,
+  assistantName,
+  viewerIsAssistant,
 }: {
   rows: AssistedVisit[];
   patientName: (patientId: UUID) => string;
   showDate?: boolean;
+  /** The assisting therapist the rows belong to. */
+  assistantName: string;
+  /** True when the signed-in user is that therapist ("Your share"); otherwise the rows name them. */
+  viewerIsAssistant: boolean;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -41,9 +48,9 @@ export function AssistedVisitList({
             {showDate && <span className="text-xs text-[var(--muted)]">{formatDateDM(r.visitDate)}</span>}
           </div>
           <div className="text-xs text-[var(--ink)]">{r.services.join(', ')}</div>
-          <div className="text-xs font-medium text-[var(--ink)]">{assistedShareText(r.sharePaise)}</div>
+          <div className="text-xs font-medium text-[var(--ink)]">{assistedShareText(r.sharePaise, viewerIsAssistant ? undefined : assistantName)}</div>
           <div className="text-xs text-[var(--muted)]">
-            Not on your schedule. Logged on {r.primaryName}&apos;s visit.
+            {viewerIsAssistant && 'Not on your schedule. '}Logged on {r.primaryName}&apos;s visit.
           </div>
         </li>
       ))}

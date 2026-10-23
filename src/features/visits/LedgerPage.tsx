@@ -368,7 +368,9 @@ export function LedgerPage() {
   const visitDetails = useVisitDetails(visitIds, nameOfTherapist, therapistSplit);
   // Visits the filtered (or signed-in) therapist assisted on: listed below the visits, but never in the
   // visit list's totals, Dues or Collected -- those belong to the primary's own visits only.
-  const assistantId = therapistId || (isClinicWideView ? undefined : myTherapistId);
+  // Only loaded when filtered to a therapist (the unfiltered list already shows every visit in full).
+  const assistantId = therapistId || undefined;
+  // Dedupe: a visit already listed in full above is never repeated as an assisted row.
   const listedVisitIds = useMemo(() => new Set(visitIds), [visitIds]);
   const assistedVisits = useAssistedVisits(
     clinic.id,
@@ -1105,7 +1107,12 @@ export function LedgerPage() {
 
       {recordsView === 'visits' && assistedVisits.length > 0 && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented && (
         <SectionCard title={`Assisted visits · ${assistedVisits.length}`}>
-          <AssistedVisitList rows={assistedVisits} patientName={assistedPatientName} />
+          <AssistedVisitList
+            rows={assistedVisits}
+            patientName={assistedPatientName}
+            assistantName={therapistName.get(assistantId ?? '') ?? 'Therapist'}
+            viewerIsAssistant={Boolean(assistantId) && assistantId === myTherapistId}
+          />
         </SectionCard>
       )}
 

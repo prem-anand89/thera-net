@@ -14,6 +14,7 @@ import type {
   Visit,
 } from '@/domain/types';
 import { rupeesToPaise as rs } from '@/domain/money';
+import { summariseTotals } from '@/features/visits/ledgerTotals';
 
 function makeFakeRepos() {
   const clinic: Clinic = {
@@ -433,7 +434,31 @@ describe('dashboardService money stays with the primary on an assisted visit', (
     // Billed under th-prem; th-ravi delivered one of its services.
     fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(1300), therapistId: 'th-prem', visitDate: '2026-06-10' }));
     fake.payments.set('pay-1', { id: 'pay-1', clinicId: 'clinic-1', visitId: 'v1', amountPaise: rs(300), method: 'cash', receivedDate: '2026-06-10', notes: null, updatedAt: '' });
+    // A real service line delivered by th-ravi, with his share row: he assisted on this visit.
+    const items = [
+      { id: 'l1', clinicId: 'clinic-1', visitId: 'v1', position: 0, serviceName: 'Assessment', assistingTherapistId: null, deleted: false },
+      { id: 'l2', clinicId: 'clinic-1', visitId: 'v1', position: 1, serviceName: 'Dry needling', assistingTherapistId: 'th-ravi', deleted: false },
+    ];
+    (fake.repos as unknown as { visitItems: unknown }).visitItems = {
+      listByVisitIds: async (ids: string[]) => items.filter((i) => ids.includes(i.visitId)),
+      listByClinic: async () => [],
+      bulkPut: async () => {},
+    };
+    (fake.repos as unknown as { visitCredits: unknown }).visitCredits = {
+      listByVisitIds: async () => [{ id: 'c1', visitId: 'v1', therapistId: 'th-ravi', amountPaise: rs(433), deleted: false }],
+      listByClinic: async () => [],
+      bulkPut: async () => {},
+    };
     const svc = createDashboardService(fake.repos);
+    // The Ledger's totals line is summariseTotals over the therapist-filtered visit list.
+    const ledgerRows = async (therapistId: string) =>
+      (await fake.repos.visits.list({ clinicId: 'clinic-1', therapistId })).map((v) => ({
+        billPaise: v.actualBillPaise,
+        paymentState: 'uninvoiced' as const,
+      }));
+    expect(summariseTotals(await ledgerRows('th-ravi')).visitCount).toBe(0);
+    expect(summariseTotals(await ledgerRows('th-ravi')).bill).toBe(0);
+    expect(summariseTotals(await ledgerRows('th-prem'))).toMatchObject({ visitCount: 1, bill: rs(1300) });
     const clinicDues = await svc.duesSummary('clinic-1');
     const primary = await svc.duesSummary('clinic-1', 'th-prem');
     const assistant = await svc.duesSummary('clinic-1', 'th-ravi');

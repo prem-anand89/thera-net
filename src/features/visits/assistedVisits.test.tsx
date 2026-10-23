@@ -5,7 +5,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 import type { Visit, VisitCredit, VisitItem } from '@/domain/types';
 import { assistedVisitsFor } from './assistedVisits';
 import { AssistedVisitList, assistedShareText } from './AssistedVisitList';
-import { summariseTotals } from './ledgerTotals';
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, className }: { children: React.ReactNode; className?: string }) => <a className={className}>{children}</a>,
@@ -56,13 +55,7 @@ describe('assistedVisitsFor', () => {
     expect(assistedVisitsFor('prem', visits, items, credits, nameOf, true)).toEqual([]);
   });
 
-  it('assisted visit is not in the assistant\'s dues or ledger totals', () => {
-    // The Ledger totals are built from the therapist-filtered visit list (primary visits only);
-    // the assisted row is a different list and carries no bill at all.
-    const ravisOwn = visits.filter((v) => v.therapistId === 'ravi');
-    const totals = summariseTotals(ravisOwn.map((v) => ({ billPaise: v.actualBillPaise, paymentState: 'uninvoiced' as const })));
-    expect(totals.visitCount).toBe(1);
-    expect(totals.bill).toBe(130000);
+  it('an assisted row carries no bill, so nothing in it can feed dues or totals', () => {
     const assisted = assistedVisitsFor('ravi', visits, items, credits, nameOf, true);
     expect(assisted.map((a) => a.visitId)).not.toContain('v2');
     expect(Object.keys(assisted[0])).not.toContain('billPaise');
@@ -72,7 +65,7 @@ describe('assistedVisitsFor', () => {
 describe('AssistedVisitList', () => {
   it('shows pill, primary, share and schedule note, with no Collect or invoice controls', () => {
     const rows = assistedVisitsFor('ravi', visits, items, credits, nameOf, true);
-    render(<AssistedVisitList rows={rows} patientName={() => 'Asha'} />);
+    render(<AssistedVisitList rows={rows} patientName={() => 'Asha'} assistantName="Dr Ravi" viewerIsAssistant />);
     expect(screen.getByText('Assisted')).toBeInTheDocument();
     expect(screen.getByText('with Dr Prem')).toBeInTheDocument();
     expect(screen.getByText('Your share ₹433')).toBeInTheDocument();
@@ -80,5 +73,14 @@ describe('AssistedVisitList', () => {
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.queryByText(/collect/i)).toBeNull();
     expect(screen.queryByText(/credit/i)).toBeNull();
+  });
+
+  it('for an admin viewing the assistant, it names the assistant instead of "Your"', () => {
+    const rows = assistedVisitsFor('ravi', visits, items, credits, nameOf, true);
+    render(<AssistedVisitList rows={rows} patientName={() => 'Asha'} assistantName="Dr Ravi" viewerIsAssistant={false} />);
+    expect(screen.getByText("Dr Ravi's share ₹433")).toBeInTheDocument();
+    expect(screen.getByText("Logged on Dr Prem's visit.")).toBeInTheDocument();
+    expect(screen.queryByText(/Your share/)).toBeNull();
+    expect(screen.queryByText(/Not on your schedule/)).toBeNull();
   });
 });
