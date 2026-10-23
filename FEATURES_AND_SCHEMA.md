@@ -612,6 +612,11 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Name per item — autocompleted group names via datalist when moving a row between groups
 - Session count — editable after create; 1 = one visit, 2+ = package line on invoices
 - Base price (in paise) — price changes affect future visits only
+- **Duration (minutes, optional)** — `service_catalog.duration_minutes` (whole number 1–480, check
+  constraint); per session for a package. Blank saves `null` = "count the whole session" in time
+  reports. Shown on the row as "· 20 min" when set. The form rejects anything else inline
+  ("Enter minutes between 1 and 480, or leave it blank.") and never sends it. It is snapshotted onto
+  a visit's service line when entered, which is what utilisation reports read.
 - Active toggle (deactivate, not delete) — inactive items are shown in their own
   collapsed "Inactive services" section below the active groups, not interspersed
 - **Permanent delete** (`hard_delete_catalog_item` RPC) — admin-only, zero-history

@@ -152,6 +152,20 @@ function CatalogAddCard({ title, hint, children }: { title: string; hint?: strin
   );
 }
 
+const DURATION_HINT = 'Per session for a package. Used for time reports; leave blank to count the whole session.';
+const DURATION_ERROR = 'Enter minutes between 1 and 480, or leave it blank.';
+
+/** Blank -> null (valid); a whole number 1-480 -> that number; anything else
+ *  -> undefined (invalid). The database check rejects values outside 1-480,
+ *  so the form must never send one. */
+function parseDuration(raw: string): number | null | undefined {
+  const t = raw.trim();
+  if (!t) return null;
+  if (!/^\d+$/.test(t)) return undefined;
+  const n = Number(t);
+  return n >= 1 && n <= 480 ? n : undefined;
+}
+
 function groupKey(category: string) {
   return category.trim() || 'Uncategorized';
 }
@@ -496,6 +510,7 @@ function ServiceCatalogItemRow({
   const [name, setName] = useState(item.name);
   const [sessionCount, setSessionCount] = useState(String(item.sessionCount));
   const [pricePaise, setPricePaise] = useState<number | null>(item.basePricePaise);
+  const [duration, setDuration] = useState(item.durationMinutes != null ? String(item.durationMinutes) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -530,6 +545,7 @@ function ServiceCatalogItemRow({
       setName(item.name);
       setSessionCount(String(item.sessionCount));
       setPricePaise(item.basePricePaise);
+      setDuration(item.durationMinutes != null ? String(item.durationMinutes) : '');
     }
   }, [item, editing]);
 
@@ -538,12 +554,18 @@ function ServiceCatalogItemRow({
       setError('Group, name, and price are required');
       return;
     }
+    const durationMinutes = parseDuration(duration);
+    if (durationMinutes === undefined) {
+      setError(DURATION_ERROR);
+      return;
+    }
     const sessions = Math.max(1, Number(sessionCount) || 1);
     setSaving(true);
     setError(null);
     try {
       await repos.catalog.put({
         ...item,
+        durationMinutes,
         category: category.trim(),
         name: name.trim(),
         sessionCount: sessions,
@@ -656,6 +678,17 @@ function ServiceCatalogItemRow({
             <RupeeInput valuePaise={pricePaise} onChange={setPricePaise} />
           </Field>
         </div>
+        <Field label="Duration (minutes, optional)" hint={DURATION_HINT}>
+          <input
+            type="number"
+            min={1}
+            max={480}
+            step={1}
+            className={inputCls}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+          />
+        </Field>
         <p className="text-[11px] text-[var(--muted)]">
           Use <strong>1</strong> for a single visit, <strong>2+</strong> for a package (one line item,
           sessions tracked on visits). New price applies to future visits only.
@@ -687,6 +720,9 @@ function ServiceCatalogItemRow({
           <span className="text-xs text-[var(--muted)]">
             · {formatINR(effectivePricePerSession(item))}/session
           </span>
+        )}
+        {item.durationMinutes != null && (
+          <span className="text-xs text-[var(--muted)]">{`· ${item.durationMinutes} min`}</span>
         )}
         <div className="ml-auto flex shrink-0 flex-wrap gap-2">
           <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
@@ -741,12 +777,18 @@ function ServiceCatalogInlineAdd({
   const [name, setName] = useState('');
   const [sessionCount, setSessionCount] = useState(defaultSessions);
   const [pricePaise, setPricePaise] = useState<number | null>(null);
+  const [duration, setDuration] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     if (!name.trim() || pricePaise == null) {
       setError('Name and price are required');
+      return;
+    }
+    const durationMinutes = parseDuration(duration);
+    if (durationMinutes === undefined) {
+      setError(DURATION_ERROR);
       return;
     }
     const sessions = Math.max(1, Number(sessionCount) || 1);
@@ -768,6 +810,7 @@ function ServiceCatalogInlineAdd({
         name: name.trim(),
         sessionCount: sessions,
         basePricePaise: pricePaise,
+        durationMinutes,
         active: true,
         updatedAt: new Date().toISOString(),
       });
@@ -809,6 +852,17 @@ function ServiceCatalogInlineAdd({
           <RupeeInput valuePaise={pricePaise} onChange={setPricePaise} />
         </Field>
       </div>
+      <Field label="Duration (minutes, optional)" hint={DURATION_HINT}>
+        <input
+          type="number"
+          min={1}
+          max={480}
+          step={1}
+          className={inputCls}
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+        />
+      </Field>
       <ErrorNote message={error} />
       <div className="flex flex-wrap gap-2">
         <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>

@@ -169,3 +169,46 @@ describe('ServiceCatalogItemRow — hard delete', () => {
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });
 });
+
+describe('ServiceCatalog — optional duration', () => {
+  const openEdit = async (over: Partial<CatalogItem> = {}) => {
+    catalogItems = [item({ name: 'Physio', ...over })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+  };
+  const field = () => screen.getByLabelText(/Duration \(minutes, optional\)/);
+
+  it('service form saves an optional duration and blank clears it', async () => {
+    await openEdit({ durationMinutes: 20 });
+    expect(screen.getByText('Per session for a package. Used for time reports; leave blank to count the whole session.')).toBeInTheDocument();
+    expect(field()).toHaveValue(20);
+
+    fireEvent.change(field(), { target: { value: '45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ durationMinutes: 45 });
+
+    put.mockClear();
+    // Saving closes the editor; reopen it to clear the value.
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(field(), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ durationMinutes: null });
+  });
+
+  it.each(['0', '481', '2.5'])('rejects %s without saving', async (bad) => {
+    await openEdit();
+    fireEvent.change(field(), { target: { value: bad } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Enter minutes between 1 and 480, or leave it blank.')).toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('shows the duration in the row only when set', async () => {
+    catalogItems = [item({ name: 'Timed', durationMinutes: 20 }), item({ name: 'Untimed' })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    expect(await screen.findByText('· 20 min')).toBeInTheDocument();
+    expect(screen.getAllByText(/ min$/)).toHaveLength(1);
+  });
+});
