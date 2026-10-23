@@ -233,9 +233,12 @@ export function ServiceRows({
               setChanging(null);
               setAssigning(null);
             }}
-            className={`rounded-lg border bg-[var(--surface)] p-3 ${
-              error ? 'border-[var(--rust)]' : 'border-[var(--border)]'
-            }`}
+            // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.
+            className={
+              named
+                ? `rounded-lg border bg-[var(--surface)] p-3 ${error ? 'border-[var(--rust)]' : 'border-[var(--border)]'}`
+                : ''
+            }
           >
             {picking ? (
               <div className="flex items-start gap-2">
