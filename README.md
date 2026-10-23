@@ -128,9 +128,9 @@ therapists, not just admins).
 **Onboarding** — inviting a `therapist` from Settings → Team creates their
 login *and* their service-roster entry (linked to that login) in one step;
 `admin`/`front_desk` invites only need the login. A therapist can always be
-**deactivated** (keeps history intact) and, once they have zero visits,
-notes, or invoices on record, **permanently deleted** — matching how
-patients work.
+**deactivated** (keeps history intact) and, once they have zero visits
+(including visits they assisted on or hold a revenue share of), notes, or
+invoices on record, **permanently deleted** — matching how patients work.
 
 ## Status
 

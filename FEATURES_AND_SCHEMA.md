@@ -522,7 +522,7 @@ queued with a visible error.
 #### Three Roles (Enforced Server-Side via RLS)
 - **admin** — full read/write on everything: roster, catalog, all therapists' visits, billing settings, feature toggles
 - **therapist** — clinic-wide reads, scoped writes (own visits/notes only), no roster/catalog/pricing changes
-- **front_desk** — reads and visit/invoice entry, and can correct any visit (its lines and revenue shares too: `visits_update` / `visit_items_update` / `visit_credits_update` allow admin, front desk or the visit's own therapist since `20261023100000`; deleting a visit stays admin or own therapist), no clinical-notes access (enforced by `consultation_notes` RLS since `20261022100000`, so notes never reach a front-desk device; bills get the referral block through `get_invoice_referral(visit_id)`), no roster/catalog writes, excluded from clinical dashboards
+- **front_desk** — reads and visit/invoice entry, and can correct any visit (its lines and revenue shares too: `visits_update` / `visit_items_update` / `visit_credits_update` allow admin, front desk or the visit's own therapist since `20261023100000`; deleting a visit stays admin or own therapist, and since `20261024100000` the soft delete — an update setting `deleted = true` — is refused for front desk on the server too), no clinical-notes access (enforced by `consultation_notes` RLS since `20261022100000`, so notes never reach a front-desk device; bills get the referral block through `get_invoice_referral(visit_id)`), no roster/catalog writes, excluded from clinical dashboards
 
 #### Visits, service lines and revenue shares (who can do what)
 Enforced by RLS (`visits_*`, `visit_items_*`, `visit_credits_*`, helpers `can_add_visit_children` / `can_edit_visit_children`) and mirrored in `features/visits/visitPermissions.ts`:
@@ -530,13 +530,17 @@ Enforced by RLS (`visits_*`, `visit_items_*`, `visit_credits_*`, helpers `can_ad
 | Action | admin | front desk | primary therapist | assisting therapist (not primary) |
 |---|---|---|---|---|
 | Add a visit (with its lines and shares) | yes | yes | yes | yes (any member can log a visit; they get the lines/shares rule below) |
-| Add lines or shares to a visit | yes | yes | yes | only if they created the visit (`visits.created_by`) |
+| Add lines or shares to a visit | yes | yes | yes | only if they created the visit (`visits.created_by`) and it isn't invoiced yet |
 | Edit a saved visit, its lines and its shares | yes | yes | yes | no |
-| Delete a visit | yes | no | yes, before invoicing | no |
+| Delete a visit | yes | no (enforced on the server: trigger `visits_guard_soft_delete`) | yes, before invoicing | no |
 | Edit lines after invoicing | no (frozen) | no | no | no |
 | Edit shares after invoicing | yes | yes | yes | no |
 
-"Whoever created the visit may add lines/shares" lets a therapist who logs a visit for a colleague save its services and revenue share, including when pushed later from offline. An assisting therapist sees the visit read-only in their own lists.
+"Whoever created the visit may add lines/shares" lets a therapist who logs a visit for a colleague save its services and revenue share, including when pushed later from offline. Since `20261024100000` it holds only while the visit is not invoiced. Accepted residual: until then, a creator with API access could add a line or a share to the visit they logged for a colleague (crediting themselves); the write is audit-logged and the attribution audit flags it as "repaired". An assisting therapist sees the visit read-only in their own lists.
+
+Delete is enforced on the server for the soft delete too (the app deletes a visit by updating `deleted = true`, which `visits_update` alone would let front desk do): trigger `visits_guard_soft_delete` refuses the false → true flip (42501, "Only an admin or the visit's therapist can delete a visit.") unless the caller is an admin or the visit's therapist before the update; server-side work without a user (`auth.uid()` null) is let through.
+
+Front desk's `visits_update` reach is the same as an admin's or the visit's own therapist's: through the API it can change a visit's therapist and the old split columns (`shared_therapist_id` / `shared_pct`) even on an invoiced visit (those columns are not in `protect_invoiced_visit()`'s frozen list). The app only offers what the table above says.
 
 #### Self-Service Sign-In (Email/Password and Google)
 - **`LoginPage.tsx`** offers both email/password (`signInWithPassword`/`signUp`)
@@ -1760,13 +1764,19 @@ reauthorization_required  boolean NOT NULL
 location              text (NULLABLE) — 'clinic' | 'home'
 credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
                        visit_credits rows follow the service lines or were edited by hand
+service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
+                       with (set by visitService.create / updateLines); null = older visit, no
+                       check. Read by the invoice builder only (since 20261024100000)
 deleted               boolean NOT NULL (default false)
 created_by, updated_by  uuid (NULLABLE)
 updated_at            timestamptz NOT NULL
 INDEXES: clinic+date, patient, clinic+updated
 ```
 RLS (since `20261023100000`): select/insert any clinic member; **update** admin, front desk or the
-visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`).
+visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`). The soft
+delete (an update setting `deleted = true`) follows the delete rule: trigger `visits_guard_soft_delete`
+(`guard_visit_soft_delete()`, since `20261024100000`) refuses it with 42501 unless the caller is an
+admin or the visit's own therapist (the therapist before the update), or there is no signed-in user.
 
 #### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
 
@@ -1806,21 +1816,26 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
 - **Invoiced visits freeze their lines**: `protect_invoiced_visit_items` rejects insert/update/delete
   of a line whose visit has `invoice_id` (errcode 42501, "This visit is on an invoice; its services are
   frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
-  `admin_wipe_clinic_data`). Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
+  `admin_wipe_clinic_data`). Since `20261024100000` an UPDATE is refused only when a content column
+  changes (`visit_id`, `service_catalog_id`, `service_name`, `catalog_price_paise`, `price_paise`,
+  `assisting_therapist_id`, `duration_minutes`, `is_package_line`, `deleted`, `position`), so an identical
+  re-put (backup restore, sync retry) passes. Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
 - Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
   Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
   the primary always has a row.
 - RLS (both): select any clinic member; **insert** admin, front desk, the parent visit's own therapist,
   or whoever created the visit (`visits.created_by = auth.uid()`, stamped by `set_updated_at()` on the
   server insert, so a therapist logging a visit for a colleague can add its lines and shares, also when
-  pushed later from offline) — helper `can_add_visit_children(visit_id)`; **update/delete** admin, front
+  pushed later from offline; since `20261024100000` only while the visit is not invoiced) — helper
+  `can_add_visit_children(visit_id)`; **update/delete** admin, front
   desk or the parent visit's own therapist (`can_edit_visit_children(visit_id)`; update's `with check`
   applies it to the new row, so a line or share can't be moved onto a visit the caller couldn't edit).
   An assisting or unrelated therapist cannot add, change or delete lines or shares, so nobody can credit
   themselves on someone else's visit.
 - Client: `repos.visitItems` / `repos.visitCredits` — `listByVisitIds(ids)`, `listByClinic(clinicId,
   range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
-  outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
+  outbox entries in one transaction). Reads skip `deleted` rows, except `listByClinicIncludingDeleted(clinicId)`
+  (only for "does anything still reference this?" checks). Dexie indexes: `visit_items: id,
   clinicId, visitId, [clinicId+updatedAt]`; `visit_credits: id, clinicId, visitId, therapistId`.
 - **Saving visits (`visitService`)**: `create` takes `lines: {serviceCatalogId, assistingTherapistId?,
   packageContinuation?}[]` (the old single `serviceCatalogId` input still works and becomes one line) and
@@ -1828,12 +1843,16 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   gets one primary share = the bill) through `repos.visits.putWithChildren(visit, items, credits)` — ONE
   Dexie transaction, outbox entries queued visit, then lines, then shares. `visits.service_catalog_id` =
   first line; package columns come from the package line (a continuation, or a multi-session service).
+  Both `create` and `updateLines` set `visits.service_lines_count` to the number of live lines written.
+  A package continuation (on a line, or the old input's `packageGroupId`) must belong to the same patient
+  ("That package belongs to another patient.").
   `updateLines(visitId, lines, adjustment)` refuses invoiced visits ("its services are frozen"), writes
   only rows that changed, recomputes bill and rate snapshot as `updateBilling` does, rewrites shares in
   `auto` mode and returns `sharesOutdated: true` in `manual` mode. `setShares(visitId, rows)` (allowed on
   invoiced visits) requires Σ = bill, no negative share, the package holder (deliverer of the package
   line; the primary with split off) never below that line's net, the primary present, everyone in the
-  visit's clinic, and sets `credits_mode = 'manual'`; `recalculateShares` returns to `auto`.
+  visit's clinic, and sets `credits_mode = 'manual'`; `recalculateShares` returns to `auto` (both refuse a
+  deleted visit: "This visit was deleted.").
   `updateBilling` follows a bill or primary change (auto shares rewritten, manual → `sharesOutdated`);
   a line tagged with the new primary has its tag cleared. **Push order matters** (the server rejects
   some intermediate states permanently and the sync would revert the local row): a line that frees the
@@ -1850,6 +1869,12 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   rounded to the rupee, primary = remainder); clearing it returns the visit to auto shares.
 - **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
   on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
+- **Deleting a therapist**: `hard_delete_therapist` (redefined in `20261024100000`) counts, as linked
+  records, each visit the therapist is on once — as its therapist, the old split's shared therapist, an
+  assistant on a line, or the holder of a share (live and soft-deleted lines/shares: a soft-deleted row
+  still references the therapist) — plus their notes and invoices, and refuses with "therapist has N
+  linked record(s); deactivate instead of deleting" rather than a raw foreign-key error. Settings → Team
+  checks the same first (`features/settings/therapistLinks.ts` `countTherapistLinkedRecords`).
 
 #### `invoices`
 ```sql
@@ -1917,6 +1942,11 @@ amending refuse ("Some of these services are still syncing…") while any of
 the visits, their lines or their shares still has an outbox entry
 (`pendingVisitSync`; an entry the server refused, i.e. with `error` set, gets its own message telling the user to fix or discard it from the unsynced changes notice), because the server freezes a visit's lines once it
 has an invoice and a line pushed afterwards would be rejected and reverted.
+They also refuse ("This visit's services haven't all arrived on this device yet. Try again in a
+moment.") a visit whose live lines on this device are fewer than its `serviceLinesCount`: its lines
+reached the server after the visit and haven't been pulled here yet, so billing it now would bill the
+wrong services and freeze the late lines out. Preview, issue and amend share this check (`buildLineItems`);
+visits without a count (older ones) are not checked.
 
 **Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
 Nothing in the schema or invoicing logic caps a package's session count —
@@ -3680,13 +3710,19 @@ reauthorization_required  boolean NOT NULL
 location              text (NULLABLE) — 'clinic' | 'home'
 credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
                        visit_credits rows follow the service lines or were edited by hand
+service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
+                       with (set by visitService.create / updateLines); null = older visit, no
+                       check. Read by the invoice builder only (since 20261024100000)
 deleted               boolean NOT NULL (default false)
 created_by, updated_by  uuid (NULLABLE)
 updated_at            timestamptz NOT NULL
 INDEXES: clinic+date, patient, clinic+updated
 ```
 RLS (since `20261023100000`): select/insert any clinic member; **update** admin, front desk or the
-visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`).
+visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`). The soft
+delete (an update setting `deleted = true`) follows the delete rule: trigger `visits_guard_soft_delete`
+(`guard_visit_soft_delete()`, since `20261024100000`) refuses it with 42501 unless the caller is an
+admin or the visit's own therapist (the therapist before the update), or there is no signed-in user.
 
 #### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
 
@@ -3726,21 +3762,26 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
 - **Invoiced visits freeze their lines**: `protect_invoiced_visit_items` rejects insert/update/delete
   of a line whose visit has `invoice_id` (errcode 42501, "This visit is on an invoice; its services are
   frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
-  `admin_wipe_clinic_data`). Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
+  `admin_wipe_clinic_data`). Since `20261024100000` an UPDATE is refused only when a content column
+  changes (`visit_id`, `service_catalog_id`, `service_name`, `catalog_price_paise`, `price_paise`,
+  `assisting_therapist_id`, `duration_minutes`, `is_package_line`, `deleted`, `position`), so an identical
+  re-put (backup restore, sync retry) passes. Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
 - Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
   Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
   the primary always has a row.
 - RLS (both): select any clinic member; **insert** admin, front desk, the parent visit's own therapist,
   or whoever created the visit (`visits.created_by = auth.uid()`, stamped by `set_updated_at()` on the
   server insert, so a therapist logging a visit for a colleague can add its lines and shares, also when
-  pushed later from offline) — helper `can_add_visit_children(visit_id)`; **update/delete** admin, front
+  pushed later from offline; since `20261024100000` only while the visit is not invoiced) — helper
+  `can_add_visit_children(visit_id)`; **update/delete** admin, front
   desk or the parent visit's own therapist (`can_edit_visit_children(visit_id)`; update's `with check`
   applies it to the new row, so a line or share can't be moved onto a visit the caller couldn't edit).
   An assisting or unrelated therapist cannot add, change or delete lines or shares, so nobody can credit
   themselves on someone else's visit.
 - Client: `repos.visitItems` / `repos.visitCredits` — `listByVisitIds(ids)`, `listByClinic(clinicId,
   range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
-  outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
+  outbox entries in one transaction). Reads skip `deleted` rows, except `listByClinicIncludingDeleted(clinicId)`
+  (only for "does anything still reference this?" checks). Dexie indexes: `visit_items: id,
   clinicId, visitId, [clinicId+updatedAt]`; `visit_credits: id, clinicId, visitId, therapistId`.
 - **Saving visits (`visitService`)**: `create` takes `lines: {serviceCatalogId, assistingTherapistId?,
   packageContinuation?}[]` (the old single `serviceCatalogId` input still works and becomes one line) and
@@ -3748,12 +3789,16 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   gets one primary share = the bill) through `repos.visits.putWithChildren(visit, items, credits)` — ONE
   Dexie transaction, outbox entries queued visit, then lines, then shares. `visits.service_catalog_id` =
   first line; package columns come from the package line (a continuation, or a multi-session service).
+  Both `create` and `updateLines` set `visits.service_lines_count` to the number of live lines written.
+  A package continuation (on a line, or the old input's `packageGroupId`) must belong to the same patient
+  ("That package belongs to another patient.").
   `updateLines(visitId, lines, adjustment)` refuses invoiced visits ("its services are frozen"), writes
   only rows that changed, recomputes bill and rate snapshot as `updateBilling` does, rewrites shares in
   `auto` mode and returns `sharesOutdated: true` in `manual` mode. `setShares(visitId, rows)` (allowed on
   invoiced visits) requires Σ = bill, no negative share, the package holder (deliverer of the package
   line; the primary with split off) never below that line's net, the primary present, everyone in the
-  visit's clinic, and sets `credits_mode = 'manual'`; `recalculateShares` returns to `auto`.
+  visit's clinic, and sets `credits_mode = 'manual'`; `recalculateShares` returns to `auto` (both refuse a
+  deleted visit: "This visit was deleted.").
   `updateBilling` follows a bill or primary change (auto shares rewritten, manual → `sharesOutdated`);
   a line tagged with the new primary has its tag cleared. **Push order matters** (the server rejects
   some intermediate states permanently and the sync would revert the local row): a line that frees the
@@ -3770,6 +3815,12 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   rounded to the rupee, primary = remainder); clearing it returns the visit to auto shares.
 - **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
   on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
+- **Deleting a therapist**: `hard_delete_therapist` (redefined in `20261024100000`) counts, as linked
+  records, each visit the therapist is on once — as its therapist, the old split's shared therapist, an
+  assistant on a line, or the holder of a share (live and soft-deleted lines/shares: a soft-deleted row
+  still references the therapist) — plus their notes and invoices, and refuses with "therapist has N
+  linked record(s); deactivate instead of deleting" rather than a raw foreign-key error. Settings → Team
+  checks the same first (`features/settings/therapistLinks.ts` `countTherapistLinkedRecords`).
 
 #### `invoices`
 ```sql
@@ -3837,6 +3888,11 @@ amending refuse ("Some of these services are still syncing…") while any of
 the visits, their lines or their shares still has an outbox entry
 (`pendingVisitSync`; an entry the server refused, i.e. with `error` set, gets its own message telling the user to fix or discard it from the unsynced changes notice), because the server freezes a visit's lines once it
 has an invoice and a line pushed afterwards would be rejected and reverted.
+They also refuse ("This visit's services haven't all arrived on this device yet. Try again in a
+moment.") a visit whose live lines on this device are fewer than its `serviceLinesCount`: its lines
+reached the server after the visit and haven't been pulled here yet, so billing it now would bill the
+wrong services and freeze the late lines out. Preview, issue and amend share this check (`buildLineItems`);
+visits without a count (older ones) are not checked.
 
 **Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
 Nothing in the schema or invoicing logic caps a package's session count —
@@ -5015,7 +5071,8 @@ Lines and shares are separate rows from the visit and sync as separate outbox en
 - **The outbox merges every queued entry for one row at that row's OLDEST queued position.** A later edit never moves a row later in the queue. Anything that relies on "queued after X" must account for this.
 - **A package-line swap queues the slot-freeing row first.** The server allows one live package line per visit (unique index), so the line that stops being the package line (or is removed) is queued before the line that takes the slot (`putWithChildren`; tag-clearing line writes go before the visit row via `itemsFirst`). Known gap: a slot-taking row that already had an older pending entry can invert this, the server answers 23505 and the row reverts.
 - **Do not issue an invoice while a visit's lines or shares are pending or refused.** `issue_invoice` freezes lines the moment `invoice_id` is set, so unsynced lines would be rejected (42501) and the bill would not match. The app refuses with a message instead.
-- **The server freezes lines once `invoice_id` is set, but not shares** (who gets paid is internal and not on the invoice).
+- **The server freezes lines once `invoice_id` is set, but not shares** (who gets paid is internal and not on the invoice). An identical re-put of a frozen line passes; only a real change is refused.
+- **A visit can arrive on another device before its lines.** `visits.service_lines_count` records how many live lines the visit was saved with, and the invoice builder refuses a visit with fewer local lines than that. Any new path that rewrites a visit's lines must set it too.
 - Backup restore follows the same rule: visits are put first, then `visit_items`, then `visit_credits`.
 
 ### 2. Revenue Split Snapshot at Billing
