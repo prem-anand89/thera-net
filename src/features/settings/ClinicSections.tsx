@@ -9,7 +9,7 @@ import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { LetterheadPreview } from './LetterheadPreview';
 import { clampBufferHours } from './shiftUtils';
 import { toFriendlyMessage } from '@/lib/errors';
-import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton, BoolToggle } from './settingsShared';
 
 type ProfileFields = Pick<
   Clinic,
@@ -749,6 +749,58 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
           Holidays, one-off closures, and individual therapist shift overrides are managed directly on the{' '}
           <span className="font-medium text-[var(--ink)]">Schedule</span> calendar.
         </p>
+        {editing && (
+          <SectionSaveBar
+            dirty={dirty}
+            saved={saved}
+            busy={busy}
+            onSave={() => void save()}
+            onCancel={() => {
+              cancel();
+              setEditing(false);
+            }}
+            error={error}
+          />
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+type ClinicalDocsFields = Pick<Clinic, 'clinicalDocsEnabled'>;
+
+/** Clinical notes on visits. Not billing-shaped: it lives on General so a plan without invoicing can still reach it. */
+export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<ClinicalDocsFields>(
+    (c) => ({ clinicalDocsEnabled: c.clinicalDocsEnabled ?? false }),
+    onDirtyChange
+  );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
+
+  return (
+    <div className="mt-6">
+      <SectionCard
+        id="settings-card-clinical-docs"
+        title="Clinical notes"
+        action={editing ? undefined : <SetOnceEditButton label="Edit clinical notes" onClick={() => setEditing(true)} />}
+      >
+        <fieldset disabled={!editing} className="contents">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label={
+                <>
+                  Clinical documentation module
+                  <InfoTip text="Enables clinical notes for visits. When off, therapists can still access notes from a patient's profile, but visit workflows won't prompt for them." />
+                </>
+              }
+            >
+              <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
+            </Field>
+          </div>
+        </fieldset>
         {editing && (
           <SectionSaveBar
             dirty={dirty}

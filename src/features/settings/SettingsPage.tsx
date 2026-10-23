@@ -13,7 +13,7 @@ import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { LockedSectionNotice } from './settingsShared';
 import { PlanSection } from './PlanSection';
-import { ClinicProfileSection, ClinicRegionSection, ClinicHoursSection } from './ClinicSections';
+import { ClinicProfileSection, ClinicRegionSection, ClinicHoursSection, ClinicalDocsSection } from './ClinicSections';
 import { BillingSection, PartnerSection } from './BillingSections';
 import { PatientCommsSection } from './BookingSections';
 import { HistoricalData, DataBackup, DangerZone } from './DataSections';
@@ -21,12 +21,13 @@ import { Therapists } from './TeamSection';
 
 /** Sections that edit a slice of the clinic row and report unsaved edits.
  *  A tab can hold more than one (Billing holds billing + partner). */
-type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'billing' | 'partner' | 'patientComms';
+type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'clinicalDocs' | 'billing' | 'partner' | 'patientComms';
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
   profile: 'general',
   clinicHours: 'general',
   clinicRegion: 'general',
+  clinicalDocs: 'general',
   billing: 'billing',
   partner: 'billing',
   patientComms: 'booking',
@@ -342,6 +343,7 @@ export function SettingsPage() {
   const setProfileDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'profile', d)), []);
   const setClinicHoursDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicHours', d)), []);
   const setClinicRegionDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicRegion', d)), []);
+  const setClinicalDocsDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicalDocs', d)), []);
   const setBillingDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'billing', d)), []);
   const setPartnerDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'partner', d)), []);
   const setPatientCommsDirty = useCallback(
@@ -453,6 +455,7 @@ export function SettingsPage() {
               <ClinicProfileSection onDirtyChange={setProfileDirty} />
               <ClinicHoursSection onDirtyChange={setClinicHoursDirty} />
               <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
+              <ClinicalDocsSection onDirtyChange={setClinicalDocsDirty} />
             </>
           )}
           {activeTab === 'team' && (

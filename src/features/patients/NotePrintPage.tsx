@@ -4,6 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { PatientProfileBackTarget } from '@/app/router';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
+import { LockedSectionNotice } from '@/features/settings/settingsShared';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -396,6 +398,7 @@ export function NoteContent({
 
 export function NotePrintPage() {
   const clinic = useClinic();
+  const { canPrintNotes, entitlementsLoading } = usePermissions();
   const { noteId } = useParams({ strict: false }) as { noteId: string };
   const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
   const note = useLiveQuery(() => repos.consultationNotes.get(noteId), [noteId]);
@@ -417,6 +420,15 @@ export function NotePrintPage() {
       document.title = previousTitle;
     };
   }, [note, patient]);
+
+  if (!canPrintNotes) {
+    // Direct URL visits get the same answer as the missing button; while the plan is still loading, show nothing rather than a false lock.
+    return entitlementsLoading ? null : (
+      <div className="mx-auto max-w-xl p-8">
+        <LockedSectionNotice feature="notePrinting" sectionLabel="Printing and PDF export of notes" />
+      </div>
+    );
+  }
 
   if (!note || patient === undefined) {
     return (

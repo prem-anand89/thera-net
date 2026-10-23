@@ -129,6 +129,7 @@ export function SharedVisitCard({
   onResendFeedback,
   onAskForGoogleReview,
   canInvoice = true,
+  canCollect = canInvoice,
   backTo,
 }: {
   data: VisitCardData;
@@ -148,6 +149,8 @@ export function SharedVisitCard({
   onResendFeedback?: () => void;
   onAskForGoogleReview?: () => void;
   canInvoice?: boolean;
+  /** Recording a payment; defaults to `canInvoice`. A plan without invoicing still collects. */
+  canCollect?: boolean;
   backTo?: PatientProfileBackTarget;
 }) {
   const initials = showPatient
@@ -159,7 +162,7 @@ export function SharedVisitCard({
     : '';
 
   const bill = formatINR(data.billPaise);
-  const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const actions = canCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
     billPaise: data.billPaise,
@@ -168,7 +171,7 @@ export function SharedVisitCard({
     issuedAt: data.issuedAt,
     isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
   });
-  const showCollect = canInvoice && actions.includes('take_payment');
+  const showCollect = canCollect && actions.includes('take_payment');
   // Same freeze-on-invoice signal PaymentStatusDisplay's table cell shows —
   // added here for parity: this hand-rolled card block never carried it,
   // which was a pre-existing gap between the two, not a deliberate choice.
@@ -248,7 +251,7 @@ export function SharedVisitCard({
           </div>
         )}
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+          {!canCollect && paymentActions(data.paymentState).length > 0 && (
             <Pill tone="slate">Ask billing</Pill>
           )}
           {data.packageInvoicePending && (
@@ -359,6 +362,7 @@ export function ResponsiveVisitList({
   onResendFeedback,
   onAskForGoogleReview,
   canInvoice = true,
+  canCollect = canInvoice,
   selection,
   backTo,
   showColumnPicker = true,
@@ -377,6 +381,7 @@ export function ResponsiveVisitList({
   onResendFeedback?: (row: VisitCardData) => void;
   onAskForGoogleReview?: (row: VisitCardData) => void;
   canInvoice?: boolean;
+  canCollect?: boolean;
   /** Row checkboxes for bulk actions (e.g. Patient Profile's "select
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
    *  card list and the table — grouped mode has no caller that needs it. */
@@ -422,6 +427,7 @@ export function ResponsiveVisitList({
                       onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
                     }
                     canInvoice={canInvoice}
+                    canCollect={canCollect}
                     backTo={backTo}
                   />
                 ))}
@@ -460,6 +466,7 @@ export function ResponsiveVisitList({
                       onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
                     }
                     canInvoice={canInvoice}
+                    canCollect={canCollect}
                     backTo={backTo}
                   />
                 </div>
@@ -489,6 +496,7 @@ export function ResponsiveVisitList({
           onResendFeedback={onResendFeedback}
           onAskForGoogleReview={onAskForGoogleReview}
           canInvoice={canInvoice}
+          canCollect={canCollect}
           selection={selection}
           backTo={backTo}
           showColumnPicker={showColumnPicker}

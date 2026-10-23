@@ -241,7 +241,7 @@ function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const { canBill, canCollectPayment, canViewClinicalNotes, canEditSettings } = usePermissions();
   const navigate = useNavigate();
 
   const { therapistSplit } = clinicBillingConfig(clinic);
@@ -979,6 +979,7 @@ export function WorkspacePage() {
                 .catch((e) => notify.error(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}
+            canCollect={canCollectPayment}
             backTo="/workspace"
           />
         )}

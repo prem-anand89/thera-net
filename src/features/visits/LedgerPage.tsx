@@ -257,7 +257,7 @@ function DueToggle({
 
 export function LedgerPage() {
   const clinic = useClinic();
-  const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
+  const { canBill, canCollectPayment, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
   const { myTherapistId, isClinicWideView, isFrontDesk } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
@@ -1190,6 +1190,7 @@ export function LedgerPage() {
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 canInvoice={canBill}
+                canCollect={canCollectPayment}
                 backTo="/ledger"
               />
               <Pager list={visitsPager} noun="visits" />

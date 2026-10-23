@@ -5,9 +5,11 @@ import type { PlanTier } from './types';
  * whether a clinic has a partner hospital — not tier-driven, see
  * FEATURES_AND_SCHEMA.md's Settings section) and anything clinical-note- or
  * advanced-module-content-shaped (still open design work, kept out of the
- * tier plan per its Part 1 scope corrections).
+ * tier plan per its Part 1 scope corrections). Writing notes is never gated;
+ * only `notePrinting` (print / save-as-PDF of a note, session log or insurer
+ * packet) is.
  */
-export type PlanFeature = 'invoicing' | 'team' | 'revenueSplit' | 'advancedModules';
+export type PlanFeature = 'invoicing' | 'team' | 'revenueSplit' | 'advancedModules' | 'notePrinting';
 
 /**
  * One row per tier, matching the Settings-page table in the tier plan:
@@ -16,10 +18,10 @@ export type PlanFeature = 'invoicing' | 'team' | 'revenueSplit' | 'advancedModul
  * bucket gate only — its content is a separate, still-open planning pass.
  */
 const TIER_FEATURES: Record<PlanTier, Record<PlanFeature, boolean>> = {
-  lite: { invoicing: false, team: false, revenueSplit: false, advancedModules: false },
-  solo: { invoicing: true, team: false, revenueSplit: false, advancedModules: false },
-  clinic: { invoicing: true, team: true, revenueSplit: true, advancedModules: true },
-  clinic_plus: { invoicing: true, team: true, revenueSplit: true, advancedModules: true },
+  lite: { invoicing: false, team: false, revenueSplit: false, advancedModules: false, notePrinting: false },
+  solo: { invoicing: true, team: false, revenueSplit: false, advancedModules: false, notePrinting: true },
+  clinic: { invoicing: true, team: true, revenueSplit: true, advancedModules: true, notePrinting: true },
+  clinic_plus: { invoicing: true, team: true, revenueSplit: true, advancedModules: true, notePrinting: true },
 };
 
 export function tierIncludes(tier: PlanTier, feature: PlanFeature): boolean {

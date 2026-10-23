@@ -42,12 +42,15 @@ export function PaymentStatusDisplay({
   data,
   onTakePayment,
   canInvoice,
+  canCollect = canInvoice,
 }: {
   data: VisitCardData;
   onTakePayment?: () => void;
   canInvoice: boolean;
+  /** Recording a payment against the visit. Wider than `canInvoice`: a plan without invoicing still collects. */
+  canCollect?: boolean;
 }) {
-  const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const actions = canCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
     billPaise: data.billPaise,
@@ -56,7 +59,7 @@ export function PaymentStatusDisplay({
     issuedAt: data.issuedAt,
     isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
   });
-  const showCollect = canInvoice && actions.includes('take_payment');
+  const showCollect = canCollect && actions.includes('take_payment');
 
   // Billing fields freeze the moment a visit is invoiced (see
   // EditVisitModal's `frozen` check), independent of whether it's since
@@ -66,7 +69,7 @@ export function PaymentStatusDisplay({
   const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
   const hasSecondaryRow =
-    (!canInvoice && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
+    (!canCollect && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
 
   return (
     <div className="flex flex-col items-start gap-1">
@@ -95,7 +98,7 @@ export function PaymentStatusDisplay({
       </div>
       {hasSecondaryRow && (
         <div className="flex flex-wrap items-center gap-1">
-          {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+          {!canCollect && paymentActions(data.paymentState).length > 0 && (
             <Pill tone="slate">
               <span className="whitespace-nowrap">Ask billing</span>
             </Pill>

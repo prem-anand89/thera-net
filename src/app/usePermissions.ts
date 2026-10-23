@@ -33,6 +33,14 @@ export interface Permissions {
    * off a tab on every fresh mount, before their real access ever loads.
    */
   entitlementsLoading: boolean;
+  /** Print / save-as-PDF of notes, session logs and insurer packets (Solo and above). Fails closed while the plan loads. */
+  canPrintNotes: boolean;
+  /**
+   * Recording a payment against a visit. Same two clinic preferences as `canBill`
+   * but not the plan: Lite can't issue invoices, yet still collects (a direct
+   * payment on the visit) — there is no billing desk for it to defer to.
+   */
+  canCollectPayment: boolean;
 }
 
 /**
@@ -67,5 +75,7 @@ export function usePermissions(): Permissions {
       billingEnabled &&
       (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
     entitlementsLoading: entitlements.loading,
+    canPrintNotes: entitlements.can('notePrinting'),
+    canCollectPayment: billingEnabled && (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
   };
 }

@@ -244,7 +244,7 @@ export function NoteEditorPage() {
   const confirmingRedFlagsRef = useRef(false);
   const clinic = useClinic();
   const navigate = useNavigate();
-  const { canViewClinicalNotes } = usePermissions();
+  const { canViewClinicalNotes, canPrintNotes } = usePermissions();
   const { patientId, noteId } = useParams({ strict: false }) as {
     patientId: string;
     noteId?: string;
@@ -887,7 +887,17 @@ export function NoteEditorPage() {
         >
           ← {patient?.name ?? 'Patient'}
         </Link>
-        {existingNote && (
+        {existingNote && !canPrintNotes && (
+          <span
+            className="btn-secondary"
+            title="Printing and PDF export of notes is included in Solo and above."
+            aria-disabled="true"
+            style={{ marginBottom: 8, marginLeft: 8, display: 'inline-block', opacity: 0.6, cursor: 'not-allowed' }}
+          >
+            Print · Solo+
+          </span>
+        )}
+        {existingNote && canPrintNotes && (
           <Link
             to="/patients/$patientId/notes/$noteId/print"
             params={{ patientId, noteId: existingNote.id }}

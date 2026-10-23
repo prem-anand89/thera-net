@@ -4,6 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { PatientProfileBackTarget } from '@/app/router';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
+import { LockedSectionNotice } from '@/features/settings/settingsShared';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -224,6 +226,7 @@ export function SessionLogContent({
  */
 export function SessionLogPrintPage() {
   const clinic = useClinic();
+  const { canPrintNotes, entitlementsLoading } = usePermissions();
   const { patientId, enrollmentId } = useParams({ strict: false }) as {
     patientId: string;
     enrollmentId: string;
@@ -253,6 +256,15 @@ export function SessionLogPrintPage() {
     () => buildSessionLog(enrollmentNotes ?? [], therapists ?? []),
     [enrollmentNotes, therapists]
   );
+
+  if (!canPrintNotes) {
+    // Direct URL visits get the same answer as the missing button; while the plan is still loading, show nothing rather than a false lock.
+    return entitlementsLoading ? null : (
+      <div className="mx-auto max-w-xl p-8">
+        <LockedSectionNotice feature="notePrinting" sectionLabel="Printing and PDF export of notes" />
+      </div>
+    );
+  }
 
   if (patient === undefined) {
     return (

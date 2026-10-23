@@ -15,7 +15,6 @@ type BillingFields = Pick<
   | 'invoicePrefix'
   | 'gstNo'
   | 'fyStartMonth'
-  | 'clinicalDocsEnabled'
   | 'billingEnabled'
   | 'invoicingAccess'
   | 'invoicePolicy'
@@ -32,7 +31,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         invoicePrefix: c.invoicePrefix,
         gstNo: c.gstNo,
         fyStartMonth: c.fyStartMonth,
-        clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
         billingEnabled: c.billingEnabled ?? true,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
         invoicePolicy: c.invoicePolicy ?? 'on_request',
@@ -121,19 +119,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
               </option>
             ))}
           </select>
-        </Field>
-        <Field
-          label={
-            <>
-              Clinical documentation module
-              <InfoTip text="Enables clinical notes for visits. When off, therapists can still access notes from a patient's profile, but visit workflows won't prompt for them." />
-            </>
-          }
-        >
-          <BoolToggle
-            value={form.clinicalDocsEnabled ?? false}
-            onChange={(v) => set({ clinicalDocsEnabled: v })}
-          />
         </Field>
         <Field
           label={

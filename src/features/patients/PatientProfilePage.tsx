@@ -58,7 +58,7 @@ const NOTE_STATUS_PILL: Record<
  */
 export function PatientProfilePage() {
   const clinic = useClinic();
-  const { canBill, canViewClinicalNotes, isAdmin } = usePermissions();
+  const { canBill, canCollectPayment, canViewClinicalNotes, canPrintNotes, isAdmin } = usePermissions();
   const { myTherapistId, isClinicWideView } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
@@ -739,7 +739,15 @@ export function PatientProfilePage() {
                       Write session notes
                     </Link>
                   )}
-                  {hasSessionNotes && sessionNotesEnrollmentId && (
+                  {hasSessionNotes && sessionNotesEnrollmentId && !canPrintNotes && (
+                    <span
+                      className="text-xs font-medium text-[var(--muted)]"
+                      title="The printable session log and insurer packet are included in Solo and above."
+                    >
+                      Session log &amp; insurer packet · Solo+
+                    </span>
+                  )}
+                  {hasSessionNotes && sessionNotesEnrollmentId && canPrintNotes && (
                     <>
                       <Link
                         to="/patients/$patientId/session-log/$enrollmentId"
@@ -831,6 +839,7 @@ export function PatientProfilePage() {
                   onEditPatient={(row) => setEditPatientId(row.patientId)}
                   onDelete={(row) => handleVisitDelete(row.visitId)}
                   canInvoice={canBill}
+                  canCollect={canCollectPayment}
                   selection={{
                     selectedIds: selectedVisitIds,
                     onToggle: toggleVisitSelection,

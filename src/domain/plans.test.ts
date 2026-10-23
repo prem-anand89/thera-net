@@ -3,7 +3,7 @@ import { tierIncludes, PLAN_TIER_LABELS, currentMonthRange, minimumTierFor, type
 import type { PlanTier } from './types';
 
 const TIERS: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
-const FEATURES: PlanFeature[] = ['invoicing', 'team', 'revenueSplit', 'advancedModules'];
+const FEATURES: PlanFeature[] = ['invoicing', 'team', 'revenueSplit', 'advancedModules', 'notePrinting'];
 
 describe('tierIncludes', () => {
   it('every tier × feature cell is defined (no accidental undefined)', () => {
@@ -20,8 +20,9 @@ describe('tierIncludes', () => {
     }
   });
 
-  it('solo gets invoicing but not team/revenueSplit/advancedModules', () => {
+  it('solo gets invoicing and note printing but not team/revenueSplit/advancedModules', () => {
     expect(tierIncludes('solo', 'invoicing')).toBe(true);
+    expect(tierIncludes('solo', 'notePrinting')).toBe(true);
     expect(tierIncludes('solo', 'team')).toBe(false);
     expect(tierIncludes('solo', 'revenueSplit')).toBe(false);
     expect(tierIncludes('solo', 'advancedModules')).toBe(false);
@@ -45,6 +46,10 @@ describe('PLAN_TIER_LABELS', () => {
 });
 
 describe('minimumTierFor', () => {
+  it('note printing is included from Solo', () => {
+    expect(minimumTierFor('notePrinting')).toBe('solo');
+  });
+
   it('invoicing is included from Solo', () => {
     expect(minimumTierFor('invoicing')).toBe('solo');
   });

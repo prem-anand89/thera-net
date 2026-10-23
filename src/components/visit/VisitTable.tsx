@@ -85,6 +85,7 @@ export function VisitTable({
   onResendFeedback,
   onAskForGoogleReview,
   canInvoice,
+  canCollect = canInvoice,
   selection,
   backTo,
   showColumnPicker = true,
@@ -104,6 +105,7 @@ export function VisitTable({
   onResendFeedback?: (row: VisitCardData) => void;
   onAskForGoogleReview?: (row: VisitCardData) => void;
   canInvoice: boolean;
+  canCollect?: boolean;
   selection?: VisitSelectionProps;
   backTo?: PatientProfileBackTarget;
   showColumnPicker?: boolean;
@@ -281,6 +283,7 @@ export function VisitTable({
                     data={row}
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
+                    canCollect={canCollect}
                   />
                 </td>
                 <td className={`${td} ${VISIT_ROW_CELL_BG}`}>

@@ -1535,7 +1535,7 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
 billing_enabled              boolean NOT NULL
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — 'on_request' | 'always' | 'never_nag'
-clinical_docs_enabled       boolean NOT NULL
+clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
 show_therapist_comparison   boolean NOT NULL
 walk_in_mrno_prefix         text (NULLABLE, default 'W')
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
@@ -2654,13 +2654,7 @@ and stay available regardless of the flag.
 **Confirmed not tier-gated either** — no `PlanFeature` in `src/domain/plans.ts`
 covers clinical notes today, by design (its own docstring excludes
 "anything clinical-note- or advanced-module-content-shaped ... still open
-design work"). **One tier restriction is planned but not yet built:** Lite
-should not be able to print/export a note as PDF (`NotePrintPage.tsx` is
-currently unrestricted by tier for every clinic). This needs a new
-`PlanFeature` (e.g. `notePrinting`) wired into `TIER_FEATURES`,
-`useEntitlements()`, and a gate on `NotePrintPage.tsx`'s print action —
-not yet scoped or built; captured here so it isn't lost before the Phase 2
-notes work lands.
+design work"). **Tier restriction — note printing:** Lite cannot print or save-as-PDF a clinical note, session log or insurer packet. `PlanFeature` `notePrinting` (Lite off, Solo and above on) feeds `usePermissions().canPrintNotes`; `NotePrintPage`, `SessionLogPrintPage` and `InsurerPacketPage` render a `LockedSectionNotice` instead of the document (so a typed URL gets the same answer), and the entry links (note editor "Print", patient profile "Session log / Insurer packet") become a disabled "· Solo+" label. Writing notes is never gated. Display-level only — printing is client-side.
 
 Note also that no admin-facing control exists for the *real* gate: turning
 consultation notes genuinely off for a clinic means flipping
@@ -2812,6 +2806,8 @@ the tier plan:
   away from `partner` if the resolved plan stops including it, mirroring
   the existing pattern `LedgerPage.tsx`/`ReportsPage.tsx` already use for a
   role changing mid-session.
+
+**Lite can collect, not invoice.** `usePermissions().canCollectPayment` is `canBill` without the plan term (`billingEnabled` and `invoicingAccess` only), so a Lite clinic records direct payments on a visit (`Collect ₹X`, the "Due" footer and Not-collected filter all stay meaningful) and is never told to "Ask billing" — that pill shows only when the user can neither invoice nor collect. Visit components take a separate `canCollect` prop (defaults to `canInvoice`); issuing an invoice stays on `canInvoice`/`canBill`. The **Clinical notes** toggle (`clinicalDocsEnabled`) lives on Settings → General (`ClinicalDocsSection`), not in the plan-locked Billing tab.
 
 `usePermissions()` folds `useEntitlements()` into `canBill` (also requires
 `can('invoicing')` now, ahead of the pre-existing `billingEnabled`/
@@ -3483,7 +3479,7 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
 billing_enabled              boolean NOT NULL
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — 'on_request' | 'always' | 'never_nag'
-clinical_docs_enabled       boolean NOT NULL
+clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
 show_therapist_comparison   boolean NOT NULL
 walk_in_mrno_prefix         text (NULLABLE, default 'W')
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
@@ -4602,13 +4598,7 @@ and stay available regardless of the flag.
 **Confirmed not tier-gated either** — no `PlanFeature` in `src/domain/plans.ts`
 covers clinical notes today, by design (its own docstring excludes
 "anything clinical-note- or advanced-module-content-shaped ... still open
-design work"). **One tier restriction is planned but not yet built:** Lite
-should not be able to print/export a note as PDF (`NotePrintPage.tsx` is
-currently unrestricted by tier for every clinic). This needs a new
-`PlanFeature` (e.g. `notePrinting`) wired into `TIER_FEATURES`,
-`useEntitlements()`, and a gate on `NotePrintPage.tsx`'s print action —
-not yet scoped or built; captured here so it isn't lost before the Phase 2
-notes work lands.
+design work"). **Tier restriction — note printing:** Lite cannot print or save-as-PDF a clinical note, session log or insurer packet. `PlanFeature` `notePrinting` (Lite off, Solo and above on) feeds `usePermissions().canPrintNotes`; `NotePrintPage`, `SessionLogPrintPage` and `InsurerPacketPage` render a `LockedSectionNotice` instead of the document (so a typed URL gets the same answer), and the entry links (note editor "Print", patient profile "Session log / Insurer packet") become a disabled "· Solo+" label. Writing notes is never gated. Display-level only — printing is client-side.
 
 Note also that no admin-facing control exists for the *real* gate: turning
 consultation notes genuinely off for a clinic means flipping
@@ -4760,6 +4750,8 @@ the tier plan:
   away from `partner` if the resolved plan stops including it, mirroring
   the existing pattern `LedgerPage.tsx`/`ReportsPage.tsx` already use for a
   role changing mid-session.
+
+**Lite can collect, not invoice.** `usePermissions().canCollectPayment` is `canBill` without the plan term (`billingEnabled` and `invoicingAccess` only), so a Lite clinic records direct payments on a visit (`Collect ₹X`, the "Due" footer and Not-collected filter all stay meaningful) and is never told to "Ask billing" — that pill shows only when the user can neither invoice nor collect. Visit components take a separate `canCollect` prop (defaults to `canInvoice`); issuing an invoice stays on `canInvoice`/`canBill`. The **Clinical notes** toggle (`clinicalDocsEnabled`) lives on Settings → General (`ClinicalDocsSection`), not in the plan-locked Billing tab.
 
 `usePermissions()` folds `useEntitlements()` into `canBill` (also requires
 `can('invoicing')` now, ahead of the pre-existing `billingEnabled`/
