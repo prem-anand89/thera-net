@@ -38,7 +38,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     minus the visit's therapist), which becomes the chip "Dr X · assisting ✕". "+ Add another service" adds a
     row; a single row has no ✕, with two or more every row has one and removing the first promotes the next.
     Errors name the service ("Dry needling: only one package per visit.") and show on that row.
-  - **Packages are chosen in the service picker** (the old New/Continuation toggle is gone): open packages
+  - **Packages are chosen in the service picker** (there is no New/Continuation toggle): open packages
     first ("Continue: Rehab package — session 5 of 10 (₹0)"), then services by category. Exactly one open
     package adds a ₹0 continuation row automatically, once per patient; two or more add nothing. A package row
     reads "Session n of N · package (₹0)" with "Use a different service". Only one package row per visit
@@ -363,7 +363,7 @@ queued with a visible error.
 - **`NewVisitPage.tsx`'s post-save screen** ("Visit logged") gained an
   "Give bill" button (originally "Issue invoice"), gated on `canBill` (same entitlement/role check
   every other invoicing entry point uses), alongside the existing "Add
-  clinical note"/"Another visit"/"Done" actions — billing staff no longer
+  clinical note"/"Log a separate visit for {patient}"/"Done" actions — billing staff no longer
   have to leave the page and find the visit again on Ledger/Workspace to
   invoice it immediately. Opens the same `IssueInvoiceDialog` those two
   pages use (`returnTo="/visits/new"`, added to `INVOICE_PRINT_BACK_TARGETS`
@@ -474,6 +474,9 @@ queued with a visible error.
 - **Deletes sync too**: an `after delete` trigger on every synced table (`record_sync_tombstone`) writes `sync_tombstones` (clinic_id, table_name, row_id, updated_at); devices pull it after the tables and delete their copy unless it has a pending edit or changed after the delete (`rowsToDelete`). Markers older than 90 days are pruned nightly by pg_cron `prune-sync-tombstones`
 - **Role changes re-pull**: memberships are remembered as `clinic:role`, so a role change resets every cursor like a new clinic does; a front-desk membership deletes clinical notes already cached for that clinic
 
+#### Data Backup (Settings → Account)
+- `backupService` exports and restores the clinic's data as a JSON bundle (version 3): therapists, catalog, patients, visits, **visit service lines (`visitItems`) and revenue shares (`visitCredits`)**, invoices, payments, settlements and notes. Restore writes visits before their lines and shares (outbox order). A backup taken before multi-service visits has no `visitItems` / `visitCredits` keys and restores as none; the restore message reports the counts.
+
 #### Historical Import
 - **Settings → Import historical visits** — one-time import from clinic's Excel ledger
 - **Smart matching**:
@@ -499,7 +502,7 @@ queued with a visible error.
 - **Single dual-bar chart** (visits + revenue per therapist, month picker) plus live month table with retention % and new packages
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
-- **Utilisation column** (`src/domain/utilisation.ts`, hook `useTherapistUtilisation`): work actually done ÷ time made available, from logged **visits** — not bookings, so walk-ins and last-minute bookings count. A visit **without service lines** counts as one clinic slot (`slotDurationMinutes`); a visit **with** lines counts each therapist's minutes from the lines they delivered (`therapistMinutes`: the sum of their lines' durations when every one has one, else the sitting once, capped at the sitting; 0 if they delivered nothing — so an assistant's time counts even on a ₹0 bill). The sitting is the linked appointment's `durationMinutes` (appointments whose `visitId` is the visit), else the clinic slot; `loadUtilisationVisits` (`src/services/utilisationVisits.ts`) attaches lines and sitting with one range query each; available time is the therapist's working hours (breaks excluded) over non-closed days, or the clinic's booking hours when none are set (shown with `*`). Each day is capped at 100% of that day's available time, so overlapping entries can't overstate it; the in-progress month only counts elapsed time; legacy shared visits (no lines) split by `sharedPct`; visit time on days off isn't counted. No schema change. Same column on the Trends print page.
+- **Utilisation column** (`src/domain/utilisation.ts`, hook `useTherapistUtilisation`): work actually done ÷ time made available, from logged **visits** — not bookings, so walk-ins and last-minute bookings count. A visit **without service lines** counts as one clinic slot (`slotDurationMinutes`); a visit **with** lines counts each therapist's minutes from the lines they delivered (`therapistMinutes`: the sum of their lines' durations when every one has one, else the sitting once, capped at the sitting; 0 if they delivered nothing — so an assistant's time counts even on a ₹0 bill). The sitting is the linked appointment's `durationMinutes` (appointments whose `visitId` is the visit), else the clinic slot; `loadUtilisationVisits` (`src/services/utilisationVisits.ts`) attaches lines and sitting with one range query each; available time is the therapist's working hours (breaks excluded) over non-closed days, or the clinic's booking hours when none are set (shown with `*`). Each day is capped at 100% of that day's available time, so overlapping entries can't overstate it; the in-progress month only counts elapsed time; a legacy visit (no service lines) keeps the old shared-percentage time rule (`sharedPct`) even if its money split is later edited in the share editor, because the editor writes share rows and never changes `shared_pct`; a visit with lines uses `therapistMinutes` only (durations capped at the sitting, else the sitting once); visit time on days off isn't counted. No schema change. Same column on the Trends print page.
 - **Top performers**: no blended score. The comparison table's Net / Visits / Retention / Utilisation headers sort (click again to restore the default order), and the best value in each column gets a "Top" marker (`src/domain/therapistRanking.ts`). The Visits column is **patients treated** (assisted visits included, each visit once), and only therapists with at least 20 patients treated in the period are eligible, a column needs two eligible therapists to have a leader, ties share it, and a best value of zero marks nobody.
 - **Clinic utilisation card** (Reports → Trends, admin only; `ClinicUtilisationCard`, `src/domain/utilisationReport.ts`, `utilisationPeriods.ts`, `therapistStatus.ts`): bar chart of clinic-wide utilisation (total work done ÷ total available time across therapists) by **month** (last 12), **fiscal quarter** (last 4, following `fyStartMonth`) or **fiscal year** (last 3), with a dashed 70% target line, in a dedicated blue (`UTILISATION_COLOR`). Clicking a bar selects that period; the table lists each therapist's utilisation, change vs the previous period (points) and a status. A period includes active therapists plus any inactive one who logged work in it. Status (thresholds in `STATUS_THRESHOLDS`): **Strong** = 70%+ and at or above the clinic; **Needs attention** = under 50%, 15+ points under the clinic, or a 10+ point drop while under the clinic; **Not enough data** = under 20 patients treated or no available hours. Each status shows its reason. Independent of the revenue period bar. Known limits: a visit without service lines still counts as one slot whatever its real length, and a therapist added mid-period is measured against the whole period.
 - **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);
@@ -520,6 +523,20 @@ queued with a visible error.
 - **admin** — full read/write on everything: roster, catalog, all therapists' visits, billing settings, feature toggles
 - **therapist** — clinic-wide reads, scoped writes (own visits/notes only), no roster/catalog/pricing changes
 - **front_desk** — reads and visit/invoice entry, and can correct any visit (its lines and revenue shares too: `visits_update` / `visit_items_update` / `visit_credits_update` allow admin, front desk or the visit's own therapist since `20261023100000`; deleting a visit stays admin or own therapist), no clinical-notes access (enforced by `consultation_notes` RLS since `20261022100000`, so notes never reach a front-desk device; bills get the referral block through `get_invoice_referral(visit_id)`), no roster/catalog writes, excluded from clinical dashboards
+
+#### Visits, service lines and revenue shares (who can do what)
+Enforced by RLS (`visits_*`, `visit_items_*`, `visit_credits_*`, helpers `can_add_visit_children` / `can_edit_visit_children`) and mirrored in `features/visits/visitPermissions.ts`:
+
+| Action | admin | front desk | primary therapist | assisting therapist (not primary) |
+|---|---|---|---|---|
+| Add a visit (with its lines and shares) | yes | yes | yes | yes (any member can log a visit; they get the lines/shares rule below) |
+| Add lines or shares to a visit | yes | yes | yes | only if they created the visit (`visits.created_by`) |
+| Edit a saved visit, its lines and its shares | yes | yes | yes | no |
+| Delete a visit | yes | no | yes, before invoicing | no |
+| Edit lines after invoicing | no (frozen) | no | no | no |
+| Edit shares after invoicing | yes | yes | yes | no |
+
+"Whoever created the visit may add lines/shares" lets a therapist who logs a visit for a colleague save its services and revenue share, including when pushed later from offline. An assisting therapist sees the visit read-only in their own lists.
 
 #### Self-Service Sign-In (Email/Password and Google)
 - **`LoginPage.tsx`** offers both email/password (`signInWithPassword`/`signUp`)
@@ -4993,6 +5010,14 @@ read misses (clipped pills, tables wider than their card).
   (`PreparingEscape`).
 - **Unsaved work registry** (`lib/unsavedWork.ts`): screens register a probe with `useUnsavedWorkProbe(() => dirty)` (the booking sheet, both note editors); `hasUnsavedWork()` feeds the update system's background-apply check alongside the DOM heuristic. The booking sheet asks "Discard this booking?" when Escape, the backdrop or the X would throw away typed patient details.
 
+### 1b. Push order for service lines and shares (`visit_items` / `visit_credits`)
+Lines and shares are separate rows from the visit and sync as separate outbox entries, so the order they reach the server matters.
+- **The outbox merges every queued entry for one row at that row's OLDEST queued position.** A later edit never moves a row later in the queue. Anything that relies on "queued after X" must account for this.
+- **A package-line swap queues the slot-freeing row first.** The server allows one live package line per visit (unique index), so the line that stops being the package line (or is removed) is queued before the line that takes the slot (`putWithChildren`; tag-clearing line writes go before the visit row via `itemsFirst`). Known gap: a slot-taking row that already had an older pending entry can invert this, the server answers 23505 and the row reverts.
+- **Do not issue an invoice while a visit's lines or shares are pending or refused.** `issue_invoice` freezes lines the moment `invoice_id` is set, so unsynced lines would be rejected (42501) and the bill would not match. The app refuses with a message instead.
+- **The server freezes lines once `invoice_id` is set, but not shares** (who gets paid is internal and not on the invoice).
+- Backup restore follows the same rule: visits are put first, then `visit_items`, then `visit_credits`.
+
 ### 2. Revenue Split Snapshot at Billing
 - **Rates stored with each visit** (bm_split_pct, tax_pct, tds_basis)
 - **Computed once at invoice time**: bm_share, post_tax, tds, hv
@@ -5036,7 +5061,8 @@ the month) and (2) an automatic package-attribution delta, computed
    billing visit's Post-Tax (and clinic share) when those are split over the
    visit's live lines by their nets (`lineNets`) with
    `largestRemainderRupees` — the same rule `line_share` uses, so the
-   biller's held amount and the base agree — so a consultation billed in the
+   biller's held amount and the base agree to within ₹1 (the per-session
+   floor below absorbs the difference) — so a consultation billed in the
    same visit never leaks into the sessions; without lines, the visit's
    whole figures.
    `perSessionShare = floor(base / 100 / packageTotal) × 100` — a fixed
@@ -5203,6 +5229,9 @@ invoiced visit stays frozen either way). `hv_paise` never drives real
 payout logic — the hospital settlement in `MonthlyStatementPage` reconciles
 against `postTaxPaise` only — so the backfill carries no risk to real
 figures, only to a previously-mislabeled report column.
+
+### 2c. One function for each therapist's money (`payBase`)
+`src/domain/payBase.ts` is the ONLY place that decides how much of a visit's money belongs to which therapist (revenue shares, legacy splits, package attribution). Monthly reports, the attribution audit and any future payroll all read it. **Never re-derive attribution elsewhere**: add an input to `PayBaseInput` instead. See §2b for the rules.
 
 ### 3. Sequential Gap-Free Invoices
 - **Server-issued numbers** via `issue_invoice()` RPC
