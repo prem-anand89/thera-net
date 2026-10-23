@@ -94,7 +94,7 @@ export function SharesRing({
       <button
         type="button"
         onClick={onEdit}
-        className={`${cls} rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2`}
+        className={`${cls} -mx-1 rounded-md px-1 no-underline transition-colors hover:bg-[rgba(198,95,47,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1`}
         style={{ color: RING_RUST }}
         title={title}
         aria-label={`${label}. Edit split`}
