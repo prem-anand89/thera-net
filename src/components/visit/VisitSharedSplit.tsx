@@ -76,18 +76,30 @@ export function SharesRing({
   primaryName,
   onEdit,
   edited,
+  services,
 }: {
   shares: { name: string; amountPaise: number }[];
   primaryName: string;
   onEdit?: () => void;
   edited?: boolean;
+  /** The visit's services, to say which assistant did what when the split follows them. */
+  services?: { name: string; assistantName: string | null }[];
 }) {
   const total = shares.reduce((sum, s) => sum + s.amountPaise, 0);
   if (total <= 0) return null;
   const primary = shares.find((s) => s.name === primaryName)?.amountPaise ?? 0;
   const pct = Math.round(((total - primary) / total) * 100);
   const line = shares.map((s) => `${s.name} ₹${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
-  const title = `Revenue share — ${line}${edited ? ' (set by hand)' : ''}${onEdit ? '. Click to edit.' : ''}`;
+  const tagged = (services ?? [])
+    .filter((x) => x.assistantName)
+    .map((x) => `${x.assistantName}: ${x.name}`)
+    .join('; ');
+  const why = edited
+    ? 'Set by hand (not following services)'
+    : tagged
+      ? `Split from services — ${tagged}`
+      : 'Split from services';
+  const title = `${why}\nRevenue share — ${line}${onEdit ? '\nClick to edit.' : ''}`;
   const others = assistantNamesShort(
     shares.filter((s) => s.name !== primaryName && s.amountPaise > 0).map((s) => s.name)
   );

@@ -16,7 +16,7 @@ describe('SharesRing', () => {
   it('shows the others\' percentage and the rupee line on hover', () => {
     render(<SharesRing shares={shares} primaryName="Prem" />);
     expect(screen.getByText('20%')).toBeTruthy();
-    expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain('Prem ₹1,600 · BM ₹400');
+    expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain("Prem ₹1,600 · BM ₹400");
     expect(screen.queryByRole('button')).toBeNull();
   });
   it('is a button that edits only when allowed', () => {
@@ -57,5 +57,15 @@ describe('assistantNamesShort', () => {
     expect(assistantNamesShort(['Venkata Subramanian'])).toBe('Venkata S.');
     expect(assistantNamesShort(['Dr Sneha Reddy', 'BM'])).toBe('Sneha, BM');
     expect(assistantNamesShort([])).toBe('');
+  });
+});
+
+describe('SharesRing hover reason', () => {
+  it('says whether the split follows services or was set by hand', () => {
+    const services = [{ name: 'Kinesio Taping', assistantName: 'BM' }];
+    const { rerender } = render(<SharesRing shares={shares} primaryName="Prem" services={services} />);
+    expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain('Split from services — BM: Kinesio Taping');
+    rerender(<SharesRing shares={shares} primaryName="Prem" services={services} edited />);
+    expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain('Set by hand');
   });
 });

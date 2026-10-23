@@ -247,6 +247,7 @@ export function VisitTable({
                                 shares={row.details.shares}
                                 primaryName={row.therapistName}
                                 edited={row.creditsManual}
+                services={row.details?.services}
                                 onEdit={row.canSplit && onSplit ? () => onSplit(row) : undefined}
                               />
                             )}

@@ -74,9 +74,11 @@ export function RevenueShareEditor({
   }, [onClose]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const nameOf = (id: string) => therapists.find((t) => t.id === id)?.name ?? 'Therapist';
   const outdated = sharesAreOutdated(visit, items, credits);
+  const byHand = (visit.creditsMode ?? 'auto') === 'manual';
   const editor = lastEditedBy(credits, therapists);
   const total = rows.reduce((s, r) => s + r.amountPaise, 0);
   const primaryRow = rows.find((r) => r.therapistId === visit.therapistId);
@@ -123,6 +125,46 @@ export function RevenueShareEditor({
           How this {formatINR(bill)} visit is shared between therapists. Internal only: the bill, date and
           invoice don't change.
         </p>
+
+        <div className="space-y-2 rounded-md bg-[var(--bg,rgba(0,0,0,0.04))] p-3 text-xs text-[var(--ink)]">
+          {byHand ? (
+            <>
+              <p>
+                <span className="font-medium">Set by hand.</span> These amounts won't change when you edit the
+                services.
+              </p>
+              {confirmReset ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>Replace these amounts with the split from the services?</span>
+                  <button
+                    type="button"
+                    className={btnSecondary}
+                    disabled={busy}
+                    onClick={() => void run(() => visitService.recalculateShares(visit.id))}
+                  >
+                    Yes, reset
+                  </button>
+                  <button type="button" className={btnSecondary} onClick={() => setConfirmReset(false)}>
+                    Keep mine
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="font-medium text-[var(--teal)] hover:underline"
+                  onClick={() => setConfirmReset(true)}
+                >
+                  Reset to services
+                </button>
+              )}
+            </>
+          ) : (
+            <p>
+              <span className="font-medium">Follows the services.</span> Change who did which service to change
+              this. Saving here switches it to set by hand.
+            </p>
+          )}
+        </div>
 
         {outdated && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border-l-4 border-[var(--teal)] bg-[var(--teal-light)] p-3 text-xs text-[var(--ink)]">

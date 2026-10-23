@@ -70,6 +70,7 @@ function VisitCardDetails({ data, onSplit }: { data: VisitCardData; onSplit?: ()
                 shares={data.details.shares}
                 primaryName={data.therapistName}
                 edited={data.creditsManual}
+                services={data.details?.services}
                 onEdit={data.canSplit && onSplit ? onSplit : undefined}
               />
             )}
