@@ -88,6 +88,14 @@ export function RevenueShareEditor({
   );
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Nobody shared with yet and only one other therapist to pick: start with them instead of asking.
+  useEffect(() => {
+    const free = therapists.filter((t) => t.active && !rows.some((r) => r.therapistId === t.id));
+    if (rows.every((r) => r.therapistId === visit.therapistId) && free.length === 1) {
+      setRows((cur) => addShareRow(cur, free[0]!.id, ctx));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     dialogRef.current?.querySelector<HTMLElement>('[data-first-field]')?.focus();
   }, []);
@@ -337,19 +345,19 @@ export function RevenueShareEditor({
           ))}
 
           {addable.length > 0 &&
-            (adding ? (
+            (adding || others.length === 0 ? (
               <select
                 aria-label="Add a therapist"
                 className={inputCls}
                 value=""
-                autoFocus
+                autoFocus={others.length > 0}
                 onChange={(e) => {
                   if (e.target.value) setRows(addShareRow(rows, e.target.value, ctx));
                   setAdding(false);
                 }}
                 onBlur={() => setAdding(false)}
               >
-                <option value="">Choose a therapist…</option>
+                <option value="">{others.length === 0 ? 'Share with…' : 'Choose a therapist…'}</option>
                 {addable.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}

@@ -71,6 +71,18 @@ describe('RevenueShareEditor', () => {
     expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(300);
   });
 
+  it('with nobody shared yet, shows the picker directly (no "add" step)', () => {
+    open({ credits: [credit('p', 130000)], items: [] });
+    expect(screen.getByLabelText('Add a therapist')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ Add another therapist' })).toBeNull();
+  });
+
+  it('with exactly one other therapist, starts with them', () => {
+    open({ credits: [credit('p', 130000)], items: [], therapists: therapists.slice(0, 2) });
+    expect(screen.getByLabelText('Dr Sneha share in rupees')).toHaveValue(0);
+    expect(screen.queryByLabelText('Add a therapist')).toBeNull();
+  });
+
   it('lists the services on the visit', () => {
     open();
     expect(screen.getByText('Services on this visit')).toBeInTheDocument();
