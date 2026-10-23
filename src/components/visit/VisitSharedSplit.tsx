@@ -55,3 +55,29 @@ export function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
     </span>
   );
 }
+
+/** The ring for a visit whose bill is shared by several therapists (share rows): the rust arc is everything
+ *  that goes to someone other than the primary therapist, and hovering shows each therapist's rupee share. */
+export function SharesRing({
+  shares,
+  primaryName,
+}: {
+  shares: { name: string; amountPaise: number }[];
+  primaryName: string;
+}) {
+  const total = shares.reduce((sum, s) => sum + s.amountPaise, 0);
+  if (total <= 0) return null;
+  const primary = shares.find((s) => s.name === primaryName)?.amountPaise ?? 0;
+  const pct = Math.round(((total - primary) / total) * 100);
+  const line = shares.map((s) => `${s.name} ₹${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[11px] leading-tight"
+      style={{ color: RING_RUST }}
+      title={`Revenue share — ${line}`}
+    >
+      <IconSplit pct={pct} className="shrink-0" />
+      <span>{pct}%</span>
+    </span>
+  );
+}

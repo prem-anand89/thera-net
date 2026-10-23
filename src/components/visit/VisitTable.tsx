@@ -12,8 +12,8 @@ import type { PatientProfileBackTarget } from '@/app/router';
 import type { VisitCardData, VisitSelectionProps } from './types';
 import { treatmentsDisplayText } from './formatters';
 import { PatientNameBlock } from './VisitPatientBlock';
-import { SharedSplitLine } from './VisitSharedSplit';
-import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './VisitServiceDetails';
+import { SharedSplitLine, SharesRing } from './VisitSharedSplit';
+import { VisitServicesList, hasServiceDetails } from './VisitServiceDetails';
 import { PaymentStatusDisplay } from './VisitPaymentDisplay';
 import { NoteCell } from './VisitNotesFeedback';
 import { RowActionsMenu } from './VisitRowActions';
@@ -222,7 +222,6 @@ export function VisitTable({
                           ) : (
                             <div>{row.serviceName}</div>
                           )}
-                          {row.details?.shares && <VisitSharesLine shares={row.details.shares} />}
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                               <PackageThread
@@ -241,6 +240,9 @@ export function VisitTable({
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <TherapistPill>{row.therapistName}</TherapistPill>
+                            {row.details?.shares && (
+                              <SharesRing shares={row.details.shares} primaryName={row.therapistName} />
+                            )}
                             {row.hasSplit && row.sharedPct != null && (
                               <SharedSplitLine
                                 pct={row.sharedPct}
