@@ -83,4 +83,9 @@ describe('rowsForNewPatient', () => {
     expect(rows.filter((r) => r.continuation)).toHaveLength(1);
     expect(rows.map((r) => r.continuation?.packageGroupId ?? r.serviceCatalogId)).toEqual(['g1', 'a']);
   });
+  it('a hand-chosen package purchase is not joined by the auto continuation', () => {
+    const rows = rowsForNewPatient([plain('bigpack'), plain('a')], [pkg(4)], null, (r) => r.serviceCatalogId === 'bigpack');
+    expect(rows.map((r) => r.serviceCatalogId)).toEqual(['bigpack', 'a']);
+    expect(rows.some((r) => r.continuation)).toBe(false);
+  });
 });

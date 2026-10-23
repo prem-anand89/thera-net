@@ -67,7 +67,7 @@ export function draftSubtotalPaise(rows: DraftLine[], catalog: CatalogItem[]): n
 }
 
 /** The package-ness rule the visit service applies: a continuation, or a service with several sessions. */
-function isPackageRow(row: DraftLine, catalog: CatalogItem[]): boolean {
+export function isPackageRow(row: DraftLine, catalog: CatalogItem[]): boolean {
   return Boolean(row.continuation) || (catalogOf(row, catalog)?.sessionCount ?? 1) > 1;
 }
 

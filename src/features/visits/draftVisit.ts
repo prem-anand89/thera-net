@@ -64,17 +64,18 @@ export function initialRowsForPatient(openPackages: OpenPackage[]): DraftLine[] 
 /**
  * The rows once a patient is chosen. Rows belonging to a different, previous patient start over. With no
  * previous patient (the first pick, or after the patient was cleared) the services already chosen are kept
- * and the one open package, if any, is added in front — never twice. Continuation rows only ever come from
+ * and the one open package, if any, is added in front — unless a kept row is already a package. Continuation rows only ever come from
  * a patient's own packages, so rows chosen before any patient never include one.
  */
 export function rowsForNewPatient(
   prevRows: DraftLine[],
   openPackages: OpenPackage[],
-  previousPatientId: UUID | null
+  previousPatientId: UUID | null,
+  isPackageRow: (row: DraftLine) => boolean = (r) => Boolean(r.continuation)
 ): DraftLine[] {
   if (previousPatientId !== null) return initialRowsForPatient(openPackages);
   const kept = prevRows.filter((r) => hasService(r) && !r.continuation);
-  const lead = openPackages.length === 1 ? [continuationLine(openPackages[0])] : [];
+  const lead = openPackages.length === 1 && !kept.some(isPackageRow) ? [continuationLine(openPackages[0])] : [];
   const rows = [...lead, ...kept];
   return rows.length > 0 ? rows : [emptyDraftLine()];
 }

@@ -71,6 +71,7 @@ import {
   draftSubtotalPaise,
   emptyDraftLine,
   hasService,
+  isPackageRow,
   rowName,
   rowProblems,
   type DraftLine,
@@ -544,6 +545,7 @@ export function NewVisitPage() {
   // silently reverted if openPackages happens to re-emit.
   // The rows belong to one patient: choosing another (or clearing the patient) starts over, so one
   // patient's package session can never ride along onto the next patient's visit.
+  const catalogItems = useMemo(() => catalog ?? [], [catalog]);
   const rowsPatientRef = useRef<UUID | null>(null);
   useEffect(() => {
     if (!patient) {
@@ -565,10 +567,10 @@ export function NewVisitPage() {
     // patient start over.
     const previousPatientId = rowsPatientRef.current;
     rowsPatientRef.current = patient.id;
-    setRows((prev) => rowsForNewPatient(prev, openPackages, previousPatientId));
+    setRows((prev) => rowsForNewPatient(prev, openPackages, previousPatientId, (r) => isPackageRow(r, catalogItems)));
     setRowErrors(new Map());
     if (previousPatientId !== null) resetBillAdjustment();
-  }, [patient, repeatVisit, openPackages]);
+  }, [patient, repeatVisit, openPackages, catalogItems]);
 
   // An assistant can't also be the visit's therapist: changing the therapist untags that person.
   useEffect(() => {
@@ -587,7 +589,6 @@ export function NewVisitPage() {
     setTherapistId(myTherapistId);
   }, [patient, therapistId, myTherapistId]);
 
-  const catalogItems = useMemo(() => catalog ?? [], [catalog]);
   const activeTherapists = useMemo(() => (therapists ?? []).filter((t) => t.active), [therapists]);
   // A solo practitioner (or a clinic with one active therapist) has nobody to assist.
   const showAssistant = clinic.clinicType !== 'individual' && activeTherapists.length > 1;
