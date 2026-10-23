@@ -118,7 +118,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     "+N more") with the assistant's initials as a chip; the Therapist column shows the primary's pill and, when
     the bill is shared, the split ring with the others' combined % (`SharesRing` in
     `components/visit/VisitSharedSplit.tsx`; hover = each therapist's ₹). For anyone who may edit the split the
-    ring is a button opening the same share editor as "Edit split"; its hover says whether the split follows the services or was set by hand; the share editor opens with a status line ("Follows the services" or "Set by hand" with a confirmed "Reset to services"); the editor lists the visit's services, shows a stacked share bar, and with exactly one assistant (and no package money) the primary's own amount can be typed, the assistant taking the rest
+    ring is a button opening the same share editor as "Edit split"; its hover says whether the split follows the services or was set by hand; the share editor opens with a status line ("Automatic" or "Set by hand" with a confirmed "Reset to services"); the editor lists the visit's services, shows a stacked share bar, and with exactly one assistant (and no package money) the primary's own amount can be typed, the assistant taking the rest
     (`credits_mode = manual`). Cards keep a text "Share" line for touch (`features/visits/visitDetails.ts`,
     `components/visit/VisitServiceDetails.tsx`). An assisting therapist sees only their own services and share
     in their "Assisted" rows, never the ring or the bill. Share rows rule

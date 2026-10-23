@@ -211,20 +211,18 @@ export function RevenueShareEditor({
       >
         <h2 className="text-sm font-semibold text-[var(--ink)]">Revenue share</h2>
         <p className="text-sm text-[var(--muted)]">
-          How this {formatINR(bill)} visit is shared between therapists. Internal only: the bill, date and
-          invoice don't change.
+          Split {formatINR(bill)} between therapists. This only affects pay, not the bill.
         </p>
 
         <div className="space-y-2 rounded-md bg-[var(--bg,rgba(0,0,0,0.04))] p-3 text-xs text-[var(--ink)]">
           {byHand ? (
             <>
               <p>
-                <span className="font-medium">Set by hand.</span> These amounts won't change when you edit the
-                services.
+                <span className="font-medium">Set by hand.</span> Changing services won't update it.
               </p>
               {confirmReset ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span>Replace these amounts with the split from the services?</span>
+                  <span>Use the split from the services instead?</span>
                   <button
                     type="button"
                     className={btnSecondary}
@@ -249,8 +247,8 @@ export function RevenueShareEditor({
             </>
           ) : (
             <p>
-              <span className="font-medium">Follows the services.</span> Change who did which service to change
-              this. Saving here switches it to set by hand.
+              <span className="font-medium">Automatic.</span> Based on who did each service. Saving your changes
+              makes it set by hand.
             </p>
           )}
         </div>
