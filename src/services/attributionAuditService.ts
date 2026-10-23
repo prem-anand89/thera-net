@@ -45,6 +45,8 @@ export interface AttributionEntry {
    * Always false for the other mechanisms.
    */
   repaired: boolean;
+  /** `package_attribution` only: the date of the visit that billed the package; null for the other mechanisms. */
+  billingVisitDate: string | null;
 }
 
 /**
@@ -77,6 +79,7 @@ export function createAttributionAuditService(repos: Repos) {
           packageTotalPaise: null,
           packageSessionCount: null,
           sessionIndex: null,
+          billingVisitDate: null as string | null,
         };
         switch (m.mechanism) {
           case 'manual_split':
@@ -100,7 +103,7 @@ export function createAttributionAuditService(repos: Repos) {
               repaired: m.repaired ?? false,
             };
           case 'package_attribution': {
-            const { packagePricePaise, packageTotal } = packageSessionShares(
+            const { packagePricePaise, packageTotal, billingVisit } = packageSessionShares(
               input.packageGroups.get(v.packageGroupId!)!,
               input
             );
@@ -114,6 +117,7 @@ export function createAttributionAuditService(repos: Repos) {
               packageTotalPaise: packagePricePaise,
               packageSessionCount: packageTotal,
               sessionIndex: v.sessionIndex,
+              billingVisitDate: billingVisit?.visitDate ?? null,
               repaired: false,
             };
           }

@@ -56,13 +56,32 @@ export function MonthlyReportTable({
       {partnerSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
       {partnerSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
       {partnerSplit && <td className={tdNum}>{formatINR(r.partnerSharePaise)}</td>}
-      {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
+      {showShared && (
+        <td className={tdNum}>
+          {r.sharedPaise !== 0 ? (
+            auditLinkMonth && !isTotal ? (
+              <Link
+                to="/insights"
+                search={{ tab: 'audit', year: auditLinkMonth.year, month: auditLinkMonth.month, therapist: r.therapistId }}
+                className="hover:underline"
+                title="See the visits behind this"
+              >
+                {formatINR(r.sharedPaise)}
+              </Link>
+            ) : (
+              formatINR(r.sharedPaise)
+            )
+          ) : (
+            '—'
+          )}
+        </td>
+      )}
       <td className={`${tdNum} font-semibold bg-[var(--teal-light)]/10 text-[var(--ink)]`}>
         {formatINR(r.netPostTaxPaise)}
         {auditLinkMonth && r.netPostTaxPaise < 0 && (
           <Link
             to="/insights"
-            search={{ tab: 'audit', year: auditLinkMonth.year, month: auditLinkMonth.month }}
+            search={{ tab: 'audit', year: auditLinkMonth.year, month: auditLinkMonth.month, therapist: r.therapistId }}
             className="ml-1.5 text-xs font-normal text-[var(--teal)] hover:underline"
           >
             Why?

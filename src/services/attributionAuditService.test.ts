@@ -227,6 +227,7 @@ describe('attributionAuditService.monthly', () => {
           packageSessionCount: null,
           sessionIndex: null,
           repaired: false,
+          billingVisitDate: null,
         },
       ]);
     });

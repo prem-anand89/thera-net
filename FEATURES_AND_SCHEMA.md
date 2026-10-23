@@ -65,6 +65,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     therapist split is on; a ₹0 package session on the visit therapist adds "Package sessions are credited through
     package attribution." "Edit split" appears only when the caller passes `onEdit` (New Visit does not: an unsaved visit
     has no stored shares to edit; the editor is for saved visits, see below).
+    When a package continuation is run by someone other than the package's biller (therapist split on), New Visit adds one muted line: "₹1,000 of Dr A's package moves to Dr B for this session." (`packageMoveNote` in `NewVisitPage.tsx`, from `packageSessionShares`).
     Assistant tagging and the share line are hidden for a solo clinic (`clinicType` 'individual') or one with a
     single active therapist; with the split off only the share line is hidden. Changing the visit's therapist
     untags that person as an assistant.
@@ -5263,6 +5264,13 @@ is null for every `package_attribution` row by design — continuation
 sessions are billed at ₹0, so only a Post-Tax share (derived from the
 billing visit) ever moves there; the UI explains this via a tooltip on
 the empty cell rather than leaving it unexplained.
+
+The audit tab also has a **therapist filter** (rows where they gave or received) and a patient search, a
+**Gave / Received / Net change** summary per therapist, and **Download CSV** of the visible rows (pure helpers in
+`features/reports/attributionAuditView.ts`). A package row's Basis names the runner, the biller, the package
+price and the date the package was billed (`AttributionEntry.billingVisitDate`), e.g. "Session 2 of 3 · run by
+Dr B · from Dr A's ₹3,000 package billed 23/10/26". The Monthly Statement's Shared cell and the negative-Net
+"Why?" link open the audit for that month filtered to that therapist (`/insights?tab=audit&therapist=`).
 
 **`hv_paise` (Partner Share) is the bill split between the two
 organizations, pre-tax — not "everything that isn't the clinic's post-tax

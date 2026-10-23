@@ -19,6 +19,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { formatINR } from '@/domain/money';
+import { packageSessionShares } from '@/domain/payBase';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -600,6 +601,33 @@ export function NewVisitPage() {
     () => new Map((therapists ?? []).map((t) => [t.id, t])),
     [therapists]
   );
+
+  // A package session run by someone other than the biller moves that session's share to the runner
+  // (package attribution). Say so while logging, so the therapist sees the consequence.
+  const continuationRow = rows.find((r) => r.continuation);
+  const continuationGroupId = continuationRow?.continuation?.packageGroupId ?? null;
+  const packageMove = useLiveQuery(async () => {
+    if (!continuationGroupId || !splitEnabled) return null;
+    const group = await repos.visits.listByPackageGroup(continuationGroupId);
+    if (group.length === 0) return null;
+    const ids = group.map((g) => g.id);
+    const [lines, credits] = await Promise.all([
+      repos.visitItems.listByVisitIds(ids),
+      repos.visitCredits.listByVisitIds(ids),
+    ]);
+    const byVisit = <T extends { visitId: string }>(list: T[]) => {
+      const m = new Map<string, T[]>();
+      for (const x of list) m.set(x.visitId, [...(m.get(x.visitId) ?? []), x]);
+      return m;
+    };
+    const r = packageSessionShares(group, { items: byVisit(lines), credits: byVisit(credits), splitEnabled });
+    return r.billerId ? { billerId: r.billerId, amountPaise: r.postTaxPaise } : null;
+  }, [continuationGroupId, splitEnabled]);
+  const runnerId = continuationRow ? (continuationRow.assistingTherapistId ?? therapistId) : '';
+  const packageMoveNote =
+    packageMove && runnerId && packageMove.billerId !== runnerId && packageMove.amountPaise > 0
+      ? `${formatINR(packageMove.amountPaise)} of ${therapistsById.get(packageMove.billerId)?.name ?? 'the biller'}'s package moves to ${therapistsById.get(runnerId)?.name ?? 'the therapist'} for this session.`
+      : null;
 
   // The bill: the discount / top-up applies to the rows' catalog total (₹0 for a package session).
   const catalogPricePaise = draftSubtotalPaise(rows, catalogItems);
@@ -1393,6 +1421,12 @@ export function NewVisitPage() {
               therapistsById={therapistsById}
               splitEnabled={splitEnabled}
             />
+          )}
+
+          {packageMoveNote && (
+            <p className="text-xs text-[var(--muted)]" data-testid="package-move-note">
+              {packageMoveNote}
+            </p>
           )}
 
           {billPaise > 0 && !canCollectPayment && (

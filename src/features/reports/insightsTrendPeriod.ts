@@ -109,6 +109,8 @@ export type InsightsTrendSearch = {
   period?: InsightsTrendPeriodMode;
   year?: number;
   month?: number;
+  /** Attribution audit: open filtered to this therapist. */
+  therapist?: string;
 };
 
 export function validateInsightsSearch(search: Record<string, unknown>): InsightsTrendSearch {
@@ -124,6 +126,7 @@ export function validateInsightsSearch(search: Record<string, unknown>): Insight
     out.year = focus.year;
     out.month = focus.month;
   }
+  if (typeof search.therapist === 'string' && search.therapist) out.therapist = search.therapist;
   return out;
 }
 

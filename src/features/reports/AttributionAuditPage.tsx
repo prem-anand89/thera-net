@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicShareLabels } from '@/domain/types';
-import type { AttributionEntry } from '@/services/attributionAuditService';
+import { MECHANISM_LABEL, basisText, filterEntries, summarize, toAuditCsv } from './attributionAuditView';
 import { inputCls, th, thNum, td, tdNum } from '@/components/ui';
 
 /**
@@ -25,7 +25,7 @@ export function AttributionAuditPage() {
   // sync; landing here directly (nav tab) falls back to the current month.
   const linkedMonth = useSearch({
     from: '/insights',
-    select: (s) => ({ year: s.year, month: s.month }),
+    select: (s) => ({ year: s.year, month: s.month, therapist: s.therapist }),
   });
   const now = new Date();
   const [fyStartYear, setFyStartYear] = useState(
@@ -51,7 +51,9 @@ export function AttributionAuditPage() {
     return { year: y, month: m };
   }, [month]);
 
-  const entries = useLiveQuery(
+  const [therapistFilter, setTherapistFilter] = useState(linkedMonth.therapist ?? '');
+  const [query, setQuery] = useState('');
+  const allEntries = useLiveQuery(
     () => attributionAuditService.monthly(clinic.id, selected),
     [clinic.id, selected.year, selected.month]
   );
@@ -59,6 +61,27 @@ export function AttributionAuditPage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patientName = new Map((patients ?? []).map((p) => [p.id, `${p.name} (${p.mrno})`]));
   const therapistName = new Map((therapists ?? []).map((t) => [t.id, t.name]));
+  const nameOf = (id: string) => therapistName.get(id) ?? 'Unknown';
+  const patientLabel = (id: string) => patientName.get(id) ?? '—';
+  const entries = useMemo(
+    () =>
+      allEntries &&
+      filterEntries(allEntries, { therapistId: therapistFilter, query, patientName: patientLabel }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allEntries, therapistFilter, query, patients]
+  );
+  const summary = useMemo(() => (entries ? summarize(entries) : []), [entries]);
+
+  function downloadCsv() {
+    if (!entries) return;
+    const blob = new Blob([toAuditCsv(entries, nameOf, patientLabel)], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${clinic.invoicePrefix}-attribution-${selected.year}-${String(selected.month).padStart(2, '0')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-4">
@@ -95,9 +118,66 @@ export function AttributionAuditPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Therapist"
+          className={inputCls}
+          value={therapistFilter}
+          onChange={(e) => setTherapistFilter(e.target.value)}
+        >
+          <option value="">All therapists</option>
+          {(therapists ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="search"
+          aria-label="Search patient"
+          placeholder="Search patient"
+          className={`${inputCls} max-w-[14rem]`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button
+          type="button"
+          className="ml-auto text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-40"
+          disabled={!entries || entries.length === 0}
+          onClick={downloadCsv}
+        >
+          Download CSV
+        </button>
+      </div>
+
+      {summary.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+          <table className="min-w-full text-sm">
+            <thead className="bg-[var(--paper)]">
+              <tr>
+                <th className={th}>Therapist</th>
+                <th className={thNum}>Gave</th>
+                <th className={thNum}>Received</th>
+                <th className={thNum}>Net change</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {summary.map((r) => (
+                <tr key={r.therapistId}>
+                  <td className={td}>{nameOf(r.therapistId)}</td>
+                  <td className={tdNum}>{r.given ? formatINR(r.given) : '—'}</td>
+                  <td className={tdNum}>{r.received ? formatINR(r.received) : '—'}</td>
+                  <td className={`${tdNum} font-semibold`}>{formatINR(r.received - r.given)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {entries && entries.length === 0 && (
         <p className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-8 text-center text-sm text-[var(--muted)]">
-          No money moved between therapists this month.
+          {allEntries && allEntries.length > 0 ? 'Nothing matches this filter.' : 'No money moved between therapists this month.'}
         </p>
       )}
 
@@ -142,7 +222,7 @@ export function AttributionAuditPage() {
                 </div>
                 <div className="mt-1 text-xs text-[var(--muted)]">
                   {MECHANISM_LABEL[e.mechanism]}
-                  {e.repaired ? ' (repaired)' : ''} · {basisText(e)}
+                  {e.repaired ? ' (repaired)' : ''} · {basisText(e, nameOf)}
                 </div>
               </div>
             ))}
@@ -189,7 +269,7 @@ export function AttributionAuditPage() {
                           </span>
                         )}
                       </td>
-                      <td className={`${td} text-[var(--muted)]`}>{basisText(e)}</td>
+                      <td className={`${td} text-[var(--muted)]`}>{basisText(e, nameOf)}</td>
                       <td
                         className={tdNum}
                         title={
@@ -224,22 +304,4 @@ export function AttributionAuditPage() {
       )}
     </div>
   );
-}
-
-const MECHANISM_LABEL: Record<AttributionEntry['mechanism'], string> = {
-  line_share: 'Revenue share',
-  manual_split: 'Manual split',
-  package_attribution: 'Package attribution',
-};
-
-/** What the moved amount is a share of, in words. */
-function basisText(e: AttributionEntry): string {
-  switch (e.mechanism) {
-    case 'manual_split':
-      return `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`;
-    case 'line_share':
-      return `Share of ${formatINR(e.visitBillPaise ?? 0)} bill`;
-    case 'package_attribution':
-      return `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`;
-  }
 }
