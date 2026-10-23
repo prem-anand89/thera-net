@@ -1992,11 +1992,7 @@ completed note, falling back to the patient's most recent completed heavy
 (initial/follow-up) note — a light session note (see Light Session Notes
 below) has no referral field to pull from. Editable before issuing, then
 frozen with the rest of the invoice (never re-read from the note
-afterward). **Known gap, by design**: Patient Profile's bulk-issue path
-(select several visits → issue one invoice) bypasses this dialog entirely
-and always issues with `clinical_snapshot: null` — giving it the same
-pre-fill would need either a second clinical form or a reshaped multi-visit
-dialog, deferred as real follow-up work rather than folded into this pass.
+afterward). **Multi-visit billing.** Patient Profile's select-visits bar shows the running total ("14 selected · ₹21,000") and one button. For billing users it opens `IssueInvoiceDialog` with `target.visitIds` (all selected, not yet invoiced), which previews and issues ONE invoice via `issueForVisits` and, with "Collected now", records the payment through `collectInvoiceNow` (split across the visits oldest-first) — issue and collect in one step; the same clinical pre-fill and payment-mode choice as a single visit apply. Without billing (Lite) the same bar offers "Collect ₹X", opening `BulkCollectDialog`: one direct payment per owing visit, in full, one method and date; a mid-way failure keeps the earlier ones and says how many. A row's own "Collect ₹X" opens `TakePaymentDialog` on the profile (previously a dead click).
 
 **Preview before issuing.** `IssueInvoiceDialog` is a two-step flow: "Review
 invoice" moves from the fields form to a review screen built from
@@ -3938,11 +3934,7 @@ completed note, falling back to the patient's most recent completed heavy
 (initial/follow-up) note — a light session note (see Light Session Notes
 below) has no referral field to pull from. Editable before issuing, then
 frozen with the rest of the invoice (never re-read from the note
-afterward). **Known gap, by design**: Patient Profile's bulk-issue path
-(select several visits → issue one invoice) bypasses this dialog entirely
-and always issues with `clinical_snapshot: null` — giving it the same
-pre-fill would need either a second clinical form or a reshaped multi-visit
-dialog, deferred as real follow-up work rather than folded into this pass.
+afterward). **Multi-visit billing.** Patient Profile's select-visits bar shows the running total ("14 selected · ₹21,000") and one button. For billing users it opens `IssueInvoiceDialog` with `target.visitIds` (all selected, not yet invoiced), which previews and issues ONE invoice via `issueForVisits` and, with "Collected now", records the payment through `collectInvoiceNow` (split across the visits oldest-first) — issue and collect in one step; the same clinical pre-fill and payment-mode choice as a single visit apply. Without billing (Lite) the same bar offers "Collect ₹X", opening `BulkCollectDialog`: one direct payment per owing visit, in full, one method and date; a mid-way failure keeps the earlier ones and says how many. A row's own "Collect ₹X" opens `TakePaymentDialog` on the profile (previously a dead click).
 
 **Preview before issuing.** `IssueInvoiceDialog` is a two-step flow: "Review
 invoice" moves from the fields form to a review screen built from

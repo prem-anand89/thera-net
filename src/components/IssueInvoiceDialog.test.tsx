@@ -12,6 +12,9 @@ vi.mock('@tanstack/react-router', () => ({
 
 const setStatus = vi.fn();
 const collectInvoiceNow = vi.fn();
+const issueForVisit = vi.fn(async () => ({ id: 'inv-1', invoiceNo: 'BM/26-27/0001' }));
+const issueForVisits = vi.fn(async () => ({ id: 'inv-2', invoiceNo: 'BM/26-27/0002' }));
+const previewLineItems = vi.fn(async () => ({ lineItems: [], totalPaise: 50000 }));
 vi.mock('@/services', () => ({
   repos: {
     visits: { get: () => undefined },
@@ -19,8 +22,9 @@ vi.mock('@/services', () => ({
     treatmentCatalog: { list: () => [] },
   },
   invoiceService: {
-    previewLineItems: async () => ({ lineItems: [], totalPaise: 50000 }),
-    issueForVisit: async () => ({ id: 'inv-1', invoiceNo: 'BM/26-27/0001' }),
+    previewLineItems: (...a: unknown[]) => (previewLineItems as (...x: unknown[]) => unknown)(...a),
+    issueForVisit: (...a: unknown[]) => (issueForVisit as (...x: unknown[]) => unknown)(...a),
+    issueForVisits: (...a: unknown[]) => (issueForVisits as (...x: unknown[]) => unknown)(...a),
   },
   paymentService: {
     setStatus: (...a: unknown[]) => setStatus(...a),
@@ -71,5 +75,26 @@ describe('IssueInvoiceDialog payment status', () => {
     await issueIt();
     expect(await screen.findByText(/BM\/26-27\/0001 issued/)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('IssueInvoiceDialog with several visits', () => {
+  beforeEach(() => {
+    issueForVisit.mockClear();
+    issueForVisits.mockClear();
+    previewLineItems.mockClear();
+    collectInvoiceNow.mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(cleanup);
+
+  it('previews and issues one invoice for all the selected visits, then collects it', async () => {
+    const multi = { ...target, visitIds: ['v1', 'v2', 'v3'], serviceLabel: '3 visits' };
+    render(<IssueInvoiceDialog clinicId="c1" target={multi} onClose={() => {}} returnTo="/patients" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Review invoice' }));
+    expect(previewLineItems).toHaveBeenCalledWith(['v1', 'v2', 'v3']);
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm & issue' }));
+    expect(issueForVisits).toHaveBeenCalledWith(['v1', 'v2', 'v3'], 'UPI', null);
+    expect(issueForVisit).not.toHaveBeenCalled();
+    expect(collectInvoiceNow).toHaveBeenCalledTimes(1);
   });
 });

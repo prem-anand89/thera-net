@@ -8,7 +8,6 @@ import {
   repos,
   dashboardService,
   consultationNoteService,
-  invoiceService,
   advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -21,7 +20,7 @@ import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
-import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
+import { computeVisitPaymentState, hasDue, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import {
   REFERRING_SOURCE_LABELS,
@@ -30,10 +29,12 @@ import {
   type ConsultationNoteStatus,
 } from '@/domain/types';
 import { formatINR } from '@/domain/money';
-import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
+import { TakePaymentDialog } from '@/components/TakePaymentDialog';
+import { BulkCollectDialog } from '@/components/BulkCollectDialog';
 import { IconPhone, IconMessage } from '@/components/StatIcons';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import { BookSlotSheet } from '@/components/BookSlotSheet';
@@ -66,13 +67,14 @@ export function PatientProfilePage() {
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
-  const [issuingInvoice, setIssuingInvoice] = useState(false);
+  const [invoicing, setInvoicing] = useState<IssueInvoiceTarget | null>(null);
+  const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
+  const [bulkCollecting, setBulkCollecting] = useState(false);
 
   const referringSources = useLiveQuery(
     () => repos.referringSourceCatalog.list(clinic.id),
     [clinic.id]
   ) ?? [];
-  const [issueError, setIssueError] = useState<string | null>(null);
   // Package sessions already billed as part of the package's own invoice
   // show up here as ₹0 visits — real activity, but noise when someone just
   // wants the payment/invoice trail. Off by default so nothing disappears
@@ -394,19 +396,37 @@ export function PatientProfilePage() {
     });
   }, []);
 
-  const handleBulkIssueInvoice = useCallback(async () => {
-    if (selectedVisitIds.size === 0) return;
-    setIssuingInvoice(true);
-    setIssueError(null);
-    try {
-      await invoiceService.issueForVisits(Array.from(selectedVisitIds), 'Cash');
-      setSelectedVisitIds(new Set());
-    } catch (e) {
-      setIssueError(toFriendlyMessage(e));
-    } finally {
-      setIssuingInvoice(false);
+  // What a row can be selected for: an invoice (billing users, not yet
+  // invoiced) or, without billing, a payment (still owed). Anything else
+  // drops out of the selection on its own, e.g. visits that just got invoiced.
+  const isSelectableRow = useCallback(
+    (row: VisitCardData) => (canBill ? !row.invoiceId : canCollectPayment && hasDue(row.paymentState)),
+    [canBill, canCollectPayment]
+  );
+  const selectedRows = useMemo(
+    () => visibleVisitCardRows.filter((r) => selectedVisitIds.has(r.visitId) && isSelectableRow(r)),
+    [visibleVisitCardRows, selectedVisitIds, isSelectableRow]
+  );
+  const selectedBillPaise = selectedRows.reduce((sum, r) => sum + r.billPaise, 0);
+  const selectedDuePaise = selectedRows.reduce((sum, r) => sum + Math.max(0, r.billPaise - r.collectedPaise), 0);
+
+  const startBulkAction = useCallback(() => {
+    if (selectedRows.length === 0) return;
+    if (!canBill) {
+      setBulkCollecting(true);
+      return;
     }
-  }, [selectedVisitIds]);
+    const first = selectedRows[0];
+    setInvoicing({
+      visitId: first.visitId,
+      visitIds: selectedRows.map((r) => r.visitId),
+      patientId: first.patientId,
+      patientLabel: first.patientName,
+      serviceLabel: `${selectedRows.length} visit${selectedRows.length === 1 ? '' : 's'}`,
+      isPackage: false,
+      alreadyCollected: selectedRows.every((r) => r.collectedPaise >= r.billPaise && r.billPaise > 0),
+    });
+  }, [selectedRows, canBill]);
 
   // Derived from the most recent Core Assessment note's safety-history
   // fields — no separate manual entry point, since a clinician already
@@ -785,24 +805,18 @@ export function PatientProfilePage() {
               </label>
             )}
           </div>
-          {issueError && (
-            <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
-              {issueError}
-            </div>
-          )}
           <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-            {selectedVisitIds.size > 0 && (
+            {selectedRows.length > 0 && (
               <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
                 <span className="text-sm font-medium text-[var(--teal)]">
-                  {selectedVisitIds.size} selected
+                  {selectedRows.length} selected · {formatINR(canBill ? selectedBillPaise : selectedDuePaise)}
                 </span>
                 <button
                   type="button"
                   className="rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-                  onClick={handleBulkIssueInvoice}
-                  disabled={issuingInvoice}
+                  onClick={startBulkAction}
                 >
-                  {issuingInvoice ? 'Issuing...' : 'Issue invoice for selected'}
+                  {canBill ? 'Issue invoice / collect' : `Collect ${formatINR(selectedDuePaise)}`}
                 </button>
               </div>
             )}
@@ -836,6 +850,7 @@ export function PatientProfilePage() {
                   showDate={true}
                   showPatient={false}
                   onInvoice={() => {}}
+                  onTakePayment={(row) => setTakingPayment(row)}
                   onEditPatient={(row) => setEditPatientId(row.patientId)}
                   onDelete={(row) => handleVisitDelete(row.visitId)}
                   canInvoice={canBill}
@@ -843,7 +858,7 @@ export function PatientProfilePage() {
                   selection={{
                     selectedIds: selectedVisitIds,
                     onToggle: toggleVisitSelection,
-                    isSelectable: (row) => !row.invoiceId && canBill,
+                    isSelectable: isSelectableRow,
                   }}
                   backTo={backTo}
                 />
@@ -852,6 +867,41 @@ export function PatientProfilePage() {
           </section>
         </div>
       </div>
+
+      {invoicing && (
+        <IssueInvoiceDialog
+          clinicId={clinic.id}
+          target={invoicing}
+          onClose={() => setInvoicing(null)}
+          returnTo="/patients"
+        />
+      )}
+
+      {takingPayment && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={takingPayment.visitId}
+          invoiceId={takingPayment.invoiceId}
+          amountPaise={takingPayment.billPaise}
+          visitDate={takingPayment.visitDate}
+          patientLabel={takingPayment.patientName}
+          mrno={takingPayment.mrno}
+          patientId={takingPayment.patientId}
+          onClose={() => setTakingPayment(null)}
+        />
+      )}
+
+      {bulkCollecting && (
+        <BulkCollectDialog
+          clinicId={clinic.id}
+          patientLabel={patient?.name ?? ''}
+          rows={selectedRows.map((r) => ({
+            visitId: r.visitId,
+            duePaise: Math.max(0, r.billPaise - r.collectedPaise),
+          }))}
+          onClose={() => setBulkCollecting(false)}
+        />
+      )}
 
       {patient && (
         <EditPatientModal

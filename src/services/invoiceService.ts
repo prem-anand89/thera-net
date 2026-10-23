@@ -183,11 +183,8 @@ export function createInvoiceService(repos: Repos) {
      * — see invoiceLine.ts) into one line item per group, combining them
      * into a single invoice. All visits must belong to the same patient.
      *
-     * `clinicalSnapshot` is optional and defaults to none — the direct
-     * bulk-issue path from Patient Profile (`handleBulkIssueInvoice`)
-     * deliberately doesn't collect one; only `IssueInvoiceDialog` does. See
-     * the Billing & Notes Rebuild Phase 1 plan's 1.4 section for why that
-     * gap is accepted rather than built out in this phase.
+     * `clinicalSnapshot` is optional and defaults to none; `IssueInvoiceDialog`
+     * collects one, for a single visit or a Patient Profile bulk selection.
      */
     async issueForVisits(
       visitIds: UUID[],

@@ -42,6 +42,8 @@ const METHOD_FOR_MODE: Record<PaymentMode, PaymentMethod> = {
 
 export interface IssueInvoiceTarget {
   visitId: string;
+  /** Several visits billed on one invoice (Patient Profile's bulk select). `visitId` stays the first of them, used for the clinical pre-fill. */
+  visitIds?: string[];
   /** Added for the clinical-snapshot pre-fill (Billing & Notes Rebuild
    *  Phase 1, 1.4) — both call sites already have it on the row. */
   patientId: string;
@@ -218,7 +220,7 @@ export function IssueInvoiceDialog({
     setBusy(true);
     setError(null);
     try {
-      const { lineItems, totalPaise } = await invoiceService.previewLineItems([target.visitId]);
+      const { lineItems, totalPaise } = await invoiceService.previewLineItems(target.visitIds ?? [target.visitId]);
       setPreview({ lineItems, totalPaise });
       setStep('review');
     } catch (e) {
@@ -261,11 +263,10 @@ export function IssueInvoiceDialog({
     setBusy(true);
     setError(null);
     try {
-      const invoice = await invoiceService.issueForVisit(
-        target.visitId,
-        paymentMode,
-        clinicalSnapshotFromFields()
-      );
+      const invoice =
+        target.visitIds && target.visitIds.length > 1
+          ? await invoiceService.issueForVisits(target.visitIds, paymentMode, clinicalSnapshotFromFields())
+          : await invoiceService.issueForVisit(target.visitId, paymentMode, clinicalSnapshotFromFields());
       setIssuedInvoice(invoice);
       try {
         await recordPaymentStatus(invoice);
