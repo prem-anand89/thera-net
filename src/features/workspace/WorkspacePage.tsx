@@ -441,7 +441,7 @@ export function WorkspacePage() {
   // Dues: what's still owed — the whole clinic for admin/front desk, a
   // therapist's own visits for them (when billing is open to them). Per visit,
   // so "Take payment later" visits count too.
-  const showDues = canBill && (scope.isClinicWideView || Boolean(scope.myTherapistId));
+  const showDues = canCollectPayment && (scope.isClinicWideView || Boolean(scope.myTherapistId));
   const dues = useLiveQuery(
     () => (showDues ? dashboardService.duesSummary(clinic.id, scope.scopeTherapistId) : undefined),
     [clinic.id, showDues, scope.scopeTherapistId]

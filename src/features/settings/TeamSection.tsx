@@ -199,6 +199,7 @@ export function TeamMemberCard({
     [clinicRoster, therapist?.id]
   );
   const [publicBookableDraft, setPublicBookableDraft] = useState(therapist ? therapist.publicBookable !== false : true);
+  const [bookableDraft, setBookableDraft] = useState(therapist ? therapist.active !== false : role !== 'front_desk');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -245,16 +246,33 @@ export function TeamMemberCard({
         if (updateError) throw updateError;
       }
 
+      const isNowFrontDesk = roleDraft === 'front_desk';
+      const shouldBeBookable = !isNowFrontDesk && bookableDraft;
+
       if (therapist) {
-        const isNowFrontDesk = roleDraft === 'front_desk';
         await repos.therapists.put({
           ...therapist,
           name: nameDraft.trim() || therapist.name,
-          active: isNowFrontDesk ? false : therapist.active,
+          active: shouldBeBookable,
           registrationNo: isNowFrontDesk ? null : regDraft.trim() || null,
           phone: phoneDraft.trim() || null,
           color: colorDraft.trim() || null,
-          publicBookable: isNowFrontDesk ? false : publicBookableDraft,
+          publicBookable: shouldBeBookable ? publicBookableDraft : false,
+          updatedAt: new Date().toISOString(),
+        });
+      } else if (shouldBeBookable && member) {
+        const existing = await repos.therapists.list(clinicId, true);
+        const others = existing.filter((t) => t.active !== false);
+        await repos.therapists.put({
+          id: crypto.randomUUID(),
+          clinicId,
+          name: nameDraft.trim() || displayName || 'Therapist',
+          active: true,
+          userId: member.userId,
+          publicBookable: publicBookableDraft,
+          color: colorDraft.trim() || nextUnusedColor(others.map((t) => therapistColor(t.id, t.color))),
+          registrationNo: regDraft.trim() || null,
+          phone: phoneDraft.trim() || null,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -404,6 +422,7 @@ export function TeamMemberCard({
               setRegDraft(therapist?.registrationNo ?? '');
               setPhoneDraft(therapist?.phone ?? '');
               setColorDraft(therapist?.color ?? '');
+              setBookableDraft(therapist ? therapist.active !== false : role !== 'front_desk');
               setPublicBookableDraft(therapist ? therapist.publicBookable !== false : true);
               setEditing(true);
             }}
@@ -544,7 +563,29 @@ export function TeamMemberCard({
                   </Field>
                 )}
 
-                {therapist && roleDraft !== 'front_desk' && (
+                {roleDraft !== 'front_desk' && (
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="pr-2">
+                        <label htmlFor="member-bookable-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
+                          Bookable in schedule
+                        </label>
+                        <p className="text-[11px] text-[var(--muted)] leading-tight">
+                          Appears in schedule, appointments, visits and team filters.
+                        </p>
+                      </div>
+                      <input
+                        id="member-bookable-toggle"
+                        type="checkbox"
+                        checked={bookableDraft}
+                        onChange={(e) => setBookableDraft(e.target.checked)}
+                        className="h-4 w-4 rounded accent-[var(--teal)] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {bookableDraft && roleDraft !== 'front_desk' && (
                   <>
                     <Field label="Registration no.">
                       <input
@@ -560,10 +601,10 @@ export function TeamMemberCard({
                     <div>
                       <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Schedule color</span>
                       <TherapistColorPicker
-                        value={colorDraft || therapistColor(therapist.id, therapist.color)}
+                        value={colorDraft || therapistColor(therapist?.id ?? 'new', therapist?.color)}
                         onChange={setColorDraft}
                         takenBy={colorsTakenByOthers}
-                        name={therapist.name}
+                        name={nameDraft || displayName}
                       />
                       <button
                         type="button"

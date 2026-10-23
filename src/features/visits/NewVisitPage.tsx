@@ -148,7 +148,7 @@ function SegmentedToggle<T extends string>({
 
 export function NewVisitPage() {
   const clinic = useClinic();
-  const { canBill, role, canViewClinicalNotes: canWriteNotes } = usePermissions();
+  const { canBill, canCollectPayment, role, canViewClinicalNotes: canWriteNotes } = usePermissions();
   const navigate = useNavigate();
   const { session } = useSession();
   const entitlements = useEntitlements(clinic.id);
@@ -715,7 +715,7 @@ export function NewVisitPage() {
         treatmentIds,
         actualBillPaise: adjustmentPaise !== 0 ? billPaise : undefined,
         adjustmentReason: adjustmentPaise !== 0 ? adjustmentReason : undefined,
-        ...(billPaise > 0 && canBill && paymentChoice === 'pending'
+        ...(billPaise > 0 && canCollectPayment && paymentChoice === 'pending'
           ? { pendingPaymentNote: pendingNote || null }
           : {}),
       });
@@ -728,7 +728,7 @@ export function NewVisitPage() {
       // genuinely unbilled, for whoever does handle billing to collect
       // from later (same Workspace pending-list path).
       let paymentError: string | undefined;
-      if (billPaise > 0 && canBill && paymentChoice === 'paid') {
+      if (billPaise > 0 && canCollectPayment && paymentChoice === 'paid') {
         try {
           await directPaymentService.logPayment(
             clinic.id,
@@ -769,7 +769,7 @@ export function NewVisitPage() {
         patientPhone: patient.phone,
         serviceLabel,
         isPackage: rows.some((r) => r.continuation),
-        alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid' && !paymentError,
+        alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
         paymentError,
         therapistId,
         billPaise,
@@ -791,9 +791,9 @@ export function NewVisitPage() {
   }
 
   if (justSaved) {
-    const otherPrimaryShown = clinic.clinicalDocsEnabled || canBill;
+    const otherPrimaryShown = clinic.clinicalDocsEnabled || canBill || canCollectPayment;
     // Still owed on this visit (0 without billing access or when settled).
-    const paymentDue = canBill
+    const paymentDue = canCollectPayment
       ? Math.max(0, justSaved.billPaise - (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0))
       : 0;
     const invoiceTarget: IssueInvoiceTarget = {
@@ -907,7 +907,7 @@ export function NewVisitPage() {
   }
 
   const savePayment: SavePayment =
-    billPaise > 0 && canBill
+    billPaise > 0 && canCollectPayment
       ? paymentChoice === 'paid'
         ? { kind: 'now', methodLabel: PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label ?? '' }
         : { kind: 'later' }
@@ -1395,7 +1395,7 @@ export function NewVisitPage() {
             />
           )}
 
-          {billPaise > 0 && !canBill && (
+          {billPaise > 0 && !canCollectPayment && (
             <p className="text-xs text-[var(--muted)]">
               This visit will be saved as unbilled — billing is handled separately at this clinic.
             </p>
@@ -1403,7 +1403,7 @@ export function NewVisitPage() {
         </div>
       </SectionCard>
 
-      {billPaise > 0 && canBill && (
+      {billPaise > 0 && canCollectPayment && (
         <div id="visit-payment" className="scroll-mt-24">
           <SectionCard title="Payment">
             <div>
