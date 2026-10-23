@@ -16,4 +16,9 @@ describe('filterLedgerTabs', () => {
     const tabs = filterLedgerTabs({ canBill: false, entitlementsLoading: true });
     expect(tabs.map((t) => t.key)).toEqual(['visits', 'patients', 'invoices', 'daybook']);
   });
+
+  it('shows Daybook, but not Invoices, to someone who can collect without billing', () => {
+    const tabs = filterLedgerTabs({ canBill: false, canCollectPayment: true, entitlementsLoading: false });
+    expect(tabs.map((t) => t.key)).toEqual(['visits', 'patients', 'daybook']);
+  });
 });

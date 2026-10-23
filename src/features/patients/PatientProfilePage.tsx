@@ -625,7 +625,7 @@ export function PatientProfilePage() {
             >
               Book appointment
             </button>
-            {canBill && (
+            {canCollectPayment && (
               <button
                 type="button"
                 className={btnSecondary}

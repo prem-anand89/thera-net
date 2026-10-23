@@ -78,14 +78,20 @@ export const LEDGER_TAB_ITEMS = [
 
 export function filterLedgerTabs({
   canBill,
+  canCollectPayment = false,
   entitlementsLoading,
 }: {
   canBill: boolean;
+  /** Daybook is a register of payments received, not of invoices: anyone who can collect sees it. */
+  canCollectPayment?: boolean;
   entitlementsLoading: boolean;
 }) {
-  return LEDGER_TAB_ITEMS.filter(
-    (v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading
-  );
+  return LEDGER_TAB_ITEMS.filter((v) => {
+    if (entitlementsLoading) return true;
+    if (v.key === 'invoices') return canBill;
+    if (v.key === 'daybook') return canBill || canCollectPayment;
+    return true;
+  });
 }
 
 
@@ -290,8 +296,9 @@ export function LedgerPage() {
   // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
     if (entitlementsLoading) return;
-    if ((recordsView === 'invoices' || recordsView === 'daybook') && !canBill) setRecordsView('visits');
-  }, [recordsView, canBill, entitlementsLoading, setRecordsView]);
+    if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
+    if (recordsView === 'daybook' && !canBill && !canCollectPayment) setRecordsView('visits');
+  }, [recordsView, canBill, canCollectPayment, entitlementsLoading, setRecordsView]);
   // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
   // (or a patient deep link) always wins and never overwrites what was remembered.
   const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));
@@ -762,7 +769,7 @@ export function LedgerPage() {
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
-          {filterLedgerTabs({ canBill, entitlementsLoading }).map((v) => (
+          {filterLedgerTabs({ canBill, canCollectPayment, entitlementsLoading }).map((v) => (
             <button
               key={v.key}
               type="button"

@@ -639,7 +639,7 @@ export function WorkspacePage() {
     icon: <IconRupee />,
     tone: 'moss' as const,
     kind: 'money' as const,
-    onClick: canBill && scope.isClinicWideView ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
+    onClick: (canBill || canCollectPayment) && scope.isClinicWideView ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
   };
   const duesCell = {
     label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',

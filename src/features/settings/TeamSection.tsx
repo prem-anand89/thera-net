@@ -864,7 +864,7 @@ function AddTeamMemberForm({
         </label>
         {loginsLocked && (
           <p className="-mt-1 ml-6 text-xs text-[var(--muted)]">
-            Team logins are included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above. You can still add a therapist to the schedule without a login.
+            Your plan's logins are all in use; more are included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above. Logins already set up keep working, and you can still add a therapist to the schedule without a login.
           </p>
         )}
         {role !== 'front_desk' && (
