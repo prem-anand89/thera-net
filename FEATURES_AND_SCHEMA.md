@@ -47,7 +47,8 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     it never blocks saving. Save sends `visitService.create({ lines })`.
   - **Rows belong to one patient.** Changing the patient (or clearing it) restarts the rows and the discount
     (one auto continuation row if the new patient has exactly one open package, else one empty row;
-    `initialRowsForPatient`). At Save every package row is re-checked against the patient's current open packages
+    `initialRowsForPatient`). Services chosen before any patient was picked are kept, and the discount with them
+    (`rowsForNewPatient`). At Save every package row is re-checked against the patient's current open packages
     (`draftLinesToVisitLines`): a package that is no longer open blocks the save on its row ("That package is no
     longer open for this patient. Remove it or pick another service."), and the session number comes from the
     fresh package, not the row. `visitService.create` also refuses a `packageContinuation` whose group has a

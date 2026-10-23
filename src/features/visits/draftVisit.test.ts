@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, draftLinesToVisitLines, initialRowsForPatient, PACKAGE_NOT_OPEN } from './draftVisit';
+import { adjustmentSurvives, draftLinesToVisitLines, initialRowsForPatient, PACKAGE_NOT_OPEN, rowsForNewPatient } from './draftVisit';
 import type { DraftLine, OpenPackage } from './ServiceRows';
 
 const pkg = (logged: number): OpenPackage => ({
@@ -54,5 +54,33 @@ describe('initialRowsForPatient', () => {
       expect(rows[0].continuation).toBeUndefined();
       expect(rows[0].serviceCatalogId).toBeUndefined();
     }
+  });
+});
+
+describe('rowsForNewPatient', () => {
+  it('first pick keeps chosen services and adds the continuation in front', () => {
+    const rows = rowsForNewPatient([plain('a'), { key: 'e', assistingTherapistId: null }], [pkg(4)], null);
+    expect(rows.map((r) => r.continuation?.packageGroupId ?? r.serviceCatalogId)).toEqual(['g1', 'a']);
+  });
+  it('first pick with no open package keeps services, or one empty row when none', () => {
+    expect(rowsForNewPatient([plain('a')], [], null).map((r) => r.serviceCatalogId)).toEqual(['a']);
+    const empty = rowsForNewPatient([{ key: 'e', assistingTherapistId: null }], [], null);
+    expect(empty).toHaveLength(1);
+    expect(empty[0].serviceCatalogId).toBeUndefined();
+  });
+  it('several open packages add nothing', () => {
+    const rows = rowsForNewPatient([plain('a')], [pkg(1), { ...pkg(2), packageGroupId: 'g2' }], null);
+    expect(rows.map((r) => r.serviceCatalogId)).toEqual(['a']);
+  });
+  it('a pick after a different patient starts over', () => {
+    const rows = rowsForNewPatient([plain('a'), pkgRow(pkg(4))], [], 'patient-a');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].serviceCatalogId).toBeUndefined();
+    expect(rows[0].continuation).toBeUndefined();
+  });
+  it('never duplicates a package row and never carries a continuation over', () => {
+    const rows = rowsForNewPatient([pkgRow(pkg(4)), plain('a')], [pkg(4)], null);
+    expect(rows.filter((r) => r.continuation)).toHaveLength(1);
+    expect(rows.map((r) => r.continuation?.packageGroupId ?? r.serviceCatalogId)).toEqual(['g1', 'a']);
   });
 });

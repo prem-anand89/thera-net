@@ -1,5 +1,6 @@
 import type { VisitLineInput } from '@/services/visitService';
 import type { BillAdjustmentMode, BillAdjustmentValueType } from '@/domain/billAdjustment';
+import type { UUID } from '@/domain/types';
 import { continuationLine, emptyDraftLine, hasService, type DraftLine, type OpenPackage } from './ServiceRows';
 
 export const PACKAGE_NOT_OPEN =
@@ -58,4 +59,22 @@ export function adjustmentSurvives(
 /** A patient's starting rows: their one open package is continued automatically; otherwise one empty row. */
 export function initialRowsForPatient(openPackages: OpenPackage[]): DraftLine[] {
   return openPackages.length === 1 ? [continuationLine(openPackages[0])] : [emptyDraftLine()];
+}
+
+/**
+ * The rows once a patient is chosen. Rows belonging to a different, previous patient start over. With no
+ * previous patient (the first pick, or after the patient was cleared) the services already chosen are kept
+ * and the one open package, if any, is added in front — never twice. Continuation rows only ever come from
+ * a patient's own packages, so rows chosen before any patient never include one.
+ */
+export function rowsForNewPatient(
+  prevRows: DraftLine[],
+  openPackages: OpenPackage[],
+  previousPatientId: UUID | null
+): DraftLine[] {
+  if (previousPatientId !== null) return initialRowsForPatient(openPackages);
+  const kept = prevRows.filter((r) => hasService(r) && !r.continuation);
+  const lead = openPackages.length === 1 ? [continuationLine(openPackages[0])] : [];
+  const rows = [...lead, ...kept];
+  return rows.length > 0 ? rows : [emptyDraftLine()];
 }

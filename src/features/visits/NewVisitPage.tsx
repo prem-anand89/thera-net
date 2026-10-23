@@ -76,7 +76,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, draftLinesToVisitLines, initialRowsForPatient } from './draftVisit';
+import { adjustmentSurvives, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 
@@ -561,10 +561,13 @@ export function NewVisitPage() {
       return;
     }
     if (openPackages === undefined || rowsPatientRef.current === patient.id) return;
+    // Services picked before any patient stay (and so does the discount); rows that belonged to another
+    // patient start over.
+    const previousPatientId = rowsPatientRef.current;
     rowsPatientRef.current = patient.id;
-    setRows(initialRowsForPatient(openPackages));
+    setRows((prev) => rowsForNewPatient(prev, openPackages, previousPatientId));
     setRowErrors(new Map());
-    resetBillAdjustment();
+    if (previousPatientId !== null) resetBillAdjustment();
   }, [patient, repeatVisit, openPackages]);
 
   // An assistant can't also be the visit's therapist: changing the therapist untags that person.
