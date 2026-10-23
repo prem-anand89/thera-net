@@ -18,8 +18,9 @@
 -- 1. Soft-delete of a visit: admin or the visit's own therapist only
 -- ---------------------------------------------------------------------------
 -- Only the false -> true flip of `deleted` is checked; every other update keeps following visits_update.
--- `old.therapist_id` is the visit's therapist BEFORE this update, so changing the therapist and deleting in
--- one statement can't be used to get round it.
+-- `old.clinic_id` / `old.therapist_id` are the visit's clinic and therapist BEFORE this update, so changing
+-- the therapist (or moving the visit to a clinic where the caller is admin) and deleting in one statement
+-- can't be used to get round it.
 -- auth.uid() is null for server-side work that runs without a signed-in user (the service role, migrations,
 -- maintenance SQL); that is let through. No function in the schema soft-deletes visits today:
 -- admin_delete_clinic and admin_wipe_clinic_data hard-delete them (DELETE, which this UPDATE trigger never
@@ -29,8 +30,8 @@ language plpgsql security definer set search_path = public as $$
 begin
   if new.deleted and not old.deleted
      and auth.uid() is not null
-     and not is_clinic_admin(new.clinic_id)
-     and not is_own_therapist(new.clinic_id, old.therapist_id)
+     and not is_clinic_admin(old.clinic_id)
+     and not is_own_therapist(old.clinic_id, old.therapist_id)
   then
     raise exception 'Only an admin or the visit''s therapist can delete a visit.' using errcode = '42501';
   end if;
@@ -64,6 +65,14 @@ declare
   v_visit_ids uuid[];
 begin
   if tg_op = 'INSERT' then
+    -- The sync and backup restore push with an upsert (INSERT ... ON CONFLICT DO UPDATE), and a BEFORE
+    -- INSERT trigger fires on the proposed row before the conflict check. When the id already exists, the
+    -- row is judged by the BEFORE UPDATE firing that follows (DO UPDATE re-enters this trigger as an UPDATE,
+    -- where the content comparison below applies); a plain INSERT with an existing id fails on the primary
+    -- key anyway. Only an EXISTING id returns early: a brand-new line on an invoiced visit is still refused.
+    if exists (select 1 from public.visit_items where id = new.id) then
+      return new;
+    end if;
     v_visit_ids := array[new.visit_id];
   elsif tg_op = 'UPDATE' then
     if (new.visit_id, new.service_catalog_id, new.service_name, new.catalog_price_paise, new.price_paise,

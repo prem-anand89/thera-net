@@ -1818,8 +1818,10 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
   `admin_wipe_clinic_data`). Since `20261024100000` an UPDATE is refused only when a content column
   changes (`visit_id`, `service_catalog_id`, `service_name`, `catalog_price_paise`, `price_paise`,
-  `assisting_therapist_id`, `duration_minutes`, `is_package_line`, `deleted`, `position`), so an identical
-  re-put (backup restore, sync retry) passes. Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
+  `assisting_therapist_id`, `duration_minutes`, `is_package_line`, `deleted`, `position`). The sync and
+  backup restore push with an upsert (INSERT … ON CONFLICT DO UPDATE): an upsert of an EXISTING line skips
+  the insert check and is judged as an update, so one that changes no content column is accepted; a new
+  line, or a changed content column, on an invoiced visit is refused. Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
 - Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
   Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
   the primary always has a row.
@@ -3764,8 +3766,10 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
   `admin_wipe_clinic_data`). Since `20261024100000` an UPDATE is refused only when a content column
   changes (`visit_id`, `service_catalog_id`, `service_name`, `catalog_price_paise`, `price_paise`,
-  `assisting_therapist_id`, `duration_minutes`, `is_package_line`, `deleted`, `position`), so an identical
-  re-put (backup restore, sync retry) passes. Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
+  `assisting_therapist_id`, `duration_minutes`, `is_package_line`, `deleted`, `position`). The sync and
+  backup restore push with an upsert (INSERT … ON CONFLICT DO UPDATE): an upsert of an EXISTING line skips
+  the insert check and is judged as an update, so one that changes no content column is accepted; a new
+  line, or a changed content column, on an invoiced visit is refused. Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
 - Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
   Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
   the primary always has a row.
@@ -5071,7 +5075,7 @@ Lines and shares are separate rows from the visit and sync as separate outbox en
 - **The outbox merges every queued entry for one row at that row's OLDEST queued position.** A later edit never moves a row later in the queue. Anything that relies on "queued after X" must account for this.
 - **A package-line swap queues the slot-freeing row first.** The server allows one live package line per visit (unique index), so the line that stops being the package line (or is removed) is queued before the line that takes the slot (`putWithChildren`; tag-clearing line writes go before the visit row via `itemsFirst`). Known gap: a slot-taking row that already had an older pending entry can invert this, the server answers 23505 and the row reverts.
 - **Do not issue an invoice while a visit's lines or shares are pending or refused.** `issue_invoice` freezes lines the moment `invoice_id` is set, so unsynced lines would be rejected (42501) and the bill would not match. The app refuses with a message instead.
-- **The server freezes lines once `invoice_id` is set, but not shares** (who gets paid is internal and not on the invoice). An identical re-put of a frozen line passes; only a real change is refused.
+- **The server freezes lines once `invoice_id` is set, but not shares** (who gets paid is internal and not on the invoice). An upsert of an existing frozen line that changes no content column passes (backup restore, sync retry); a new line or a real change is refused.
 - **A visit can arrive on another device before its lines.** `visits.service_lines_count` records how many live lines the visit was saved with, and the invoice builder refuses a visit with fewer local lines than that. Any new path that rewrites a visit's lines must set it too.
 - Backup restore follows the same rule: visits are put first, then `visit_items`, then `visit_credits`.
 
