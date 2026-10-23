@@ -30,7 +30,39 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Auto-widening past 9999 with no configuration needed
   - Fully offline-supported via collision retry loop
   - Prefix configurable per clinic in Settings (defaults to 'W')
-- **Visit entry** with catalog price autofill
+- **Visit entry** with catalog price autofill. The New Visit form (`NewVisitPage.tsx`) is three cards:
+  **Visit** (date, therapist, condition/treatments — collapsed for front desk), **Services**, **Payment**.
+  - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
+    presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
+    the top; a row shows the service, its catalog price and a "+ Assign assistant" action (active therapists
+    minus the visit's therapist), which becomes the chip "Dr X · assisting ✕". "+ Add another service" adds a
+    row; a single row has no ✕, with two or more every row has one and removing the first promotes the next.
+    Errors name the service ("Dry needling: only one package per visit.") and show on that row.
+  - **Packages are chosen in the service picker** (the old New/Continuation toggle is gone): open packages
+    first ("Continue: Rehab package — session 5 of 10 (₹0)"), then services by category. Exactly one open
+    package adds a ₹0 continuation row automatically, once per patient; two or more add nothing. A package row
+    reads "Session n of N · package (₹0)" with "Use a different service". Only one package row per visit
+    (a continuation or a multi-session service). With an open package and no package row, a note reads
+    "{patient} has an open package (session n of N). It isn't used on this visit." with "Add package session";
+    it never blocks saving. Save sends `visitService.create({ lines })`.
+  - **Bill.** Subtotal = the rows' catalog prices (₹0 for a continuation). The discount / extra control
+    (`BillAdjustmentFields`, ₹ or %, reason required whenever the bill differs from the subtotal) applies to the
+    subtotal and **survives row changes**; it is cleared only when a ₹ discount no longer fits the new subtotal
+    or the subtotal reaches ₹0, and the control is disabled at ₹0. The UPI QR, the payment amount and the phone
+    bar use the total.
+  - **Revenue share** is a read-only line under Total ("Revenue share · from services — Dr A ₹867 (67%) · Dr B
+    ₹433 (33%)", `RevenueShareSummary`, from `autoCredits`) shown only when an assistant is tagged and the clinic's
+    therapist split is on; a ₹0 package session on the visit therapist adds "Package sessions are credited through
+    package attribution." "Edit split" appears only when the caller passes `onEdit` (New Visit does not yet).
+    Assistant tagging and the share line are hidden for a solo clinic (`clinicType` 'individual') or one with a
+    single active therapist; with the split off only the share line is hidden. Changing the visit's therapist
+    untags that person as an assistant.
+  - **Phone save bar** (`VisitSaveBar`, below `sm:`): fixed above the bottom navigation
+    (`bottom: calc(64px + env(safe-area-inset-bottom))`, 64 = `PHONE_BOTTOM_NAV`), reads "₹1,300 · 2 services ·
+    UPI, collected now" (or "to collect later") with Save visit; tapping the summary scrolls to Payment. The
+    page gets extra bottom padding on phones; tablet/desktop keep Save under Payment.
+  - After saving: the "Visit logged" screen and the bill dialog name the services ("Assessment + Dry needling"),
+    and the extra-visit button reads "Log a separate visit for {patient}".
 - **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)
 - **Package session tracking** (1/3, 2/3, etc.) with ₹0 continuations for subsequent sessions
 - **Reference panel** showing patient's last visit and open-package progress

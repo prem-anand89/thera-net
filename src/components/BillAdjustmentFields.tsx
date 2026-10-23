@@ -51,6 +51,10 @@ export interface BillAdjustmentFieldsProps {
   onReasonChange: (reason: string) => void;
   /** When true (package continuation), only extra adjustments are offered */
   continuationSession?: boolean;
+  /** Label for the teal result box; the New Visit form calls it "Total". */
+  totalLabel?: string;
+  /** Greys out every control (New Visit while the subtotal is ₹0). */
+  disabled?: boolean;
 }
 
 export function BillAdjustmentFields({
@@ -65,6 +69,8 @@ export function BillAdjustmentFields({
   onValueChange,
   onReasonChange,
   continuationSession,
+  totalLabel = 'Final bill',
+  disabled,
 }: BillAdjustmentFieldsProps) {
   const numericValue = Number(value);
   const adjustment = {
@@ -76,7 +82,7 @@ export function BillAdjustmentFields({
   const summary = describeBillAdjustment(catalogPricePaise, billPaise);
 
   return (
-    <div className="space-y-3">
+    <fieldset disabled={disabled} className="m-0 min-w-0 space-y-3 border-0 p-0">
       <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
         <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
         <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
@@ -126,7 +132,7 @@ export function BillAdjustmentFields({
       )}
 
       <div className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)]">
-        <span className="font-medium">Final bill: {formatINR(billPaise)}</span>
+        <span className="font-medium">{totalLabel}: {formatINR(billPaise)}</span>
         {summary && (
           <span className="mt-0.5 block text-xs text-[var(--teal-strong)]/90">
             {summary.kind === 'discount' ? 'Discount' : 'Extra'} of{' '}
@@ -152,7 +158,7 @@ export function BillAdjustmentFields({
           />
         </Field>
       )}
-    </div>
+    </fieldset>
   );
 }
 

@@ -27,7 +27,6 @@ import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { isNearingCompletion } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import {
-  effectivePricePerSession,
   type Patient,
   type PaymentMethod,
   type TreatmentItem,
@@ -65,16 +64,20 @@ import {
 import { BillAdjustmentFields, billAdjustmentFromFields } from '@/components/BillAdjustmentFields';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 import { PhoneField } from '@/components/PhoneField';
-
-
-interface OpenPackage {
-  packageGroupId: UUID;
-  serviceCatalogId: UUID;
-  serviceName: string;
-  logged: number;
-  packageTotal: number;
-  startedOn: string;
-}
+import {
+  ServiceRows,
+  continuationLine,
+  draftLinesToItems,
+  draftSubtotalPaise,
+  emptyDraftLine,
+  hasService,
+  rowName,
+  rowProblems,
+  type DraftLine,
+  type OpenPackage,
+} from './ServiceRows';
+import { RevenueShareSummary } from './RevenueShareSummary';
+import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 
 // UPI first — the most common collection method at an Indian clinic front
 // desk, so it's both the default (see paymentMethod's useState below) and
@@ -203,9 +206,10 @@ export function NewVisitPage() {
   const today = toLocalDateStr(new Date());
   const [visitDate, setVisitDate] = useState(today);
   const [therapistId, setTherapistId] = useState('');
-  const [mode, setMode] = useState<'new' | 'continuation'>('new');
-  const [serviceCatalogId, setServiceCatalogId] = useState('');
-  const [openPackageId, setOpenPackageId] = useState('');
+  // The services performed, in order; the first is the visit's main service. One empty row to start.
+  const [rows, setRows] = useState<DraftLine[]>(() => [emptyDraftLine()]);
+  // Messages from the last Save attempt, by row index (the package rule is checked live by ServiceRows).
+  const [rowErrors, setRowErrors] = useState<Map<number, string>>(() => new Map());
   const [adjustmentMode, setAdjustmentMode] = useState<BillAdjustmentMode>('none');
   const [adjustmentValueType, setAdjustmentValueType] = useState<BillAdjustmentValueType>('amount');
   const [adjustmentValue, setAdjustmentValue] = useState('');
@@ -237,6 +241,11 @@ export function NewVisitPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // On a phone the Save button is in the fixed bar, far from this message — bring it into view.
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [error]);
   const [busy, setBusy] = useState(false);
   // Set only when the clinic has clinical docs on — swaps the form for a
   // one-time "add a note now?" offer at the highest-intent moment, right
@@ -427,14 +436,12 @@ export function NewVisitPage() {
       }
       setTherapistId(repeatVisit.therapistId);
       // Same service and bill as the visit being repeated either way — for
-      // a package continuation this just seeds sensible values before the
-      // effect below (once openPackages has loaded) switches the mode and
-      // picks the matching package; for an ordinary one-off repeat (no
-      // package involved) this IS the whole pre-fill, which used to be
-      // skipped entirely — every repeat got forced into continuation mode
-      // regardless of whether there was a package to continue, landing on
-      // an empty, unpickable "Open package" field for a plain repeat visit.
-      setServiceCatalogId(repeatVisit.serviceCatalogId);
+      // a package continuation this just seeds the plain service before the
+      // effect below (once openPackages has loaded) swaps in the matching
+      // package session; for an ordinary one-off repeat (no package
+      // involved) this IS the whole pre-fill. (Only the main service is
+      // repeated, not the visit's other lines.)
+      setRows([{ ...emptyDraftLine(), serviceCatalogId: repeatVisit.serviceCatalogId }]);
       const inferred = inferBillAdjustment(
         repeatVisit.catalogPricePaise,
         repeatVisit.actualBillPaise
@@ -443,7 +450,6 @@ export function NewVisitPage() {
       setAdjustmentValueType(inferred.valueType);
       setAdjustmentValue(inferred.value > 0 ? String(inferred.value) : '');
       setAdjustmentReason(repeatVisit.adjustmentReason ?? '');
-      setMode(repeatVisit.packageGroupId ? 'continuation' : 'new');
     })();
   }, [repeatVisit, patient]);
 
@@ -503,16 +509,10 @@ export function NewVisitPage() {
   useEffect(() => {
     if (!repeatVisit?.packageGroupId || openPackages === undefined) return;
     const match = openPackages.find((op) => op.packageGroupId === repeatVisit.packageGroupId);
-    if (match) {
-      setOpenPackageId(match.packageGroupId);
-    } else {
-      // The package this visit belonged to has since closed (every session
-      // logged) — fall back to a plain repeat of the same service instead
-      // of leaving the form on continuation mode with no open package left
-      // to pick. Service and bill were already pre-filled by the effect
-      // above.
-      setMode('new');
-    }
+    // If the package this visit belonged to has since closed (every session
+    // logged), the plain repeat of the same service from the effect above
+    // stays as it is. Otherwise its next session replaces that row.
+    if (match) setRows((prev) => [continuationLine(match, prev[0]?.assistingTherapistId ?? null), ...prev.slice(1)]);
   }, [repeatVisit, openPackages]);
 
   // An ordinary patient pick (not the "repeat visit" shortcut above, which
@@ -520,8 +520,8 @@ export function NewVisitPage() {
   // practice, almost always here for the next session of it — defaulting to
   // an empty "New service" picker made the common case the extra-click one.
   // Two or more open packages isn't guessed at; the front desk picks
-  // deliberately via the toggle. Runs once per patient (tracked by id, not
-  // by re-deriving "untouched" state), so a manual switch back to New isn't
+  // deliberately in the service picker. Runs once per patient (tracked by id,
+  // not by re-deriving "untouched" state), so removing the package row isn't
   // silently reverted if openPackages happens to re-emit.
   const autoContinuationForPatientRef = useRef<UUID | null>(null);
   useEffect(() => {
@@ -529,11 +529,20 @@ export function NewVisitPage() {
     if (autoContinuationForPatientRef.current === patient.id) return;
     autoContinuationForPatientRef.current = patient.id;
     if (openPackages.length === 1) {
-      setMode('continuation');
-      setOpenPackageId(openPackages[0].packageGroupId);
-      resetBillAdjustment();
+      // The session joins whatever services were already picked (empty rows make way for it).
+      setRows((prev) => [continuationLine(openPackages[0]), ...prev.filter(hasService)]);
     }
   }, [patient, repeatVisit, openPackages]);
+
+  // An assistant can't also be the visit's therapist: changing the therapist untags that person.
+  useEffect(() => {
+    if (!therapistId) return;
+    setRows((prev) =>
+      prev.some((r) => r.assistingTherapistId === therapistId)
+        ? prev.map((r) => (r.assistingTherapistId === therapistId ? { ...r, assistingTherapistId: null } : r))
+        : prev
+    );
+  }, [therapistId]);
 
   // Default therapist to current user's therapist when creating a new patient
   // or selecting a patient for 'new' mode (unless therapist is already selected)
@@ -542,21 +551,24 @@ export function NewVisitPage() {
     setTherapistId(myTherapistId);
   }, [patient, therapistId, myTherapistId]);
 
-  const selectedService = useMemo(
-    () => (catalog ?? []).find((c) => c.id === serviceCatalogId),
-    [catalog, serviceCatalogId]
-  );
-  const selectedPackage = useMemo(
-    () => (openPackages ?? []).find((p) => p.packageGroupId === openPackageId),
-    [openPackages, openPackageId]
+  const catalogItems = useMemo(() => catalog ?? [], [catalog]);
+  const activeTherapists = useMemo(() => (therapists ?? []).filter((t) => t.active), [therapists]);
+  // A solo practitioner (or a clinic with one active therapist) has nobody to assist.
+  const showAssistant = clinic.clinicType !== 'individual' && activeTherapists.length > 1;
+  const splitEnabled = clinic.enableTherapistSplit !== false;
+  const therapistsById = useMemo(
+    () => new Map((therapists ?? []).map((t) => [t.id, t])),
+    [therapists]
   );
 
-  const catalogPricePaise = mode === 'continuation' ? 0 : (selectedService?.basePricePaise ?? 0);
+  // The bill: the discount / top-up applies to the rows' catalog total (₹0 for a package session).
+  const catalogPricePaise = draftSubtotalPaise(rows, catalogItems);
   const billPaise = computeAdjustedBillPaise(
     catalogPricePaise,
     billAdjustmentFromFields(adjustmentMode, adjustmentValueType, adjustmentValue)
   );
   const adjustmentPaise = billPaise - catalogPricePaise;
+  const serviceLabel = rows.filter(hasService).map((r) => rowName(r, catalogItems)).join(' + ') || 'Visit';
 
   function resetBillAdjustment() {
     setAdjustmentMode('none');
@@ -565,14 +577,17 @@ export function NewVisitPage() {
     setAdjustmentReason('');
   }
 
-  const categories = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof catalog>>();
-    for (const item of catalog ?? []) {
-      if (!map.has(item.category)) map.set(item.category, []);
-      map.get(item.category)!.push(item);
-    }
-    return [...map.entries()];
-  }, [catalog]);
+  /** Row edits keep the discount; it is dropped only when a ₹ discount no longer fits the new subtotal. */
+  function changeRows(next: DraftLine[]) {
+    setRows(next);
+    setRowErrors(new Map());
+    const subtotal = draftSubtotalPaise(next, catalogItems);
+    const tooBig =
+      adjustmentMode === 'discount' &&
+      adjustmentValueType === 'amount' &&
+      Math.round(Number(adjustmentValue || 0) * 100) > subtotal;
+    if (subtotal === 0 || tooBig) resetBillAdjustment();
+  }
 
   function selectPatientFromSearch(p: Patient) {
     setPatient(p);
@@ -624,8 +639,15 @@ export function NewVisitPage() {
     setError(null);
     if (!patient) return setError('Select or create a patient first');
     if (!therapistId) return setError('Select a therapist');
-    if (mode === 'new' && !serviceCatalogId) return setError('Select a service');
-    if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
+    const missing = new Map<number, string>();
+    rows.forEach((r, i) => {
+      if (!hasService(r)) missing.set(i, 'Pick a service.');
+    });
+    if (missing.size > 0) {
+      setRowErrors(missing);
+      return setError(rows.length === 1 ? 'Select a service' : 'Pick a service for each row, or remove the empty one.');
+    }
+    if (rowProblems(rows, catalogItems).size > 0) return setError('Fix the service marked above.');
     if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
       return setError('Enter a reason for the bill adjustment');
     }
@@ -647,21 +669,24 @@ export function NewVisitPage() {
         patientId: patient.id,
         therapistId,
         visitDate,
-        serviceCatalogId:
-          mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
+        lines: rows.map((r) => ({
+          serviceCatalogId: r.continuation?.serviceCatalogId ?? r.serviceCatalogId!,
+          assistingTherapistId: r.assistingTherapistId,
+          ...(r.continuation
+            ? {
+                packageContinuation: {
+                  packageGroupId: r.continuation.packageGroupId,
+                  sessionIndex: r.continuation.logged + 1,
+                  packageTotal: r.continuation.packageTotal,
+                },
+              }
+            : {}),
+        })),
         condition,
         treatmentNotes: notes,
         treatmentIds,
         actualBillPaise: adjustmentPaise !== 0 ? billPaise : undefined,
         adjustmentReason: adjustmentPaise !== 0 ? adjustmentReason : undefined,
-        ...(mode === 'continuation'
-          ? {
-              isContinuation: true,
-              packageGroupId: selectedPackage!.packageGroupId,
-              sessionIndex: selectedPackage!.logged + 1,
-              packageTotal: selectedPackage!.packageTotal,
-            }
-          : {}),
         ...(billPaise > 0 && canBill && paymentChoice === 'pending'
           ? { pendingPaymentNote: pendingNote || null }
           : {}),
@@ -714,11 +739,8 @@ export function NewVisitPage() {
         patientId: patient.id,
         patientName: patient.name,
         patientPhone: patient.phone,
-        serviceLabel:
-          mode === 'continuation'
-            ? selectedPackage!.serviceName
-            : (selectedService?.name ?? 'Visit'),
-        isPackage: mode === 'continuation',
+        serviceLabel,
+        isPackage: rows.some((r) => r.continuation),
         alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid' && !paymentError,
         paymentError,
         therapistId,
@@ -824,7 +846,7 @@ export function NewVisitPage() {
                 });
               }}
             >
-              Another visit for {justSaved.patientName}
+              Log a separate visit for {justSaved.patientName}
             </button>
             <button type="button" className={btnSecondary} onClick={goBack}>
               Done
@@ -855,6 +877,13 @@ export function NewVisitPage() {
       </div>
     );
   }
+
+  const savePayment: SavePayment =
+    billPaise > 0 && canBill
+      ? paymentChoice === 'paid'
+        ? { kind: 'now', methodLabel: PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label ?? '' }
+        : { kind: 'later' }
+      : { kind: 'none' };
 
   const patientPanel = (
     <SectionCard title="Patient">
@@ -1243,60 +1272,6 @@ export function NewVisitPage() {
             options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
           />
 
-          <SegmentedToggle
-            value={mode}
-            onChange={(v) => {
-              setMode(v);
-              resetBillAdjustment();
-            }}
-            options={[
-              { value: 'new', label: 'New service / package' },
-              {
-                value: 'continuation',
-                label: `Continuation (₹0)${patient && !openPackages?.length ? ' — none open' : ''}`,
-                disabled: !openPackages?.length,
-              },
-            ]}
-          />
-
-          {mode === 'new' ? (
-            <SearchableSelect
-              label="Service *"
-              value={serviceCatalogId}
-              onChange={(v) => {
-                setServiceCatalogId(v);
-                resetBillAdjustment();
-              }}
-              options={categories.flatMap(([category, items]) =>
-                items.map((i) => ({
-                  value: i.id,
-                  label: `${i.name} — ${formatINR(i.basePricePaise)}${
-                    i.sessionCount > 1
-                      ? ` (${i.sessionCount} sessions, ${formatINR(effectivePricePerSession(i))}/session)`
-                      : ''
-                  }`,
-                  group: category,
-                }))
-              )}
-            />
-          ) : (
-            <Field label="Open package *">
-              <select
-                className={inputCls}
-                value={openPackageId}
-                onChange={(e) => setOpenPackageId(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {(openPackages ?? []).map((p) => (
-                  <option key={p.packageGroupId} value={p.packageGroupId}>
-                    {p.serviceName} — session {p.logged + 1} of {p.packageTotal} (started{' '}
-                    {formatDateDMY(p.startedOn)})
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-
           {role === 'front_desk' && !clinicalDetailsExpanded ? (
             <button
               type="button"
@@ -1351,17 +1326,27 @@ export function NewVisitPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Billing">
+      <SectionCard title="Services">
         <div className="grid grid-cols-1 gap-3">
+          <ServiceRows
+            rows={rows}
+            onChange={changeRows}
+            catalog={catalogItems}
+            openPackages={openPackages ?? []}
+            therapists={therapists ?? []}
+            primaryId={therapistId}
+            showAssistant={showAssistant}
+            errors={rowErrors}
+            patientName={patient?.name}
+          />
+
+          {/* The rows are the itemised bill: subtotal, the discount / top-up, then the total. The
+              discount survives row edits and is off while there is nothing to discount. */}
           <BillAdjustmentFields
             catalogPricePaise={catalogPricePaise}
-            catalogLabel={
-              mode === 'continuation'
-                ? 'Package session (catalog)'
-                : selectedService
-                  ? `Catalog — ${selectedService.name}`
-                  : 'Catalog price'
-            }
+            catalogLabel="Subtotal"
+            totalLabel="Total"
+            disabled={catalogPricePaise === 0}
             mode={adjustmentMode}
             valueType={adjustmentValueType}
             value={adjustmentValue}
@@ -1370,17 +1355,30 @@ export function NewVisitPage() {
             onValueTypeChange={setAdjustmentValueType}
             onValueChange={setAdjustmentValue}
             onReasonChange={setAdjustmentReason}
-            continuationSession={mode === 'continuation'}
           />
+
+          {showAssistant && (
+            <RevenueShareSummary
+              items={draftLinesToItems(rows, catalogItems)}
+              primaryId={therapistId}
+              billPaise={billPaise}
+              therapistsById={therapistsById}
+              splitEnabled={splitEnabled}
+            />
+          )}
 
           {billPaise > 0 && !canBill && (
             <p className="text-xs text-[var(--muted)]">
               This visit will be saved as unbilled — billing is handled separately at this clinic.
             </p>
           )}
+        </div>
+      </SectionCard>
 
-          {billPaise > 0 && canBill && (
-            <Field label="Payment">
+      {billPaise > 0 && canBill && (
+        <div id="visit-payment" className="scroll-mt-24">
+          <SectionCard title="Payment">
+            <div>
               <SegmentedToggle
                 value={paymentChoice}
                 onChange={setPaymentChoice}
@@ -1419,14 +1417,17 @@ export function NewVisitPage() {
                   onChange={(e) => setPendingNote(e.target.value)}
                 />
               )}
-            </Field>
-          )}
+            </div>
+          </SectionCard>
         </div>
-      </SectionCard>
+      )}
 
-      <ErrorNote message={error} />
+      <div ref={errorRef}>
+        <ErrorNote message={error} />
+      </div>
       <div className="flex gap-2">
-        <button type="button" className={btnPrimary} disabled={busy} onClick={() => void save()}>
+        {/* Phones save from the fixed bar below; tablet and up keep Save here, under Payment. */}
+        <button type="button" className={`${btnPrimary} hidden sm:inline-flex`} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
         <button type="button" className={btnSecondary} onClick={goBack}>
@@ -1437,7 +1438,8 @@ export function NewVisitPage() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
+    <div className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
 
       {/* Same two-column shape (reference panel left, form right) whether or
@@ -1449,6 +1451,17 @@ export function NewVisitPage() {
         <div className="tab:w-80 tab:shrink-0">{patientPanel}</div>
         <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
       </div>
+
+      <VisitSaveBar
+        totalPaise={billPaise}
+        serviceCount={rows.filter(hasService).length || rows.length}
+        payment={savePayment}
+        busy={busy}
+        onSave={() => void save()}
+        onSummaryClick={() =>
+          document.getElementById('visit-payment')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+        }
+      />
 
       {patient && editingPatient && (
         <EditPatientModal
