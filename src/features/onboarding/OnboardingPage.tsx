@@ -19,6 +19,8 @@ import { OnboardingPasswordStep } from './OnboardingPasswordStep';
 import { ServiceCatalogTemplateEditor } from './ServiceCatalogTemplateEditor';
 import {
   catalogDraftsReadyToSave,
+  isPricedDraft,
+  zeroCatalogDrafts,
   createStarterCatalogDrafts,
   type CatalogTemplateDraft,
 } from '@/domain/onboardingCatalogTemplates';
@@ -45,7 +47,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   );
   const [finishBusy, setFinishBusy] = useState(false);
   const catalogRows = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
-  const catalogCount = (catalogRows ?? []).filter((c) => c.active && c.basePricePaise > 0).length;
+  const catalogCount = (catalogRows ?? []).filter((c) => c.active).length;
   const [finishError, setFinishError] = useState<string | null>(null);
 
   const phase = getOnboardingWizardPhase(clinic.id);
@@ -102,16 +104,14 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
 
   async function finishOnboarding() {
     if (!catalogDraftsReadyToSave(catalogDrafts)) {
-      setFinishError('Add a price to at least one included service or package.');
+      setFinishError('Add a price (₹0 if you do not charge patients) to at least one included service or package.');
       return;
     }
     setFinishBusy(true);
     setFinishError(null);
     try {
       const now = new Date().toISOString();
-      const toSave = catalogDrafts.filter(
-        (d) => d.enabled && d.name.trim() && d.basePricePaise != null && d.basePricePaise > 0
-      );
+      const toSave = catalogDrafts.filter(isPricedDraft);
       for (const d of toSave) {
         const item: CatalogItem = {
           id: d.key,
@@ -192,8 +192,15 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
             <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Services you bill for</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">
               We&apos;ve filled in common templates — edit group names, session counts, and prices. Uncheck
-              anything you don&apos;t offer. You need at least one priced item to continue.
+              anything you don&apos;t offer. You need a price on at least one item to continue.
             </p>
+            <button
+              type="button"
+              className="mt-2 text-sm font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setCatalogDrafts((rows) => zeroCatalogDrafts(rows))}
+            >
+              We don&apos;t charge patients here — set every price to ₹0
+            </button>
           </div>
           <ServiceCatalogTemplateEditor drafts={catalogDrafts} onChange={setCatalogDrafts} />
           <ErrorNote message={finishError} />

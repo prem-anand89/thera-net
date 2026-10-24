@@ -47,9 +47,19 @@ export function groupCatalogDrafts(drafts: CatalogTemplateDraft[]): Map<string, 
   return map;
 }
 
-/** At least one enabled row with a positive price — required to finish onboarding. */
+/** True for a row that has a price entered. ₹0 counts: a clinic that doesn't charge patients prices its services at 0. */
+export function isPricedDraft(d: CatalogTemplateDraft): boolean {
+  return d.enabled && Boolean(d.name.trim()) && d.basePricePaise != null && d.basePricePaise >= 0;
+}
+
+/** At least one enabled row with a price (₹0 allowed) — required to finish onboarding. */
 export function catalogDraftsReadyToSave(drafts: CatalogTemplateDraft[]): boolean {
-  return drafts.some((d) => d.enabled && d.name.trim() && d.basePricePaise != null && d.basePricePaise > 0);
+  return drafts.some(isPricedDraft);
+}
+
+/** "We don't charge patients": every price to ₹0, so the Payment card never appears on a visit. */
+export function zeroCatalogDrafts(drafts: CatalogTemplateDraft[]): CatalogTemplateDraft[] {
+  return drafts.map((d) => ({ ...d, basePricePaise: 0 }));
 }
 
 export function renameCatalogDraftGroup(

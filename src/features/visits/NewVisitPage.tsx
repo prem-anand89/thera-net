@@ -819,7 +819,6 @@ export function NewVisitPage() {
   }
 
   if (justSaved) {
-    const otherPrimaryShown = clinic.clinicalDocsEnabled || canBill || canCollectPayment;
     // Still owed on this visit (0 without billing access or when settled).
     const paymentDue = canCollectPayment
       ? Math.max(0, justSaved.billPaise - (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0))
@@ -833,6 +832,11 @@ export function NewVisitPage() {
       // Settled up front, or since (Take payment above).
       alreadyCollected: justSaved.alreadyCollected || (canBill && justSaved.billPaise > 0 && paymentDue === 0),
     };
+    // One clear next step: collect what is owed, else write the note, else bill; everything else is quieter.
+    const showBill = canBill && !justSaved.byPartner;
+    const primaryAction: 'payment' | 'note' | 'bill' | 'done' =
+      paymentDue > 0 ? 'payment' : clinic.clinicalDocsEnabled ? 'note' : showBill ? 'bill' : 'done';
+    const cls = (action: typeof primaryAction) => (primaryAction === action ? btnPrimary : btnSecondary);
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
@@ -844,14 +848,14 @@ export function NewVisitPage() {
           )}
           <div className="mt-4 flex flex-wrap gap-2">
             {paymentDue > 0 && (
-              <button type="button" className={btnPrimary} onClick={() => setTakingPayment(true)}>
+              <button type="button" className={cls('payment')} onClick={() => setTakingPayment(true)}>
                 Take payment · {formatINR(paymentDue)}
               </button>
             )}
-            {canBill && !justSaved.byPartner && (
+            {showBill && (
               <button
                 type="button"
-                className={paymentDue > 0 ? btnSecondary : btnPrimary}
+                className={cls('bill')}
                 onClick={() => setInvoicing(true)}
               >
                 Give bill
@@ -862,7 +866,7 @@ export function NewVisitPage() {
                 to="/patients/$patientId/notes/new"
                 params={{ patientId: justSaved.patientId }}
                 search={{ visitId: justSaved.visitId }}
-                className={btnPrimary}
+                className={cls('note')}
               >
                 Add clinical note
               </Link>
@@ -893,7 +897,7 @@ export function NewVisitPage() {
             )}
             <button
               type="button"
-              className={otherPrimaryShown ? btnSecondary : btnPrimary}
+              className="px-1 text-sm font-medium text-[var(--teal)] hover:underline"
               onClick={() => {
                 setJustSaved(null);
                 void navigate({
@@ -904,7 +908,7 @@ export function NewVisitPage() {
             >
               Log a separate visit for {justSaved.patientName}
             </button>
-            <button type="button" className={btnSecondary} onClick={goBack}>
+            <button type="button" className={cls('done')} onClick={goBack}>
               Done
             </button>
           </div>

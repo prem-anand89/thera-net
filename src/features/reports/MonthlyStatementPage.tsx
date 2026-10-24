@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { reportService, settlementService } from '@/services';
+import { dashboardService, reportService, settlementService } from '@/services';
+import { partnerName } from '@/domain/paymentMethods';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
@@ -45,6 +46,11 @@ export function MonthlyStatementPage() {
 
   const report = useLiveQuery(
     () => reportService.monthly(clinic.id, selected),
+    [clinic.id, selected.year, selected.month]
+  );
+
+  const collection = useLiveQuery(
+    () => dashboardService.monthlyCollection(clinic.id, selected),
     [clinic.id, selected.year, selected.month]
   );
 
@@ -165,7 +171,27 @@ export function MonthlyStatementPage() {
             </div>
           </div>
 
+          {/* Card 2, no partner: what was actually received. (With a partner the clinic's share is the figure that matters.) */}
+          {!partnerSplit && (
+            <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
+                Collected
+              </div>
+              <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--teal-strong)] truncate">
+                {collection ? formatINR(collection.collectedPaise) : '—'}
+              </div>
+              <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
+                {collection
+                  ? collection.billedPaise > collection.collectedPaise
+                    ? `${formatINR(collection.billedPaise - collection.collectedPaise)} still due`
+                    : 'Nothing due'
+                  : '—'}
+              </div>
+            </div>
+          )}
+
           {/* Card 2: Clinic Share (Net) */}
+          {partnerSplit && (
           <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
               {showPostTax ? `Post-Tax ${labels.own}` : `${labels.own} Share`}
@@ -181,6 +207,7 @@ export function MonthlyStatementPage() {
               )}
             </div>
           </div>
+          )}
 
           {/* Card 3: Partner Share (if applicable) */}
           {partnerSplit && (
@@ -260,7 +287,12 @@ export function MonthlyStatementPage() {
         <SettlementCard
           clinicId={clinic.id}
           month={selected}
-          expectedPaise={report?.total.postTaxPaise ?? null}
+          expectedPaise={
+            clinic.partnerCollects ? (report?.total.postTaxPaise ?? null) : (report?.total.partnerSharePaise ?? null)
+          }
+          partnerCollects={Boolean(clinic.partnerCollects)}
+          partnerCollectedPaise={collection?.partnerCollectedPaise ?? 0}
+          partnerCollectedVisits={collection?.partnerCollectedVisitCount ?? 0}
           labels={labels}
           showPostTax={showPostTax}
         />
@@ -283,12 +315,19 @@ function SettlementCard({
   clinicId,
   month,
   expectedPaise,
+  partnerCollects,
+  partnerCollectedPaise,
+  partnerCollectedVisits,
   labels,
   showPostTax,
 }: {
   clinicId: string;
   month: FyMonth;
   expectedPaise: Paise | null;
+  /** The partner collects patients' payments and owes the clinic its share; otherwise the clinic collects and owes the partner theirs. */
+  partnerCollects: boolean;
+  partnerCollectedPaise: Paise;
+  partnerCollectedVisits: number;
   labels: { own: string; partner: string };
   /** At 0% TDS the expected figure is still the clinic's computed share,
    *  just nothing was actually withheld from it — "Post Tax" would overstate
@@ -304,7 +343,14 @@ function SettlementCard({
   const [error, setError] = useState<string | null>(null);
 
   const totalReceivedPaise = (payments ?? []).reduce((sum, p) => sum + p.amountReceivedPaise, 0);
-  const variancePaise = payments && expectedPaise != null ? totalReceivedPaise - expectedPaise : null;
+  // Received from the partner: positive variance = they paid more than expected. Paid to the partner: what is still to pay.
+  const variancePaise =
+    payments && expectedPaise != null
+      ? partnerCollects
+        ? totalReceivedPaise - expectedPaise
+        : expectedPaise - totalReceivedPaise
+      : null;
+  const partner = partnerName(useClinic());
 
   async function remove(id: string) {
     setError(null);
@@ -318,11 +364,20 @@ function SettlementCard({
   return (
     <SectionCard title={`${labels.partner} settlement — ${monthName(month.month)} ${month.year}`}>
       <p className="text-sm text-[var(--muted)]">
-        Expected (computed {showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`}):{' '}
+        {partnerCollects
+          ? `Expected from ${partner} (computed ${showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`}):`
+          : `${labels.partner} share to pay (computed):`}{' '}
         <span className="font-medium text-[var(--ink)]">
           {expectedPaise != null ? formatINR(expectedPaise) : '—'}
         </span>
       </p>
+      {partnerCollectedPaise > 0 && (
+        <p className="text-sm text-[var(--muted)]">
+          Collected by {partner} this month:{' '}
+          <span className="font-medium text-[var(--ink)]">{formatINR(partnerCollectedPaise)}</span> (
+          {partnerCollectedVisits} visit{partnerCollectedVisits === 1 ? '' : 's'})
+        </p>
+      )}
 
       {payments && payments.length > 0 && (
         <div className="mt-3 divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
@@ -359,13 +414,14 @@ function SettlementCard({
       )}
 
       <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-        Total received: {formatINR(totalReceivedPaise as Paise)}
+        {partnerCollects ? 'Total received' : `Total paid to ${partner}`}: {formatINR(totalReceivedPaise as Paise)}
       </p>
       {variancePaise != null && (
         <p
           className={`text-sm font-medium ${variancePaise === 0 ? 'text-[var(--moss)]' : 'text-[var(--rust)]'}`}
         >
-          Variance: {variancePaise >= 0 ? '+' : ''}
+          {partnerCollects ? 'Variance' : 'Still to pay'}:{' '}
+          {partnerCollects && variancePaise >= 0 ? '+' : ''}
           {formatINR(variancePaise as Paise)}
         </p>
       )}
@@ -376,6 +432,7 @@ function SettlementCard({
             clinicId={clinicId}
             month={month}
             existing={editing}
+            paying={!partnerCollects}
             onDone={() => {
               setAdding(false);
               setEditing(null);
@@ -399,11 +456,14 @@ function SettlementPaymentForm({
   clinicId,
   month,
   existing,
+  paying,
   onDone,
 }: {
   clinicId: string;
   month: FyMonth;
   existing: SettlementPayment | null;
+  /** The clinic pays the partner (it collected the patients' money); otherwise the partner pays the clinic. */
+  paying: boolean;
   onDone: () => void;
 }) {
   const [amountPaise, setAmountPaise] = useState<Paise | null>(existing?.amountReceivedPaise ?? null);
@@ -437,10 +497,10 @@ function SettlementPaymentForm({
   return (
     <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Field label="Amount received">
+        <Field label={paying ? 'Amount paid' : 'Amount received'}>
           <RupeeInput valuePaise={amountPaise} onChange={setAmountPaise} />
         </Field>
-        <Field label="Received date">
+        <Field label={paying ? 'Paid on' : 'Received date'}>
           <input
             type="date"
             className={inputCls}

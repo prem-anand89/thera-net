@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   catalogDraftsReadyToSave,
+  zeroCatalogDrafts,
   createStarterCatalogDrafts,
   renameCatalogDraftGroup,
 } from './onboardingCatalogTemplates';
@@ -21,6 +22,12 @@ describe('onboardingCatalogTemplates', () => {
     expect(catalogDraftsReadyToSave(drafts)).toBe(false);
     drafts[0].basePricePaise = 100;
     expect(catalogDraftsReadyToSave(drafts)).toBe(true);
+  });
+
+  it('accepts ₹0 as a price, for a clinic that does not charge patients', () => {
+    const blank = createStarterCatalogDrafts().map((d) => ({ ...d, basePricePaise: null as number | null }));
+    expect(catalogDraftsReadyToSave(zeroCatalogDrafts(blank))).toBe(true);
+    expect(zeroCatalogDrafts(blank).every((d) => d.basePricePaise === 0)).toBe(true);
   });
 
   it('renames group on all drafts in that group', () => {

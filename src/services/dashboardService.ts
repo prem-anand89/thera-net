@@ -102,6 +102,9 @@ export interface MonthlyCollection {
    *  isn't 0%, it's undefined, and showing "0%" would read as a bad month
    *  rather than an inactive one. */
   collectionRatePct: number | null;
+  /** Of the month's visits, what the partner collected at its own counter (`partner` payments) — not in the clinic's hands. */
+  partnerCollectedPaise: Paise;
+  partnerCollectedVisitCount: number;
 }
 
 export interface RepeatVisitStats {
@@ -588,10 +591,18 @@ export function createDashboardService(repos: Repos) {
         directByVisitId.set(p.visitId, (directByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
       }
 
+      const partnerByVisitId = partnerPaymentsByVisit(directPayments);
       let billedPaise = 0;
       let collectedPaise = 0;
+      let partnerCollectedPaise = 0;
+      let partnerCollectedVisitCount = 0;
       for (const v of visits) {
         billedPaise += v.actualBillPaise;
+        const byPartner = partnerByVisitId.get(v.id) ?? 0;
+        if (byPartner > 0) {
+          partnerCollectedPaise += byPartner;
+          partnerCollectedVisitCount += 1;
+        }
         const state = computeVisitPaymentState(
           v.actualBillPaise,
           v.invoiceId,
@@ -606,6 +617,8 @@ export function createDashboardService(repos: Repos) {
         collectedPaise,
         collectionRatePct:
           billedPaise > 0 ? Math.round((collectedPaise / billedPaise) * 100) : null,
+        partnerCollectedPaise,
+        partnerCollectedVisitCount,
       };
     },
 

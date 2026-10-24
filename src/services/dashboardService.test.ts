@@ -573,6 +573,20 @@ describe('dashboardService.monthlyCollection', () => {
     fake = makeFakeRepos();
   });
 
+  it('reports what the partner collected for the month\'s visits', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1000) }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-06', actualBillPaise: rs(500) }));
+    const pay = (id: string, visitId: string, amount: number, method: 'cash' | 'partner') =>
+      fake.payments.set(id, { id, clinicId: 'clinic-1', visitId, amountPaise: amount, method, receivedDate: '2026-06-10', notes: null, updatedAt: '' } as Payment);
+    pay('p1', 'v1', rs(1000), 'partner');
+    pay('p2', 'v2', rs(500), 'cash');
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.partnerCollectedPaise).toBe(rs(1000));
+    expect(summary.partnerCollectedVisitCount).toBe(1);
+    expect(summary.collectedPaise).toBe(rs(1500));
+  });
+
   it('returns null collectionRatePct when nothing was billed that month', async () => {
     const svc = createDashboardService(fake.repos);
     const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
