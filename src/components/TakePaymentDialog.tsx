@@ -8,14 +8,8 @@ import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService, directPaymentService, paymentService, repos } from '@/services';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 import { toLocalDateStr } from '@/domain/schedule';
-
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank transfer' },
-  { value: 'cheque', label: 'Cheque' },
-];
+import { useClinic } from '@/app/clinicContext';
+import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 export function TakePaymentDialog({
   clinicId,
@@ -46,7 +40,9 @@ export function TakePaymentDialog({
   onClose: () => void;
 }) {
   const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
-  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const clinic = useClinic();
+  const methods = paymentMethodOptions(clinic);
+  const [method, setMethod] = useState<PaymentMethod>(() => defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
   // When the money actually arrived — today by default, not the visit's date:
   // collecting on an old visit would otherwise land in a past Daybook day.
   const today = toLocalDateStr(new Date());
@@ -154,6 +150,7 @@ export function TakePaymentDialog({
         }
       } else {
         await recordOne(parsedAmountPaise, method);
+        rememberPaymentMethod(clinic.id, method);
       }
       onClose();
     } catch (e) {
@@ -260,7 +257,7 @@ export function TakePaymentDialog({
                   value={s.method}
                   onChange={(e) => updateSplit(i, { method: e.target.value as PaymentMethod })}
                 >
-                  {METHODS.map((m) => (
+                  {methods.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
                     </option>
@@ -312,7 +309,7 @@ export function TakePaymentDialog({
                 value={method}
                 onChange={(e) => setMethod(e.target.value as PaymentMethod)}
               >
-                {METHODS.map((m) => (
+                {methods.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>

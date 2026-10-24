@@ -80,6 +80,7 @@ export const SETTINGS_CARDS: SettingsCard[] = [
   { id: 'settings-card-booking-online', title: 'Booking page', tab: 'booking', keywords: ['whatsapp', 'feedback', 'google review', 'booking page', 'booking link', 'slug', 'patient messages', 'review link'] },
   { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'general', keywords: ['booking hours', 'hours', 'closed day', 'weekly closed', 'holiday', 'closure', 'slot', 'appointment duration'] },
   { id: 'settings-card-clinical-docs', title: 'Clinical notes', tab: 'general', keywords: ['clinical', 'notes', 'documentation', 'soap', 'consultation', 'module'] },
+  { id: 'settings-card-payments', title: 'Payments', tab: 'general', keywords: ['payment', 'default', 'cash', 'upi', 'card', 'partner', 'hospital', 'collects', 'collected by'] },
   { id: 'settings-card-billing-invoicing', title: 'Billing & invoicing', tab: 'billing', keywords: ['gst', 'tax', 'invoice', 'prefix', 'upi', 'signature', 'fiscal year', 'who can bill', 'number'] },
   { id: 'settings-card-billing-partner', title: 'Partner & split', tab: 'billing', keywords: ['partner', 'split', 'revenue share', 'tds', 'hospital', 'share'] },
   { id: 'settings-card-account-plan', title: 'Your plan', tab: 'account', keywords: ['plan', 'tier', 'limit', 'seats', 'subscription'] },

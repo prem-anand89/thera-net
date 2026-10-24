@@ -6,15 +6,9 @@ import type { Paise } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import { directPaymentService } from '@/services';
+import { useClinic } from '@/app/clinicContext';
+import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 import { toFriendlyMessage } from '@/lib/errors';
-
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank transfer' },
-  { value: 'cheque', label: 'Cheque' },
-];
 
 export interface BulkCollectRow {
   visitId: string;
@@ -39,7 +33,9 @@ export function BulkCollectDialog({
   rows: BulkCollectRow[];
   onClose: () => void;
 }) {
-  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const clinic = useClinic();
+  const methods = paymentMethodOptions(clinic);
+  const [method, setMethod] = useState<PaymentMethod>(() => defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
   const [receivedDate, setReceivedDate] = useState(toLocalDateStr(new Date()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +53,7 @@ export function BulkCollectDialog({
         await directPaymentService.logPayment(clinicId, row.visitId, row.duePaise, method, receivedDate, null);
         done += 1;
       }
+      rememberPaymentMethod(clinic.id, method);
       onClose();
     } catch (e) {
       setError(
@@ -84,7 +81,7 @@ export function BulkCollectDialog({
         </p>
         <Field label="Method">
           <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
-            {METHODS.map((m) => (
+            {methods.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

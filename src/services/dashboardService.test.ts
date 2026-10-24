@@ -376,6 +376,15 @@ describe('dashboardService.receivedOnDate', () => {
     expect(await svc.receivedOnDate('clinic-1', '2026-06-10')).toBe(rs(800));
   });
 
+  it('leaves out what the partner collected — it never reached the clinic\'s drawer', async () => {
+    fake.visits.set('v1', baseVisit('v1', {}));
+    fake.visits.set('v2', baseVisit('v2', {}));
+    pay('p1', 'v1', rs(300), '2026-06-10');
+    pay('p2', 'v2', rs(500), '2026-06-10', { method: 'partner' });
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10')).toBe(rs(300));
+  });
+
   it('skips payments drawn from an advance, and only counts a therapist\'s own visits when scoped', async () => {
     fake.visits.set('v1', baseVisit('v1', { therapistId: 'th-prem' }));
     fake.visits.set('v2', baseVisit('v2', { therapistId: 'th-other' }));

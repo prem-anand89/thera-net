@@ -12,7 +12,8 @@ import { treatmentsDisplayText, patientIdentityLine } from './visit/formatters';
 import { PatientNameBlock } from './visit/VisitPatientBlock';
 import { SharedSplitLine, SharesRing } from './visit/VisitSharedSplit';
 import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './visit/VisitServiceDetails';
-import { PAYMENT_CHIP } from './visit/VisitPaymentDisplay';
+import { PAYMENT_CHIP, PartnerCollectedPill } from './visit/VisitPaymentDisplay';
+import { isFullyPartnerCollected } from '@/domain/paymentMethods';
 import { VisitNoteLink, VisitFeedbackLink } from './visit/VisitNotesFeedback';
 import { RowActionsMenu } from './visit/VisitRowActions';
 import { VisitTable, VisitColumnPicker } from './visit/VisitTable';
@@ -247,9 +248,13 @@ export function SharedVisitCard({
                 🔒
               </span>
             )}
-            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-              <span title={badge.title}>{badge.label}</span>
-            </Pill>
+            {badge.kind === 'paid' && isFullyPartnerCollected(data.billPaise, data.partnerCollectedPaise) ? (
+              <PartnerCollectedPill />
+            ) : (
+              <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                <span title={badge.title}>{badge.label}</span>
+              </Pill>
+            )}
           </div>
         )}
         <div className="flex flex-wrap items-center justify-end gap-1.5">

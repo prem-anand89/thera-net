@@ -5,6 +5,7 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
 import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
+import { paymentMethodLabel } from '@/domain/paymentMethods';
 import { DatePresetBar, DAYBOOK_DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
 
 // Local Y/M/D components
@@ -17,6 +18,8 @@ export function DaybookPage() {
   const [from, setFrom] = useState(todayIso);
   const [to, setTo] = useState(todayIso);
   const [preset, setPreset] = useState<DatePreset>('today');
+  // Short, readable method text for the table (UPI/CASH stay capitalised as before; the partner reads in full).
+  const methodText = (m: string) => (m === 'partner' ? paymentMethodLabel('partner', clinic) : m.toUpperCase());
 
   const yesterdayIso = useMemo(() => {
     const d = new Date();
@@ -84,8 +87,8 @@ export function DaybookPage() {
     return { payments, advances, visits, patients };
   }, [clinic.id, from, to], { payments: [], advances: [], visits: [], patients: [] });
 
-  const { cash, upi, card, other, total, transactions } = useMemo(() => {
-    let cash = 0, upi = 0, card = 0, other = 0;
+  const { cash, upi, card, other, partner, total, transactions } = useMemo(() => {
+    let cash = 0, upi = 0, card = 0, other = 0, partner = 0;
     const transactions: { id: string; date: string; patientName: string; type: string; method: string; amount: number; notes: string }[] = [];
 
     const patientNameById = new Map((data.patients ?? []).map((p) => [p.id, p.name]));
@@ -98,6 +101,7 @@ export function DaybookPage() {
         if (p.method === 'cash') cash += amt;
         else if (p.method === 'upi') upi += amt;
         else if (p.method === 'card') card += amt;
+        else if (p.method === 'partner') partner += amt;
         else other += amt;
 
         const visit = visitById.get(p.visitId);
@@ -133,6 +137,7 @@ export function DaybookPage() {
         if (a.method === 'cash') cash += amt;
         else if (a.method === 'upi') upi += amt;
         else if (a.method === 'card') card += amt;
+        else if (a.method === 'partner') partner += amt;
         else other += amt;
 
         const pName = patientNameById.get(a.patientId) ?? 'Unknown';
@@ -151,7 +156,8 @@ export function DaybookPage() {
 
     transactions.sort((a, b) => b.date.localeCompare(a.date));
 
-    return { cash, upi, card, other, total: cash + upi + card + other, transactions };
+    // `total` is money that reached the clinic; what the partner collected is shown on its own line.
+    return { cash, upi, card, other, partner, total: cash + upi + card + other, transactions };
   }, [data]);
 
   return (
@@ -212,6 +218,15 @@ export function DaybookPage() {
                     <td className={tdNum}>{formatINR(other)}</td>
                   </tr>
                 )}
+                {partner > 0 && (
+                  <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
+                    <td className={`${td} text-[var(--muted)]`}>
+                      {paymentMethodLabel('partner', clinic)}
+                      <span className="block text-xs">Not in your drawer — settled with them later</span>
+                    </td>
+                    <td className={`${tdNum} text-[var(--muted)]`}>{formatINR(partner)}</td>
+                  </tr>
+                )}
               </tbody>
               <tfoot>
                 <tr>
@@ -255,7 +270,7 @@ export function DaybookPage() {
                       {t.type}
                     </Pill>
                   </td>
-                  <td className={td}>{t.method === '—' ? '—' : t.method.toUpperCase()}</td>
+                  <td className={td}>{t.method === '—' ? '—' : methodText(t.method)}</td>
                   <td className={tdNum}>{formatINR(t.amount)}</td>
                   <td className={`${td} text-[var(--muted)] whitespace-normal break-words leading-snug`} title={t.notes}>{t.notes || '—'}</td>
                 </tr>
@@ -280,7 +295,7 @@ export function DaybookPage() {
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
                   <Pill tone="slate">{formatDateDMY(t.date)}</Pill>
-                  <Pill tone="slate">{t.method === '—' ? '—' : t.method.toUpperCase()}</Pill>
+                  <Pill tone="slate">{t.method === '—' ? '—' : methodText(t.method)}</Pill>
                   <Pill tone={t.type === 'Advance Deposit' ? 'amber' : t.type === 'Discount' ? 'rust' : t.type === 'Price Top-up' ? 'teal' : 'green'}>
                     {t.type}
                   </Pill>

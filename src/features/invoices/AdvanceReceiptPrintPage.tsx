@@ -10,14 +10,7 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
-
-const METHOD_LABEL: Record<string, string> = {
-  cash: 'Cash',
-  upi: 'UPI',
-  card: 'Card',
-  bank_transfer: 'Bank transfer',
-  cheque: 'Cheque',
-};
+import { paymentMethodLabel } from '@/domain/paymentMethods';
 
 export function AdvanceReceiptPrintPage() {
   const clinic = useClinic();
@@ -102,7 +95,7 @@ export function AdvanceReceiptPrintPage() {
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{amountInWords(advance.amountPaise)}</p>
           <p className="mt-3 text-sm text-[var(--ink)]">
-            Received via {METHOD_LABEL[advance.method] ?? advance.method}
+            Received via {paymentMethodLabel(advance.method, clinic)}
           </p>
           {advance.notes && <p className="mt-1 text-sm text-[var(--muted)]">{advance.notes}</p>}
         </div>

@@ -19,6 +19,7 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   card: 'Card',
   bank_transfer: 'Bank Transfer',
   cheque: 'Cheque',
+  partner: 'Collected by partner',
 };
 
 /**

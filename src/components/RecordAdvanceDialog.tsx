@@ -7,14 +7,8 @@ import { formatINR, rupeesToPaise } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService } from '@/services';
-
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank transfer' },
-  { value: 'cheque', label: 'Cheque' },
-];
+import { useClinic } from '@/app/clinicContext';
+import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 /** Record money received ahead of treatment (Billing & Notes Rebuild Phase
  *  1, 1.6) — not tied to a visit, so this is its own small dialog rather
@@ -34,7 +28,9 @@ export function RecordAdvanceDialog({
 }) {
   const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [amountRupees, setAmountRupees] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const clinic = useClinic();
+  const methods = paymentMethodOptions(clinic);
+  const [method, setMethod] = useState<PaymentMethod>(() => defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
   const [receivedDate, setReceivedDate] = useState(() => toLocalDateStr(new Date()));
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -61,6 +57,7 @@ export function RecordAdvanceDialog({
         receivedDate,
         notes.trim() || null
       );
+      rememberPaymentMethod(clinic.id, method);
       setRecorded({ advanceId: advance.id });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not record the advance');
@@ -84,14 +81,17 @@ export function RecordAdvanceDialog({
               {patientLabel}. It's available to apply against a future bill.
             </p>
             <div className="flex justify-end gap-2">
-              <Link
-                to="/patients/$patientId/advances/$advanceId/print"
-                params={{ patientId, advanceId: recorded.advanceId }}
-                search={backTo ? { from: backTo } : undefined}
-                className={btnSecondary}
-              >
-                Print receipt
-              </Link>
+              {/* A receipt is for money the clinic received; the partner's counter issued its own. */}
+              {method !== 'partner' && (
+                <Link
+                  to="/patients/$patientId/advances/$advanceId/print"
+                  params={{ patientId, advanceId: recorded.advanceId }}
+                  search={backTo ? { from: backTo } : undefined}
+                  className={btnSecondary}
+                >
+                  Print receipt
+                </Link>
+              )}
               <button type="button" className={btnPrimary} onClick={onClose}>
                 Done
               </button>
@@ -121,7 +121,7 @@ export function RecordAdvanceDialog({
                 value={method}
                 onChange={(e) => setMethod(e.target.value as PaymentMethod)}
               >
-                {METHODS.map((m) => (
+                {methods.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>

@@ -190,7 +190,17 @@ export function SetOnceEditButton({ label, onClick }: { label: string; onClick: 
  *  instead of a 3-way role), so a feature flag reads the same way a role
  *  or status does elsewhere in Settings, instead of as a plain browser
  *  &lt;select&gt;. */
-export function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+export function BoolToggle({
+  value,
+  onChange,
+  offLabel = 'Off',
+  onLabel = 'On',
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  offLabel?: string;
+  onLabel?: string;
+}) {
   return (
     <div className="flex gap-1.5">
       {([false, true] as const).map((v) => {
@@ -207,7 +217,7 @@ export function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: 
               color: selected ? 'var(--teal)' : 'var(--muted)',
             }}
           >
-            {v ? 'On' : 'Off'}
+            {v ? onLabel : offLabel}
           </button>
         );
       })}

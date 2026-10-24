@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
 const logPayment = vi.fn();
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false, defaultPaymentMethod: 'cash' }) }));
 vi.mock('@/services', () => ({
   repos: {
     invoices: { get: () => undefined },

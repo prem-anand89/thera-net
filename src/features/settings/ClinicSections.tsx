@@ -4,7 +4,8 @@ import { PhoneField } from '@/components/PhoneField';
 import { useEffect, useMemo, useState } from 'react';
 import { visitService } from '@/services';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
-import { type Clinic } from '@/domain/types';
+import { type Clinic, type PaymentMethod } from '@/domain/types';
+import { paymentMethodLabel, paymentMethodOptions, partnerName } from '@/domain/paymentMethods';
 import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { LetterheadPreview } from './LetterheadPreview';
 import { clampBufferHours } from './shiftUtils';
@@ -798,6 +799,100 @@ export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: 
               }
             >
               <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
+            </Field>
+          </div>
+        </fieldset>
+        {editing && (
+          <SectionSaveBar
+            dirty={dirty}
+            saved={saved}
+            busy={busy}
+            onSave={() => void save()}
+            onCancel={() => {
+              cancel();
+              setEditing(false);
+            }}
+            error={error}
+          />
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+type PaymentsFields = Pick<Clinic, 'partnerCollects' | 'defaultPaymentMethod'>;
+
+/**
+ * What payment screens start with, and — for a clinic with a partner — who collects the patient's money.
+ * On General (not Billing) so every plan reaches it.
+ */
+export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { clinic, form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<PaymentsFields>(
+    (c) => ({ partnerCollects: c.partnerCollects ?? false, defaultPaymentMethod: c.defaultPaymentMethod ?? null }),
+    onDirtyChange
+  );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
+  const hasPartner = Boolean(clinic.hasPartner);
+  const partnerCollects = hasPartner && Boolean(form.partnerCollects);
+  const options = paymentMethodOptions(clinic);
+  const name = partnerName(clinic);
+
+  return (
+    <div className="mt-6">
+      <SectionCard
+        id="settings-card-payments"
+        title="Payments"
+        action={editing ? undefined : <SetOnceEditButton label="Edit payments" onClick={() => setEditing(true)} />}
+      >
+        <fieldset disabled={!editing} className="contents">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {hasPartner && (
+              <Field
+                label={
+                  <>
+                    Who collects patient payments?
+                    <InfoTip text="We do: patients pay the clinic and you settle the partner's share. The partner does: patients pay at the partner's counter and the partner settles with you. Either way you can change it on a single visit." />
+                  </>
+                }
+              >
+                <BoolToggle
+                  value={partnerCollects}
+                  onChange={(v) => set({ partnerCollects: v })}
+                  offLabel="We do"
+                  onLabel={`${name} does`}
+                />
+              </Field>
+            )}
+            <Field
+              label={
+                <>
+                  Default payment method
+                  <InfoTip text="What New Visit, Take payment and Record advance start with. Staff can still pick another method on any payment." />
+                </>
+              }
+            >
+              <select
+                className={inputCls}
+                disabled={partnerCollects}
+                value={partnerCollects ? 'partner' : (form.defaultPaymentMethod ?? '')}
+                onChange={(e) => set({ defaultPaymentMethod: (e.target.value || null) as PaymentMethod | null })}
+              >
+                {partnerCollects ? (
+                  <option value="partner">{paymentMethodLabel('partner', clinic)}</option>
+                ) : (
+                  <>
+                    <option value="">Last one used on this device</option>
+                    {options.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
             </Field>
           </div>
         </fieldset>

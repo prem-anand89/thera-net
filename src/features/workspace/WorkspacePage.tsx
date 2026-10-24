@@ -176,6 +176,7 @@ export function todayRowToCardData(
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
     collectedPaise: row.collectedPaise,
+    partnerCollectedPaise: row.partnerCollectedPaise,
     issuedAt: row.issuedAt,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
     canSplit: therapistSplit && row.billPaise > 0 && canModify,

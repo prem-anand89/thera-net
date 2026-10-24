@@ -64,6 +64,7 @@ import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { PatientsList } from '@/features/patients/PatientsPage';
 import { DaybookPage } from './DaybookPage';
 import { DatePresetBar, DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
+import { partnerPaymentsByVisit } from '@/domain/paymentMethods';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
@@ -125,7 +126,8 @@ export function visitToCardData(
   responseByRequestId: Map<UUID, FeedbackResponse>,
   googleReviewEligibleIds: Set<UUID>,
   googleReviewUrl: string | null,
-  details?: VisitDetails
+  details?: VisitDetails,
+  partnerPaymentByVisitId?: Map<UUID, number>
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -176,6 +178,7 @@ export function visitToCardData(
     paymentState,
     invoiceId: v.invoiceId ?? null,
     collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
+    partnerCollectedPaise: partnerPaymentByVisitId?.get(v.id) ?? 0,
     issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
     editedBy,
     syncError: syncErrorByVisitId.get(v.id) ?? null,
@@ -479,6 +482,7 @@ export function LedgerPage() {
     }
     return map;
   }, [directPayments]);
+  const partnerPaymentByVisitId = useMemo(() => partnerPaymentsByVisit(directPayments ?? []), [directPayments]);
   // D2's Overdue anchor (max(visitDate, issuedAt)) needs an invoice's issue
   // date, which statusByInvoiceId (from invoice_payments) doesn't carry —
   // a separate map off the same invoices list this page's Invoices tab
@@ -583,7 +587,8 @@ export function LedgerPage() {
           responseByRequestId,
           googleReviewEligibleIds,
           clinic.googleReviewUrl ?? null,
-          visitDetails.get(v.id)
+          visitDetails.get(v.id),
+          partnerPaymentByVisitId
         )
       ),
     [
@@ -598,6 +603,7 @@ export function LedgerPage() {
       canShareRevenue,
       statusByInvoiceId,
       directPaymentByVisitId,
+      partnerPaymentByVisitId,
       issuedAtByInvoiceId,
       isAdmin,
       isFrontDesk,

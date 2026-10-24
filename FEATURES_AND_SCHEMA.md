@@ -1533,7 +1533,9 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              admin changes hasPartner/bmSplitPct/taxPct/
                              tdsBasis/clinicType; Workspace shows a 14-day
                              "your split changed on X" banner off this
-billing_enabled              boolean NOT NULL
+billing_enabled              boolean NOT NULL — legacy: no longer read or editable (billing is always on); server invoice checks still read it (all true)
+partner_collects             boolean NOT NULL DEFAULT false — the partner collects patients' payments (only with has_partner)
+default_payment_method       text NULL — what payment screens preselect (CHECK: the six methods)
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — 'on_request' | 'always' | 'never_nag'
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
@@ -2082,7 +2084,7 @@ id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
 amount_paise    bigint NOT NULL
-method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
 received_date   date NOT NULL
 notes           text (NULLABLE)
 advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
@@ -2111,7 +2113,7 @@ id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
 amount_paise    bigint NOT NULL (> 0)
-method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
 received_date   date NOT NULL
 receipt_no      text (NULLABLE) — no numbered series yet, see below
 notes           text (NULLABLE)
@@ -2804,7 +2806,7 @@ the tier plan:
   the existing pattern `LedgerPage.tsx`/`ReportsPage.tsx` already use for a
   role changing mid-session.
 
-**Lite can collect, not invoice.** `usePermissions().canCollectPayment` (`collectPaymentAllowed`) is `canBill` without the plan term (`invoicingAccess`, plus `billingEnabled` — which is ignored on a plan without invoicing, since Lite cannot reach that switch and collecting cash isn't billing), so a Lite clinic records direct payments on a visit (`Collect ₹X`, the "Due" footer and Not-collected filter all stay meaningful) and is never told to "Ask billing" — that pill shows only when the user can neither invoice nor collect. New Visit's **Payment** card (Collected now / Take payment later, method, UPI QR), the post-save "Take payment" button and Workspace's Dues tile, Patient Profile's "Record advance" and Ledger's **Daybook** tab (a register of payments received, with no invoice dependency; Ledger's Invoices tab stays `canBill`) all follow `canCollectPayment`, so a Lite visit can be saved as collected in the form itself; "Give bill" and the invoice-policy prompt stay on `canBill`. Visit components take a separate `canCollect` prop (defaults to `canInvoice`); issuing an invoice stays on `canInvoice`/`canBill`. **Lite UX around the plan limits.** (1) *Visit cap:* the 50-visits/month block stays, but `VisitCapNotice` (New visit page and Settings → Your plan) warns from 80% (`visitCapStatus`, `VISIT_CAP_WARN_AT` in `src/domain/plans.ts`) and says so plainly when reached, with an "Ask to upgrade" mailto from `upgradeMailto()` (`src/lib/support.ts`, needs `VITE_SUPPORT_EMAIL`; without it the text is "Contact us to upgrade"); the save error says nothing entered is lost. (2) *Seat cap:* hitting the login limit no longer hides the Add team member form — `loginsLocked` turns "Needs login" off and disables it with a hint, so a no-login roster therapist (bookable, appears on the schedule) can always be added. (3) *Monthly statement:* `usePermissions().canViewMonthlyStatement` (admin, any plan) gates Reports → Monthly statement; without a partner/therapist split configured it is billed totals, visits and patients. The Attribution audit stays on `canViewPayouts` (`revenueSplit`).
+**Lite can collect, not invoice.** `usePermissions().canCollectPayment` (`collectPaymentAllowed`) is `canBill` without the plan term (`invoicingAccess`, plus `billingEnabled` — which is ignored on a plan without invoicing, since Lite cannot reach that switch and collecting cash isn't billing), so a Lite clinic records direct payments on a visit (`Collect ₹X`, the "Due" footer and Not-collected filter all stay meaningful) and is never told to "Ask billing" — that pill shows only when the user can neither invoice nor collect. New Visit's **Payment** card (Collected now / Take payment later, method, UPI QR), the post-save "Take payment" button and Workspace's Dues tile, Patient Profile's "Record advance" and Ledger's **Daybook** tab (a register of payments received, with no invoice dependency; Ledger's Invoices tab stays `canBill`) all follow `canCollectPayment`, so a Lite visit can be saved as collected in the form itself; "Give bill" and the invoice-policy prompt stay on `canBill`. Visit components take a separate `canCollect` prop (defaults to `canInvoice`); issuing an invoice stays on `canInvoice`/`canBill`. **Payments for every clinic (billing is always on).** The "Billing module" off switch is gone: collecting a payment depends only on `invoicing_access` (`collectPaymentAllowed`), never on plan or partner settings. A partner that collects at its own counter is a payment method, `partner`, offered only when `hasPartner` and labelled **"Collected by {partner name}"** (`paymentMethodLabel`, `src/domain/paymentMethods.ts`). It settles the visit (no dues) but is not cash in hand: `isCashInHand()` keeps it out of Workspace "Collected" (`receivedOnDate`), `paymentService.collected*`, and the Daybook total, which shows it on its own muted line ("Not in your drawer — settled with them later"). A visit whose whole bill the partner collected (`isFullyPartnerCollected`, from `VisitCardData.partnerCollectedPaise`) shows a slate "Collected by …" pill instead of the green Paid, is left out of Needs receipt, cannot be selected for an invoice or given a bill, and its advance has no printable receipt. Settings → General **Payments** card: "Who collects patient payments?" (We do / {Partner} does, only with a partner) and "Default payment method". Preselect order in New Visit / Take payment / Bulk collect / Record advance (`defaultPaymentMethod`): partner when it collects → clinic default → the method last used on this device (only when the clinic set no default) → UPI. Migration `20261025120000`. **Lite UX around the plan limits.** (1) *Visit cap:* the 50-visits/month block stays, but `VisitCapNotice` (New visit page and Settings → Your plan) warns from 80% (`visitCapStatus`, `VISIT_CAP_WARN_AT` in `src/domain/plans.ts`) and says so plainly when reached, with an "Ask to upgrade" mailto from `upgradeMailto()` (`src/lib/support.ts`, needs `VITE_SUPPORT_EMAIL`; without it the text is "Contact us to upgrade"); the save error says nothing entered is lost. (2) *Seat cap:* hitting the login limit no longer hides the Add team member form — `loginsLocked` turns "Needs login" off and disables it with a hint, so a no-login roster therapist (bookable, appears on the schedule) can always be added. (3) *Monthly statement:* `usePermissions().canViewMonthlyStatement` (admin, any plan) gates Reports → Monthly statement; without a partner/therapist split configured it is billed totals, visits and patients. The Attribution audit stays on `canViewPayouts` (`revenueSplit`).
 
 The **Clinical notes** toggle (`clinicalDocsEnabled`) lives on Settings → General (`ClinicalDocsSection`), not in the plan-locked Billing tab.
 
@@ -3475,7 +3477,9 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              admin changes hasPartner/bmSplitPct/taxPct/
                              tdsBasis/clinicType; Workspace shows a 14-day
                              "your split changed on X" banner off this
-billing_enabled              boolean NOT NULL
+billing_enabled              boolean NOT NULL — legacy: no longer read or editable (billing is always on); server invoice checks still read it (all true)
+partner_collects             boolean NOT NULL DEFAULT false — the partner collects patients' payments (only with has_partner)
+default_payment_method       text NULL — what payment screens preselect (CHECK: the six methods)
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — 'on_request' | 'always' | 'never_nag'
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
@@ -4024,7 +4028,7 @@ id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
 amount_paise    bigint NOT NULL
-method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
 received_date   date NOT NULL
 notes           text (NULLABLE)
 advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
@@ -4053,7 +4057,7 @@ id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
 amount_paise    bigint NOT NULL (> 0)
-method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
 received_date   date NOT NULL
 receipt_no      text (NULLABLE) — no numbered series yet, see below
 notes           text (NULLABLE)

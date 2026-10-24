@@ -2,7 +2,21 @@ import { Pill } from '@/components/ui';
 import { formatINR } from '@/domain/money';
 import type { PaymentBadgeKind } from '@/domain/paymentState';
 import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
+import { useClinic } from '@/app/clinicContext';
+import { isFullyPartnerCollected, paymentMethodLabel } from '@/domain/paymentMethods';
 import type { VisitCardData } from './types';
+
+/** The pill for a visit whose whole bill the partner collected: slate, so it never reads as cash in hand. */
+export function PartnerCollectedPill() {
+  const clinic = useClinic();
+  return (
+    <Pill tone="slate">
+      <span className="whitespace-nowrap" title="The partner took this payment at its counter">
+        {paymentMethodLabel('partner', clinic)}
+      </span>
+    </Pill>
+  );
+}
 
 /**
  * Pill/button color per `paymentBadge()` kind (Billing & Notes Rebuild
@@ -88,6 +102,8 @@ export function PaymentStatusDisplay({
           >
             Collect {formatINR(data.billPaise - data.collectedPaise)}
           </button>
+        ) : badge.kind === 'paid' && isFullyPartnerCollected(data.billPaise, data.partnerCollectedPaise) ? (
+          <PartnerCollectedPill />
         ) : (
           <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
             <span className="whitespace-nowrap" title={badge.title}>

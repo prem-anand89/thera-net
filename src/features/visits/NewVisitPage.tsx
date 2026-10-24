@@ -82,6 +82,7 @@ import {
 import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
+import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 // UPI first — the most common collection method at an Indian clinic front
 // desk, so it's both the default (see paymentMethod's useState below) and
@@ -92,14 +93,6 @@ import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 const EMPTY_TREATMENTS: TreatmentItem[] = [];
 const EMPTY_PACKAGES: OpenPackage[] = [];
 const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
-
-const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'upi', label: 'UPI' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank transfer' },
-  { value: 'cheque', label: 'Cheque' },
-];
 
 /** Compact reference card for the patient side panel — last visit / open
  *  package are more decision-relevant here than an outstanding-balance
@@ -243,7 +236,10 @@ export function NewVisitPage() {
     }
   }, [role, clinicalDetailsExpanded, condition]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
+  const paymentMethods = paymentMethodOptions(clinic);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
+    defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id))
+  );
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   // On a phone the Save button is in the fixed bar, far from this message — bring it into view.
@@ -265,6 +261,8 @@ export function NewVisitPage() {
     serviceLabel: string;
     isPackage: boolean;
     alreadyCollected: boolean;
+    /** The whole bill was collected by the partner: no clinic bill is offered. */
+    byPartner?: boolean;
     therapistId: UUID;
     billPaise: number;
     visitDate: string;
@@ -767,6 +765,7 @@ export function NewVisitPage() {
             receivedDateAtVisit(visitDate, today),
             null
           );
+          rememberPaymentMethod(clinic.id, paymentMethod);
         } catch (paymentFailure) {
           // The visit is already saved. Falling into the outer catch would keep
           // the form open and a second Save would log the same visit again.
@@ -798,6 +797,7 @@ export function NewVisitPage() {
         serviceLabel,
         isPackage: rows.some((r) => r.continuation),
         alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
+        byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
         paymentError,
         therapistId,
         billPaise,
@@ -807,7 +807,7 @@ export function NewVisitPage() {
       setFeedbackRequested(false);
       // Clinic policy "always": the bill step opens straight after a paid visit
       // (still the usual review-then-issue dialog, never issued silently).
-      if (clinic.invoicePolicy === 'always' && billPaise > 0 && canBill && paymentChoice === 'paid' && !paymentError) {
+      if (clinic.invoicePolicy === 'always' && billPaise > 0 && canBill && paymentChoice === 'paid' && paymentMethod !== 'partner' && !paymentError) {
         setInvoicing(true);
       }
     } catch (e) {
@@ -848,7 +848,7 @@ export function NewVisitPage() {
                 Take payment · {formatINR(paymentDue)}
               </button>
             )}
-            {canBill && (
+            {canBill && !justSaved.byPartner && (
               <button
                 type="button"
                 className={paymentDue > 0 ? btnSecondary : btnPrimary}
@@ -937,7 +937,7 @@ export function NewVisitPage() {
   const savePayment: SavePayment =
     billPaise > 0 && canCollectPayment
       ? paymentChoice === 'paid'
-        ? { kind: 'now', methodLabel: PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label ?? '' }
+        ? { kind: 'now', methodLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label ?? '' }
         : { kind: 'later' }
       : { kind: 'none' };
 
@@ -1456,7 +1456,7 @@ export function NewVisitPage() {
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                   >
-                    {PAYMENT_METHODS.map((m) => (
+                    {paymentMethods.map((m) => (
                       <option key={m.value} value={m.value}>
                         {m.label}
                       </option>

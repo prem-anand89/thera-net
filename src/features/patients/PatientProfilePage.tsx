@@ -31,6 +31,7 @@ import {
 import { formatINR } from '@/domain/money';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+import { partnerPaymentsByVisit, isFullyPartnerCollected } from '@/domain/paymentMethods';
 import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
@@ -133,6 +134,7 @@ export function PatientProfilePage() {
   // Same fact-set as Ledger's payment chip (domain/paymentState.ts) — a
   // direct payment counts as collected even if the invoice's own status
   // row still says outstanding, or there's no invoice at all.
+  const partnerPaymentByVisitId = useMemo(() => partnerPaymentsByVisit(directPayments ?? []), [directPayments]);
   const directPaymentByVisitId = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of directPayments ?? []) {
@@ -323,6 +325,7 @@ export function PatientProfilePage() {
           ),
           invoiceId: v.invoiceId ?? null,
           collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
+          partnerCollectedPaise: partnerPaymentByVisitId.get(v.id) ?? 0,
           issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
           canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
           // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
@@ -354,6 +357,7 @@ export function PatientProfilePage() {
       therapistName,
       treatmentName,
       directPaymentByVisitId,
+      partnerPaymentByVisitId,
       statusByInvoiceId,
       issuedAtByInvoiceId,
       openPackageIds,
@@ -400,7 +404,10 @@ export function PatientProfilePage() {
   // invoiced) or, without billing, a payment (still owed). Anything else
   // drops out of the selection on its own, e.g. visits that just got invoiced.
   const isSelectableRow = useCallback(
-    (row: VisitCardData) => (canBill ? !row.invoiceId : canCollectPayment && hasDue(row.paymentState)),
+    (row: VisitCardData) =>
+      canBill
+        ? !row.invoiceId && !isFullyPartnerCollected(row.billPaise, row.partnerCollectedPaise)
+        : canCollectPayment && hasDue(row.paymentState),
     [canBill, canCollectPayment]
   );
   const selectedRows = useMemo(

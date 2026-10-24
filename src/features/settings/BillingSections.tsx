@@ -15,7 +15,6 @@ type BillingFields = Pick<
   | 'invoicePrefix'
   | 'gstNo'
   | 'fyStartMonth'
-  | 'billingEnabled'
   | 'invoicingAccess'
   | 'invoicePolicy'
   | 'upiVpa'
@@ -31,7 +30,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         invoicePrefix: c.invoicePrefix,
         gstNo: c.gstNo,
         fyStartMonth: c.fyStartMonth,
-        billingEnabled: c.billingEnabled ?? true,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
         invoicePolicy: c.invoicePolicy ?? 'on_request',
         upiVpa: c.upiVpa ?? '',
@@ -121,20 +119,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
           </select>
         </Field>
         <Field
-          label={
-            <>
-              Billing module
-              <InfoTip text="Off for clinics that bill entirely through a partner's own system — hides Invoices everywhere, for everyone, regardless of role." />
-            </>
-          }
-        >
-          <BoolToggle
-            value={form.billingEnabled ?? true}
-            onChange={(v) => set({ billingEnabled: v })}
-          />
-        </Field>
-        {form.billingEnabled && (
-          <Field
             label={
               <>
                 Who can issue invoices
@@ -153,9 +137,7 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
               <option value="billing_staff">Front desk and admins only</option>
             </select>
           </Field>
-        )}
-        {form.billingEnabled && (
-          <Field
+        <Field
             label={
               <>
                 Bills after a visit
@@ -173,7 +155,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
               <option value="never_nag">Never remind — hide the Needs receipt list</option>
             </select>
           </Field>
-        )}
       </div>
 
       <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">

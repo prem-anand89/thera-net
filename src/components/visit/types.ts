@@ -39,6 +39,8 @@ export interface VisitCardData {
    *  read for the `partially_collected` "of" form and the Collect button's
    *  outstanding-amount calculation. */
   collectedPaise: Paise;
+  /** The part of `collectedPaise` the partner collected (a `partner` payment). Optional: only the builders that know payment methods set it. */
+  partnerCollectedPaise?: Paise;
   /** This visit's invoice's `issuedAt`, or null if uninvoiced — required so
    *  every builder assigns it; feeds `paymentBadge()`'s D2
    *  `max(visitDate, issuedAt)` Overdue anchor. */

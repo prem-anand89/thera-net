@@ -17,7 +17,7 @@ export interface Permissions {
   canViewClinicalNotes: boolean;
   /**
    * Issuing invoices / collecting payment at point of care. False for
-   * everyone when `clinic.billingEnabled` is off (the clinic doesn't use
+   * everyone when the legacy `billingEnabled` flag was off (no longer read; billing is always on
    * the module at all); otherwise false for a plain therapist when
    * `clinic.invoicingAccess` is 'billing_staff'. Display-level only — the
    * real boundary is `issue_invoice()`'s own check on the same two fields.
@@ -61,30 +61,22 @@ export interface Permissions {
  * a different question from what this hook answers.
  */
 /**
- * Recording a payment against a visit. The clinic's "Billing module" switch
- * means "someone else bills" and stops collecting on a plan that has invoicing;
- * on a plan without it (Lite) the switch is out of reach (the Billing tab is
- * locked) and collecting cash isn't billing, so it is ignored there. While the
- * plan is still loading it is not ignored, so a paid clinic with the switch
- * off never flashes payment buttons.
+ * Recording a payment against a visit. Billing is always on, so this is only the clinic's
+ * "who can bill" preference: everyone, or admin and front desk when a billing desk exists.
+ * Not tied to the plan (Lite collects without invoicing) or to partner settings.
  */
 export function collectPaymentAllowed(input: {
-  billingEnabled: boolean;
   invoicingAccess: 'everyone' | 'billing_staff';
   isAdmin: boolean;
   isFrontDesk: boolean;
-  planHasInvoicing: boolean;
-  planLoading: boolean;
 }): boolean {
-  const switchOk = input.billingEnabled || (!input.planLoading && !input.planHasInvoicing);
-  return switchOk && (input.invoicingAccess === 'everyone' || input.isAdmin || input.isFrontDesk);
+  return input.invoicingAccess === 'everyone' || input.isAdmin || input.isFrontDesk;
 }
 
 export function usePermissions(): Permissions {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const entitlements = useEntitlements(clinic.id);
-  const billingEnabled = clinic.billingEnabled ?? true;
   const invoicingAccess = clinic.invoicingAccess ?? 'everyone';
   return {
     role: scope.role,
@@ -95,22 +87,18 @@ export function usePermissions(): Permissions {
     canViewPayouts: scope.isAdmin && entitlements.can('revenueSplit'),
     canViewClinicalNotes: !scope.isFrontDesk,
     // Plan tier is the outermost gate (a Lite clinic can't bill no matter
-    // what billingEnabled/invoicingAccess say — see issue_invoice()'s own
+    // what invoicingAccess says — see issue_invoice()'s own
     // precedence), then the two existing clinic-owned preferences.
     canBill:
       entitlements.can('invoicing') &&
-      billingEnabled &&
       (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
     entitlementsLoading: entitlements.loading,
     canPrintNotes: entitlements.can('notePrinting'),
     canViewMonthlyStatement: scope.isAdmin,
     canCollectPayment: collectPaymentAllowed({
-      billingEnabled,
       invoicingAccess,
       isAdmin: scope.isAdmin,
       isFrontDesk: scope.isFrontDesk,
-      planHasInvoicing: entitlements.can('invoicing'),
-      planLoading: entitlements.loading,
     }),
   };
 }

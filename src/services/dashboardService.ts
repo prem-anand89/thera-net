@@ -26,6 +26,7 @@ import {
 } from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
 import { createReportService, type MonthlyReport } from './reportService';
+import { isCashInHand, isFullyPartnerCollected, partnerPaymentsByVisit } from '@/domain/paymentMethods';
 
 export interface OpenPackageRow {
   packageGroupId: UUID;
@@ -242,6 +243,8 @@ export interface TodayVisitRow {
   /** Sum of direct `payments` rows against this visit — see
    *  `VisitCardData.collectedPaise` in `VisitCard.tsx`. */
   collectedPaise: Paise;
+  /** The part of `collectedPaise` the partner collected. */
+  partnerCollectedPaise?: Paise;
   /** This visit's invoice's `issuedAt`, or null — see
    *  `VisitCardData.issuedAt` in `VisitCard.tsx`. */
   issuedAt: string | null;
@@ -374,7 +377,9 @@ export function createDashboardService(repos: Repos) {
      * counts a bill whose cash came another day.
      */
     async receivedOnDate(clinicId: UUID, date: string, therapistId?: UUID): Promise<Paise> {
-      const payments = (await repos.payments.listByDate(clinicId, date)).filter((p) => !p.advanceId);
+      const payments = (await repos.payments.listByDate(clinicId, date)).filter(
+        (p) => !p.advanceId && isCashInHand(p.method)
+      );
       let ownVisitIds: Set<UUID> | null = null;
       if (therapistId) {
         const visits = await repos.visits.list({ clinicId, therapistId });
@@ -385,7 +390,7 @@ export function createDashboardService(repos: Repos) {
         .reduce((sum, p) => sum + p.amountPaise, 0);
       if (!therapistId) {
         const advances = await repos.patientAdvances.listByDate(clinicId, date);
-        total += advances.reduce((sum, a) => sum + a.amountPaise, 0);
+        total += advances.filter((a) => isCashInHand(a.method)).reduce((sum, a) => sum + a.amountPaise, 0);
       }
       return total;
     },
@@ -525,6 +530,7 @@ export function createDashboardService(repos: Repos) {
           (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise
         );
       }
+      const partnerByVisitId = partnerPaymentsByVisit(directPayments);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
 
@@ -539,6 +545,8 @@ export function createDashboardService(repos: Repos) {
           v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
         );
         if (state !== 'collected_no_receipt') continue;
+        // The partner billed the patient: nothing for the clinic to give a receipt for.
+        if (isFullyPartnerCollected(v.actualBillPaise, partnerByVisitId.get(v.id))) continue;
         const patient = patientById.get(v.patientId);
         rows.push({
           visitId: v.id,
@@ -1059,6 +1067,7 @@ export function createDashboardService(repos: Repos) {
         directPaymentByVisitId.set(p.visitId, existing + p.amountPaise);
       });
 
+      const partnerByVisitId = partnerPaymentsByVisit(directPayments);
       const rows: TodayVisitRow[] = visits
         .map((v): TodayVisitRow => {
           const patient = patientById.get(v.patientId);
@@ -1100,6 +1109,7 @@ export function createDashboardService(repos: Repos) {
             needsNote: v.clinicalStatus === 'pending',
             consultationNoteId: v.consultationNoteId ?? null,
             collectedPaise: directPaymentAmount,
+            partnerCollectedPaise: partnerByVisitId.get(v.id) ?? 0,
             issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
           };
         })

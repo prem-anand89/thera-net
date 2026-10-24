@@ -5,6 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const logPayment = vi.fn();
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false, defaultPaymentMethod: 'cash' }) }));
 vi.mock('@/services', () => ({
   directPaymentService: { logPayment: (...a: unknown[]) => logPayment(...a) },
 }));

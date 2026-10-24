@@ -81,8 +81,12 @@ export interface Clinic {
    * for the full rule before adding a new notes entry point.
    */
   clinicalDocsEnabled?: boolean;
-  /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
+  /** Legacy "Billing module" switch: no longer read or offered — billing is always on. Column kept (all rows true). */
   billingEnabled?: boolean;
+  /** The partner (e.g. a hospital) collects patients' payments at its own counter and settles with the clinic. Only meaningful with `hasPartner`. */
+  partnerCollects?: boolean;
+  /** What payment screens preselect; null = follow `partnerCollects`, else UPI. */
+  defaultPaymentMethod?: PaymentMethod | null;
   /**
    * Who may issue invoices when billing is on. 'everyone' = any clinical
    * member (original behavior). 'billing_staff' = admin + front_desk only.
@@ -756,7 +760,7 @@ export interface InvoicePayment {
   updatedAt: string;
 }
 
-export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque';
+export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner';
 
 /**
  * A payment received toward one visit's bill — cash/UPI/etc, always keyed

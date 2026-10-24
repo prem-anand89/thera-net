@@ -10,6 +10,7 @@ import type { Repos } from '@/repositories/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { allocateAcrossVisits } from './allocate';
+import { isCashInHand } from '@/domain/paymentMethods';
 
 /**
  * Pure repo CRUD, deliberately separate from invoiceService (which is
@@ -221,17 +222,17 @@ export function createDirectPaymentService(repos: Repos) {
       return repos.payments.listByDate(clinicId, date);
     },
 
-    /** Total collected for a clinic on a specific date. */
+    /** Total received by the clinic on a specific date (what the partner collected is not the clinic's cash). */
     async collectedOnDate(clinicId: UUID, date: string): Promise<Paise> {
       const payments = await repos.payments.listByDate(clinicId, date);
-      return payments.reduce((sum, p) => sum + p.amountPaise, 0);
+      return payments.filter((p) => isCashInHand(p.method)).reduce((sum, p) => sum + p.amountPaise, 0);
     },
 
     /** Total collected for a date range. */
     async collectedInRange(clinicId: UUID, fromDate: string, toDate: string): Promise<Paise> {
       const payments = await repos.payments.list(clinicId);
       return payments
-        .filter((p) => p.receivedDate >= fromDate && p.receivedDate <= toDate)
+        .filter((p) => p.receivedDate >= fromDate && p.receivedDate <= toDate && isCashInHand(p.method))
         .reduce((sum, p) => sum + p.amountPaise, 0);
     },
 
@@ -244,6 +245,7 @@ export function createDirectPaymentService(repos: Repos) {
         card: 0,
         bank_transfer: 0,
         cheque: 0,
+        partner: 0,
       };
       payments.forEach((p) => {
         breakdown[p.method] += p.amountPaise;
