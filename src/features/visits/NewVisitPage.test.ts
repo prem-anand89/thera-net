@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isNewVisitDirty, newVisitSignature, type NewVisitSignatureInput } from './NewVisitPage';
+import {
+  formatPatientSearchResultSubtitle,
+  isNewVisitDirty,
+  newVisitSignature,
+  type NewVisitSignatureInput,
+} from './NewVisitPage';
 
 function input(over: Partial<NewVisitSignatureInput> = {}): NewVisitSignatureInput {
   return {
@@ -63,3 +68,66 @@ describe('isNewVisitDirty', () => {
     expect(dirty(sig(), sig({ notes: 'x' }), true, true)).toBe(false);
   });
 });
+
+describe('formatPatientSearchResultSubtitle', () => {
+  it('masks phone to last 4 digits and includes age', () => {
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: '9876543210',
+        age: 34,
+      })
+    ).toBe('••••3210 · 34y');
+  });
+
+  it('masks formatted phone properly', () => {
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: '+91 98765-44821',
+        age: 25,
+      })
+    ).toBe('••••4821 · 25y');
+  });
+
+  it('handles missing phone with age present', () => {
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: null,
+        age: 34,
+      })
+    ).toBe('34y');
+  });
+
+  it('handles missing age with phone present', () => {
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: '9876543210',
+        age: null,
+      })
+    ).toBe('••••3210');
+  });
+
+  it('returns empty string when both phone and age are missing', () => {
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: null,
+        age: null,
+      })
+    ).toBe('');
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: '',
+        age: null,
+      })
+    ).toBe('');
+  });
+
+  it('preserves short phone if fewer than 4 digits', () => {
+    expect(
+      formatPatientSearchResultSubtitle({
+        phone: '123',
+        age: null,
+      })
+    ).toBe('123');
+  });
+});
+

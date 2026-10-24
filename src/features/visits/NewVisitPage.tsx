@@ -141,6 +141,24 @@ function SegmentedToggle<T extends string>({
   );
 }
 
+/**
+ * Formats a subtle subtitle for patient search results (e.g. "••••4821 · 34y").
+ * Omits any missing parts with no stray separators.
+ */
+export function formatPatientSearchResultSubtitle(patient: Pick<Patient, 'phone' | 'age'>): string {
+  const parts: string[] = [];
+  const digits = patient.phone ? patient.phone.replace(/\D/g, '') : '';
+  if (digits.length >= 4) {
+    parts.push(`••••${digits.slice(-4)}`);
+  } else if (digits.length > 0) {
+    parts.push(digits);
+  }
+  if (patient.age != null) {
+    parts.push(`${patient.age}y`);
+  }
+  return parts.join(' · ');
+}
+
 export interface NewVisitSignatureInput {
   rows: DraftLine[];
   patientId: string | null;
@@ -1351,17 +1369,27 @@ export function NewVisitPage() {
           />
           {query.trim() ? (
             <>
-              {(matches ?? []).map((p) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
-                  onClick={() => selectPatientFromSearch(p)}
-                >
-                  <span>{p.name}</span>
-                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                </button>
-              ))}
+              {(matches ?? []).map((p) => {
+                const subtitle = formatPatientSearchResultSubtitle(p);
+                return (
+                  <button
+                    type="button"
+                    key={p.id}
+                    className="flex min-h-11 w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
+                    onClick={() => selectPatientFromSearch(p)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-[var(--ink)]">{p.name}</div>
+                      {subtitle && (
+                        <div className="truncate text-xs text-[var(--muted)]">
+                          {subtitle}
+                        </div>
+                      )}
+                    </div>
+                    <span className="ml-2 shrink-0 font-mono text-xs text-[var(--muted)]">{p.mrno}</span>
+                  </button>
+                );
+              })}
               {matches?.length === 0 && (
                 <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
                   No existing patient found.

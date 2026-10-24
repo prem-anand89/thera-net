@@ -32,6 +32,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Prefix configurable per clinic in Settings (defaults to 'W')
 - **Visit entry** with catalog price autofill. The New Visit form (`NewVisitPage.tsx`) is three cards:
   **Visit** (date, therapist, condition/treatments — collapsed for front desk), **Services**, **Payment**.
+  - **Patient search & lookup**: Instant search by MRNO, name or phone number. Result rows show the patient's name, MRNO, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
     presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
     the top; a row shows the service, its catalog price and a "+ Assign assistant" action (active therapists
