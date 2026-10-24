@@ -77,3 +77,37 @@ export function toAuditCsv(
   ];
   return rows.map((r) => r.map(csvCell).join(',')).join('\n');
 }
+
+/** One therapist's own rows: credits (money to them) positive, debits negative. Newest first. */
+export interface MyAuditRow {
+  entry: AttributionEntry;
+  /** Positive = credit to `me`, negative = debit from `me`; post-tax, the pay base. */
+  signedPaise: Paise;
+  withTherapistId: UUID;
+}
+
+export function myRows(entries: AttributionEntry[], me: UUID): MyAuditRow[] {
+  return entries
+    .filter((e) => e.fromTherapistId === me || e.toTherapistId === me)
+    .map((e) => ({
+      entry: e,
+      signedPaise: e.toTherapistId === me ? e.postTaxPaise : -e.postTaxPaise,
+      withTherapistId: e.toTherapistId === me ? e.fromTherapistId : e.toTherapistId,
+    }))
+    .sort((a, b) => b.entry.visitDate.localeCompare(a.entry.visitDate));
+}
+
+/** What a therapist sees as the reason: never the visit's bill or a package's price. */
+export function myBasisText(e: AttributionEntry, nameOf: (id: UUID) => string): string {
+  switch (e.mechanism) {
+    case 'manual_split':
+      return `${e.sharedPct}% share of the visit`;
+    case 'line_share':
+      return 'Share of the visit';
+    case 'package_attribution':
+      return (
+        `Package session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'}, run by ${nameOf(e.toTherapistId)}` +
+        (e.billingVisitDate ? `, package billed ${formatDateDMY(e.billingVisitDate)}` : '')
+      );
+  }
+}

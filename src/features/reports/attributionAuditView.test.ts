@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AttributionEntry } from '@/services/attributionAuditService';
-import { basisText, filterEntries, summarize, toAuditCsv } from './attributionAuditView';
+import { basisText, filterEntries, myBasisText, myRows, summarize, toAuditCsv } from './attributionAuditView';
 
 const name = (id: string) => ({ a: 'Dr A', b: 'Dr B', c: 'Dr C' })[id] ?? id;
 const entry = (over: Partial<AttributionEntry>): AttributionEntry => ({
@@ -48,5 +48,19 @@ describe('attribution audit view', () => {
     const csv = toAuditCsv([entry({})], name, () => 'Asha, M (W1)');
     expect(csv.split('\n')[0]).toContain('Post-tax');
     expect(csv).toContain('"Asha, M (W1)"');
+  });
+
+  it('gives a therapist only their own rows, signed, without the bill or package price', () => {
+    const list = [
+      entry({}),
+      entry({ visitId: 'v2', fromTherapistId: 'c', toTherapistId: 'b', visitDate: '2026-11-05' }),
+      entry({ visitId: 'v3', mechanism: 'line_share', fromTherapistId: 'a', toTherapistId: 'c', visitBillPaise: 230000 }),
+    ];
+    const mine = myRows(list, 'b');
+    expect(mine.map((r) => [r.entry.visitId, r.signedPaise])).toEqual([['v2', 100000], ['v1', 100000]]);
+    expect(myRows(list, 'a').map((r) => r.signedPaise)).toEqual([-100000, -100000]);
+    const text = [myBasisText(list[0]!, name), myBasisText(list[2]!, name)].join(' ');
+    expect(text).not.toMatch(/3,000|2,300/);
+    expect(myBasisText(list[0]!, name)).toContain('Package session 2 of 3, run by Dr B');
   });
 });

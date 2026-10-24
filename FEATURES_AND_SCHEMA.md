@@ -5276,6 +5276,13 @@ price and the date the package was billed (`AttributionEntry.billingVisitDate`),
 Dr B · from Dr A's ₹3,000 package billed 23/10/26". The Monthly Statement's Shared cell and the negative-Net
 "Why?" link open the audit for that month filtered to that therapist (`/insights?tab=audit&therapist=`).
 
+**My credits and debits** (`features/workspace/MyCreditsCard.tsx`): a plain therapist (not clinic-wide, therapist
+split on, more than one active therapist) sees a Workspace section with the last six months of their own audit rows:
+Credits, Debits and Net change, each row naming the patient, date, colleague and reason ("Share of the visit",
+"Package session 2 of 3, run by Dr B, package billed 23/10/26"). It reads the same `attributionAuditService.monthly`
+rows filtered to the therapist (`myRows`, `myBasisText` in `attributionAuditView.ts`) and never shows a visit's
+bill or a package's price.
+
 **`hv_paise` (Partner Share) is the bill split between the two
 organizations, pre-tax — not "everything that isn't the clinic's post-tax
 take."** `hvPaise = billPaise - bmSharePaise`, so `bmSharePaise + hvPaise
