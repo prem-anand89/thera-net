@@ -634,6 +634,52 @@ describe('visitService: lines and shares', () => {
     expect(shareOf(v.id, 'th-prem')).toBe(rs(500));
   });
 
+  describe('sharing a package session with a helper', () => {
+    const cont = { packageGroupId: 'grp-1', sessionIndex: 2, packageTotal: 3 };
+
+    it('stores the helper and the percentage on the package line only', async () => {
+      const v = await svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont, sessionShare: { therapistId: 'th-aish', pct: 40 } }],
+      });
+      const pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect(pkg.sessionShareTherapistId).toBe('th-aish');
+      expect(pkg.sessionSharePct).toBe(40);
+    });
+
+    it('a line with no helper carries neither column', async () => {
+      const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont }] });
+      const pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect('sessionShareTherapistId' in pkg).toBe(false);
+    });
+
+    it('refuses the runner as the helper, a non-package line, a bad percentage and a stranger', async () => {
+      const make = (over: object, serviceCatalogId = 'svc-physio3') =>
+        svc.create({
+          ...base,
+          lines: [{ serviceCatalogId, ...(serviceCatalogId === 'svc-physio3' ? { packageContinuation: cont } : {}), ...over }],
+        });
+      await expect(make({ sessionShare: { therapistId: 'th-prem', pct: 40 } })).rejects.toThrow(/ran it/);
+      await expect(make({ assistingTherapistId: 'th-aish', sessionShare: { therapistId: 'th-aish', pct: 40 } })).rejects.toThrow(/ran it/);
+      await expect(make({ sessionShare: { therapistId: 'th-aish', pct: 100 } })).rejects.toThrow(/1 to 99/);
+      await expect(make({ sessionShare: { therapistId: 'th-away', pct: 40 } })).rejects.toThrow(/isn't part of this clinic/);
+      await expect(make({ sessionShare: { therapistId: 'th-aish', pct: 40 } }, 'svc-consult')).rejects.toThrow(/package session/);
+    });
+
+    it('editing the lines can clear or change the helper', async () => {
+      const v = await svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont, sessionShare: { therapistId: 'th-aish', pct: 40 } }],
+      });
+      await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont, sessionShare: { therapistId: 'th-ravi', pct: 25 } }]);
+      let pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect([pkg.sessionShareTherapistId, pkg.sessionSharePct]).toEqual(['th-ravi', 25]);
+      await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont }]);
+      pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect([pkg.sessionShareTherapistId, pkg.sessionSharePct]).toEqual([null, null]);
+    });
+  });
+
   it('refuses a package group that belongs to another patient', async () => {
     const first = await svc.create({ ...base, patientId: 'pat-other', lines: [{ serviceCatalogId: 'svc-physio3' }] });
     await expect(
