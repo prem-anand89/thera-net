@@ -6,7 +6,13 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicShareLabels } from '@/domain/types';
-import { MECHANISM_LABEL, basisText, filterEntries, summarize, toAuditCsv } from './attributionAuditView';
+import {
+  MECHANISM_LABEL,
+  basisText,
+  filterEntries,
+  summarize,
+  toAuditCsv,
+} from './attributionAuditView';
 import { inputCls, th, thNum, td, tdNum } from '@/components/ui';
 
 /**
@@ -16,6 +22,8 @@ import { inputCls, th, thNum, td, tdNum } from '@/components/ui';
  * it came from. Exists so a disputed monthly number can be traced back to
  * the specific visit(s) that produced it, rather than taken on faith.
  */
+const sectionTitle = 'text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
+
 export function AttributionAuditPage() {
   const clinic = useClinic();
   const labels = clinicShareLabels(clinic);
@@ -84,15 +92,15 @@ export function AttributionAuditPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] pb-4">
         <div>
-          <h2 className="font-display text-base font-semibold text-[var(--ink)]">
+          <h2 className="font-display text-lg font-semibold text-[var(--ink)]">
             Attribution audit
           </h2>
           <p className="text-xs text-[var(--muted)]">
-            Every rupee moved between therapists this month via a manual split or a package's
-            session-attribution — the detail behind the Shared/Net columns above.
+            Every rupee that moved between therapists this month: revenue shares, manual splits and
+            package sessions. The detail behind the Shared and Net columns of the Monthly statement.
           </p>
         </div>
         <div className="ml-auto flex items-end gap-2">
@@ -118,10 +126,10 @@ export function AttributionAuditPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-2.5">
         <select
           aria-label="Therapist"
-          className={inputCls}
+          className={`${inputCls} !w-auto min-w-[10rem]`}
           value={therapistFilter}
           onChange={(e) => setTherapistFilter(e.target.value)}
         >
@@ -136,13 +144,13 @@ export function AttributionAuditPage() {
           type="search"
           aria-label="Search patient"
           placeholder="Search patient"
-          className={`${inputCls} max-w-[14rem]`}
+          className={`${inputCls} !w-auto min-w-[10rem] flex-1 sm:max-w-[16rem] sm:flex-none`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <button
           type="button"
-          className="ml-auto text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-40"
+          className="ml-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-40"
           disabled={!entries || entries.length === 0}
           onClick={downloadCsv}
         >
@@ -151,38 +159,47 @@ export function AttributionAuditPage() {
       </div>
 
       {summary.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[var(--paper)]">
-              <tr>
-                <th className={th}>Therapist</th>
-                <th className={thNum}>Gave</th>
-                <th className={thNum}>Received</th>
-                <th className={thNum}>Net change</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {summary.map((r) => (
-                <tr key={r.therapistId}>
-                  <td className={td}>{nameOf(r.therapistId)}</td>
-                  <td className={tdNum}>{r.given ? formatINR(r.given) : '—'}</td>
-                  <td className={tdNum}>{r.received ? formatINR(r.received) : '—'}</td>
-                  <td className={`${tdNum} font-semibold`}>{formatINR(r.received - r.given)}</td>
+        <section className="space-y-2">
+          <h3 className={sectionTitle}>Summary by therapist</h3>
+          <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[var(--paper)]">
+                <tr>
+                  <th className={th}>Therapist</th>
+                  <th className={thNum}>Gave</th>
+                  <th className={thNum}>Received</th>
+                  <th className={thNum}>Net change</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {summary.map((r) => (
+                  <tr key={r.therapistId}>
+                    <td className={td}>{nameOf(r.therapistId)}</td>
+                    <td className={tdNum}>{r.given ? formatINR(r.given) : '—'}</td>
+                    <td className={tdNum}>{r.received ? formatINR(r.received) : '—'}</td>
+                    <td className={`${tdNum} font-semibold`}>{formatINR(r.received - r.given)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {entries && entries.length === 0 && (
         <p className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-8 text-center text-sm text-[var(--muted)]">
-          {allEntries && allEntries.length > 0 ? 'Nothing matches this filter.' : 'No money moved between therapists this month.'}
+          {allEntries && allEntries.length > 0
+            ? 'Nothing matches this filter.'
+            : 'No money moved between therapists this month.'}
         </p>
       )}
 
       {entries && entries.length > 0 && (
-        <>
+        <section className="space-y-2">
+          <h3 className={sectionTitle}>
+            Movements{' '}
+            <span className="font-normal normal-case tracking-normal">· {entries.length}</span>
+          </h3>
           {/* Below tab: — boxed cards instead of forcing this 8-column
               table to scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">
@@ -245,7 +262,10 @@ export function AttributionAuditPage() {
                 </thead>
                 <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
                   {entries.map((e, i) => (
-                    <tr key={`${e.visitId}-${e.toTherapistId}-${i}`} className="hover:bg-[var(--paper)]/50 transition-colors">
+                    <tr
+                      key={`${e.visitId}-${e.toTherapistId}-${i}`}
+                      className="hover:bg-[var(--paper)]/50 transition-colors"
+                    >
                       <td className={td}>{formatDateDMY(e.visitDate)}</td>
                       <td className={`${td} font-medium`}>{patientName.get(e.patientId) ?? '—'}</td>
                       <td className={td}>{therapistName.get(e.fromTherapistId) ?? 'Unknown'}</td>
@@ -280,7 +300,9 @@ export function AttributionAuditPage() {
                       >
                         {e.grossPaise != null ? formatINR(e.grossPaise) : '—'}
                       </td>
-                      <td className={`${tdNum} font-semibold text-[var(--ink)]`}>{formatINR(e.postTaxPaise)}</td>
+                      <td className={`${tdNum} font-semibold text-[var(--ink)]`}>
+                        {formatINR(e.postTaxPaise)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -300,7 +322,7 @@ export function AttributionAuditPage() {
               </table>
             </div>
           </div>
-        </>
+        </section>
       )}
     </div>
   );
