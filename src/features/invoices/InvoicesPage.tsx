@@ -122,7 +122,7 @@ export function InvoicesPage() {
 
   async function remindToPay(inv: Invoice, remainingPaise: number) {
     const patientId = patientIdByInvoiceId.get(inv.id);
-    const phone = patientId ? (phoneByPatientId.get(patientId) ?? null) : null;
+    const phone = (patientId ? (phoneByPatientId.get(patientId) ?? null) : null) || inv.patientSnapshot?.phone || null;
     
     if (!phone) {
       setError('Patient has no phone number on file');

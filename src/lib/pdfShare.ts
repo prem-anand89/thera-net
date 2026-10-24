@@ -79,7 +79,8 @@ export async function renderElementToPdf(
 export async function shareFileToWhatsApp(
   file: File,
   title: string,
-  fallbackText: string
+  fallbackText: string,
+  patientPhone?: string | null
 ): Promise<'shared' | 'fallback'> {
   const nav = navigator as Navigator & {
     share?: (data: ShareData) => Promise<void>;
@@ -93,13 +94,11 @@ export async function shareFileToWhatsApp(
       // AbortError = the user backed out of the share sheet — not a
       // failure worth surfacing as an error.
       if (e instanceof Error && e.name === 'AbortError') return 'shared';
-      throw e;
+      console.warn('Web Share failed or user gesture expired, falling back to WhatsApp link:', e);
     }
   }
-  openWhatsAppUrl(
-    `https://wa.me/?text=${encodeURIComponent(fallbackText)}`,
-    fallbackText
-  );
+  const url = buildWhatsAppSendUrl(fallbackText, patientPhone);
+  openWhatsAppUrl(url, fallbackText);
   return 'fallback';
 }
 
@@ -109,17 +108,26 @@ export function openPatientWhatsAppChat(
   text: string,
   patientPhone: string | null | undefined
 ): void {
-  if (!patientPhone?.trim()) {
+  const normalized = patientPhone ? normalizePhoneForWaMe(patientPhone) : '';
+  if (!normalized) {
     notify.error('Patient has no phone number on file');
     return;
   }
-  const url = buildWhatsAppSendUrl(text, patientPhone);
+  const url = buildWhatsAppSendUrl(text, normalized);
   openWhatsAppUrl(url, text);
 }
 
 /** Same normalization as visit-row payment reminders and Meta's `to` field. */
 export function normalizePhoneForWaMe(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
+  let digits = phone.replace(/\D/g, '');
+  // Strip international call prefix 00 (e.g., 0091...)
+  if (digits.startsWith('00')) {
+    digits = digits.slice(2);
+  }
+  // Strip single leading trunk 0 for 11-digit numbers (e.g. 09876543210 -> 9876543210)
+  if (digits.length === 11 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
   return digits.length === 10 ? `91${digits}` : digits;
 }
 
@@ -157,7 +165,7 @@ function openWhatsAppUrl(
   } catch {
     opened = null;
   }
-  if (opened && !opened.closed) {
+  if (opened) {
     try {
       opened.opener = null;
     } catch {
