@@ -83,6 +83,7 @@ import {
 import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
+import { PaymentMethodChips } from './PaymentMethodChips';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 // UPI first — the most common collection method at an Indian clinic front
@@ -1578,17 +1579,14 @@ export function NewVisitPage() {
               />
               {paymentChoice === 'paid' ? (
                 <>
-                  <select
-                    className={`${inputCls} mt-2`}
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  >
-                    {paymentMethods.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-2">
+                    <PaymentMethodChips
+                      value={paymentMethod}
+                      onChange={setPaymentMethod}
+                      options={paymentMethods}
+                      disabled={busy}
+                    />
+                  </div>
                   {paymentMethod === 'upi' && patient && (
                     <ShowUpiQrButton
                       amountPaise={billPaise}

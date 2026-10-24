@@ -61,6 +61,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     subtotal and **survives row changes**; it is cleared only when a ₹ discount no longer fits the new subtotal
     or the subtotal reaches ₹0, and the control is disabled at ₹0. The UPI QR, the payment amount and the phone
     bar use the total.
+  - **Payment method selection** (`PaymentMethodChips.tsx`): fast one-tap radio chips for the clinic's common methods (UPI, Cash, Card) and an "Other ▾" expandable chip for remaining methods (e.g., Bank transfer, Cheque, or "Collected by {partner}"). Arrow-key navigable with 44px touch targets. Selecting UPI reveals the dynamic UPI QR button.
   - **Revenue share** is a read-only line under Total ("Revenue share · from services — Dr A ₹867 (67%) · Dr B
     ₹433 (33%)", `RevenueShareSummary`, from `autoCredits`) shown only when an assistant is tagged and the clinic's
     therapist split is on; a ₹0 package session on the visit therapist adds "Package sessions are credited through
