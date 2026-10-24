@@ -126,10 +126,10 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     whenever they exist (also for a visit without services, which shows a shares-only line); the old
     `shared_therapist_id`/`shared_pct` line shows only for a visit with no share rows (`splitDisplay`), and the
     row action reads "Edit split" for a shared or legacy-split visit, else "Split revenue".
-  - **Phone save bar** (`VisitSaveBar`, below `sm:`): fixed above the bottom navigation
-    (`bottom: calc(64px + env(safe-area-inset-bottom))`, 64 = `PHONE_BOTTOM_NAV`), reads "₹1,300 · 2 services ·
-    UPI, collected now" (or "to collect later"; "No service yet" until a service is chosen) with Save visit; tapping the summary scrolls to Payment. The
-    page gets extra bottom padding on phones; tablet/desktop keep Save under Payment.
+  - **Phone save bar** (`VisitSaveBar`, below `sm:`): one-row bar fixed flush to the bottom edge
+    (`bottom: 0`, padding `env(safe-area-inset-bottom)`), reads line 1 "₹1,300" (or "No service yet" until a service is chosen, disabling Save)
+    and line 2 "2 services · UPI, collected now" (or "to collect later"), with Cancel and Save visit buttons; tapping the summary scrolls to Payment.
+    The phone bottom tab bar is hidden on `/visits/new`. Unsaved edits are guarded by router blocker so Cancel/back prompts to discard; tablet/desktop keep Save and Cancel together under Payment.
   - After saving: the "Visit logged" screen and the bill dialog name the services ("Assessment + Dry needling"),
     and the extra-visit button reads "Log a separate visit for {patient}".
 - **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)

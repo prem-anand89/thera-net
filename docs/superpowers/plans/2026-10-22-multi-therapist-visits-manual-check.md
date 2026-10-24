@@ -81,7 +81,9 @@ Test setup (once, as admin): catalog has "Consultation" ₹1,000 and an add-on s
 
 ## L. Phone Save bar (360 px only)
 - [ ] New Visit on the phone.
-  - You should see: the Save bar sits ABOVE the bottom menu, shows for example "₹1,300 · 2 services · UPI, collected now", and does not cover the Payment card. Tapping the summary scrolls to Payment. Scroll to the very bottom: the Payment fields are still reachable.
+  - You should see: the phone bottom tab bar is hidden. The Save bar sits flush at the bottom edge in a single row with line 1 "₹1,300" (or "No service yet" when empty with Save disabled) and line 2 "2 services · UPI, collected now", plus Cancel and Save visit buttons. Tapping the summary scrolls to Payment. Scroll to the very bottom: the Payment fields are still reachable and there is no duplicate Cancel button under Payment.
+- [ ] Cancel/Back behavior on phone.
+  - You should see: pressing Cancel on an untouched form exits immediately. With a service chosen, Cancel or the top-left "←" back arrow prompts "Discard this visit? Unsaved changes will be lost.".
 
 ## M. Escape closes pickers
 - [ ] Open the service picker, press Escape. Open the assistant picker, press Escape. Open the revenue share editor, press Escape.

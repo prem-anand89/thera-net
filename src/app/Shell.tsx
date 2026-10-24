@@ -75,6 +75,14 @@ export function filterNavItems(role: string) {
   );
 }
 
+/**
+ * Bottom tab bar on phones is hidden on focused creation routes like `/visits/new`
+ * so the page's own action bar can sit flush at the bottom.
+ */
+export function shouldShowPhoneBottomNav(pathname: string): boolean {
+  return pathname !== '/visits/new';
+}
+
 // Serialises session-change work across effect runs (see the effect in Shell).
 let sessionWork: Promise<void> = Promise.resolve();
 
@@ -485,54 +493,62 @@ export function Shell() {
         </header>
         <UpdateBanner />
         <SyncStatusBanners />
-        <main className="mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6">
+        <main
+          className={`mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${
+            shouldShowPhoneBottomNav(pathname)
+              ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
+              : 'pb-24 sm:pb-6'
+          }`}
+        >
           <Suspense
             fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}
           >
             <Outlet />
           </Suspense>
         </main>
-        <nav
-          className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
-          aria-label="Main"
-        >
-          <PhoneTab
-            to="/workspace"
-            label="Workspace"
-            Icon={IconWorkspace}
-            active={activePhoneTab(pathname) === '/workspace'}
-          />
-          <PhoneTab
-            to="/schedule"
-            label="Schedule"
-            Icon={IconCalendar}
-            active={activePhoneTab(pathname) === '/schedule'}
-            badge={pendingRequestsCount}
-          />
-          <Link
-            to="/visits/new"
-            search={newVisitFrom ? { from: newVisitFrom } : {}}
-            aria-label="New visit"
-            className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center py-1"
+        {shouldShowPhoneBottomNav(pathname) && (
+          <nav
+            className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
+            aria-label="Main"
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--teal)] text-lg font-medium text-white">
-              +
-            </span>
-            <span className="sr-only">New visit</span>
-          </Link>
-          <PhoneTab
-            to="/ledger"
-            label="Ledger"
-            Icon={IconLedger}
-            active={activePhoneTab(pathname) === '/ledger'}
-          />
-          <PhoneTab
-            to="/more"
-            label="More"
-            Icon={IconMore}
-            active={activePhoneTab(pathname) === '/more'}
-          />
-        </nav>
+            <PhoneTab
+              to="/workspace"
+              label="Workspace"
+              Icon={IconWorkspace}
+              active={activePhoneTab(pathname) === '/workspace'}
+            />
+            <PhoneTab
+              to="/schedule"
+              label="Schedule"
+              Icon={IconCalendar}
+              active={activePhoneTab(pathname) === '/schedule'}
+              badge={pendingRequestsCount}
+            />
+            <Link
+              to="/visits/new"
+              search={newVisitFrom ? { from: newVisitFrom } : {}}
+              aria-label="New visit"
+              className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center py-1"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--teal)] text-lg font-medium text-white">
+                +
+              </span>
+              <span className="sr-only">New visit</span>
+            </Link>
+            <PhoneTab
+              to="/ledger"
+              label="Ledger"
+              Icon={IconLedger}
+              active={activePhoneTab(pathname) === '/ledger'}
+            />
+            <PhoneTab
+              to="/more"
+              label="More"
+              Icon={IconMore}
+              active={activePhoneTab(pathname) === '/more'}
+            />
+          </nav>
+        )}
       </div>
     </ClinicContext.Provider>
   );

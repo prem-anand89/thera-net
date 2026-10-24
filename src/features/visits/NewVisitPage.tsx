@@ -1,7 +1,7 @@
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { patientsBackLink, type NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   repos,
@@ -141,6 +141,33 @@ function SegmentedToggle<T extends string>({
   );
 }
 
+export interface NewVisitDirtyInput {
+  justSaved: boolean;
+  rows: DraftLine[];
+  patient: Patient | null;
+  hasPrefillPatient: boolean;
+  creatingPatient: boolean;
+  newPatientName: string;
+  condition: string;
+  notes: string;
+  pendingNote: string;
+  treatmentIds: string[];
+  adjustmentMode: BillAdjustmentMode;
+}
+
+export function isNewVisitDirty(input: NewVisitDirtyInput): boolean {
+  if (input.justSaved) return false;
+  if (input.rows.some(hasService)) return true;
+  if (input.patient && !input.hasPrefillPatient) return true;
+  if (input.creatingPatient && input.newPatientName.trim().length > 0) return true;
+  if (input.condition.trim().length > 0 && !input.hasPrefillPatient) return true;
+  if (input.notes.trim().length > 0) return true;
+  if (input.pendingNote.trim().length > 0) return true;
+  if (input.treatmentIds.length > 0) return true;
+  if (input.adjustmentMode !== 'none') return true;
+  return false;
+}
+
 export function NewVisitPage() {
   const clinic = useClinic();
   const { canBill, canCollectPayment, role, canViewClinicalNotes: canWriteNotes } = usePermissions();
@@ -173,6 +200,10 @@ export function NewVisitPage() {
     } else {
       void navigate({ to: '/workspace' });
     }
+  }
+
+  function requestExit() {
+    goBack();
   }
 
   // Patient selection — a small state machine: searching (default) → either
@@ -273,6 +304,31 @@ export function NewVisitPage() {
   } | null>(null);
   // Synchronous double-tap guard: `busy` is React state and lags one render.
   const savingRef = useRef(false);
+
+  const isDirty = isNewVisitDirty({
+    justSaved: Boolean(justSaved),
+    rows,
+    patient,
+    hasPrefillPatient: Boolean(search.patientId || search.repeatVisitId),
+    creatingPatient,
+    newPatientName: newPatient.name,
+    condition,
+    notes,
+    pendingNote,
+    treatmentIds,
+    adjustmentMode,
+  });
+
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+
+  useBlocker({
+    shouldBlockFn: () => {
+      if (!isDirtyRef.current) return false;
+      return !confirm('Discard this visit? Unsaved changes will be lost.');
+    },
+    enableBeforeUnload: () => isDirtyRef.current,
+  });
   const [invoicing, setInvoicing] = useState(false);
   const [takingPayment, setTakingPayment] = useState(false);
   // What's been received for the just-saved visit, so Take payment disappears
@@ -1505,11 +1561,11 @@ export function NewVisitPage() {
         <ErrorNote message={error} />
       </div>
       <div className="flex items-center gap-2">
-        {/* Phones save from the fixed bar below; tablet and up keep Save here, under Payment. */}
+        {/* Phones save and cancel from the fixed bar below; tablet and up keep them here, under Payment. */}
         <button type="button" className={`${btnPrimary} hidden sm:inline-flex`} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
-        <button type="button" className={btnSecondary} onClick={goBack}>
+        <button type="button" className={`${btnSecondary} hidden sm:inline-flex`} disabled={busy} onClick={requestExit}>
           Cancel
         </button>
       </div>
@@ -1519,7 +1575,18 @@ export function NewVisitPage() {
   return (
     // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Back"
+          disabled={busy}
+          onClick={requestExit}
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-40 sm:hidden"
+        >
+          <span aria-hidden="true" className="text-lg leading-none">←</span>
+        </button>
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+      </div>
       <VisitCapNotice />
 
       {/* Same two-column shape (reference panel left, form right) whether or
@@ -1538,6 +1605,7 @@ export function NewVisitPage() {
         payment={savePayment}
         busy={busy}
         onSave={() => void save()}
+        onCancel={requestExit}
         onSummaryClick={() =>
           document.getElementById('visit-payment')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
         }

@@ -249,27 +249,80 @@ describe('RevenueShareSummary', () => {
 });
 
 describe('VisitSaveBar', () => {
-  it('phone save bar states the payment choice', () => {
+  it('phone save bar states the payment choice, handles Cancel, busy, and disabled states', () => {
     const onSave = vi.fn();
+    const onCancel = vi.fn();
     const onSummary = vi.fn();
     const { rerender } = render(
-      <VisitSaveBar totalPaise={130000} serviceCount={2} payment={{ kind: 'now', methodLabel: 'UPI' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
+      <VisitSaveBar
+        totalPaise={130000}
+        serviceCount={2}
+        payment={{ kind: 'now', methodLabel: 'UPI' }}
+        busy={false}
+        onSave={onSave}
+        onCancel={onCancel}
+        onSummaryClick={onSummary}
+      />
     );
     const bar = screen.getByTestId('visit-save-bar');
-    expect(within(bar).getByText('₹1,300 · 2 services · UPI, collected now')).toBeInTheDocument();
+    expect(within(bar).getByText('₹1,300')).toBeInTheDocument();
+    expect(within(bar).getByText('2 services · UPI, collected now')).toBeInTheDocument();
+
     fireEvent.click(within(bar).getByRole('button', { name: 'Save visit' }));
     expect(onSave).toHaveBeenCalled();
-    fireEvent.click(within(bar).getByText(/₹1,300/));
+
+    fireEvent.click(within(bar).getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalled();
+
+    fireEvent.click(within(bar).getByText('₹1,300'));
     expect(onSummary).toHaveBeenCalled();
     expect(bar.className).toContain('sm:hidden');
+
+    // With no service: "No service yet" and Save is disabled
     rerender(
-      <VisitSaveBar totalPaise={0} serviceCount={0} payment={{ kind: 'none' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
+      <VisitSaveBar
+        totalPaise={0}
+        serviceCount={0}
+        payment={{ kind: 'none' }}
+        busy={false}
+        onSave={onSave}
+        onCancel={onCancel}
+        onSummaryClick={onSummary}
+      />
     );
     expect(within(bar).getByText('No service yet')).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Save visit' })).toBeDisabled();
+
+    // Later collection format
     rerender(
-      <VisitSaveBar totalPaise={50000} serviceCount={1} payment={{ kind: 'later' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
+      <VisitSaveBar
+        totalPaise={50000}
+        serviceCount={1}
+        payment={{ kind: 'later' }}
+        busy={false}
+        onSave={onSave}
+        onCancel={onCancel}
+        onSummaryClick={onSummary}
+      />
     );
-    expect(within(bar).getByText('₹500 · 1 service · to collect later')).toBeInTheDocument();
+    expect(within(bar).getByText('₹500')).toBeInTheDocument();
+    expect(within(bar).getByText('1 service · to collect later')).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Save visit' })).not.toBeDisabled();
+
+    // Busy state: Save shows "Saving…", both buttons disabled
+    rerender(
+      <VisitSaveBar
+        totalPaise={50000}
+        serviceCount={1}
+        payment={{ kind: 'later' }}
+        busy={true}
+        onSave={onSave}
+        onCancel={onCancel}
+        onSummaryClick={onSummary}
+      />
+    );
+    expect(within(bar).getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    expect(within(bar).getByRole('button', { name: 'Cancel' })).toBeDisabled();
   });
 });
 
