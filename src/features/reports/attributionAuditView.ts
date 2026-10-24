@@ -18,7 +18,10 @@ export function basisText(e: AttributionEntry, nameOf: (id: UUID) => string): st
       return `Share of ${formatINR(e.visitBillPaise ?? 0)} bill`;
     case 'package_attribution':
       return (
-        `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · run by ${nameOf(e.toTherapistId)}` +
+        `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ` +
+        (e.packageRole === 'helper'
+          ? `${nameOf(e.toTherapistId)} helped (${e.sessionSharePct}%)`
+          : `run by ${nameOf(e.toTherapistId)}${e.sessionSharePct ? ` (keeps ${100 - e.sessionSharePct}%)` : ''}`) +
         ` · from ${nameOf(e.fromTherapistId)}'s ${formatINR(e.packageTotalPaise ?? 0)} package` +
         (e.billingVisitDate ? ` billed ${formatDateDMY(e.billingVisitDate)}` : '')
       );
@@ -106,7 +109,8 @@ export function myBasisText(e: AttributionEntry, nameOf: (id: UUID) => string): 
       return 'Share of the visit';
     case 'package_attribution':
       return (
-        `Package session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'}, run by ${nameOf(e.toTherapistId)}` +
+        `Package session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'}, ` +
+        (e.packageRole === 'helper' ? `${nameOf(e.toTherapistId)} helped` : `run by ${nameOf(e.toTherapistId)}`) +
         (e.billingVisitDate ? `, package billed ${formatDateDMY(e.billingVisitDate)}` : '')
       );
   }

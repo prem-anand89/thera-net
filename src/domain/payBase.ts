@@ -33,6 +33,10 @@ export type Movement = {
    * or not summing to the bill), so they were recomputed from its service lines (`autoCredits`) for this report. Absent when the rows were used as stored.
    */
   repaired?: boolean;
+  /** `package_attribution` only: this session was shared with a helper, who got this % (set on both of its movements). */
+  sessionSharePct?: number;
+  /** `package_attribution` only: this movement is the helper's part of a shared session (the other is the runner's). */
+  packageRole?: 'helper';
 };
 
 export interface PayBaseInput {
@@ -296,11 +300,11 @@ export function attributionMovements(input: PayBaseInput): Movement[] {
       // A helper's part comes off the session's share; the runner keeps the rest.
       const helperClinic = part ? roundToRupeeHalfUp((clinicSharePaise * part.pct) / 100) : 0;
       const helperPostTax = part ? roundToRupeeHalfUp((postTaxPaise * part.pct) / 100) : 0;
-      const recipients: { id: UUID; clinic: Paise; postTax: Paise }[] = [
+      const recipients: { id: UUID; clinic: Paise; postTax: Paise; helper?: true }[] = [
         { id: runner, clinic: clinicSharePaise - helperClinic, postTax: postTaxPaise - helperPostTax },
       ];
       if (part && part.therapistId !== runner) {
-        recipients.push({ id: part.therapistId, clinic: helperClinic, postTax: helperPostTax });
+        recipients.push({ id: part.therapistId, clinic: helperClinic, postTax: helperPostTax, helper: true });
       } else if (part) {
         recipients[0] = { id: runner, clinic: clinicSharePaise, postTax: postTaxPaise };
       }
@@ -314,6 +318,8 @@ export function attributionMovements(input: PayBaseInput): Movement[] {
           grossPaise: 0,
           clinicSharePaise: r.clinic,
           postTaxPaise: r.postTax,
+          ...(part && part.therapistId !== runner ? { sessionSharePct: part.pct } : {}),
+          ...(r.helper ? { packageRole: 'helper' as const } : {}),
         });
       }
     }

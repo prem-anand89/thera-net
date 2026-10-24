@@ -272,3 +272,37 @@ describe('VisitSaveBar', () => {
     expect(within(bar).getByText('₹500 · 1 service · to collect later')).toBeInTheDocument();
   });
 });
+
+describe('sharing a package session', () => {
+  it('offers "Share this session" only on a package row, and seeds a helper who is not the runner', () => {
+    const onRows = vi.fn();
+    render(<Harness initial={[pkgRow(), row('n', 'needle')]} openPackages={[pkg]} onRows={onRows} />);
+    const links = screen.getAllByRole('button', { name: '+ Share this session' });
+    expect(links).toHaveLength(1);
+    fireEvent.click(links[0]!);
+    const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+    expect(last[0]!.sessionShare).toEqual({ therapistId: 't2', pct: 50 });
+  });
+
+  it('edits the percentage and removes the share', () => {
+    const onRows = vi.fn();
+    render(<Harness initial={[{ ...pkgRow(), sessionShare: { therapistId: 't2', pct: 50 } }]} openPackages={[pkg]} onRows={onRows} />);
+    fireEvent.change(screen.getByLabelText('Percent of this session'), { target: { value: '30' } });
+    expect((onRows.mock.calls.at(-1)![0] as DraftLine[])[0]!.sessionShare?.pct).toBe(30);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove session share' }));
+    expect((onRows.mock.calls.at(-1)![0] as DraftLine[])[0]!.sessionShare).toBeNull();
+  });
+
+  it('drops a share whose helper is the person running the session', () => {
+    const onRows = vi.fn();
+    // t1 is the visit's therapist, so cannot also be the helper (e.g. the visit's therapist was just changed to t1).
+    render(<Harness initial={[{ ...pkgRow(), sessionShare: { therapistId: 't1', pct: 50 } }]} openPackages={[pkg]} onRows={onRows} />);
+    const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+    expect(last[0]!.sessionShare).toBeNull();
+  });
+
+  it('shows no share control for a solo clinic', () => {
+    render(<Harness initial={[pkgRow()]} openPackages={[pkg]} showAssistant={false} />);
+    expect(screen.queryByRole('button', { name: '+ Share this session' })).toBeNull();
+  });
+});

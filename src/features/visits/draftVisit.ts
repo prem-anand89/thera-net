@@ -27,6 +27,7 @@ export function draftLinesToVisitLines(
       lines.push({
         serviceCatalogId: fresh.serviceCatalogId,
         assistingTherapistId: r.assistingTherapistId,
+        ...(r.sessionShare ? { sessionShare: r.sessionShare } : {}),
         packageContinuation: {
           packageGroupId: fresh.packageGroupId,
           sessionIndex: fresh.logged + 1,
@@ -39,7 +40,11 @@ export function draftLinesToVisitLines(
       errors.set(i, 'Pick a service.');
       return;
     }
-    lines.push({ serviceCatalogId: r.serviceCatalogId!, assistingTherapistId: r.assistingTherapistId });
+    lines.push({
+      serviceCatalogId: r.serviceCatalogId!,
+      assistingTherapistId: r.assistingTherapistId,
+      ...(r.sessionShare ? { sessionShare: r.sessionShare } : {}),
+    });
   });
   return errors.size > 0 ? { errors } : { lines };
 }

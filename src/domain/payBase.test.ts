@@ -454,7 +454,7 @@ describe('a helper given part of a package session', () => {
     const all = package3('hp', {}, {});
     const movements = attributionMovements(input(all, all, { items: itemsFor('hp', share(AISH, 40)), credits: credits('hp') }));
     expect(movements).toEqual([
-      { mechanism: 'package_attribution', visitId: 'hp-2', fromTherapistId: PREM, toTherapistId: AISH, grossPaise: 0, clinicSharePaise: rs(300), postTaxPaise: rs(270) },
+      { mechanism: 'package_attribution', visitId: 'hp-2', fromTherapistId: PREM, toTherapistId: AISH, grossPaise: 0, clinicSharePaise: rs(300), postTaxPaise: rs(270), sessionSharePct: 40, packageRole: 'helper' },
     ]);
   });
 

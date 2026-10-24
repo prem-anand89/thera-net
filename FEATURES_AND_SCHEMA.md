@@ -1806,6 +1806,10 @@ assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — nul
                            primary delivered it; set = assistant tagged on this service
 duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
 is_package_line           boolean NOT NULL (default false)
+session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — package line only: a colleague who
+                           helped with this session (never the runner = assisting_therapist_id ?? visit therapist)
+session_share_pct         smallint (NULLABLE, 1–99) — the helper's % of the session's package share; the runner
+                           keeps the rest. Both set or both null. Migration 20261026100000
 deleted                   boolean NOT NULL (default false)
 INDEXES: visit_id; (clinic_id, updated_at, id); UNIQUE (visit_id) WHERE is_package_line AND NOT deleted
 
@@ -3750,6 +3754,10 @@ assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — nul
                            primary delivered it; set = assistant tagged on this service
 duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
 is_package_line           boolean NOT NULL (default false)
+session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — package line only: a colleague who
+                           helped with this session (never the runner = assisting_therapist_id ?? visit therapist)
+session_share_pct         smallint (NULLABLE, 1–99) — the helper's % of the session's package share; the runner
+                           keeps the rest. Both set or both null. Migration 20261026100000
 deleted                   boolean NOT NULL (default false)
 INDEXES: visit_id; (clinic_id, updated_at, id); UNIQUE (visit_id) WHERE is_package_line AND NOT deleted
 
@@ -5231,6 +5239,14 @@ the same loader. Rules:
 - A package session moves `perSessionShare` of clinic share and post-tax
   (above), and **no gross** (so `Shared` is exactly the revenue-share /
   legacy-split movement).
+- **A helper's part of a session.** A package line may carry `session_share_therapist_id` + `session_share_pct`
+  (New Visit / Edit visit: "+ Share this session" on a package row, with the clinic's therapist split on). The
+  session's per-session share then splits: the helper gets `roundToRupeeHalfUp(share × pct / 100)` of the clinic
+  share and of post-tax, the runner (the line's deliverer) keeps the rest, both paid by the biller as separate
+  `package_attribution` movements (the helper's carries `packageRole: 'helper'`, both carry `sessionSharePct`);
+  a recipient who is the biller moves nothing. It works on any session including the billing visit's own, is
+  ignored when the split is off, and a line without the columns behaves exactly as before. The audit's Basis reads
+  "Session 2 of 3 · Dr B helped (40%) · from Dr A's ₹3,000 package billed …" / "run by Dr C (keeps 60%)".
 `reportService` (Shared / Net / `netClinicSharePaise`) and the attribution
 audit both read from it; future payroll will too. **Never compute
 therapist attribution anywhere else** — add an input to `PayBaseInput`

@@ -24,6 +24,8 @@ export interface DraftLine {
   serviceCatalogId?: UUID;
   continuation?: OpenPackage;
   assistingTherapistId: UUID | null;
+  /** Package rows only: a colleague who helped with this session and the % of the session's package share they get. */
+  sessionShare?: { therapistId: UUID; pct: number } | null;
 }
 
 let keyCounter = 0;
@@ -79,6 +81,9 @@ export function rowProblems(rows: DraftLine[], catalog: CatalogItem[]): Map<numb
     if (!hasService(r)) return;
     if (!isPackageRow(r, catalog)) return;
     if (seenPackage) out.set(i, `${rowName(r, catalog)}: only one package per visit.`);
+    else if (r.sessionShare && (!Number.isInteger(r.sessionShare.pct) || r.sessionShare.pct < 1 || r.sessionShare.pct > 99)) {
+      out.set(i, 'A session share must be a whole number from 1 to 99%.');
+    }
     seenPackage = true;
   });
   return out;
@@ -188,8 +193,33 @@ export function ServiceRows({
   }, [openPackages, catalog]);
 
   function update(key: string, patch: Partial<DraftLine>) {
-    onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    onChange(
+      rows.map((r) => {
+        if (r.key !== key) return r;
+        const next = { ...r, ...patch };
+        // The helper of a session can't also be the one who runs it; a non-package row has no session to share.
+        const runner = next.assistingTherapistId ?? primaryId;
+        if (next.sessionShare && (next.sessionShare.therapistId === runner || !isPackageRow(next, catalog))) {
+          next.sessionShare = null;
+        }
+        return next;
+      })
+    );
   }
+
+  // A change of the visit's therapist can make a row's helper the runner: drop that share.
+  useEffect(() => {
+    if (rows.some((r) => r.sessionShare && r.sessionShare.therapistId === (r.assistingTherapistId ?? primaryId))) {
+      onChange(
+        rows.map((r) =>
+          r.sessionShare && r.sessionShare.therapistId === (r.assistingTherapistId ?? primaryId)
+            ? { ...r, sessionShare: null }
+            : r
+        )
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryId, rows]);
 
   function pick(key: string, value: string) {
     if (value.startsWith('pkg:')) {
@@ -331,6 +361,14 @@ export function ServiceRows({
               </div>
             )}
 
+            {named && showAssistant && isPackageRow(row, catalog) && (
+              <SessionShare
+                row={row}
+                candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
+                onChange={(sessionShare) => update(row.key, { sessionShare })}
+              />
+            )}
+
             {error && <p className="mt-1.5 text-xs text-[var(--rust)]">{error}</p>}
           </div>
         );
@@ -373,6 +411,70 @@ export function ServiceRows({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Share this session": a colleague who helped gets a percentage of the session's package share. */
+function SessionShare({
+  row,
+  candidates,
+  onChange,
+}: {
+  row: DraftLine;
+  candidates: Therapist[];
+  onChange: (share: DraftLine['sessionShare']) => void;
+}) {
+  const share = row.sessionShare;
+  if (!share) {
+    if (candidates.length === 0) return null;
+    return (
+      <button
+        type="button"
+        className="mt-1 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
+        title="Give a colleague who helped part of this session's package share"
+        onClick={() => onChange({ therapistId: candidates[0]!.id, pct: 50 })}
+      >
+        + Share this session
+      </button>
+    );
+  }
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+      <span>Shared with</span>
+      <select
+        aria-label="Colleague who helped"
+        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)]"
+        value={share.therapistId}
+        onChange={(e) => onChange({ ...share, therapistId: e.target.value })}
+      >
+        {candidates.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      <label className="flex items-center gap-1">
+        <input
+          type="number"
+          min={1}
+          max={99}
+          inputMode="numeric"
+          aria-label="Percent of this session"
+          className="w-14 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-xs text-[var(--ink)]"
+          value={Number.isFinite(share.pct) ? share.pct : ''}
+          onChange={(e) => onChange({ ...share, pct: e.target.value === '' ? NaN : Number(e.target.value) })}
+        />
+        % of this session
+      </label>
+      <button
+        type="button"
+        aria-label="Remove session share"
+        className="rounded p-0.5 hover:bg-[var(--paper)]"
+        onClick={() => onChange(null)}
+      >
+        <IconClose className="h-3 w-3" />
+      </button>
     </div>
   );
 }

@@ -28,6 +28,12 @@ describe('attribution audit view', () => {
     expect(basisText(entry({}), name)).toBe("Session 2 of 3 · run by Dr B · from Dr A's ₹3,000 package billed 23/10/26");
   });
 
+  it('names a helper and the runner who keeps the rest', () => {
+    expect(basisText(entry({ packageRole: 'helper', sessionSharePct: 40 }), name)).toContain('Dr B helped (40%)');
+    expect(basisText(entry({ sessionSharePct: 40 }), name)).toContain('run by Dr B (keeps 60%)');
+    expect(myBasisText(entry({ packageRole: 'helper', sessionSharePct: 40 }), name)).toContain('Dr B helped');
+  });
+
   it('filters by a therapist who gave or received, and by patient', () => {
     const list = [entry({}), entry({ visitId: 'v2', fromTherapistId: 'c', toTherapistId: 'b', patientId: 'p2' })];
     const pn = (id: string) => (id === 'p1' ? 'Asha (W1)' : 'Ravi (W2)');

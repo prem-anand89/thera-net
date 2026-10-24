@@ -20,6 +20,7 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { formatINR } from '@/domain/money';
 import { packageSessionShares } from '@/domain/payBase';
+import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -622,9 +623,21 @@ export function NewVisitPage() {
     return r.billerId ? { billerId: r.billerId, amountPaise: r.postTaxPaise } : null;
   }, [continuationGroupId, splitEnabled]);
   const runnerId = continuationRow ? (continuationRow.assistingTherapistId ?? therapistId) : '';
+  const helperShare = continuationRow?.sessionShare ?? null;
   const packageMoveNote =
-    packageMove && runnerId && packageMove.billerId !== runnerId && packageMove.amountPaise > 0
-      ? `${formatINR(packageMove.amountPaise)} of ${therapistsById.get(packageMove.billerId)?.name ?? 'the biller'}'s package moves to ${therapistsById.get(runnerId)?.name ?? 'the therapist'} for this session.`
+    packageMove && runnerId
+      ? buildPackageMoveNote({
+          amountPaise: packageMove.amountPaise,
+          biller: { id: packageMove.billerId, name: therapistsById.get(packageMove.billerId)?.name ?? 'the biller' },
+          runner: { id: runnerId, name: therapistsById.get(runnerId)?.name ?? 'the therapist' },
+          helper: helperShare
+            ? {
+                id: helperShare.therapistId,
+                name: therapistsById.get(helperShare.therapistId)?.name ?? 'a colleague',
+                pct: helperShare.pct,
+              }
+            : null,
+        })
       : null;
 
   // The bill: the discount / top-up applies to the rows' catalog total (₹0 for a package session).
