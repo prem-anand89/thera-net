@@ -46,13 +46,13 @@ export function VisitSaveBar({
         className="min-w-0 flex-1 truncate text-left"
         onClick={onSummaryClick}
       >
-        <div className="truncate text-sm font-bold text-[var(--ink)]">
+        <span className="block truncate text-sm font-bold text-[var(--ink)]">
           {serviceCount === 0 ? 'No service yet' : formatINR(totalPaise)}
-        </div>
+        </span>
         {serviceCount > 0 && (
-          <div className="truncate text-xs text-[var(--muted)]">
+          <span className="block truncate text-xs text-[var(--muted)]">
             {detailText}
-          </div>
+          </span>
         )}
       </button>
       <div className="flex shrink-0 items-center gap-1.5">

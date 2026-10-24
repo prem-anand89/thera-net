@@ -141,11 +141,9 @@ function SegmentedToggle<T extends string>({
   );
 }
 
-export interface NewVisitDirtyInput {
-  justSaved: boolean;
+export interface NewVisitSignatureInput {
   rows: DraftLine[];
-  patient: Patient | null;
-  hasPrefillPatient: boolean;
+  patientId: string | null;
   creatingPatient: boolean;
   newPatientName: string;
   condition: string;
@@ -155,17 +153,37 @@ export interface NewVisitDirtyInput {
   adjustmentMode: BillAdjustmentMode;
 }
 
-export function isNewVisitDirty(input: NewVisitDirtyInput): boolean {
-  if (input.justSaved) return false;
-  if (input.rows.some(hasService)) return true;
-  if (input.patient && !input.hasPrefillPatient) return true;
-  if (input.creatingPatient && input.newPatientName.trim().length > 0) return true;
-  if (input.condition.trim().length > 0 && !input.hasPrefillPatient) return true;
-  if (input.notes.trim().length > 0) return true;
-  if (input.pendingNote.trim().length > 0) return true;
-  if (input.treatmentIds.length > 0) return true;
-  if (input.adjustmentMode !== 'none') return true;
-  return false;
+/** Everything the person can change on the form, as one string, so "changed" means "different from where it started". */
+export function newVisitSignature(input: NewVisitSignatureInput): string {
+  return JSON.stringify({
+    rows: input.rows.map((r) => [
+      r.continuation?.packageGroupId ?? r.serviceCatalogId ?? '',
+      r.assistingTherapistId ?? '',
+      r.sessionShare ? `${r.sessionShare.therapistId}:${r.sessionShare.pct}` : '',
+    ]),
+    patientId: input.patientId ?? '',
+    newPatient: input.creatingPatient ? input.newPatientName.trim() : '',
+    condition: input.condition.trim(),
+    notes: input.notes.trim(),
+    pendingNote: input.pendingNote.trim(),
+    treatmentIds: [...input.treatmentIds].sort(),
+    adjustmentMode: input.adjustmentMode,
+  });
+}
+
+/**
+ * Whether leaving would lose something the person did. The form starts out filled in by the page itself
+ * (a patient from the link, an open package's session, a repeated visit's services, an appointment's name):
+ * that is never "unsaved work". The baseline follows those changes until the person first touches the form
+ * (`touched`), then freezes; dirty means touched AND different from that baseline. Saved is never dirty.
+ */
+export function isNewVisitDirty(input: {
+  justSaved: boolean;
+  touched: boolean;
+  signature: string;
+  baseline: string;
+}): boolean {
+  return !input.justSaved && input.touched && input.signature !== input.baseline;
 }
 
 export function NewVisitPage() {
@@ -305,11 +323,10 @@ export function NewVisitPage() {
   // Synchronous double-tap guard: `busy` is React state and lags one render.
   const savingRef = useRef(false);
 
-  const isDirty = isNewVisitDirty({
-    justSaved: Boolean(justSaved),
+  // See isNewVisitDirty: the baseline tracks the page's own prefill until the first touch, then freezes.
+  const signature = newVisitSignature({
     rows,
-    patient,
-    hasPrefillPatient: Boolean(search.patientId || search.repeatVisitId),
+    patientId: patient?.id ?? null,
     creatingPatient,
     newPatientName: newPatient.name,
     condition,
@@ -317,6 +334,15 @@ export function NewVisitPage() {
     pendingNote,
     treatmentIds,
     adjustmentMode,
+  });
+  const touchedRef = useRef(false);
+  const baselineRef = useRef(signature);
+  if (!touchedRef.current) baselineRef.current = signature;
+  const isDirty = isNewVisitDirty({
+    justSaved: Boolean(justSaved),
+    touched: touchedRef.current,
+    signature,
+    baseline: baselineRef.current,
   });
 
   const isDirtyRef = useRef(false);
@@ -1574,7 +1600,15 @@ export function NewVisitPage() {
 
   return (
     // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
-    <div className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0">
+    <div
+      className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0"
+      onPointerDownCapture={() => {
+        touchedRef.current = true;
+      }}
+      onKeyDownCapture={() => {
+        touchedRef.current = true;
+      }}
+    >
       <div className="flex items-center gap-2">
         <button
           type="button"

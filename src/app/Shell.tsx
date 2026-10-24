@@ -497,7 +497,7 @@ export function Shell() {
           className={`mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${
             shouldShowPhoneBottomNav(pathname)
               ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
-              : 'pb-24 sm:pb-6'
+              : 'pb-6'
           }`}
         >
           <Suspense

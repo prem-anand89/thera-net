@@ -1,26 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isNewVisitDirty, type NewVisitDirtyInput } from './NewVisitPage';
-import type { Patient } from '@/domain/types';
+import { isNewVisitDirty, newVisitSignature, type NewVisitSignatureInput } from './NewVisitPage';
 
-const dummyPatient: Patient = {
-  id: 'p1',
-  clinicId: 'c1',
-  name: 'John Doe',
-  mrno: 'MR101',
-  mrnoSource: 'auto',
-  age: 30,
-  sex: 'M',
-  phone: '9876543210',
-  primaryCondition: 'Knee pain',
-  updatedAt: '2026-01-01',
-};
-
-function baseInput(overrides: Partial<NewVisitDirtyInput> = {}): NewVisitDirtyInput {
+function input(over: Partial<NewVisitSignatureInput> = {}): NewVisitSignatureInput {
   return {
-    justSaved: false,
     rows: [{ key: 'r1', assistingTherapistId: null }],
-    patient: null,
-    hasPrefillPatient: false,
+    patientId: null,
     creatingPatient: false,
     newPatientName: '',
     condition: '',
@@ -28,88 +12,54 @@ function baseInput(overrides: Partial<NewVisitDirtyInput> = {}): NewVisitDirtyIn
     pendingNote: '',
     treatmentIds: [],
     adjustmentMode: 'none',
-    ...overrides,
+    ...over,
   };
 }
 
+const sig = (over: Partial<NewVisitSignatureInput> = {}) => newVisitSignature(input(over));
+
+/** What the page does: baseline = the signature before the first touch; then compare. */
+function dirty(baseline: string, now: string, touched = true, justSaved = false) {
+  return isNewVisitDirty({ justSaved, touched, signature: now, baseline });
+}
+
 describe('isNewVisitDirty', () => {
-  it('returns false for an untouched form', () => {
-    expect(isNewVisitDirty(baseInput())).toBe(false);
+  it('an untouched form is never dirty, even if the page filled things in', () => {
+    const start = sig();
+    const prefilled = sig({
+      patientId: 'p1',
+      condition: 'Knee pain',
+      rows: [{ key: 'r1', continuation: { packageGroupId: 'g1' } as never, assistingTherapistId: null }],
+    });
+    expect(dirty(start, prefilled, false)).toBe(false);
   });
 
-  it('returns true when a service is chosen', () => {
-    expect(
-      isNewVisitDirty(
-        baseInput({
-          rows: [{ key: 'r1', serviceCatalogId: 's1', assistingTherapistId: null }],
-        })
-      )
-    ).toBe(true);
+  it('a touched form that still equals its prefilled start is not dirty (open from a patient / appointment, then Cancel)', () => {
+    const prefilled = sig({ patientId: 'p1', treatmentIds: ['t1'], creatingPatient: true, newPatientName: 'Asha' });
+    expect(dirty(prefilled, prefilled)).toBe(false);
   });
 
-  it('returns false when patient was prefilled via ?patientId or ?repeatVisitId and nothing else was edited', () => {
-    expect(
-      isNewVisitDirty(
-        baseInput({
-          patient: dummyPatient,
-          hasPrefillPatient: true,
-          condition: 'Knee pain', // carried over from patient primaryCondition
-        })
-      )
-    ).toBe(false);
+  it('is dirty once something differs from the start', () => {
+    const start = sig({ patientId: 'p1' });
+    expect(dirty(start, sig({ patientId: 'p1', rows: [{ key: 'r', serviceCatalogId: 's1', assistingTherapistId: null }] }))).toBe(true);
+    expect(dirty(start, sig({ patientId: 'p2' }))).toBe(true);
+    expect(dirty(start, sig({ patientId: 'p1', notes: 'Follow up' }))).toBe(true);
+    expect(dirty(start, sig({ patientId: 'p1', pendingNote: 'Pays tomorrow' }))).toBe(true);
+    expect(dirty(start, sig({ patientId: 'p1', treatmentIds: ['t1'] }))).toBe(true);
+    expect(dirty(start, sig({ patientId: 'p1', adjustmentMode: 'discount' }))).toBe(true);
   });
 
-  it('returns true when a patient was manually selected in this session', () => {
-    expect(
-      isNewVisitDirty(
-        baseInput({
-          patient: dummyPatient,
-          hasPrefillPatient: false,
-        })
-      )
-    ).toBe(true);
+  it('typing and then undoing is not dirty; whitespace is ignored; treatment order does not matter', () => {
+    const start = sig({ treatmentIds: ['a', 'b'] });
+    expect(dirty(start, sig({ treatmentIds: ['b', 'a'], notes: '   ' }))).toBe(false);
   });
 
-  it('returns false once saved (justSaved is true)', () => {
-    expect(
-      isNewVisitDirty(
-        baseInput({
-          justSaved: true,
-          patient: dummyPatient,
-          rows: [{ key: 'r1', serviceCatalogId: 's1', assistingTherapistId: null }],
-          condition: 'Knee pain',
-        })
-      )
-    ).toBe(false);
+  it('a new patient being typed counts, an empty name does not', () => {
+    expect(dirty(sig(), sig({ creatingPatient: true, newPatientName: 'Alice' }))).toBe(true);
+    expect(dirty(sig(), sig({ creatingPatient: true, newPatientName: '   ' }))).toBe(false);
   });
 
-  it('returns true when clinical notes or pending payment note has text', () => {
-    expect(isNewVisitDirty(baseInput({ notes: 'Follow up in 3 days' }))).toBe(true);
-    expect(isNewVisitDirty(baseInput({ pendingNote: 'Will pay tomorrow' }))).toBe(true);
-  });
-
-  it('returns true when treatments or adjustments are selected', () => {
-    expect(isNewVisitDirty(baseInput({ treatmentIds: ['t1'] }))).toBe(true);
-    expect(isNewVisitDirty(baseInput({ adjustmentMode: 'discount' }))).toBe(true);
-    expect(isNewVisitDirty(baseInput({ adjustmentMode: 'extra' }))).toBe(true);
-  });
-
-  it('returns true when staff started creating a new patient with a name', () => {
-    expect(
-      isNewVisitDirty(
-        baseInput({
-          creatingPatient: true,
-          newPatientName: 'Alice',
-        })
-      )
-    ).toBe(true);
-    expect(
-      isNewVisitDirty(
-        baseInput({
-          creatingPatient: true,
-          newPatientName: '   ',
-        })
-      )
-    ).toBe(false);
+  it('is never dirty once the visit is saved', () => {
+    expect(dirty(sig(), sig({ notes: 'x' }), true, true)).toBe(false);
   });
 });

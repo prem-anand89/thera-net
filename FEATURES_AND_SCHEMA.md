@@ -129,7 +129,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Phone save bar** (`VisitSaveBar`, below `sm:`): one-row bar fixed flush to the bottom edge
     (`bottom: 0`, padding `env(safe-area-inset-bottom)`), reads line 1 "₹1,300" (or "No service yet" until a service is chosen, disabling Save)
     and line 2 "2 services · UPI, collected now" (or "to collect later"), with Cancel and Save visit buttons; tapping the summary scrolls to Payment.
-    The phone bottom tab bar is hidden on `/visits/new`. Unsaved edits are guarded by router blocker so Cancel/back prompts to discard; tablet/desktop keep Save and Cancel together under Payment.
+    The phone bottom tab bar is hidden on `/visits/new`. Unsaved edits (anything changed since the page opened, not what the page prefilled itself: a patient from the link, an open package's session, a repeated visit) are guarded by a router blocker so Cancel, the back arrow and browser back prompt once to discard; tablet/desktop keep Save and Cancel together under Payment.
   - After saving: the "Visit logged" screen and the bill dialog name the services ("Assessment + Dry needling"),
     and the extra-visit button reads "Log a separate visit for {patient}".
 - **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)
