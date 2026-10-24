@@ -1215,44 +1215,44 @@ export function LedgerPage() {
                 aria-label="Totals for all filtered visits"
                 title={filterDescription}
               >
-                {/* Phone (<sm): compact single line, wraps gracefully up to 2 lines if needed */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                  <span>
+                {/* Phone (<sm): compact single row with left metrics and right due toggle */}
+                <div className="flex items-center justify-between gap-2 sm:hidden">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
                     <span className="font-medium text-[var(--ink)]">
                       {totals.visitCount} visit{totals.visitCount === 1 ? '' : 's'}
                     </span>
-                    {visitsPager.pageCount > 1 && ' (all pages)'}
-                  </span>
+                    {totals.state === 'dues' && (
+                      <>
+                        <span className="text-[var(--muted)]">·</span>
+                        <span>
+                          Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
+                        </span>
+                      </>
+                    )}
+                    {totals.state === 'clear' && (
+                      <>
+                        <span className="text-[var(--muted)]">·</span>
+                        <span>
+                          <strong className="font-num font-medium text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong> collected
+                        </span>
+                        <span className="text-[var(--muted)]">·</span>
+                        <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
+                      </>
+                    )}
+                    {totals.state === 'no_charge' && (
+                      <>
+                        <span className="text-[var(--muted)]">·</span>
+                        <span className="text-[var(--muted)]">no charges</span>
+                      </>
+                    )}
+                  </div>
                   {totals.state === 'dues' && (
-                    <>
-                      <span className="text-[var(--muted)]">·</span>
-                      <span>
-                        Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
-                      </span>
-                      <span className="text-[var(--muted)]">·</span>
-                      <DueToggle
-                        active={onlyNotCollected}
-                        outstanding={totals.outstanding}
-                        unpaidCount={totals.unpaidCount}
-                        onToggle={toggleUnpaid}
-                      />
-                    </>
-                  )}
-                  {totals.state === 'clear' && (
-                    <>
-                      <span className="text-[var(--muted)]">·</span>
-                      <span>
-                        <strong className="font-num font-medium text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong> collected
-                      </span>
-                      <span className="text-[var(--muted)]">·</span>
-                      <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
-                    </>
-                  )}
-                  {totals.state === 'no_charge' && (
-                    <>
-                      <span className="text-[var(--muted)]">·</span>
-                      <span className="text-[var(--muted)]">no charges</span>
-                    </>
+                    <DueToggle
+                      active={onlyNotCollected}
+                      outstanding={totals.outstanding}
+                      unpaidCount={totals.unpaidCount}
+                      onToggle={toggleUnpaid}
+                    />
                   )}
                 </div>
 

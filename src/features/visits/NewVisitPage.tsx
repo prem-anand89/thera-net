@@ -1491,7 +1491,7 @@ export function NewVisitPage() {
       <div ref={errorRef}>
         <ErrorNote message={error} />
       </div>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         {/* Phones save from the fixed bar below; tablet and up keep Save here, under Payment. */}
         <button type="button" className={`${btnPrimary} hidden sm:inline-flex`} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
