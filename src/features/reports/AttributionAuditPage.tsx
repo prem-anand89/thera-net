@@ -197,7 +197,7 @@ export function AttributionAuditPage() {
       {entries && entries.length > 0 && (
         <section className="space-y-2">
           <h3 className={sectionTitle}>
-            Movements{' '}
+            Credits and debits{' '}
             <span className="font-normal normal-case tracking-normal">· {entries.length}</span>
           </h3>
           {/* Below tab: — boxed cards instead of forcing this 8-column
