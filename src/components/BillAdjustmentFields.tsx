@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { formatINR } from '@/domain/money';
 import {
   computeAdjustedBillPaise,
@@ -81,6 +82,22 @@ export function BillAdjustmentFields({
   const billPaise = computeAdjustedBillPaise(catalogPricePaise, adjustment);
   const summary = describeBillAdjustment(catalogPricePaise, billPaise);
 
+  const hasAdjustment = mode !== 'none';
+  const [expanded, setExpanded] = useState(hasAdjustment);
+
+  useEffect(() => {
+    if (hasAdjustment) {
+      setExpanded(true);
+    }
+  }, [hasAdjustment]);
+
+  function handleModeChange(newMode: BillAdjustmentMode) {
+    if (newMode === 'none') {
+      setExpanded(false);
+    }
+    onModeChange(newMode);
+  }
+
   return (
     <fieldset disabled={disabled} className="m-0 min-w-0 space-y-3 border-0 p-0">
       <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
@@ -88,21 +105,34 @@ export function BillAdjustmentFields({
         <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
       </div>
 
-      <Field label="Adjustment">
-        <SegmentedToggle
-          value={mode}
-          onChange={onModeChange}
-          options={[
-            { value: 'none', label: 'None' },
-            {
-              value: 'discount',
-              label: 'Discount',
-              disabled: continuationSession && catalogPricePaise === 0,
-            },
-            { value: 'extra', label: 'Extra' },
-          ]}
-        />
-      </Field>
+      {!expanded && !hasAdjustment ? (
+        <div>
+          <button
+            type="button"
+            disabled={disabled || (continuationSession && catalogPricePaise === 0)}
+            onClick={() => setExpanded(true)}
+            className="min-h-11 inline-flex items-center text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            + Discount / Extra
+          </button>
+        </div>
+      ) : (
+        <Field label="Adjustment">
+          <SegmentedToggle
+            value={mode}
+            onChange={handleModeChange}
+            options={[
+              { value: 'none', label: 'None' },
+              {
+                value: 'discount',
+                label: 'Discount',
+                disabled: continuationSession && catalogPricePaise === 0,
+              },
+              { value: 'extra', label: 'Extra' },
+            ]}
+          />
+        </Field>
+      )}
 
       {mode !== 'none' && (
         <>

@@ -57,7 +57,10 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     package row once, and pre-fills the discount only when the original visit had a single service. Esc closes
     an opened change-service / assistant picker.
   - **Bill.** Subtotal = the rows' catalog prices (₹0 for a continuation). The discount / extra control
-    (`BillAdjustmentFields`, ₹ or %, reason required whenever the bill differs from the subtotal) applies to the
+    (`BillAdjustmentFields`, ₹ or %, reason required whenever the bill differs from the subtotal) starts collapsed
+    behind a quiet "+ Discount / Extra" button when no adjustment exists, and starts expanded whenever an adjustment
+    is already present (e.g. editing a visit or restoring a draft). Selecting "None" collapses it back and clears the adjustment.
+    The disclosure state does not affect dirty form tracking. It applies to the
     subtotal and **survives row changes**; it is cleared only when a ₹ discount no longer fits the new subtotal
     or the subtotal reaches ₹0, and the control is disabled at ₹0. The UPI QR, the payment amount and the phone
     bar use the total.
