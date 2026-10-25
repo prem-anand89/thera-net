@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatINR } from '@/domain/money';
+import { formatINR, roundToRupeeHalfUp } from '@/domain/money';
 import { effectivePricePerSession, type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/domain/types';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { IconClose, IconUserPlus } from '@/components/StatIcons';
@@ -145,9 +145,9 @@ export interface ServiceRowsProps {
   catalog: CatalogItem[];
   openPackages: OpenPackage[];
   therapists: Therapist[];
-  /** The visit's therapist — never offered as an assistant. */
+  /** The visit's therapist — who does a row unless "Done by" says otherwise. */
   primaryId: UUID;
-  /** False for a solo clinic: no "Assign assistant". */
+  /** False for a solo clinic: no "Done by" / "Share". */
   showAssistant: boolean;
   /** Messages the page wants on specific rows (by index), shown in addition to the package rule. */
   errors: Map<number, string>;
@@ -171,15 +171,16 @@ export function ServiceRows({
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState<string | null>(null);
+  const [doneBy, setDoneBy] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
 
   const problems = useMemo(() => rowProblems(rows, catalog), [rows, catalog]);
-  const assistants = useMemo(
-    () => therapists.filter((t) => t.active && t.id !== primaryId),
+  // Everyone who can do a service: the visit's therapist and the other active therapists.
+  const doers = useMemo(
+    () => therapists.filter((t) => t.active || t.id === primaryId),
     [therapists, primaryId]
   );
-  const therapistName = (id: UUID) => therapists.find((t) => t.id === id)?.name ?? 'Assistant';
+  const therapistName = (id: UUID) => therapists.find((t) => t.id === id)?.name ?? 'Therapist';
 
   const serviceOptions = useMemo(() => {
     const packages = openPackages.map((p) => ({
@@ -204,9 +205,9 @@ export function ServiceRows({
       rows.map((r) => {
         if (r.key !== key) return r;
         const next = { ...r, ...patch };
-        // The helper of a session can't also be the one who runs it; a non-package row has no session to share.
+        // A service can't be shared with the therapist who does it.
         const runner = next.assistingTherapistId ?? primaryId;
-        if (next.sessionShare && (next.sessionShare.therapistId === runner || !isPackageRow(next, catalog))) {
+        if (next.sessionShare && next.sessionShare.therapistId === runner) {
           next.sessionShare = null;
         }
         return next;
@@ -214,7 +215,7 @@ export function ServiceRows({
     );
   }
 
-  // A change of the visit's therapist can make a row's helper the runner: drop that share.
+  // A change of the visit's therapist can make the shared therapist the one who does the row: drop that share.
   useEffect(() => {
     if (rows.some((r) => r.sessionShare && r.sessionShare.therapistId === (r.assistingTherapistId ?? primaryId))) {
       onChange(
@@ -268,7 +269,7 @@ export function ServiceRows({
             onKeyDown={(e) => {
               if (e.key !== 'Escape') return;
               setChanging(null);
-              setAssigning(null);
+              setDoneBy(null);
             }}
             // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.
             className={
@@ -328,48 +329,41 @@ export function ServiceRows({
               <div className="mt-0.5 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
             )}
 
-            {named && (
+            {named && showAssistant && (
               <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2.5">
-                {row.assistingTherapistId ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs text-[var(--teal)]">
-                    {therapistName(row.assistingTherapistId)} · assisting
+                {doneBy === row.key ? (
+                  <div className="w-full">
+                    <FocusedPicker
+                      autoFocus
+                      label="Done by"
+                      value={row.assistingTherapistId ?? primaryId}
+                      onChange={(v) => {
+                        update(row.key, { assistingTherapistId: v === primaryId ? null : v });
+                        setDoneBy(null);
+                      }}
+                      options={doers.map((t) => ({ value: t.id, label: t.name }))}
+                    />
+                  </div>
+                ) : (
+                  doers.length > 1 && (
                     <button
                       type="button"
-                      aria-label={`Remove assistant ${therapistName(row.assistingTherapistId)}`}
-                      className="rounded-full p-0.5 hover:bg-[var(--surface)]"
-                      onClick={() => update(row.key, { assistingTherapistId: null })}
+                      className={row.assistingTherapistId ? `${pillBtn} !border-[var(--teal)] !text-[var(--teal)]` : pillBtn}
+                      title="Who did this service. They get its money."
+                      onClick={() => setDoneBy(row.key)}
                     >
-                      <IconClose className="h-3 w-3" />
-                    </button>
-                  </span>
-                ) : showAssistant && assistants.length > 0 ? (
-                  assigning === row.key ? (
-                    <div className="w-full">
-                      <FocusedPicker
-                        autoFocus
-                        label="Assistant"
-                        value=""
-                        onChange={(v) => {
-                          update(row.key, { assistingTherapistId: v });
-                          setAssigning(null);
-                        }}
-                        options={assistants.map((t) => ({ value: t.id, label: t.name }))}
-                      />
-                    </div>
-                  ) : (
-                    <button type="button" className={pillBtn} onClick={() => setAssigning(row.key)}>
                       <IconUserPlus className="h-3.5 w-3.5" />
-                      Assistant
+                      Done by: {therapistName(row.assistingTherapistId ?? primaryId)} ▾
                     </button>
                   )
-                ) : null}
-                {showAssistant && isPackageRow(row, catalog) && (
-                  <SessionShare
-                    row={row}
-                    candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
-                    onChange={(sessionShare) => update(row.key, { sessionShare })}
-                  />
                 )}
+                <RowShare
+                  row={row}
+                  pricePaise={rowPricePaise(row, catalog)}
+                  isPackage={isPackageRow(row, catalog)}
+                  candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
+                  onChange={(sessionShare) => update(row.key, { sessionShare })}
+                />
               </div>
             )}
 
@@ -419,13 +413,21 @@ export function ServiceRows({
   );
 }
 
-/** "Share this session": a colleague who helped gets a percentage of the session's package share. */
-function SessionShare({
+/**
+ * "Share": a colleague who helped gets a percentage of this service; whoever does it keeps the rest. On a
+ * paid service the money moves through the visit's revenue shares, on a package session through package
+ * attribution — the row just records who and how much.
+ */
+function RowShare({
   row,
+  pricePaise,
+  isPackage,
   candidates,
   onChange,
 }: {
   row: DraftLine;
+  pricePaise: number;
+  isPackage: boolean;
   candidates: Therapist[];
   onChange: (share: DraftLine['sessionShare']) => void;
 }) {
@@ -436,18 +438,22 @@ function SessionShare({
       <button
         type="button"
         className={pillBtn}
-        title="Give a colleague who helped part of this session's package share"
+        title="Give a colleague who helped a % of this service"
         onClick={() => onChange({ therapistId: candidates[0]!.id, pct: 50 })}
       >
-        Share session
+        Share
       </button>
     );
   }
+  const preview =
+    !isPackage && Number.isFinite(share.pct) && share.pct > 0 && pricePaise > 0
+      ? formatINR(roundToRupeeHalfUp((pricePaise * share.pct) / 100))
+      : null;
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+    <div className="flex w-full flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
       <span>Shared with</span>
       <select
-        aria-label="Colleague who helped"
+        aria-label="Shared with"
         className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)]"
         value={share.therapistId}
         onChange={(e) => onChange({ ...share, therapistId: e.target.value })}
@@ -464,16 +470,17 @@ function SessionShare({
           min={1}
           max={99}
           inputMode="numeric"
-          aria-label="Percent of this session"
+          aria-label="Percent of this service"
           className="w-14 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-xs text-[var(--ink)]"
           value={Number.isFinite(share.pct) ? share.pct : ''}
           onChange={(e) => onChange({ ...share, pct: e.target.value === '' ? NaN : Number(e.target.value) })}
         />
-        % of this session
+        {isPackage ? '% of this session' : '% of this service'}
       </label>
+      {preview && <span className="font-num text-[var(--ink)]">≈ {preview}</span>}
       <button
         type="button"
-        aria-label="Remove session share"
+        aria-label="Remove share"
         className="rounded p-0.5 hover:bg-[var(--paper)]"
         onClick={() => onChange(null)}
       >

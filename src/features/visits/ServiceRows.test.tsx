@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import type { CatalogItem, Therapist, VisitItem } from '@/domain/types';
-import { ServiceRows, draftLinesToItems, draftSubtotalPaise, type DraftLine, type OpenPackage } from './ServiceRows';
+import { ServiceRows, draftLinesToItems, draftSubtotalPaise, rowProblems, type DraftLine, type OpenPackage } from './ServiceRows';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar } from './VisitSaveBar';
 
@@ -125,30 +125,30 @@ describe('ServiceRows', () => {
     expect(screen.getByText(/isn't used on this visit/)).toBeInTheDocument();
   });
 
-  it("assistant list excludes the visit's therapist and inactive therapists", () => {
+  it('"Done by" starts as the visit therapist and lists active therapists only', () => {
     render(<Harness initial={[row('a', 'assess')]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Assistant' }));
-    const box = screen.getByRole('combobox', { name: 'Assistant' });
-    fireEvent.focus(box);
-    const names = screen.getAllByRole('option').map((o) => o.textContent);
-    expect(names).toEqual(['Dr Sneha']);
+    fireEvent.click(screen.getByRole('button', { name: /Done by: Dr Raghavender/ }));
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Dr Raghavender', 'Dr Sneha']);
   });
 
-  it('assign assistant tags only that row', () => {
+  it('"Done by" tags only that row, and choosing the visit therapist clears it', () => {
     const seen: DraftLine[][] = [];
     render(<Harness initial={[row('a', 'assess'), row('b', 'needle')]} onRows={(r) => seen.push(r)} />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Assistant' })[1]);
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Assistant' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Done by: Dr Raghavender/ })[1]);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
     fireEvent.mouseDown(screen.getByRole('option', { name: 'Dr Sneha' }));
     expect(seen.at(-1)!.map((r) => r.assistingTherapistId)).toEqual([null, 't2']);
-    expect(screen.getByText('Dr Sneha · assisting')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove assistant Dr Sneha' }));
+    fireEvent.click(screen.getByRole('button', { name: /Done by: Dr Sneha/ }));
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Dr Raghavender' }));
     expect(seen.at(-1)!.map((r) => r.assistingTherapistId)).toEqual([null, null]);
   });
 
-  it('solo clinic shows no assign assistant', () => {
+  it('solo clinic shows no "Done by" or "Share"', () => {
     render(<Harness initial={[row('a', 'assess')]} showAssistant={false} />);
-    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Done by/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
   });
 
   it('picker lists open packages before services', () => {
@@ -181,16 +181,16 @@ describe('ServiceRows', () => {
     expect(screen.getByText('Pick a service.')).toBeInTheDocument();
   });
 
-  it('escape cancels an opened change-service picker and assistant picker', () => {
+  it('escape cancels an opened change-service picker and "Done by" picker', () => {
     render(<Harness initial={[row('a', 'assess')]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Assessment' }));
     expect(screen.getByRole('combobox', { name: 'Service' })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Service' }), { key: 'Escape' });
     expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Assistant' }));
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Assistant' }), { key: 'Escape' });
-    expect(screen.queryByRole('combobox', { name: 'Assistant' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Assistant' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Done by/ }));
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Done by' }), { key: 'Escape' });
+    expect(screen.queryByRole('combobox', { name: 'Done by' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Done by/ })).toBeInTheDocument();
   });
 
   it('adds another service row', () => {
@@ -326,36 +326,56 @@ describe('VisitSaveBar', () => {
   });
 });
 
-describe('sharing a package session', () => {
-  it('offers "Share this session" only on a package row, and seeds a helper who is not the runner', () => {
+describe('sharing a service', () => {
+  it('offers "Share" on a paid row and a package row, seeding a colleague who is not the one doing it', () => {
     const onRows = vi.fn();
     render(<Harness initial={[pkgRow(), row('n', 'needle')]} openPackages={[pkg]} onRows={onRows} />);
-    const links = screen.getAllByRole('button', { name: 'Share session' });
-    expect(links).toHaveLength(1);
-    fireEvent.click(links[0]!);
+    const pills = screen.getAllByRole('button', { name: 'Share' });
+    expect(pills).toHaveLength(2);
+    fireEvent.click(pills[1]!);
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
-    expect(last[0]!.sessionShare).toEqual({ therapistId: 't2', pct: 50 });
+    expect(last[1]!.sessionShare).toEqual({ therapistId: 't2', pct: 50 });
   });
 
-  it('edits the percentage and removes the share', () => {
+  it('previews the rupees on a paid row', () => {
+    render(<Harness initial={[row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 30 } })]} />);
+    // Assessment is ₹800 in the test catalog: 30% = ₹240.
+    expect(screen.getByText('≈ ₹240')).toBeInTheDocument();
+    expect(screen.getByText(/% of this service/)).toBeInTheDocument();
+  });
+
+  it('edits the percentage and removes the share on a package row', () => {
     const onRows = vi.fn();
     render(<Harness initial={[{ ...pkgRow(), sessionShare: { therapistId: 't2', pct: 50 } }]} openPackages={[pkg]} onRows={onRows} />);
-    fireEvent.change(screen.getByLabelText('Percent of this session'), { target: { value: '30' } });
+    expect(screen.getByText(/% of this session/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Percent of this service'), { target: { value: '30' } });
     expect((onRows.mock.calls.at(-1)![0] as DraftLine[])[0]!.sessionShare?.pct).toBe(30);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove session share' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove share' }));
     expect((onRows.mock.calls.at(-1)![0] as DraftLine[])[0]!.sessionShare).toBeNull();
   });
 
-  it('drops a share whose helper is the person running the session', () => {
+  it('drops a share whose colleague is the one doing the service', () => {
     const onRows = vi.fn();
-    // t1 is the visit's therapist, so cannot also be the helper (e.g. the visit's therapist was just changed to t1).
+    // t1 is the visit's therapist, so cannot also be the one it is shared with.
     render(<Harness initial={[{ ...pkgRow(), sessionShare: { therapistId: 't1', pct: 50 } }]} openPackages={[pkg]} onRows={onRows} />);
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
     expect(last[0]!.sessionShare).toBeNull();
   });
 
-  it('shows no share control for a solo clinic', () => {
-    render(<Harness initial={[pkgRow()]} openPackages={[pkg]} showAssistant={false} />);
-    expect(screen.queryByRole('button', { name: 'Share session' })).toBeNull();
+  it('clears the share when "Done by" becomes the shared colleague', () => {
+    const onRows = vi.fn();
+    render(<Harness initial={[row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 30 } })]} onRows={onRows} />);
+    fireEvent.click(screen.getByRole('button', { name: /Done by/ }));
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
+    // The row's own "Shared with" select also lists Dr Sneha; take the picker's option.
+    fireEvent.mouseDown(screen.getAllByRole('option', { name: 'Dr Sneha' }).find((o) => o.tagName !== 'OPTION')!);
+    const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+    expect(last[0]!.assistingTherapistId).toBe('t2');
+    expect(last[0]!.sessionShare).toBeNull();
+  });
+
+  it('flags a percentage outside 1 to 99 on any row', () => {
+    const rows = [row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 0 } })];
+    expect(rowProblems(rows, catalog).get(0)).toMatch(/1 to 99/);
   });
 });
