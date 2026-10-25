@@ -86,6 +86,7 @@ import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
 import { VisitLoggedCard } from './VisitLoggedCard';
+import { visitPermissions } from './visitPermissions';
 import { EditVisitModal } from './EditVisitModal';
 import { visitDateHint } from './visitDateHint';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
@@ -223,7 +224,7 @@ export function isNewVisitDirty(input: {
 
 export function NewVisitPage() {
   const clinic = useClinic();
-  const { canBill, canCollectPayment, role, canViewClinicalNotes: canWriteNotes } = usePermissions();
+  const { canBill, canCollectPayment, role, isAdmin, canViewClinicalNotes: canWriteNotes } = usePermissions();
   const navigate = useNavigate();
   const { session } = useSession();
   const entitlements = useEntitlements(clinic.id);
@@ -1022,7 +1023,19 @@ export function NewVisitPage() {
           }}
           onTakePayment={() => setTakingPayment(true)}
           onGiveBill={() => setInvoicing(true)}
-          onEdit={() => setEditingVisit(true)}
+          onEdit={
+            // Only someone the database would let save the edit is offered it (a therapist logging a colleague's visit is not).
+            visitPermissions({
+              isAdmin,
+              isFrontDesk: role === 'front_desk',
+              myTherapistId,
+              visitTherapistId: justSaved.therapistId,
+              invoiced: false,
+            }).canModify
+              ? () => setEditingVisit(true)
+              : undefined
+          }
+          receivedPaise={(savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0)}
           onNewVisitSamePatient={() => {
             // Re-run the "rows for this patient" step, so an open package's next session is offered again.
             rowsPatientRef.current = null;
@@ -1059,6 +1072,9 @@ export function NewVisitPage() {
                         billPaise: updated.actualBillPaise,
                         visitDate: updated.visitDate,
                         therapistId: updated.therapistId,
+                        // The bill may have changed since it was collected: what is owed now comes from the
+                        // payments on record, not from the "collected on the form" flag.
+                        alreadyCollected: false,
                       }
                     : null
                 );

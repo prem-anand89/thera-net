@@ -185,6 +185,18 @@ describe('ServiceRows', () => {
     expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
   });
 
+  it('Escape in an open service picker does not reach a dialog around the rows', () => {
+    const outer = vi.fn();
+    render(
+      <div onKeyDown={outer}>
+        <Harness initial={[row('a', 'assess')]} />
+      </div>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Assessment' }));
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Service' }), { key: 'Escape' });
+    expect(outer).not.toHaveBeenCalled();
+  });
+
   it('adds another service row', () => {
     const seen: DraftLine[][] = [];
     render(<Harness initial={[row('a', 'assess')]} onRows={(r) => seen.push(r)} />);

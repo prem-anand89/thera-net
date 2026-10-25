@@ -120,7 +120,7 @@ describe('EditVisitModal', () => {
     expect(screen.getByText(/Locked on Invoice #INV-7/)).toBeInTheDocument();
     expect(screen.getByText(/Services and billing are locked/)).toBeInTheDocument();
     expect(screen.getByText(/Dry needling/)).toBeInTheDocument();
-    expect(screen.getByText(/Dr Sneha assisting/)).toBeInTheDocument();
+    expect(screen.getByText(/done by Dr Sneha/)).toBeInTheDocument();
     // no service editing controls, no bill adjustment, no therapist/date fields
     expect(screen.queryByText('+ Add another service')).toBeNull();
     expect(screen.queryByLabelText('Visit date')).toBeNull();
@@ -131,7 +131,9 @@ describe('EditVisitModal', () => {
 
   it('an uninvoiced visit with services saves them through updateLines', async () => {
     setup({}, items);
-    expect(screen.getAllByText(/Subtotal/).length).toBeGreaterThan(0);
+    // With nothing adjusted the single Total says it all (no separate Subtotal box).
+    expect(screen.queryByText(/Subtotal/)).toBeNull();
+    expect(screen.getByText(/Total: /)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(updateBilling).toHaveBeenCalled());
     // nothing about the services or bill changed, so they are not rewritten

@@ -25,6 +25,8 @@ export interface VisitLoggedCardProps {
   justSaved: SavedVisitInfo;
   therapistName?: string;
   paymentDue: number;
+  /** Payments on record for this visit (live), so the badge stays true after the bill is edited. */
+  receivedPaise?: number;
   canBill: boolean;
   clinicalDocsEnabled?: boolean;
   enablePatientComms?: boolean;
@@ -133,6 +135,7 @@ export function VisitLoggedCard({
   justSaved,
   therapistName,
   paymentDue,
+  receivedPaise = 0,
   canBill,
   clinicalDocsEnabled,
   enablePatientComms,
@@ -181,13 +184,14 @@ export function VisitLoggedCard({
           {paymentDue > 0 ? (
             <span className="inline-flex items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--rust)]">
               Payment due · {formatINR(paymentDue)}
+              {receivedPaise > 0 ? ` (paid ${formatINR(receivedPaise)})` : ''}
             </span>
-          ) : justSaved.alreadyCollected ? (
+          ) : justSaved.alreadyCollected || receivedPaise > 0 ? (
             <span
               className="inline-flex items-center rounded-full border border-[var(--teal)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)]"
               data-testid="collected-line"
             >
-              ✓ {formatINR(justSaved.billPaise)} collected{justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
+              ✓ {formatINR(receivedPaise > 0 ? receivedPaise : justSaved.billPaise)} collected{justSaved.alreadyCollected && justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">

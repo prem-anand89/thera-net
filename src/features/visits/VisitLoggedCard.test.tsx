@@ -196,5 +196,34 @@ describe('VisitLoggedCard', () => {
     fireEvent.click(editBtn);
     expect(onEdit).toHaveBeenCalledTimes(1);
   });
-});
 
+  describe('after the bill is edited (payments on record decide)', () => {
+    const saved = (over = {}) => ({
+      visitId: 'v', patientId: 'p', patientName: 'Eeshaan Sharma', patientPhone: null, serviceLabel: 'Assessment',
+      isPackage: false, alreadyCollected: false, therapistId: 't', billPaise: 200000, visitDate: '2026-10-25', mrno: '1042',
+      ...over,
+    });
+
+    it('a bill raised after payment shows what is still owed, not "collected" for the new total', () => {
+      renderCard({ justSaved: saved(), paymentDue: 50000, receivedPaise: 150000 });
+      expect(screen.getByText(/Payment due · ₹500/)).toBeInTheDocument();
+      expect(screen.getByText(/paid ₹1,500/)).toBeInTheDocument();
+      expect(screen.queryByTestId('collected-line')).toBeNull();
+    });
+
+    it('a fully paid, edited visit still reads collected, for the amount received', () => {
+      renderCard({ justSaved: saved({ billPaise: 150000 }), paymentDue: 0, receivedPaise: 150000 });
+      expect(screen.getByTestId('collected-line')).toHaveTextContent('✓ ₹1,500 collected');
+    });
+  });
+
+  it('shows Edit only when an edit handler is given (the page withholds it from who cannot save)', () => {
+    renderCard({ onEdit: undefined });
+    expect(screen.queryByRole('button', { name: 'Edit visit' })).toBeNull();
+    const onEdit = vi.fn();
+    cleanup();
+    renderCard({ onEdit });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+    expect(onEdit).toHaveBeenCalled();
+  });
+});

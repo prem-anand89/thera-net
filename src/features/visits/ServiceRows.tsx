@@ -285,6 +285,8 @@ export function ServiceRows({
             key={row.key}
             onKeyDown={(e) => {
               if (e.key !== 'Escape') return;
+              // Inside a dialog (Edit visit) Escape closes the open picker only, not the whole dialog.
+              if (changing === row.key || !named) e.stopPropagation();
               setChanging(null);
                           }}
             // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.

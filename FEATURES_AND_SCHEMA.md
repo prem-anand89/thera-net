@@ -38,6 +38,11 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     patient is chosen, stays in view while the form scrolls. Touch sizes on phones: toggles 40px, row pills 40px, the
     row ✕ 40px, "+ Add another service" a 44px dashed button; the small selects/inputs on a service row use 16px text
     on phones so iOS does not zoom. Patient search is a labelled search box; Enter picks the first match.
+  - **Edit from the saved screen.** The receipt has an Edit link (only for people who may edit that visit: admin, front
+    desk, the visit's own therapist) opening the Edit visit dialog; on close the receipt re-reads the visit. After an
+    edit the badge comes from the payments on record ("Payment due · ₹500 (paid ₹1,500)" when the bill rose,
+    "✓ collected" otherwise), never from the collected-on-the-form flag. Escape closes an open service picker, not the
+    dialog around it.
   - **Date and therapist** share one row (one column only below 360px). **After saving**: a visit collected on the
     form shows "✓ ₹2,000 collected · UPI" and never offers "Take payment" (`paymentStillDue`); "Take payment" appears
     only when the choice was "Take payment later", the payment failed to record, or part is still owed.

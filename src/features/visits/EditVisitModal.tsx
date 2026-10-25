@@ -548,8 +548,11 @@ export function EditVisitModal({
                     <span>
                       {i.serviceName}
                       {i.assistingTherapistId && (
-                        <span className="text-xs text-[var(--muted)]"> · {nameOf(i.assistingTherapistId)} assisting</span>
+                        <span className="text-xs text-[var(--muted)]"> · done by {nameOf(i.assistingTherapistId)}</span>
                       )}
+                      {i.sessionShareTherapistId && i.sessionSharePct ? (
+                        <span className="text-xs text-[var(--muted)]"> · shared with {nameOf(i.sessionShareTherapistId)} ({i.sessionSharePct}%)</span>
+                      ) : null}
                     </span>
                     <span className="font-num font-medium">{formatINR(i.pricePaise)}</span>
                   </li>
@@ -647,7 +650,7 @@ export function EditVisitModal({
                       <span className="font-medium text-[var(--teal)]">Paid {formatINR(paidPaise)} · {formatINR(Math.abs(paymentDelta))} overpaid</span>
                     )
                   ) : billPaise === 0 ? (
-                    <span className="text-[var(--muted)]">Package session · ₹0</span>
+                    <span className="text-[var(--muted)]">No charge · ₹0</span>
                   ) : (
                     <span className="font-medium text-[var(--rust)]">Payment due · {formatINR(billPaise)}</span>
                   )}
@@ -659,6 +662,7 @@ export function EditVisitModal({
                     hasLines ? 'Subtotal' : catalogItem ? `Catalog — ${catalogItem.name}` : 'Catalog price'
                   }
                   totalLabel={hasLines ? 'Total' : undefined}
+                  hideUnadjustedPrice={hasLines}
                   disabled={hasLines && subtotalPaise === 0}
                   mode={adjustmentMode}
                   valueType={adjustmentValueType}
@@ -703,7 +707,7 @@ export function EditVisitModal({
           {/* Last edited attribution */}
           {visit.updatedAt && (
             <p className="text-xs text-[var(--muted)]">
-              Last edited{lastEditorName ? ` by ${lastEditorName}` : ''}, {formatDateDM(visit.updatedAt)}
+              Last updated{lastEditorName ? ` by ${lastEditorName}` : ''}, {formatDateDM(visit.updatedAt)}
             </p>
           )}
 
@@ -730,11 +734,11 @@ export function EditVisitModal({
         </div>
 
         {/* Sticky footer with bill/payment summary and actions */}
-        <div className="modal-actions shrink-0 flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5 bg-[var(--surface)]">
+        <div className="modal-actions shrink-0 flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 bg-[var(--surface)]">
           <div className="text-xs">
             <span className="font-semibold text-sm text-[var(--ink)]">{formatINR(billPaise)}</span>
             <span className="text-[var(--muted)] ml-1.5">
-              {paidPaise > 0 ? `· Paid ${formatINR(paidPaise)}` : '· Unpaid'}
+              {paidPaise > 0 ? `· Paid ${formatINR(paidPaise)}` : billPaise > 0 ? '· Unpaid' : ''}
             </span>
           </div>
 
