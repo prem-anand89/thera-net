@@ -26,6 +26,16 @@ function renderFields(props: Partial<BillAdjustmentFieldsProps> = {}) {
 }
 
 describe('BillAdjustmentFields', () => {
+  it('hideTotalWhenPlain hides the total box until there is a discount or extra to explain', () => {
+    const { rerender, props } = renderFields({ hideTotalWhenPlain: true, mode: 'none' });
+    expect(screen.getByText('Total: ₹1,000').parentElement).toHaveClass('hidden');
+
+    rerender(
+      <BillAdjustmentFields {...props} hideTotalWhenPlain mode="discount" valueType="amount" value="200" />
+    );
+    expect(screen.getByText('Total: ₹800').parentElement).not.toHaveClass('hidden');
+  });
+
   it('is collapsed by default when mode is none', () => {
     renderFields({ mode: 'none' });
 

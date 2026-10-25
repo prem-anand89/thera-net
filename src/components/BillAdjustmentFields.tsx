@@ -58,6 +58,11 @@ export interface BillAdjustmentFieldsProps {
   hideUnadjustedPrice?: boolean;
   /** Greys out every control (New Visit while the subtotal is ₹0). */
   disabled?: boolean;
+  /**
+   * New Visit: the save bar already shows the total, so with no discount or extra the green total box would
+   * only repeat it. It appears once there is an adjustment to explain.
+   */
+  hideTotalWhenPlain?: boolean;
 }
 
 export function BillAdjustmentFields({
@@ -74,6 +79,7 @@ export function BillAdjustmentFields({
   continuationSession,
   totalLabel = 'Final bill',
   hideUnadjustedPrice = false,
+  hideTotalWhenPlain = false,
   disabled,
 }: BillAdjustmentFieldsProps) {
   const numericValue = Number(value);
@@ -177,7 +183,11 @@ export function BillAdjustmentFields({
         </>
       )}
 
-      <div className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)]">
+      <div
+        className={`rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)] ${
+          hideTotalWhenPlain && !summary ? 'hidden' : ''
+        }`}
+      >
         <span className="font-medium">
           {totalLabel}: {formatINR(billPaise)}
         </span>

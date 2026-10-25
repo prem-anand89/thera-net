@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterNavItems, shouldShowPhoneBottomNav } from './Shell';
+import { filterNavItems, shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './Shell';
 
 describe('filterNavItems', () => {
   it('shows Settings to an admin in the main header nav', () => {
@@ -37,5 +37,14 @@ describe('shouldShowPhoneBottomNav', () => {
     expect(shouldShowPhoneBottomNav('/ledger')).toBe(true);
     expect(shouldShowPhoneBottomNav('/schedule')).toBe(true);
     expect(shouldShowPhoneBottomNav('/patients/abc')).toBe(true);
+  });
+});
+
+describe('shouldShowPhoneAppHeader', () => {
+  it('hides the app header on phones only on the focused New visit page', () => {
+    expect(shouldShowPhoneAppHeader('/visits/new')).toBe(false);
+    expect(shouldShowPhoneAppHeader('/workspace')).toBe(true);
+    expect(shouldShowPhoneAppHeader('/visits')).toBe(true);
+    expect(shouldShowPhoneAppHeader('/patients/abc')).toBe(true);
   });
 });

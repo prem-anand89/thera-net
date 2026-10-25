@@ -349,13 +349,13 @@ describe('sharing a service', () => {
     render(<Harness initial={[row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 30 } })]} />);
     // Assessment is ₹800 in the test catalog: 30% = ₹240.
     expect(screen.getByText('≈ ₹240')).toBeInTheDocument();
-    expect(screen.getByText(/% of this service/)).toBeInTheDocument();
+    expect(screen.getByText(/Their share of this service/)).toBeInTheDocument();
   });
 
   it('edits the percentage and removes the share on a package row', () => {
     const onRows = vi.fn();
     render(<Harness initial={[{ ...pkgRow(), sessionShare: { therapistId: 't2', pct: 50 } }]} openPackages={[pkg]} onRows={onRows} />);
-    expect(screen.getByText(/% of this session/)).toBeInTheDocument();
+    expect(screen.getByText(/Their share of this session/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Percent of this service'), { target: { value: '30' } });
     expect((onRows.mock.calls.at(-1)![0] as DraftLine[])[0]!.sessionShare?.pct).toBe(30);
     fireEvent.click(screen.getByRole('button', { name: 'Remove share' }));
@@ -435,6 +435,62 @@ describe('sharing a service', () => {
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
     expect(last).toHaveLength(2);
     expect(last[1].serviceCatalogId).toBe('needle');
+  });
+
+  describe('a new package bought while one is still open', () => {
+    it('warns, and "Use the remaining session" swaps the row for the free continuation', () => {
+      const onRows = vi.fn();
+      render(<Harness initial={[row('r1', 'rehab')]} openPackages={[pkg]} onRows={onRows} />);
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('Rahul still has session 5 of 10 on this package.');
+      expect(alert).toHaveTextContent('₹5,000');
+      // The general "open package isn't used" notice is not shown twice.
+      expect(screen.queryByText(/isn't used on this visit/)).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Use the remaining session (₹0)' }));
+      const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+      expect(last[0].continuation?.packageGroupId).toBe('g1');
+      expect(last[0].serviceCatalogId).toBeUndefined();
+    });
+
+    it('"Yes, a new package" keeps the purchase and replaces the warning with a quiet note', () => {
+      const onRows = vi.fn();
+      render(<Harness initial={[row('r1', 'rehab')]} openPackages={[pkg]} onRows={onRows} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, a new package' }));
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText('New package, separate from the open one.')).toBeInTheDocument();
+      expect(onRows).not.toHaveBeenCalled();
+    });
+
+    it('does not warn for a different package service, or for a single-session service', () => {
+      render(<Harness initial={[row('r1', 'pkg2'), row('r2', 'assess')]} openPackages={[pkg]} />);
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
+
+  it('quick-add skips free services and a package that is already open', () => {
+    const free = item('free', 'Complimentary Session', 0);
+    render(
+      <Harness
+        initial={[{ key: 'r1', assistingTherapistId: null }]}
+        openPackages={[pkg]}
+        quickServices={[catalog[0], free, catalog[2]]}
+      />
+    );
+    expect(screen.getByRole('button', { name: /\+ Assessment/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Complimentary/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /\+ Rehab package/ })).toBeNull();
+  });
+
+  it('the share row keeps the dropdown, the % box and remove together, with the result underneath', () => {
+    render(<Harness initial={[row('r1', 'assess', { sessionShare: { therapistId: 't2', pct: 20 } })]} />);
+    const select = screen.getByLabelText('Shared with');
+    const pct = screen.getByLabelText('Percent of this service');
+    const remove = screen.getByRole('button', { name: 'Remove share' });
+    // One flex line holds all three controls; the label and the result are separate full-width lines.
+    expect(select.parentElement).toBe(pct.parentElement?.parentElement);
+    expect(remove.parentElement).toBe(select.parentElement);
+    expect(screen.getByText(/Their share of this service/)).toHaveTextContent('≈ ₹160');
   });
 
   it('renders multiple package chips when patient has 2+ open packages and none is on form', () => {

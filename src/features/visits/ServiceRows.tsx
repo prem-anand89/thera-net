@@ -133,6 +133,20 @@ export function draftLinesToItems(rows: DraftLine[], catalog: CatalogItem[]): Vi
 
 const linkBtn = 'text-xs font-medium text-[var(--teal)] hover:underline';
 
+const warnBtn =
+  'inline-flex min-h-10 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3.5 text-sm font-medium text-[var(--ink)] hover:border-[var(--teal)] sm:min-h-8 sm:text-xs';
+const warnBtnPrimary =
+  'inline-flex min-h-10 items-center rounded-full border border-[var(--teal)] bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:opacity-90 sm:min-h-8 sm:text-xs';
+
+/**
+ * The open package a purchase row would double up on: the row buys a package service (more than one session,
+ * not a continuation) and the patient still has a session open on that same service.
+ */
+export function openSamePackage(row: DraftLine, cat: CatalogItem | undefined, openPackages: OpenPackage[]): OpenPackage | undefined {
+  if (row.continuation || !cat || cat.sessionCount <= 1) return undefined;
+  return openPackages.find((p) => p.serviceCatalogId === cat.id);
+}
+
 /** Focuses the picker's input when it mounts, so "Add another service" / "Change" land ready to type. */
 function FocusedPicker({
   autoFocus,
@@ -184,6 +198,8 @@ export function ServiceRows({
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  // Rows where staff confirmed "yes, a new package" while the same one still has a session open.
+  const [newPackageOk, setNewPackageOk] = useState<ReadonlySet<string>>(new Set());
 
   const problems = useMemo(() => rowProblems(rows, catalog), [rows, catalog]);
   // Everyone who can do a service: the visit's therapist and the other active therapists.
@@ -271,14 +287,20 @@ export function ServiceRows({
   }
 
   const hasPackageRow = rows.some((r) => r.continuation);
-  const showGuardrail = openPackages.length > 0 && !hasPackageRow;
+  const warnedInRow = rows.some((r) => openSamePackage(r, catalogOf(r, catalog), openPackages));
+  const showGuardrail = openPackages.length > 0 && !hasPackageRow && !(openPackages.length === 1 && warnedInRow);
   const who = patientName ?? 'This patient';
 
   const availableQuickServices = useMemo(() => {
     return (quickServices ?? []).filter(
-      (s) => s.active && !rows.some((r) => r.serviceCatalogId === s.id)
+      (s) =>
+        s.active &&
+        // A shortcut is for the everyday paid service: not a free session, and not a second purchase of a package that is still open.
+        s.basePricePaise > 0 &&
+        !(s.sessionCount > 1 && openPackages.some((p) => p.serviceCatalogId === s.id)) &&
+        !rows.some((r) => r.serviceCatalogId === s.id)
     );
-  }, [quickServices, rows]);
+  }, [quickServices, rows, openPackages]);
 
   function pickQuickService(service: CatalogItem) {
     const emptyAt = rows.findIndex((r) => !hasService(r));
@@ -303,6 +325,7 @@ export function ServiceRows({
         const error = errors.get(index) ?? problems.get(index);
         const name = rowName(row, catalog);
         const cat = catalogOf(row, catalog);
+        const openSame = openSamePackage(row, cat, openPackages);
         return (
           <div
             key={row.key}
@@ -369,6 +392,26 @@ export function ServiceRows({
             {named && !row.continuation && cat && cat.sessionCount > 1 && (
               <div className="mt-0.5 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
             )}
+            {openSame && !newPackageOk.has(row.key) && (
+              // The money guard: this row sells a NEW package while one of the same service still has a session left.
+              <div role="alert" className="mt-2.5 rounded-md border border-[var(--amber)] bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]">
+                <p>
+                  {who} still has session {openSame.logged + 1} of {openSame.packageTotal} on this package. This row charges{' '}
+                  <strong className="font-num">{formatINR(rowPricePaise(row, catalog))}</strong> for a <strong>new</strong> one.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" className={`${warnBtnPrimary}`} onClick={() => pick(row.key, `pkg:${openSame.packageGroupId}`)}>
+                    Use the remaining session (₹0)
+                  </button>
+                  <button type="button" className={warnBtn} onClick={() => setNewPackageOk((prev) => new Set(prev).add(row.key))}>
+                    Yes, a new package
+                  </button>
+                </div>
+              </div>
+            )}
+            {openSame && newPackageOk.has(row.key) && (
+              <p className="mt-1 text-xs text-[var(--muted)]">New package, separate from the open one.</p>
+            )}
 
             {named && showAssistant && (
               <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2.5">
@@ -414,12 +457,12 @@ export function ServiceRows({
 
       {availableQuickServices.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 pt-1 pb-0.5" data-testid="quick-services">
-          <span className="text-xs text-[var(--muted)]">Suggested:</span>
+          <span className="text-xs text-[var(--muted)]">Quick add:</span>
           {availableQuickServices.map((s) => (
             <button
               key={s.id}
               type="button"
-              className="inline-flex min-h-7 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--paper)] hover:text-[var(--teal)] transition-colors"
+              className="inline-flex min-h-10 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--teal)] hover:bg-[var(--paper)] hover:text-[var(--teal)] sm:min-h-8 sm:px-2.5 sm:text-xs"
               onClick={() => pickQuickService(s)}
             >
               + {s.name}
@@ -437,7 +480,7 @@ export function ServiceRows({
       </button>
 
       {showGuardrail && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-[var(--amber)]/50 bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]">
           {openPackages.length === 1 ? (
             <>
               <span>
@@ -446,7 +489,7 @@ export function ServiceRows({
               </span>
               <button
                 type="button"
-                className={linkBtn}
+                className={warnBtnPrimary}
                 onClick={() => {
                   const pkgLine = continuationLine(openPackages[0]);
                   // Fill an empty row if there is one; otherwise add the session as its own row.
@@ -534,11 +577,13 @@ function RowShare({
       ? formatINR(roundToRupeeHalfUp((pricePaise * share.pct) / 100))
       : null;
   return (
-    <div className="flex w-full flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-      <span>Shared with</span>
+    // Phone: the label on its own line, then dropdown + % + remove on ONE line, then the plain-language result.
+    // sm+: label and controls share a line. Controls are 16px on touch (no iOS zoom), 14px with a mouse.
+    <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
+      <span className="w-full text-sm font-medium text-[var(--ink)] sm:w-auto sm:font-normal sm:text-[var(--muted)]">Shared with</span>
       <select
         aria-label="Shared with"
-        className="min-h-9 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-base text-[var(--ink)] sm:min-h-0 sm:text-xs"
+        className="min-h-10 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-base text-[var(--ink)] sm:min-h-8 sm:flex-none sm:text-sm"
         value={share.therapistId}
         onChange={(e) => onChange({ ...share, therapistId: e.target.value })}
       >
@@ -548,38 +593,46 @@ function RowShare({
           </option>
         ))}
       </select>
-      <label className="flex items-center gap-1">
+      <div className="relative shrink-0">
         <input
           type="number"
           min={1}
           max={99}
           inputMode="numeric"
           aria-label="Percent of this service"
-          className="min-h-9 w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-base text-[var(--ink)] sm:min-h-0 sm:w-14 sm:text-xs"
-          placeholder="%"
+          className="min-h-10 w-20 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 pl-2 pr-6 text-right text-base text-[var(--ink)] sm:min-h-8 sm:w-16 sm:text-sm"
+          placeholder="0"
           autoFocus={!Number.isFinite(share.pct)}
           value={Number.isFinite(share.pct) ? share.pct : ''}
           onChange={(e) => onChange({ ...share, pct: e.target.value === '' ? NaN : Number(e.target.value) })}
         />
-        {isPackage ? '% of this session' : '% of this service'}
-      </label>
-      {preview && <span className="font-num text-[var(--ink)]">≈ {preview}</span>}
-      {row.sharePrefilled && <span>· Same as last session</span>}
+        <span aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)]">%</span>
+      </div>
       <button
         type="button"
         aria-label="Remove share"
-        className="flex h-9 w-9 items-center justify-center rounded hover:bg-[var(--paper)] sm:h-6 sm:w-6"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--rust)] sm:h-8 sm:w-8"
         onClick={() => onChange(null)}
       >
-        <IconClose className="h-3 w-3" />
+        <IconClose className="h-3.5 w-3.5" />
       </button>
+      <p className="w-full text-xs text-[var(--muted)]">
+        Their share of this {isPackage ? 'session' : 'service'}
+        {preview && (
+          <>
+            {' · '}
+            <span className="font-num text-[var(--ink)]">≈ {preview}</span>
+          </>
+        )}
+        {row.sharePrefilled && ' · Same as last session'}
+      </p>
     </div>
   );
 }
 
 /** Small outlined action pill under a service (Assistant, Share session). */
 const pillBtn =
-  'inline-flex min-h-10 sm:min-h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--teal)]';
+  'inline-flex min-h-10 sm:min-h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--teal)] sm:text-xs';
 
 function RemoveButton({ name, onClick }: { name: string; onClick: () => void }) {
   return (

@@ -83,6 +83,14 @@ export function shouldShowPhoneBottomNav(pathname: string): boolean {
   return pathname !== '/visits/new';
 }
 
+/**
+ * On phones the app header (brand, clinic, bell, account) is also hidden on `/visits/new`: the page brings its
+ * own slim header with a back arrow, so the form gets the height and the way out is always in view.
+ */
+export function shouldShowPhoneAppHeader(pathname: string): boolean {
+  return pathname !== '/visits/new';
+}
+
 // Serialises session-change work across effect runs (see the effect in Shell).
 let sessionWork: Promise<void> = Promise.resolve();
 
@@ -403,7 +411,7 @@ export function Shell() {
   return (
     <ClinicContext.Provider value={clinic}>
       <div className="min-h-screen bg-[var(--paper)]">
-        <header ref={trackAppHeaderHeight} className="no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)]">
+        <header ref={trackAppHeaderHeight} className={`no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] ${shouldShowPhoneAppHeader(pathname) ? '' : 'max-sm:hidden'}`}>
           {/* Header layout. Left: the Thera.Net mark (the product; wordmark
               from desktop:). Middle: nav, sm:-and-up only — the bottom tab
               bar replaces it on phones. Right: the clinic pill (where you

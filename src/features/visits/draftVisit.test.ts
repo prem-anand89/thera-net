@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason } from './draftVisit';
 import { continuationLine, type DraftLine, type OpenPackage } from './ServiceRows';
 import type { Visit, VisitItem } from '@/domain/types';
 
@@ -136,5 +136,20 @@ describe('a package session starts with the last session\'s share', () => {
     expect(row.sessionShare).toEqual({ therapistId: 'bm', pct: 30 });
     expect(row.sharePrefilled).toBe(true);
     expect(continuationLine(pkg, 'bm').sessionShare).toBeUndefined();
+  });
+});
+
+describe('therapistReason', () => {
+  const base = { therapistId: 't1', appointmentTherapistId: null, lastVisitTherapistId: null, myTherapistId: null };
+
+  it('follows the order the page fills the therapist in: booked, then last visit, then you', () => {
+    expect(therapistReason({ ...base, appointmentTherapistId: 't1', lastVisitTherapistId: 't1', myTherapistId: 't1' })).toBe('Booked');
+    expect(therapistReason({ ...base, lastVisitTherapistId: 't1', myTherapistId: 't1' })).toBe('Last visit');
+    expect(therapistReason({ ...base, myTherapistId: 't1' })).toBe('You');
+  });
+
+  it('says nothing for a therapist picked by hand, or before one is chosen', () => {
+    expect(therapistReason({ ...base, lastVisitTherapistId: 't2', myTherapistId: 't3' })).toBeNull();
+    expect(therapistReason({ ...base, therapistId: '' })).toBeNull();
   });
 });

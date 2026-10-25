@@ -47,7 +47,6 @@ import {
   ErrorNote,
   SectionCard,
   Pill,
-  TherapistPill,
   MultiToggle,
 } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -82,7 +81,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, therapistReason, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
@@ -1552,13 +1551,17 @@ export function NewVisitPage() {
               value={therapistId}
               onChange={setTherapistId}
               options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
-              badge={
-                therapistId ? (
-                  <TherapistPill>
-                    {(therapists ?? []).find((t) => t.id === therapistId)?.name ?? 'Therapist'}
-                  </TherapistPill>
-                ) : undefined
-              }
+              badge={(() => {
+                // Say WHY this therapist is chosen (the field already shows who): a returning patient's last
+                // therapist is a default, not a decision, and attribution depends on it being right.
+                const reason = therapistReason({
+                  therapistId,
+                  appointmentTherapistId: fromAppointment?.therapistId,
+                  lastVisitTherapistId: lastVisit?.therapistId,
+                  myTherapistId,
+                });
+                return reason ? <Pill tone="slate">{reason}</Pill> : undefined;
+              })()}
             />
           </div>
 
@@ -1639,6 +1642,7 @@ export function NewVisitPage() {
             catalogPricePaise={catalogPricePaise}
             catalogLabel="Subtotal"
             totalLabel="Total"
+            hideTotalWhenPlain
             hideUnadjustedPrice
             disabled={catalogPricePaise === 0}
             mode={adjustmentMode}
@@ -1754,17 +1758,30 @@ export function NewVisitPage() {
         touchedRef.current = true;
       }}
     >
-      <div className="flex items-center gap-2">
+      {/* Phones: the app header is hidden on this page (Shell), so this slim bar is the page's header — it stays
+          while the form scrolls, so the way out and who the visit is for are always in view. */}
+      <div className="flex items-center gap-1 max-sm:sticky max-sm:top-0 max-sm:z-20 max-sm:-mx-4 max-sm:-mt-6 max-sm:border-b max-sm:border-[var(--border)] max-sm:bg-[var(--surface)] max-sm:px-2 max-sm:pt-[env(safe-area-inset-top)] sm:gap-2">
         <button
           type="button"
           aria-label="Back"
           disabled={busy}
           onClick={requestExit}
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-40 sm:hidden"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-40 sm:hidden"
         >
-          <span aria-hidden="true" className="text-lg leading-none">←</span>
+          <span aria-hidden="true" className="text-xl leading-none">←</span>
         </button>
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+        <h1 className="shrink-0 font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+        {patient && (
+          <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)] sm:hidden">· {patient.name}</span>
+        )}
+        {isDirty && (
+          <span
+            role="img"
+            aria-label="Unsaved changes"
+            title="Unsaved changes"
+            className="mr-2 ml-auto h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--amber)] sm:hidden"
+          />
+        )}
       </div>
       <VisitCapNotice />
 
