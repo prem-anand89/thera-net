@@ -124,7 +124,7 @@ function SegmentedToggle<T extends string>({
           disabled={opt.disabled}
           aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`h-8 flex-1 rounded px-3 text-center font-medium transition-colors ${
+          className={`h-8 flex-1 whitespace-nowrap rounded px-3 text-center font-medium transition-colors ${
             value === opt.value
               ? 'bg-[var(--teal-light)] text-[var(--teal)]'
               : 'text-[var(--muted)] hover:bg-[var(--paper)]'
