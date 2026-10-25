@@ -86,6 +86,7 @@ import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
 import { VisitLoggedCard } from './VisitLoggedCard';
+import { EditVisitModal } from './EditVisitModal';
 import { visitDateHint } from './visitDateHint';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
@@ -393,6 +394,7 @@ export function NewVisitPage() {
   });
   const [invoicing, setInvoicing] = useState(false);
   const [takingPayment, setTakingPayment] = useState(false);
+  const [editingVisit, setEditingVisit] = useState(false);
   // What's been received for the just-saved visit, so Take payment disappears
   // once it's settled (the dialog can be used for part payments too).
   const savedPayments = useLiveQuery(
@@ -1020,6 +1022,7 @@ export function NewVisitPage() {
           }}
           onTakePayment={() => setTakingPayment(true)}
           onGiveBill={() => setInvoicing(true)}
+          onEdit={() => setEditingVisit(true)}
           onNewVisitSamePatient={() => {
             // Re-run the "rows for this patient" step, so an open package's next session is offered again.
             rowsPatientRef.current = null;
@@ -1039,6 +1042,34 @@ export function NewVisitPage() {
           }}
           onDone={goBack}
         />
+        {editingVisit && (
+          <EditVisitModal
+            visitId={justSaved.visitId}
+            onClose={async () => {
+              setEditingVisit(false);
+              const updated = await repos.visits.get(justSaved.visitId);
+              if (updated && !updated.deleted) {
+                const items = await repos.visitItems.listByVisitIds([justSaved.visitId]);
+                const label = items.map((i) => i.serviceName).filter(Boolean).join(' + ') || justSaved.serviceLabel;
+                setJustSaved((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        serviceLabel: label,
+                        billPaise: updated.actualBillPaise,
+                        visitDate: updated.visitDate,
+                        therapistId: updated.therapistId,
+                      }
+                    : null
+                );
+              } else if (!updated || updated.deleted) {
+                setJustSaved(null);
+                goBack();
+              }
+            }}
+            setError={setError}
+          />
+        )}
         {takingPayment && (
           <TakePaymentDialog
             clinicId={clinic.id}

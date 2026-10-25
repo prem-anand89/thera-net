@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -8,11 +9,22 @@ vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() })
 
 const visitRef: { current: Partial<Visit> } = { current: {} };
 const itemsRef: { current: VisitItem[] } = { current: [] };
+const paymentsRef: { current: unknown[] } = { current: [] };
 const updateBilling = vi.fn();
 const updateLines = vi.fn();
+const confirmAndDeleteVisitMock = vi.fn();
 
 vi.mock('@/app/clinicContext', () => ({
   useClinic: () => ({ id: 'c1', clinicType: 'group', enableTherapistSplit: true }),
+}));
+vi.mock('@/app/usePermissions', () => ({
+  usePermissions: () => ({ isAdmin: true, role: 'admin', canViewClinicalNotes: true, canBill: true }),
+}));
+vi.mock('@/app/useSession', () => ({
+  useSession: () => ({ session: { user: { id: 'u1' } }, loading: false }),
+}));
+vi.mock('./confirmDeleteVisit', () => ({
+  confirmAndDeleteVisit: (...a: unknown[]) => confirmAndDeleteVisitMock(...a),
 }));
 vi.mock('@/components/RevenueShareEditorLoader', () => ({
   RevenueShareEditorLoader: () => <div>share editor open</div>,
@@ -27,7 +39,7 @@ vi.mock('@/services', () => ({
       ],
     },
     invoices: { get: () => ({ id: 'inv1', invoiceNo: 'INV-7' }) },
-    patients: { get: () => ({ id: 'pt1', name: 'Ananya' }) },
+    patients: { get: () => ({ id: 'pt1', name: 'Ananya', mrno: 'MR-001' }) },
     catalog: {
       get: () => ({ id: 'a1', name: 'Assessment' }),
       list: () => [
@@ -37,6 +49,7 @@ vi.mock('@/services', () => ({
     },
     visitItems: { listByVisitIds: () => itemsRef.current },
     visitCredits: { listByVisitIds: () => [] },
+    payments: { listByVisit: () => paymentsRef.current },
     treatmentCatalog: { list: () => [] },
   },
   visitService: {
@@ -64,8 +77,15 @@ const line = (id: string, name: string, price: number, assist: string | null, po
   updatedAt: '',
 });
 
+const askConfirmMock = vi.fn(async () => true);
+vi.mock('@/lib/notify', () => ({
+  askConfirm: (...a: unknown[]) => askConfirmMock(...(a as [])),
+  notify: { error: vi.fn(), info: vi.fn() },
+}));
+
 const setErrorMock = vi.fn();
-function setup(visit: Partial<Visit>, items: VisitItem[]) {
+const onCloseMock = vi.fn();
+function setup(visit: Partial<Visit>, items: VisitItem[], onClose = onCloseMock) {
   visitRef.current = {
     id: 'v1',
     clinicId: 'c1',
@@ -80,12 +100,14 @@ function setup(visit: Partial<Visit>, items: VisitItem[]) {
     ...visit,
   };
   itemsRef.current = items;
-  render(<EditVisitModal visitId="v1" onClose={() => {}} setError={setErrorMock} />);
+  render(<EditVisitModal visitId="v1" onClose={onClose} setError={setErrorMock} />);
 }
 
 beforeEach(() => {
   updateBilling.mockReset().mockResolvedValue({ sharesOutdated: false });
   setErrorMock.mockReset();
+  onCloseMock.mockReset();
+  askConfirmMock.mockReset().mockResolvedValue(true);
   updateLines.mockReset().mockResolvedValue({ sharesOutdated: false });
 });
 afterEach(cleanup);
@@ -95,7 +117,8 @@ const items = [line('a1', 'Assessment', 100000, null, 0), line('b2', 'Dry needli
 describe('EditVisitModal', () => {
   it('invoiced visit shows services locked and share editable', () => {
     setup({ invoiceId: 'inv1' }, items);
-    expect(screen.getByText("This visit is on an invoice. Its services and bill can't be changed.")).toBeInTheDocument();
+    expect(screen.getByText(/Locked on Invoice #INV-7/)).toBeInTheDocument();
+    expect(screen.getByText(/Services and billing are locked/)).toBeInTheDocument();
     expect(screen.getByText(/Dry needling/)).toBeInTheDocument();
     expect(screen.getByText(/Dr Sneha assisting/)).toBeInTheDocument();
     // no service editing controls, no bill adjustment, no therapist/date fields
@@ -136,5 +159,70 @@ describe('EditVisitModal', () => {
     await vi.waitFor(() => expect(setErrorMock).toHaveBeenCalled());
     expect(updateBilling).not.toHaveBeenCalled();
     expect(updateLines).not.toHaveBeenCalled();
+  });
+
+  it('displays error note inside the dialog when save fails', async () => {
+    updateBilling.mockRejectedValueOnce(new Error('Network error during save'));
+    setup({}, items);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => {
+      expect(screen.getByText('Network error during save')).toBeInTheDocument();
+    });
+  });
+
+  it('closes immediately on Cancel when untouched', async () => {
+    setup({}, items, onCloseMock);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(askConfirmMock).not.toHaveBeenCalled();
+    expect(onCloseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('prompts to discard unsaved changes when modified', async () => {
+    setup({}, items, onCloseMock);
+    const conditionInput = screen.getByPlaceholderText('e.g., Cervical pain');
+    fireEvent.change(conditionInput, { target: { value: 'Severe back pain' } });
+
+    // Try to cancel but decline discard
+    askConfirmMock.mockResolvedValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await vi.waitFor(() => {
+      expect(askConfirmMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Discard unsaved changes?' })
+      );
+    });
+    expect(onCloseMock).not.toHaveBeenCalled();
+
+    // Now confirm discard
+    askConfirmMock.mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await vi.waitFor(() => {
+      expect(onCloseMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('warns when changing visit date moves visit into another month', () => {
+    setup({ visitDate: '2026-10-20' }, items);
+    const dateInput = screen.getByLabelText('Visit date');
+    fireEvent.change(dateInput, { target: { value: '2026-11-05' } });
+    expect(screen.getByText("This moves the visit into November's report.")).toBeInTheDocument();
+  });
+
+  it('displays payment status with partial payment', () => {
+    paymentsRef.current = [
+      { id: 'pay1', visitId: 'v1', amountPaise: 50000, method: 'upi', deleted: false },
+    ];
+    setup({ actualBillPaise: 130000 }, items);
+    expect(screen.getByText(/Paid ₹500 · ₹800 more to collect/)).toBeInTheDocument();
+    expect(screen.getByText('· Paid ₹500')).toBeInTheDocument();
+    paymentsRef.current = [];
+  });
+
+  it('calls confirmAndDeleteVisit when Delete this visit is clicked', async () => {
+    setup({}, items, onCloseMock);
+    const deleteBtn = screen.getByRole('button', { name: 'Delete this visit' });
+    fireEvent.click(deleteBtn);
+    await vi.waitFor(() => {
+      expect(confirmAndDeleteVisitMock).toHaveBeenCalledWith('v1');
+    });
   });
 });

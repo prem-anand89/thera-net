@@ -21,8 +21,8 @@
    - Write tests first, verify they fail for the right reason, implement code, and verify they pass.
 6. **UI & Accessibility Standards:**
    - Every `<button>` must have an explicit `type` attribute (`type="button"` unless submitting).
-   - Form fields must have `<label htmlFor>` matching `<input id>`, `aria-invalid`, `aria-describedby` pointing to error IDs, and `aria-label` for icon-only buttons.
-   - Touch targets must be at least 44px (`min-h-11`).
+   - Form fields use the `Field` component (it wraps the label) or a `<label htmlFor>` matching the input's `id`; add `aria-invalid` and `aria-describedby` (pointing to the error's id) on a field that is showing an error. Icon-only buttons need an `aria-label`.
+   - Touch targets: primary buttons and form controls at least 44px (`min-h-11`). Small pills in a row of actions (e.g. "Done by" / "Share" on a service row) are at least 40px on phones; do not enlarge or shrink them to "fix" this rule.
    - Colors must strictly use CSS custom variables (`var(--ink)`, `var(--teal)`, `var(--surface)`, `var(--border)`, etc.). Never hardcode hex values.
 7. **Documentation in the Same Commit:**
    - Update `FEATURES_AND_SCHEMA.md` (and `README.md` if significant) in the same change as feature or schema changes.
@@ -31,6 +31,7 @@
    - Never edit or delete plan files in `~/.claude/plans/`. Claude manages them.
 9. **Evidence Before Assertions:**
    - Never state or report that code is verified without running the commands and pasting real output tails.
+   - Never hide a failing check behind a pipe: `npm run typecheck | tail && git commit` commits even when typecheck fails (the pipe returns `tail`'s status). Run the check on its own and look at its exit status before committing.
 
 ---
 

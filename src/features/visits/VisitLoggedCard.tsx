@@ -35,6 +35,21 @@ export interface VisitLoggedCardProps {
   onNewVisitSamePatient: () => void;
   onNewVisitNextPatient: () => void;
   onDone: () => void;
+  onEdit?: () => void;
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+      <path
+        d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function NoteIcon() {
@@ -128,6 +143,7 @@ export function VisitLoggedCard({
   onNewVisitSamePatient,
   onNewVisitNextPatient,
   onDone,
+  onEdit,
 }: VisitLoggedCardProps) {
   const patientFirstName = justSaved.patientName.trim().split(/\s+/)[0] || 'patient';
   // One solid button at a time: what is owed, else the note, else the bill. Everything else is outlined.
@@ -142,9 +158,22 @@ export function VisitLoggedCard({
       <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="font-display text-base font-semibold text-[var(--ink)]">
-              {justSaved.patientName}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-display text-base font-semibold text-[var(--ink)]">
+                {justSaved.patientName}
+              </h3>
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="inline-flex min-h-11 sm:min-h-0 sm:py-0.5 items-center gap-1 px-1.5 text-xs font-medium text-[var(--teal)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/30 rounded"
+                  aria-label="Edit visit"
+                >
+                  <PencilIcon />
+                  <span>Edit</span>
+                </button>
+              )}
+            </div>
             {justSaved.mrno && (
               <p className="text-xs text-[var(--muted)]">Patient ID {justSaved.mrno}</p>
             )}
