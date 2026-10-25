@@ -6,6 +6,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Visit, VisitItem } from '@/domain/types';
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
+// toFriendlyMessage answers "offline" when the build has no Supabase settings (CI has none), hiding the error text asserted below.
+vi.mock('@/lib/env', () => ({ hasSupabaseConfig: true }));
 
 const visitRef: { current: Partial<Visit> } = { current: {} };
 const itemsRef: { current: VisitItem[] } = { current: [] };

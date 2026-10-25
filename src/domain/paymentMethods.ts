@@ -1,4 +1,7 @@
-import type { Clinic, PaymentMethod } from './types';
+import type { Clinic, PaymentMethod, PaymentMode } from './types';
+
+/** The ways an invoice is marked as paid, in the order bills list them (UPI first: the default at a front desk). */
+export const INVOICE_PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
 
 /** Every payment method, in the order screens list them. `partner` is only offered to a clinic with a partner. */
 export const ALL_PAYMENT_METHODS: PaymentMethod[] = ['upi', 'cash', 'card', 'bank_transfer', 'cheque', 'partner'];
