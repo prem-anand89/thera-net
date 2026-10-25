@@ -45,6 +45,7 @@ function Harness(props: {
   initial: DraftLine[];
   openPackages?: OpenPackage[];
   showAssistant?: boolean;
+  quickServices?: CatalogItem[];
   onRows?: (rows: DraftLine[]) => void;
 }) {
   const [rows, setRows] = useState(props.initial);
@@ -62,6 +63,7 @@ function Harness(props: {
       showAssistant={props.showAssistant ?? true}
       errors={new Map()}
       patientName="Rahul"
+      quickServices={props.quickServices}
     />
   );
 }
@@ -394,4 +396,73 @@ describe('sharing a service', () => {
     const rows = [row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 0 } })];
     expect(rowProblems(rows, catalog).get(0)).toMatch(/1 to 99/);
   });
+
+  it('renders quick service chips and clicking one fills an empty row', () => {
+    const onRows = vi.fn();
+    render(
+      <Harness
+        initial={[{ key: 'r1', assistingTherapistId: null }]}
+        quickServices={[catalog[0], catalog[1]]}
+        onRows={onRows}
+      />
+    );
+    expect(screen.getByTestId('quick-services')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\+ Assessment/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\+ Dry needling/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ Assessment/ }));
+    const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+    expect(last).toHaveLength(1);
+    expect(last[0].serviceCatalogId).toBe('assess');
+  });
+
+  it('clicking quick service chip appends a new row if all rows are filled', () => {
+    const onRows = vi.fn();
+    render(
+      <Harness
+        initial={[row('r1', 'assess')]}
+        quickServices={[catalog[0], catalog[1]]}
+        onRows={onRows}
+      />
+    );
+    // Assessment is already on form, so it shouldn't show in quick-services
+    expect(screen.queryByRole('button', { name: /\+ Assessment/ })).toBeNull();
+    // Dry needling should show
+    const dryBtn = screen.getByRole('button', { name: /\+ Dry needling/ });
+    expect(dryBtn).toBeInTheDocument();
+
+    fireEvent.click(dryBtn);
+    const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+    expect(last).toHaveLength(2);
+    expect(last[1].serviceCatalogId).toBe('needle');
+  });
+
+  it('renders multiple package chips when patient has 2+ open packages and none is on form', () => {
+    const pkg2: OpenPackage = {
+      packageGroupId: 'g2',
+      serviceCatalogId: 'pkg2',
+      serviceName: 'Back package',
+      logged: 1,
+      packageTotal: 6,
+      startedOn: '2026-09-10',
+    };
+    const onRows = vi.fn();
+    render(
+      <Harness
+        initial={[{ key: 'r1', assistingTherapistId: null }]}
+        openPackages={[pkg, pkg2]}
+        onRows={onRows}
+      />
+    );
+    const chipsContainer = screen.getByTestId('package-chips');
+    expect(chipsContainer).toBeInTheDocument();
+    expect(within(chipsContainer).getByRole('button', { name: /Rehab package/ })).toBeInTheDocument();
+    expect(within(chipsContainer).getByRole('button', { name: /Back package/ })).toBeInTheDocument();
+
+    fireEvent.click(within(chipsContainer).getByRole('button', { name: /Back package/ }));
+    const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
+    expect(last).toHaveLength(1);
+    expect(last[0].continuation?.packageGroupId).toBe('g2');
+  });
 });
+

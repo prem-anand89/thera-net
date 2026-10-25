@@ -133,6 +133,11 @@ export interface TreatmentUsageRow {
   count: number;
 }
 
+export interface ServiceUsageCountRow {
+  serviceId: UUID;
+  count: number;
+}
+
 export interface ConditionUsagePatientRow {
   patientId: UUID;
   patientName: string;
@@ -764,6 +769,35 @@ export function createDashboardService(repos: Repos) {
       }
       return [...counts.entries()]
         .map(([treatmentId, count]) => ({ treatmentId, count }))
+        .sort((a, b) => b.count - a.count);
+    },
+
+    /**
+     * How often each catalog service was entered over the last `days` (default 90).
+     * Inspects visit_items (and visits.serviceCatalogId for legacy visits) for the clinic's visits.
+     * Feeds the quick-pick service chips on the New Visit form.
+     */
+    async serviceUsageCounts(clinicId: UUID, days = 90): Promise<ServiceUsageCountRow[]> {
+      const to = toLocalDateStr(new Date());
+      const from = toLocalDateStr(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+      const visits = await repos.visits.list({ clinicId, from, to });
+      if (visits.length === 0) return [];
+      const items = await repos.visitItems.listByVisitIds(visits.map((v) => v.id));
+      const counts = new Map<UUID, number>();
+      const visitsWithItems = new Set<UUID>();
+      for (const it of items) {
+        if (!it.deleted && it.serviceCatalogId) {
+          counts.set(it.serviceCatalogId, (counts.get(it.serviceCatalogId) ?? 0) + 1);
+          visitsWithItems.add(it.visitId);
+        }
+      }
+      for (const v of visits) {
+        if (!visitsWithItems.has(v.id) && v.serviceCatalogId) {
+          counts.set(v.serviceCatalogId, (counts.get(v.serviceCatalogId) ?? 0) + 1);
+        }
+      }
+      return [...counts.entries()]
+        .map(([serviceId, count]) => ({ serviceId, count }))
         .sort((a, b) => b.count - a.count);
     },
 

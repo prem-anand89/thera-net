@@ -162,6 +162,7 @@ export interface ServiceRowsProps {
   /** Messages the page wants on specific rows (by index), shown in addition to the package rule. */
   errors: Map<number, string>;
   patientName?: string;
+  quickServices?: CatalogItem[];
 }
 
 /**
@@ -178,6 +179,7 @@ export function ServiceRows({
   showAssistant,
   errors,
   patientName,
+  quickServices,
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
@@ -272,6 +274,27 @@ export function ServiceRows({
   const showGuardrail = openPackages.length > 0 && !hasPackageRow;
   const who = patientName ?? 'This patient';
 
+  const availableQuickServices = useMemo(() => {
+    return (quickServices ?? []).filter(
+      (s) => s.active && !rows.some((r) => r.serviceCatalogId === s.id)
+    );
+  }, [quickServices, rows]);
+
+  function pickQuickService(service: CatalogItem) {
+    const emptyAt = rows.findIndex((r) => !hasService(r));
+    const targetKey = emptyAt >= 0 ? rows[emptyAt].key : newDraftKey();
+    const newLine: DraftLine = {
+      key: targetKey,
+      serviceCatalogId: service.id,
+      assistingTherapistId: emptyAt >= 0 ? rows[emptyAt].assistingTherapistId : null,
+    };
+    if (emptyAt >= 0) {
+      onChange(rows.map((r, i) => (i === emptyAt ? newLine : r)));
+    } else {
+      onChange([...rows, newLine]);
+    }
+  }
+
   return (
     <div className="space-y-2">
       {rows.map((row, index) => {
@@ -288,7 +311,7 @@ export function ServiceRows({
               // Inside a dialog (Edit visit) Escape closes the open picker only, not the whole dialog.
               if (changing === row.key || !named) e.stopPropagation();
               setChanging(null);
-                          }}
+            }}
             // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.
             className={
               named
@@ -389,6 +412,23 @@ export function ServiceRows({
         );
       })}
 
+      {availableQuickServices.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 py-1" data-testid="quick-services">
+          <span className="text-xs font-medium text-[var(--muted)] mr-1">Quick add:</span>
+          {availableQuickServices.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors"
+              onClick={() => pickQuickService(s)}
+            >
+              <span>+ {s.name}</span>
+              <span className="font-num text-[var(--muted)]">{formatINR(s.basePricePaise)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <button
         type="button"
         className="flex min-h-11 w-full items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-sm font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)]"
@@ -398,7 +438,7 @@ export function ServiceRows({
       </button>
 
       {showGuardrail && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
           {openPackages.length === 1 ? (
             <>
               <span>
@@ -423,10 +463,34 @@ export function ServiceRows({
               </button>
             </>
           ) : (
-            <span>
-              {who} has {openPackages.length} open packages. None is used on this visit; pick one from the
-              service list to continue it.
-            </span>
+            <div className="w-full space-y-1.5">
+              <span>{who} has {openPackages.length} open packages. Tap to continue:</span>
+              <div className="flex flex-wrap gap-1.5" data-testid="package-chips">
+                {openPackages.map((pkg) => {
+                  const alreadyUsed = rows.some((r) => r.continuation?.packageGroupId === pkg.packageGroupId);
+                  if (alreadyUsed) return null;
+                  return (
+                    <button
+                      key={pkg.packageGroupId}
+                      type="button"
+                      className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--paper)]"
+                      onClick={() => {
+                        const pkgLine = continuationLine(pkg);
+                        const emptyAt = rows.findIndex((r) => !hasService(r));
+                        if (emptyAt >= 0) {
+                          onChange(rows.map((r, i) => (i === emptyAt ? { ...pkgLine, key: r.key, assistingTherapistId: r.assistingTherapistId } : r)));
+                        } else {
+                          onChange([...rows, pkgLine]);
+                        }
+                      }}
+                    >
+                      <span className="font-medium">{pkg.serviceName}</span>
+                      <span className="text-[var(--muted)]">({pkg.logged + 1} of {pkg.packageTotal})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       )}

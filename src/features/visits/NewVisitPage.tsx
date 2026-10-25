@@ -30,13 +30,14 @@ import { SimilarPatients } from '@/components/SimilarPatients';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { isNearingCompletion } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
+import { rankServicesByUsage } from '@/domain/serviceUsage';
 import {
   type Patient,
   type PaymentMethod,
   type TreatmentItem,
   type UUID,
 } from '@/domain/types';
-import type { TreatmentUsageRow } from '@/services/dashboardService';
+import type { ServiceUsageCountRow, TreatmentUsageRow } from '@/services/dashboardService';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   Field,
@@ -100,19 +101,8 @@ import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, reme
 const EMPTY_TREATMENTS: TreatmentItem[] = [];
 const EMPTY_PACKAGES: OpenPackage[] = [];
 const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
+const EMPTY_SERVICE_USAGE: ServiceUsageCountRow[] = [];
 
-/** Compact reference card for the patient side panel — last visit / open
- *  package are more decision-relevant here than an outstanding-balance
- *  figure (that's a billing/collections concern, already surfaced on the
- *  Ledger table and Patient Profile). */
-function SummaryTile({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      <div className="mt-1 text-sm text-[var(--ink)]">{children}</div>
-    </div>
-  );
-}
 
 /** Two/three-way pill toggle — replaces a radio-button row where the choice
  *  is really "pick one of these modes", not a form field in the accessible-
@@ -419,9 +409,16 @@ export function NewVisitPage() {
   const treatmentUsage =
     useLiveQuery(() => dashboardService.treatmentUsageCounts(clinic.id), [clinic.id]) ??
     EMPTY_TREATMENT_USAGE;
+  const serviceUsage =
+    useLiveQuery(() => dashboardService.serviceUsageCounts(clinic.id), [clinic.id]) ??
+    EMPTY_SERVICE_USAGE;
   const rankedTreatments = useMemo(
     () => rankTreatmentsByUsage(treatments, treatmentUsage),
     [treatments, treatmentUsage]
+  );
+  const quickServices = useMemo(
+    () => rankServicesByUsage(catalog ?? [], serviceUsage, 3),
+    [catalog, serviceUsage]
   );
   const matches = useLiveQuery(
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
@@ -1118,144 +1115,145 @@ export function NewVisitPage() {
         : { kind: 'later' }
       : { kind: 'none' };
 
-  const patientPanel = (
-    <SectionCard title="Patient">
-      {patient ? (
-        // Confirmed — collapsed to an identity header, reference tiles, and
-        // a single way back to search. No outstanding-balance figure here
-        // (that's a billing/collections concern, already surfaced on the
-        // Ledger table and Patient Profile) — last visit and open-package
-        // progress are what's actually decision-relevant while logging a
-        // new one.
-        <div className="space-y-3">
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="font-display text-sm font-medium text-[var(--ink)]">
-                {patient.name}
-              </div>
-              <div className="text-xs text-[var(--muted)]">
-                Patient ID {patient.mrno}
-                {patient.age != null && ` · ${patient.age}y`}
-                {patient.sex && ` · ${patient.sex}`}
-                {patient.primaryCondition && ` · ${patient.primaryCondition}`}
-              </div>
-            </div>
+  const patientPanel = patient ? (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-display text-sm sm:text-base font-semibold text-[var(--ink)] truncate">
+              {patient.name}
+            </span>
             <button
               type="button"
               className="shrink-0 text-xs text-[var(--teal)] hover:underline"
               onClick={() => setEditingPatient(true)}
             >
-              Edit details
+              Edit
             </button>
           </div>
+          <div className="text-xs text-[var(--muted)] mt-0.5">
+            Patient ID {patient.mrno}
+            {patient.age != null && ` · ${patient.age}y`}
+            {patient.sex && ` · ${patient.sex}`}
+            {patient.primaryCondition && ` · ${patient.primaryCondition}`}
+          </div>
+        </div>
 
-          <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
-
-          {patientVisits !== undefined && (
-            <SummaryTile label="Last visit">
-              {lastVisit ? (
-                (() => {
-                  const state = computeVisitPaymentState(
-                    lastVisit.actualBillPaise,
-                    lastVisit.invoiceId,
-                    lastVisitDirectPaymentPaise,
-                    lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
-                  );
-                  const badge = paymentBadge({
-                    state,
-                    billPaise: lastVisit.actualBillPaise,
-                    collectedPaise: lastVisitDirectPaymentPaise,
-                    visitDate: lastVisit.visitDate,
-                    issuedAt: lastVisitInvoice?.issuedAt,
-                    isPackageSession: isPackageContinuation(
-                      lastVisit.sessionIndex,
-                      lastVisit.packageTotal
-                    ),
-                  });
-                  return (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span>
-                        {formatDateDMY(lastVisit.visitDate)} —{' '}
-                        {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
-                      </span>
-                      <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                        <span title={badge.title}>{badge.label}</span>
-                      </Pill>
-                    </div>
-                  );
-                })()
-              ) : (
-                <span className="text-[var(--muted)]">No previous visits on record</span>
-              )}
-            </SummaryTile>
-          )}
-
-          {openPackages !== undefined && (
-            <SummaryTile label="Package">
-              {openPackages.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span>
-                    {openPackages[0].serviceName} — {openPackages[0].logged} of{' '}
-                    {openPackages[0].packageTotal} used
-                  </span>
-                  <PackageThread
-                    sessionIndex={openPackages[0].logged + 1}
-                    packageTotal={openPackages[0].packageTotal}
-                  />
-                  {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
-                    <Pill tone="amber">Renew soon</Pill>
-                  )}
-                  <span className="text-xs text-[var(--muted)]">
-                    started {formatDateDMY(openPackages[0].startedOn)}
-                  </span>
-                </div>
-              ) : (
-                <span className="text-[var(--muted)]">No open package</span>
-              )}
-            </SummaryTile>
-          )}
-
+        <div className="flex items-center gap-1.5 shrink-0">
           {clinic.clinicalDocsEnabled && canWriteNotes && (
             <button
               type="button"
-              className={`${btnSecondary} flex w-full flex-col items-center gap-0.5 py-2`}
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--surface)] hover:border-[var(--teal)]"
               onClick={() => {
-                  if (search.appointmentId) {
-                    const appointmentId = search.appointmentId;
-                    void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
-                    void navigate({
-                      to: '/patients/$patientId/notes/new',
-                      params: { patientId: patient.id },
-                      search: { appointmentId },
-                    });
-                  } else {
-                    setStartNoteOpen(true);
-                  }
+                if (search.appointmentId) {
+                  const appointmentId = search.appointmentId;
+                  void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
+                  void navigate({
+                    to: '/patients/$patientId/notes/new',
+                    params: { patientId: patient.id },
+                    search: { appointmentId },
+                  });
+                } else {
+                  setStartNoteOpen(true);
+                }
               }}
+              title="Start clinical note first"
             >
-              <span className="inline-flex items-center gap-1.5 font-medium text-[var(--teal)]">
-                <IconPen className="h-3.5 w-3.5" />
-                Start a note first
-              </span>
-              <span className="text-xs font-normal text-[var(--muted)]">Add the service later</span>
+              <IconPen className="h-3 w-3" />
+              <span className="hidden sm:inline">Start note</span>
+              <span className="sm:hidden">Note</span>
             </button>
           )}
 
           {canChangePatient(search) && (
             <button
               type="button"
-              className={`${btnSecondary} w-full`}
+              className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)]"
               onClick={() => {
                 setPatient(null);
                 setCreatingPatient(false);
                 setQuery('');
               }}
             >
-              Change patient
+              Change
             </button>
           )}
         </div>
-      ) : creatingPatient ? (
+      </div>
+
+      <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
+
+      {/* Folded status row: Package info & Last visit info */}
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between border-t border-[var(--border)] pt-2 text-xs">
+        {/* Package summary */}
+        <div className="min-w-0">
+          {openPackages !== undefined && (
+            openPackages.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-[var(--ink)]">
+                  📦 {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
+                </span>
+                <PackageThread
+                  sessionIndex={openPackages[0].logged + 1}
+                  packageTotal={openPackages[0].packageTotal}
+                />
+                {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
+                  <Pill tone="amber">Renew soon</Pill>
+                )}
+                {openPackages.length > 1 && (
+                  <Pill tone="teal">+{openPackages.length - 1} more</Pill>
+                )}
+              </div>
+            ) : (
+              <span className="text-[var(--muted)]">No open package</span>
+            )
+          )}
+        </div>
+
+        {/* Last visit summary */}
+        <div className="min-w-0 shrink-0">
+          {patientVisits !== undefined && (
+            lastVisit ? (
+              (() => {
+                const state = computeVisitPaymentState(
+                  lastVisit.actualBillPaise,
+                  lastVisit.invoiceId,
+                  lastVisitDirectPaymentPaise,
+                  lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
+                );
+                const badge = paymentBadge({
+                  state,
+                  billPaise: lastVisit.actualBillPaise,
+                  collectedPaise: lastVisitDirectPaymentPaise,
+                  visitDate: lastVisit.visitDate,
+                  issuedAt: lastVisitInvoice?.issuedAt,
+                  isPackageSession: isPackageContinuation(
+                    lastVisit.sessionIndex,
+                    lastVisit.packageTotal
+                  ),
+                });
+                return (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[var(--muted)]">Last:</span>
+                    <span className="font-medium text-[var(--ink)]">
+                      {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
+                    </span>
+                    <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                      <span title={badge.title}>{badge.label}</span>
+                    </Pill>
+                  </div>
+                );
+              })()
+            ) : (
+              <span className="text-[var(--muted)]">First visit</span>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  ) : (
+    <SectionCard title="Patient">
+      {creatingPatient ? (
         // Creating — no existing match; capture the new patient. Only
         // name and phone are asked for up front, everything else is
         // explicitly optional and can be filled in later from the profile.
@@ -1609,6 +1607,7 @@ export function NewVisitPage() {
             showAssistant={showAssistant}
             errors={rowErrors}
             patientName={patient?.name}
+            quickServices={quickServices}
           />
 
           {/* The rows are the itemised bill: subtotal, the discount / top-up, then the total. The
@@ -1748,18 +1747,18 @@ export function NewVisitPage() {
 
       {/* Same two-column shape (reference panel left, form right) whether or
           not a patient is picked yet — the *content* inside the left panel
-          changes (search/create UI vs. confirmed-patient tiles), but the
+          changes (search/create UI vs. confirmed-patient banner), but the
           page's own structure doesn't, so picking a patient doesn't cause a
-          jarring column-count/width jump. Collapses to stacked below tab:. */}
-      <div className="tab:flex tab:items-start tab:gap-4">
+          jarring column-count/width jump. Collapses to stacked below desktop:. */}
+      <div className="desktop:flex desktop:items-start desktop:gap-4">
         <div
-          className={`tab:w-80 tab:shrink-0 ${
-            patient ? 'tab:sticky tab:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
+          className={`desktop:w-80 desktop:shrink-0 ${
+            patient ? 'desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
           }`}
         >
           {patientPanel}
         </div>
-        <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
+        <div className="mt-4 min-w-0 flex-1 desktop:mt-0">{visitPanel}</div>
       </div>
 
       <VisitSaveBar

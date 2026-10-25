@@ -73,6 +73,12 @@ describe('rowsForNewPatient', () => {
     const rows = rowsForNewPatient([plain('a')], [pkg(1), { ...pkg(2), packageGroupId: 'g2' }], null);
     expect(rows.map((r) => r.serviceCatalogId)).toEqual(['a']);
   });
+  it('with two open packages leaves an empty row when nothing was selected', () => {
+    const rows = rowsForNewPatient([{ key: 'e', assistingTherapistId: null }], [pkg(1), { ...pkg(2), packageGroupId: 'g2' }], null);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].serviceCatalogId).toBeUndefined();
+    expect(rows[0].continuation).toBeUndefined();
+  });
   it('a pick after a different patient starts over', () => {
     const rows = rowsForNewPatient([plain('a'), pkgRow(pkg(4))], [], 'patient-a');
     expect(rows).toHaveLength(1);
