@@ -32,7 +32,7 @@ export function RevenueShareSummary({
   onEdit,
 }: RevenueShareSummaryProps) {
   const live = items.filter((i) => !i.deleted);
-  if (!splitEnabled || !live.some((i) => i.assistingTherapistId)) return null;
+  if (!splitEnabled || !live.some((i) => i.assistingTherapistId || (!i.isPackageLine && i.sessionShareTherapistId))) return null;
 
   const shares = credits ?? autoCredits(items, primaryId, billPaise, { splitEnabled });
   const primaryLines = live.filter((i) => deliverer(i, primaryId) === primaryId);

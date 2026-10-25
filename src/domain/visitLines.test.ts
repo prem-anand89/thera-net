@@ -163,6 +163,69 @@ describe('autoCredits', () => {
     ]);
   });
 
+  describe('a share on a paid service', () => {
+    const shared = (pct: number, to = S) => ({ sessionShareTherapistId: to, sessionSharePct: pct });
+
+    it('gives the colleague a % of the line and the deliverer the rest', () => {
+      const items = [line({ position: 0, pricePaise: rs(2000), ...shared(30) })];
+      expect(autoCredits(items, R, rs(2000), { splitEnabled: true })).toEqual([
+        { therapistId: R, amountPaise: rs(1400) },
+        { therapistId: S, amountPaise: rs(600) },
+      ]);
+    });
+
+    it('takes the % of the net after the visit discount', () => {
+      const items = [line({ position: 0, pricePaise: rs(2000), ...shared(30) })];
+      expect(autoCredits(items, R, rs(1800), { splitEnabled: true })).toEqual([
+        { therapistId: R, amountPaise: rs(1260) },
+        { therapistId: S, amountPaise: rs(540) },
+      ]);
+    });
+
+    it('splits only the shared service when there are several', () => {
+      const items = [
+        line({ position: 0, pricePaise: rs(1000), ...shared(50) }),
+        line({ position: 1, pricePaise: rs(500), assistingTherapistId: S }),
+      ];
+      expect(autoCredits(items, R, rs(1500), { splitEnabled: true })).toEqual([
+        { therapistId: R, amountPaise: rs(500) },
+        { therapistId: S, amountPaise: rs(1000) },
+      ]);
+    });
+
+    it("shares a line an assistant did: the assistant keeps the rest", () => {
+      const items = [line({ position: 0, pricePaise: rs(1000), assistingTherapistId: S, ...shared(20, R) })];
+      expect(autoCredits(items, R, rs(1000), { splitEnabled: true })).toEqual([
+        { therapistId: R, amountPaise: rs(200) },
+        { therapistId: S, amountPaise: rs(800) },
+      ]);
+    });
+
+    it('rounds half-up to the rupee and the shares still total the bill', () => {
+      const items = [line({ position: 0, pricePaise: rs(999), ...shared(33) })];
+      const credits = autoCredits(items, R, rs(999), { splitEnabled: true });
+      expect(credits).toEqual([
+        { therapistId: R, amountPaise: rs(669) },
+        { therapistId: S, amountPaise: rs(330) },
+      ]);
+      expect(credits.reduce((n, c) => n + c.amountPaise, 0)).toBe(rs(999));
+    });
+
+    it('ignores a share on a package line (package attribution moves it, never this)', () => {
+      const items = [line({ position: 0, pricePaise: rs(5000), isPackageLine: true, ...shared(30) })];
+      expect(autoCredits(items, R, rs(5000), { splitEnabled: true })).toEqual([
+        { therapistId: R, amountPaise: rs(5000) },
+      ]);
+    });
+
+    it('ignores the share when the clinic split is off', () => {
+      const items = [line({ position: 0, pricePaise: rs(2000), ...shared(30) })];
+      expect(autoCredits(items, R, rs(2000), { splitEnabled: false })).toEqual([
+        { therapistId: R, amountPaise: rs(2000) },
+      ]);
+    });
+  });
+
   it('keeps the primary present even with no lines of their own', () => {
     const items = [line({ position: 0, pricePaise: rs(500), assistingTherapistId: S })];
     expect(autoCredits(items, R, rs(500), { splitEnabled: true })).toEqual([

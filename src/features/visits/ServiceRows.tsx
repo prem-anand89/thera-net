@@ -79,12 +79,16 @@ export function rowProblems(rows: DraftLine[], catalog: CatalogItem[]): Map<numb
   let seenPackage = false;
   rows.forEach((r, i) => {
     if (!hasService(r)) return;
-    if (!isPackageRow(r, catalog)) return;
-    if (seenPackage) out.set(i, `${rowName(r, catalog)}: only one package per visit.`);
-    else if (r.sessionShare && (!Number.isInteger(r.sessionShare.pct) || r.sessionShare.pct < 1 || r.sessionShare.pct > 99)) {
-      out.set(i, 'A session share must be a whole number from 1 to 99%.');
+    if (isPackageRow(r, catalog)) {
+      if (seenPackage) {
+        out.set(i, `${rowName(r, catalog)}: only one package per visit.`);
+        return;
+      }
+      seenPackage = true;
     }
-    seenPackage = true;
+    if (r.sessionShare && (!Number.isInteger(r.sessionShare.pct) || r.sessionShare.pct < 1 || r.sessionShare.pct > 99)) {
+      out.set(i, 'A share must be a whole number from 1 to 99%.');
+    }
   });
   return out;
 }
@@ -105,6 +109,9 @@ export function draftLinesToItems(rows: DraftLine[], catalog: CatalogItem[]): Vi
       catalogPricePaise: cat.basePricePaise,
       pricePaise: rowPricePaise(r, catalog),
       assistingTherapistId: r.assistingTherapistId,
+      ...(r.sessionShare
+        ? { sessionShareTherapistId: r.sessionShare.therapistId, sessionSharePct: r.sessionShare.pct }
+        : {}),
       durationMinutes: cat.durationMinutes ?? null,
       isPackageLine: isPackageRow(r, catalog),
       deleted: false,

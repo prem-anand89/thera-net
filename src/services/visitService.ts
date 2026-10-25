@@ -133,10 +133,9 @@ export function createVisitService(repos: Repos) {
       if (sp.assistingTherapistId) assistants.add(sp.assistingTherapistId);
       if (sp.sessionShare) {
         const { therapistId, pct } = sp.sessionShare;
-        if (!sp.isPackage) throw new Error('Only a package session can be shared.');
-        if (!Number.isInteger(pct) || pct < 1 || pct > 99) throw new Error('A session share must be 1 to 99%.');
+        if (!Number.isInteger(pct) || pct < 1 || pct > 99) throw new Error('A share must be 1 to 99%.');
         if (therapistId === (sp.assistingTherapistId ?? primaryId)) {
-          throw new Error("A session can't be shared with the therapist who ran it.");
+          throw new Error("A service can't be shared with the therapist who did it.");
         }
         assistants.add(therapistId);
       }
