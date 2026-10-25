@@ -255,9 +255,8 @@ describe('RevenueShareSummary', () => {
 });
 
 describe('VisitSaveBar', () => {
-  it('phone save bar states the payment choice, handles Cancel, busy, and disabled states', () => {
+  it('phone save bar states the payment choice, has no Cancel, and handles busy and disabled states', () => {
     const onSave = vi.fn();
-    const onCancel = vi.fn();
     const onSummary = vi.fn();
     const { rerender } = render(
       <VisitSaveBar
@@ -266,7 +265,6 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'now', methodLabel: 'UPI' }}
         busy={false}
         onSave={onSave}
-        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
@@ -277,8 +275,8 @@ describe('VisitSaveBar', () => {
     fireEvent.click(within(bar).getByRole('button', { name: 'Save visit' }));
     expect(onSave).toHaveBeenCalled();
 
-    fireEvent.click(within(bar).getByRole('button', { name: 'Cancel' }));
-    expect(onCancel).toHaveBeenCalled();
+    // The page header's back arrow is the way out; a Cancel beside Save is a slip away from losing the visit.
+    expect(within(bar).queryByRole('button', { name: 'Cancel' })).toBeNull();
 
     fireEvent.click(within(bar).getByText('₹1,300'));
     expect(onSummary).toHaveBeenCalled();
@@ -292,7 +290,6 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'none' }}
         busy={false}
         onSave={onSave}
-        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
@@ -307,7 +304,6 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'later' }}
         busy={false}
         onSave={onSave}
-        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
@@ -315,7 +311,13 @@ describe('VisitSaveBar', () => {
     expect(within(bar).getByText('1 service · to collect later')).toBeInTheDocument();
     expect(within(bar).getByRole('button', { name: 'Save visit' })).not.toBeDisabled();
 
-    // Busy state: Save shows "Saving…", both buttons disabled
+    // A free package session says so instead of showing a payment
+    rerender(
+      <VisitSaveBar totalPaise={0} serviceCount={1} payment={{ kind: 'none' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
+    );
+    expect(within(bar).getByText('1 service · no charge')).toBeInTheDocument();
+
+    // Busy state: Save shows "Saving…" and is disabled
     rerender(
       <VisitSaveBar
         totalPaise={50000}
@@ -323,12 +325,10 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'later' }}
         busy={true}
         onSave={onSave}
-        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
     expect(within(bar).getByRole('button', { name: 'Saving…' })).toBeDisabled();
-    expect(within(bar).getByRole('button', { name: 'Cancel' })).toBeDisabled();
   });
 });
 

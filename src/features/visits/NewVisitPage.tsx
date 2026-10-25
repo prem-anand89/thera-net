@@ -28,7 +28,6 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { findSimilarPatients } from '@/domain/similarPatients';
 import { SimilarPatients } from '@/components/SimilarPatients';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
-import { isNearingCompletion } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import { rankServicesByUsage } from '@/domain/serviceUsage';
 import {
@@ -1159,33 +1158,31 @@ export function NewVisitPage() {
 
   const patientPanel = patient ? (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-3">
-      {/* 1. Header: Patient name & actions */}
+      {/* Who: name and Edit, then ID · age · sex, then the condition on its own line (so nothing dangles). */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-display text-base sm:text-lg font-semibold text-[var(--ink)] truncate">
-              {patient.name}
-            </span>
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="truncate font-display text-base font-semibold text-[var(--ink)]">{patient.name}</span>
             <button
               type="button"
-              className="shrink-0 text-xs text-[var(--teal)] hover:underline"
+              className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
               onClick={() => setEditingPatient(true)}
             >
               Edit
             </button>
           </div>
-          <div className="text-xs text-[var(--muted)] mt-0.5 leading-relaxed">
+          <div className="mt-0.5 text-xs text-[var(--muted)]">
             Patient ID <span className="font-medium tabular-nums text-[var(--ink)]">{patient.mrno}</span>
             {patient.age != null && ` · ${patient.age}y`}
             {patient.sex && ` · ${patient.sex}`}
-            {patient.primaryCondition && ` · ${patient.primaryCondition}`}
           </div>
+          {patient.primaryCondition && <div className="text-xs text-[var(--muted)]">{patient.primaryCondition}</div>}
         </div>
 
         {canChangePatient(search) && (
           <button
             type="button"
-            className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)] shrink-0"
+            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)]"
             onClick={() => {
               setPatient(null);
               setCreatingPatient(false);
@@ -1199,11 +1196,11 @@ export function NewVisitPage() {
 
       <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
 
-      {/* 2. Structured Package Row */}
+      {/* Open package: label + its own Paid/Due status, the package, then progress. */}
       {openPackages !== undefined && openPackages.length > 0 && (
-        <div className="border-t border-[var(--border)] pt-2.5 text-xs">
+        <div className="border-t border-[var(--border)] pt-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[var(--muted)]">
+            <span className="text-xs text-[var(--muted)]">
               {openPackages.length > 1 ? `Open packages (${openPackages.length})` : 'Open package'}
             </span>
             {packageBadge && (
@@ -1212,42 +1209,32 @@ export function NewVisitPage() {
               </Pill>
             )}
           </div>
-          <div className="mt-0.5 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
-          <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted)]">
+          <div className="mt-1 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
             <span
-              className="inline-flex items-center gap-1 align-middle"
+              className="inline-flex items-center gap-1"
               title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
             >
-              {Array.from({ length: openPackages[0].packageTotal }, (_, i) => {
-                const isDone = i < openPackages[0].logged;
-                return (
-                  <span
-                    key={i}
-                    className={`h-2 w-2 rounded-full transition-colors ${
-                      isDone ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
-                    }`}
-                  />
-                );
-              })}
+              {Array.from({ length: openPackages[0].packageTotal }, (_, i) => (
+                <span
+                  key={i}
+                  className={`h-2 w-2 rounded-full ${
+                    i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
+                  }`}
+                />
+              ))}
             </span>
             <span>
               {openPackages[0].logged} of {openPackages[0].packageTotal} used
             </span>
-            <span>·</span>
-            <span>started {formatDateDMY(openPackages[0].startedOn)}</span>
-            {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
-              <>
-                <span>·</span>
-                <span className="text-[var(--amber)]">Renew soon</span>
-              </>
-            )}
+            <span>· started {formatDateDMY(openPackages[0].startedOn)}</span>
           </div>
         </div>
       )}
 
-      {/* 3. Structured Last Visit Row */}
+      {/* Last visit: same shape as the package block above — label + status, the service, then the date. */}
       {patientVisits !== undefined && (
-        <div className="border-t border-[var(--border)] pt-2.5 text-xs">
+        <div className="border-t border-[var(--border)] pt-3">
           {lastVisit ? (
             (() => {
               const state = computeVisitPaymentState(
@@ -1270,28 +1257,27 @@ export function NewVisitPage() {
               return (
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[var(--muted)]">
-                      Last visit: <span className="text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
-                    </span>
+                    <span className="text-xs text-[var(--muted)]">Last visit</span>
                     <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
                       <span title={badge.title}>{badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}</span>
                     </Pill>
                   </div>
-                  <div className="mt-0.5 truncate text-[var(--ink)]">
-                    {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
+                  <div className="mt-1 text-sm font-medium text-[var(--ink)]">
+                    {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
                   </div>
+                  <div className="mt-1 text-xs text-[var(--muted)]">{formatDateDMY(lastVisit.visitDate)}</div>
                 </div>
               );
             })()
           ) : (
-            <span className="text-[var(--muted)]">First visit</span>
+            <span className="text-xs text-[var(--muted)]">First visit</span>
           )}
         </div>
       )}
 
       {/* 4. Start note button (quiet secondary action at bottom) */}
       {clinic.clinicalDocsEnabled && canWriteNotes && (
-        <div className="border-t border-[var(--border)] pt-2.5">
+        <div className="border-t border-[var(--border)] pt-3">
           <button
             type="button"
             className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--surface)]"
@@ -1785,7 +1771,7 @@ export function NewVisitPage() {
             {servicesChosen === 0 ? 'No service yet' : formatINR(billPaise)}
           </div>
           {servicesChosen > 0 && (
-            <div className="truncate text-xs text-[var(--muted)]">{saveSummary(servicesChosen, savePayment)}</div>
+            <div className="truncate text-xs text-[var(--muted)]">{saveSummary(servicesChosen, savePayment, billPaise)}</div>
           )}
         </div>
         <button type="button" className={btnSecondary} disabled={busy} onClick={requestExit}>
@@ -1858,7 +1844,6 @@ export function NewVisitPage() {
         payment={savePayment}
         busy={busy}
         onSave={() => void save()}
-        onCancel={requestExit}
         onSummaryClick={() =>
           document.getElementById('visit-payment')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
         }
