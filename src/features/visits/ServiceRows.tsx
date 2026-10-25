@@ -97,7 +97,7 @@ export function rowProblems(rows: DraftLine[], catalog: CatalogItem[]): Map<numb
       seenPackage = true;
     }
     if (r.sessionShare && (!Number.isInteger(r.sessionShare.pct) || r.sessionShare.pct < 1 || r.sessionShare.pct > 99)) {
-      out.set(i, 'A share must be a whole number from 1 to 99%.');
+      out.set(i, Number.isNaN(r.sessionShare.pct) ? 'Enter the % to share.' : 'A share must be a whole number from 1 to 99%.');
     }
   });
   return out;
@@ -181,7 +181,6 @@ export function ServiceRows({
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
-  const [doneBy, setDoneBy] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
 
   const problems = useMemo(() => rowProblems(rows, catalog), [rows, catalog]);
@@ -190,7 +189,6 @@ export function ServiceRows({
     () => therapists.filter((t) => t.active || t.id === primaryId),
     [therapists, primaryId]
   );
-  const therapistName = (id: UUID) => therapists.find((t) => t.id === id)?.name ?? 'Therapist';
 
   const serviceOptions = useMemo(() => {
     const packages = openPackages.map((p) => ({
@@ -288,8 +286,7 @@ export function ServiceRows({
             onKeyDown={(e) => {
               if (e.key !== 'Escape') return;
               setChanging(null);
-              setDoneBy(null);
-            }}
+                          }}
             // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.
             className={
               named
@@ -350,31 +347,30 @@ export function ServiceRows({
 
             {named && showAssistant && (
               <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2.5">
-                {doneBy === row.key ? (
-                  <div className="w-full">
-                    <FocusedPicker
-                      autoFocus
-                      label="Done by"
+                {doers.length > 1 && (
+                  // A native select dressed as the pill: one tap, same look open or closed.
+                  <label
+                    className={`${pillBtn} relative cursor-pointer ${
+                      row.assistingTherapistId ? '!border-[var(--teal)] !text-[var(--teal)]' : ''
+                    }`}
+                    title="Who did this service. They get its money."
+                  >
+                    <IconUserPlus className="h-3.5 w-3.5" />
+                    <span>Done by:</span>
+                    <select
+                      aria-label="Done by"
+                      className="max-w-[10rem] cursor-pointer appearance-none truncate bg-transparent pr-3 text-xs font-medium text-inherit focus:outline-none"
                       value={row.assistingTherapistId ?? primaryId}
-                      onChange={(v) => {
-                        update(row.key, { assistingTherapistId: v === primaryId ? null : v });
-                        setDoneBy(null);
-                      }}
-                      options={doers.map((t) => ({ value: t.id, label: t.name }))}
-                    />
-                  </div>
-                ) : (
-                  doers.length > 1 && (
-                    <button
-                      type="button"
-                      className={row.assistingTherapistId ? `${pillBtn} !border-[var(--teal)] !text-[var(--teal)]` : pillBtn}
-                      title="Who did this service. They get its money."
-                      onClick={() => setDoneBy(row.key)}
+                      onChange={(e) => update(row.key, { assistingTherapistId: e.target.value === primaryId ? null : e.target.value })}
                     >
-                      <IconUserPlus className="h-3.5 w-3.5" />
-                      Done by: {therapistName(row.assistingTherapistId ?? primaryId)} ▾
-                    </button>
-                  )
+                      {doers.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span aria-hidden="true" className="pointer-events-none absolute right-2.5 text-[10px]">▾</span>
+                  </label>
                 )}
                 <RowShare
                   row={row}
@@ -458,7 +454,7 @@ function RowShare({
         type="button"
         className={pillBtn}
         title="Give a colleague who helped a % of this service"
-        onClick={() => onChange({ therapistId: candidates[0]!.id, pct: 50 })}
+        onClick={() => onChange({ therapistId: candidates[0]!.id, pct: NaN })}
       >
         Share
       </button>
@@ -491,6 +487,8 @@ function RowShare({
           inputMode="numeric"
           aria-label="Percent of this service"
           className="w-14 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-xs text-[var(--ink)]"
+          placeholder="%"
+          autoFocus={!Number.isFinite(share.pct)}
           value={Number.isFinite(share.pct) ? share.pct : ''}
           onChange={(e) => onChange({ ...share, pct: e.target.value === '' ? NaN : Number(e.target.value) })}
         />

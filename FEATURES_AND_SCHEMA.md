@@ -32,13 +32,14 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Prefix configurable per clinic in Settings (defaults to 'W')
 - **Visit entry** with catalog price autofill. The New Visit form (`NewVisitPage.tsx`) is three cards:
   **Visit** (date, therapist, condition/treatments — collapsed for front desk), **Services**, **Payment**.
+  - **Start a note first**: for clinics with clinical notes on, a quiet outlined button under the patient's Last visit / Package tiles ("Start a note first — Add the service later"), above "Change patient"; it opens the same start-note flow as before.
   - **Patient search & lookup**: Instant search by MRNO, name or phone number. Result rows show the patient's name, MRNO, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
     presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
     the top; a row shows the service, its catalog price and two outlined pills (clinics with several therapists):
-    **"Done by: Dr X ▾"** (who did the service and gets its money — defaults to the visit's therapist; picking
-    another sets `assistingTherapistId`) and **"Share"** (a colleague who helped gets a % of this service — on any
-    service, paid or package; the open row reads "Shared with [Dr Y] [30] % ≈ ₹600 ✕", the ₹ being a preview of the
+    **"Done by: Dr X ▾"** (a select dressed as the pill: who did the service and gets its money — defaults to the
+    visit's therapist; picking another sets `assistingTherapistId`) and **"Share"** (a colleague who helped gets a %
+    of this service — on any service, paid or package; the % starts empty (focused) and Save asks for it; the open row reads "Shared with [Dr Y] [30] % ≈ ₹600 ✕", the ₹ being a preview of the
     row price; "Same as last session" when a package session copied it). "+ Add another service" adds a
     row; a single row has no ✕, with two or more every row has one and removing the first promotes the next.
     Errors name the service ("Dry needling: only one package per visit.") and show on that row.

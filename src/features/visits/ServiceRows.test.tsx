@@ -127,27 +127,23 @@ describe('ServiceRows', () => {
 
   it('"Done by" starts as the visit therapist and lists active therapists only', () => {
     render(<Harness initial={[row('a', 'assess')]} />);
-    fireEvent.click(screen.getByRole('button', { name: /Done by: Dr Raghavender/ }));
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
-    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Dr Raghavender', 'Dr Sneha']);
+    const select = screen.getByRole('combobox', { name: 'Done by' }) as HTMLSelectElement;
+    expect(select.value).toBe('t1');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Dr Raghavender', 'Dr Sneha']);
   });
 
   it('"Done by" tags only that row, and choosing the visit therapist clears it', () => {
     const seen: DraftLine[][] = [];
     render(<Harness initial={[row('a', 'assess'), row('b', 'needle')]} onRows={(r) => seen.push(r)} />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Done by: Dr Raghavender/ })[1]);
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
-    fireEvent.mouseDown(screen.getByRole('option', { name: 'Dr Sneha' }));
+    fireEvent.change(screen.getAllByRole('combobox', { name: 'Done by' })[1]!, { target: { value: 't2' } });
     expect(seen.at(-1)!.map((r) => r.assistingTherapistId)).toEqual([null, 't2']);
-    fireEvent.click(screen.getByRole('button', { name: /Done by: Dr Sneha/ }));
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
-    fireEvent.mouseDown(screen.getByRole('option', { name: 'Dr Raghavender' }));
+    fireEvent.change(screen.getAllByRole('combobox', { name: 'Done by' })[1]!, { target: { value: 't1' } });
     expect(seen.at(-1)!.map((r) => r.assistingTherapistId)).toEqual([null, null]);
   });
 
   it('solo clinic shows no "Done by" or "Share"', () => {
     render(<Harness initial={[row('a', 'assess')]} showAssistant={false} />);
-    expect(screen.queryByRole('button', { name: /Done by/ })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Done by' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
   });
 
@@ -181,16 +177,12 @@ describe('ServiceRows', () => {
     expect(screen.getByText('Pick a service.')).toBeInTheDocument();
   });
 
-  it('escape cancels an opened change-service picker and "Done by" picker', () => {
+  it('escape cancels an opened change-service picker', () => {
     render(<Harness initial={[row('a', 'assess')]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Assessment' }));
     expect(screen.getByRole('combobox', { name: 'Service' })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Service' }), { key: 'Escape' });
     expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Done by/ }));
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Done by' }), { key: 'Escape' });
-    expect(screen.queryByRole('combobox', { name: 'Done by' })).toBeNull();
-    expect(screen.getByRole('button', { name: /Done by/ })).toBeInTheDocument();
   });
 
   it('adds another service row', () => {
@@ -334,7 +326,9 @@ describe('sharing a service', () => {
     expect(pills).toHaveLength(2);
     fireEvent.click(pills[1]!);
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
-    expect(last[1]!.sessionShare).toEqual({ therapistId: 't2', pct: 50 });
+    expect(last[1]!.sessionShare?.therapistId).toBe('t2');
+    // The percentage is left for the therapist to enter.
+    expect(Number.isNaN(last[1]!.sessionShare!.pct)).toBe(true);
   });
 
   it('previews the rupees on a paid row', () => {
@@ -365,10 +359,7 @@ describe('sharing a service', () => {
   it('clears the share when "Done by" becomes the shared colleague', () => {
     const onRows = vi.fn();
     render(<Harness initial={[row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 30 } })]} onRows={onRows} />);
-    fireEvent.click(screen.getByRole('button', { name: /Done by/ }));
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Done by' }));
-    // The row's own "Shared with" select also lists Dr Sneha; take the picker's option.
-    fireEvent.mouseDown(screen.getAllByRole('option', { name: 'Dr Sneha' }).find((o) => o.tagName !== 'OPTION')!);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Done by' }), { target: { value: 't2' } });
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
     expect(last[0]!.assistingTherapistId).toBe('t2');
     expect(last[0]!.sessionShare).toBeNull();
@@ -380,6 +371,11 @@ describe('sharing a service', () => {
     expect(screen.getByText(/Same as last session/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Percent of this service'), { target: { value: '40' } });
     expect(screen.queryByText(/Same as last session/)).toBeNull();
+  });
+
+  it('asks for the % while it is empty', () => {
+    const rows = [row('a', 'assess', { sessionShare: { therapistId: 't2', pct: NaN } })];
+    expect(rowProblems(rows, catalog).get(0)).toBe('Enter the % to share.');
   });
 
   it('flags a percentage outside 1 to 99 on any row', () => {

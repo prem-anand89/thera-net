@@ -1,3 +1,4 @@
+import { IconPen } from '@/components/StatIcons';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { patientsBackLink, type NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -1094,30 +1095,6 @@ export function NewVisitPage() {
             </button>
           </div>
 
-          {clinic.clinicalDocsEnabled && canWriteNotes && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)]">
-              <span>Not ready to pick a service?</span>
-              <button
-                type="button"
-                className="font-medium text-[var(--teal)] hover:underline"
-                onClick={() => {
-                  if (search.appointmentId) {
-                    const appointmentId = search.appointmentId;
-                    void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
-                    void navigate({
-                      to: '/patients/$patientId/notes/new',
-                      params: { patientId: patient.id },
-                      search: { appointmentId },
-                    });
-                  } else {
-                    setStartNoteOpen(true);
-                  }
-                }}
-              >
-                Start a note first — add the service later →
-              </button>
-            </div>
-          )}
           <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
 
           {patientVisits !== undefined && (
@@ -1182,6 +1159,32 @@ export function NewVisitPage() {
                 <span className="text-[var(--muted)]">No open package</span>
               )}
             </SummaryTile>
+          )}
+
+          {clinic.clinicalDocsEnabled && canWriteNotes && (
+            <button
+              type="button"
+              className={`${btnSecondary} flex w-full flex-col items-center gap-0.5 py-2`}
+              onClick={() => {
+                  if (search.appointmentId) {
+                    const appointmentId = search.appointmentId;
+                    void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
+                    void navigate({
+                      to: '/patients/$patientId/notes/new',
+                      params: { patientId: patient.id },
+                      search: { appointmentId },
+                    });
+                  } else {
+                    setStartNoteOpen(true);
+                  }
+              }}
+            >
+              <span className="inline-flex items-center gap-1.5 font-medium text-[var(--teal)]">
+                <IconPen className="h-3.5 w-3.5" />
+                Start a note first
+              </span>
+              <span className="text-xs font-normal text-[var(--muted)]">Add the service later</span>
+            </button>
           )}
 
           {canChangePatient(search) && (
