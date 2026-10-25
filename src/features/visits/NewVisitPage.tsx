@@ -84,6 +84,7 @@ import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, lastPacka
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
+import { visitDateHint } from './visitDateHint';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 // UPI first — the most common collection method at an Indian clinic front
@@ -1431,6 +1432,8 @@ export function NewVisitPage() {
     </SectionCard>
   );
 
+  const dateHint = visitDateHint(visitDate, today);
+
   const visitPanel = (
     <div className="space-y-4">
       <SectionCard title="Visit">
@@ -1444,7 +1447,14 @@ export function NewVisitPage() {
             wrap inside a half-width column, visually crowding its own
             input. One column removes the ambiguity entirely. */}
         <div className="grid grid-cols-1 gap-3">
-          <Field label="Date">
+          <Field
+            label="Date"
+            hint={
+              dateHint && (
+                <span className={dateHint.tone === 'warn' ? 'text-[var(--rust)]' : undefined}>{dateHint.text}</span>
+              )
+            }
+          >
             <input
               type="date"
               className={inputCls}
@@ -1500,8 +1510,10 @@ export function NewVisitPage() {
                       />
                     </div>
                   )}
+                  <p className="text-[11px] font-medium text-[var(--muted)]">Other treatments / notes</p>
                   <input
                     className={inputCls}
+                    aria-label="Other treatments / notes"
                     placeholder="Anything not in the list…"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -1533,6 +1545,7 @@ export function NewVisitPage() {
             catalogPricePaise={catalogPricePaise}
             catalogLabel="Subtotal"
             totalLabel="Total"
+            hideUnadjustedPrice
             disabled={catalogPricePaise === 0}
             mode={adjustmentMode}
             valueType={adjustmentValueType}

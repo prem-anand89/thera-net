@@ -54,6 +54,8 @@ export interface BillAdjustmentFieldsProps {
   continuationSession?: boolean;
   /** Label for the teal result box; the New Visit form calls it "Total". */
   totalLabel?: string;
+  /** New Visit: with nothing adjusted the Total says the same as the price box, so show the price box only once it differs. */
+  hideUnadjustedPrice?: boolean;
   /** Greys out every control (New Visit while the subtotal is ₹0). */
   disabled?: boolean;
 }
@@ -71,6 +73,7 @@ export function BillAdjustmentFields({
   onReasonChange,
   continuationSession,
   totalLabel = 'Final bill',
+  hideUnadjustedPrice = false,
   disabled,
 }: BillAdjustmentFieldsProps) {
   const numericValue = Number(value);
@@ -100,10 +103,12 @@ export function BillAdjustmentFields({
 
   return (
     <fieldset disabled={disabled} className="m-0 min-w-0 space-y-3 border-0 p-0">
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
-        <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
-        <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
-      </div>
+            {(hasAdjustment || !hideUnadjustedPrice) && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
+          <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
+          <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
+        </div>
+      )}
 
       {!expanded && !hasAdjustment ? (
         <div>

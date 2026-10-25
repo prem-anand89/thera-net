@@ -84,6 +84,19 @@ describe('BillAdjustmentFields', () => {
     expect(screen.getByRole('button', { name: '+ Discount / Extra' })).toBeInTheDocument();
   });
 
+  it('shows one total box when nothing is adjusted, and the price box once it differs (New Visit)', () => {
+    const { rerender, props } = renderFields({ mode: 'none', hideUnadjustedPrice: true });
+    expect(screen.queryByText(/Subtotal/)).toBeNull();
+    expect(screen.getByText(/Total: /)).toBeInTheDocument();
+    rerender(<BillAdjustmentFields {...props} mode="discount" value="100" hideUnadjustedPrice />);
+    expect(screen.getByText(/Subtotal/)).toBeInTheDocument();
+  });
+
+  it('keeps the price box by default (Edit visit)', () => {
+    renderFields({ mode: 'none' });
+    expect(screen.getByText(/Subtotal/)).toBeInTheDocument();
+  });
+
   it('can be hidden again when opened by mistake with None selected', () => {
     renderFields({ mode: 'none' });
     fireEvent.click(screen.getByRole('button', { name: '+ Discount / Extra' }));
