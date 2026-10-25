@@ -2,7 +2,7 @@ import { IconPen } from '@/components/StatIcons';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { patientsBackLink, type NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
+import { useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   repos,
@@ -85,6 +85,7 @@ import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, lastPacka
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
+import { VisitLoggedCard } from './VisitLoggedCard';
 import { visitDateHint } from './visitDateHint';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
@@ -971,92 +972,61 @@ export function NewVisitPage() {
       // Settled up front, or since (Take payment above).
       alreadyCollected: justSaved.alreadyCollected || (canBill && justSaved.billPaise > 0 && paymentDue === 0),
     };
-    // One clear next step: collect what is owed, else write the note, else bill; everything else is quieter.
     const showBill = canBill && !justSaved.byPartner;
-    const primaryAction: 'payment' | 'note' | 'bill' | 'done' =
-      paymentDue > 0 ? 'payment' : clinic.clinicalDocsEnabled ? 'note' : showBill ? 'bill' : 'done';
-    const cls = (action: typeof primaryAction) => (primaryAction === action ? btnPrimary : btnSecondary);
+    const therapistName = therapistsById.get(justSaved.therapistId)?.name;
     return (
       <div className="mx-auto max-w-2xl space-y-4">
-        <SectionCard title="Visit logged">
-          <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
-          {justSaved.alreadyCollected && (
-            <p className="mt-1 text-sm font-medium text-[var(--teal)]" data-testid="collected-line">
-              ✓ {formatINR(justSaved.billPaise)} collected{justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
-            </p>
-          )}
-          {justSaved.paymentError && (
-            <div className="mt-3">
-              <ErrorNote message={`The visit was saved, but the payment was not recorded: ${justSaved.paymentError} Use Take payment to record it.`} />
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {paymentDue > 0 && (
-              <button type="button" className={cls('payment')} onClick={() => setTakingPayment(true)}>
-                Take payment · {formatINR(paymentDue)}
-              </button>
-            )}
-            {showBill && (
-              <button
-                type="button"
-                className={cls('bill')}
-                onClick={() => setInvoicing(true)}
-              >
-                Give bill
-              </button>
-            )}
-            {clinic.clinicalDocsEnabled && (
-              <Link
-                to="/patients/$patientId/notes/new"
-                params={{ patientId: justSaved.patientId }}
-                search={{ visitId: justSaved.visitId }}
-                className={cls('note')}
-              >
-                Add clinical note
-              </Link>
-            )}
-            {clinic.enablePatientComms && (
-              <button
-                type="button"
-                className={btnSecondary}
-                disabled={feedbackRequested}
-                onClick={() => {
-                  setFeedbackRequested(true);
-                  void feedbackService
-                    .askForFeedback(
-                      justSaved.visitId,
-                      justSaved.patientName,
-                      justSaved.patientPhone,
-                      clinic.name
-                    )
-                    .catch((e) => {
-                      setFeedbackRequested(false);
-                      setError(toFriendlyMessage(e));
-                    });
-                }}
-                title="Ask this patient for feedback"
-              >
-                {feedbackRequested ? 'Sent ✓' : 'Feedback'}
-              </button>
-            )}
-            <button
-              type="button"
-              className="px-1 text-sm font-medium text-[var(--teal)] hover:underline"
-              onClick={() => {
-                setJustSaved(null);
-                void navigate({
-                  to: '/visits/new',
-                  search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
-                });
-              }}
-            >
-              Log a separate visit for {justSaved.patientName}
-            </button>
-            <button type="button" className={cls('done')} onClick={goBack}>
-              Done
-            </button>
-          </div>
-        </SectionCard>
+        <VisitLoggedCard
+          justSaved={justSaved}
+          therapistName={therapistName}
+          paymentDue={paymentDue}
+          canBill={showBill}
+          clinicalDocsEnabled={Boolean(clinic.clinicalDocsEnabled)}
+          enablePatientComms={Boolean(clinic.enablePatientComms)}
+          feedbackRequested={feedbackRequested}
+          onRequestFeedback={() => {
+            setFeedbackRequested(true);
+            void feedbackService
+              .askForFeedback(
+                justSaved.visitId,
+                justSaved.patientName,
+                justSaved.patientPhone,
+                clinic.name
+              )
+              .catch((e) => {
+                setFeedbackRequested(false);
+                setError(toFriendlyMessage(e));
+              });
+          }}
+          onTakePayment={() => setTakingPayment(true)}
+          onGiveBill={() => setInvoicing(true)}
+          onNewVisitSamePatient={() => {
+            setRows([emptyDraftLine()]);
+            setCondition('');
+            setNotes('');
+            setPendingNote('');
+            resetBillAdjustment();
+            setJustSaved(null);
+            void navigate({
+              to: '/visits/new',
+              search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
+            });
+          }}
+          onNewVisitNextPatient={() => {
+            setPatient(null);
+            setRows([emptyDraftLine()]);
+            setCondition('');
+            setNotes('');
+            setPendingNote('');
+            resetBillAdjustment();
+            setJustSaved(null);
+            void navigate({
+              to: '/visits/new',
+              search: { ...(search.from ? { from: search.from } : {}) },
+            });
+          }}
+          onDone={goBack}
+        />
         {takingPayment && (
           <TakePaymentDialog
             clinicId={clinic.id}

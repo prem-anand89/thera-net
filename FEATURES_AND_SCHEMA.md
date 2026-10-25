@@ -152,8 +152,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     (`bottom: 0`, padding `env(safe-area-inset-bottom)`), reads line 1 "₹1,300" (or "No service yet" until a service is chosen, disabling Save)
     and line 2 "2 services · UPI, collected now" (or "to collect later"), with Cancel and Save visit buttons; tapping the summary scrolls to Payment.
     The phone bottom tab bar is hidden on `/visits/new`. Unsaved edits (anything changed since the page opened, not what the page prefilled itself: a patient from the link, an open package's session, a repeated visit) are guarded by a router blocker so Cancel, the back arrow and browser back prompt once to discard; tablet/desktop keep Save and Cancel together under Payment.
-  - After saving: the "Visit logged" screen and the bill dialog name the services ("Assessment + Dry needling"),
-    and the extra-visit button reads "Log a separate visit for {patient}".
+  - After saving: the "Visit logged" screen (`VisitLoggedCard.tsx`) displays a compact receipt summary (patient, MRN, service, date, therapist, and payment status badge), a 2-column grid of patient-specific actions (Add clinical note, Give bill, Request review, and Another visit for {patient}), and a bottom exit block with "Log visit for next patient" (for fast back-to-back logging) and a clear "Done" dismissal button.
 - **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)
 - **Package session tracking** (1/3, 2/3, etc.) with ₹0 continuations for subsequent sessions
 - **Reference panel** showing patient's last visit and open-package progress
