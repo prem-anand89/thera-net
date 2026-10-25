@@ -113,18 +113,18 @@ describe('ServiceRows', () => {
     const seen: DraftLine[][] = [];
     render(<Harness initial={[row('a', 'assess')]} openPackages={[pkg]} onRows={(r) => seen.push(r)} />);
     expect(
-      screen.getByText("Rahul has an open package (session 5 of 10). It isn't used on this visit.")
+      screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === 'Open package: Rehab package — 6 sessions left (4 of 10 used).')
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add package session' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use a session for this visit (₹0)' }));
     expect(seen.at(-1)!.some((r) => r.continuation?.packageGroupId === 'g1')).toBe(true);
-    expect(screen.queryByText(/isn't used on this visit/)).toBeNull();
+    expect(screen.queryByText(/Open package:/)).toBeNull();
   });
 
   it('guardrail shows when the package row is removed', () => {
     render(<Harness initial={[pkgRow(), row('b', 'assess')]} openPackages={[pkg]} />);
-    expect(screen.queryByText(/isn't used on this visit/)).toBeNull();
+    expect(screen.queryByText(/Open package:/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Rehab package' }));
-    expect(screen.getByText(/isn't used on this visit/)).toBeInTheDocument();
+    expect(screen.getByText(/Open package:/)).toBeInTheDocument();
   });
 
   it('"Done by" starts as the visit therapist and lists active therapists only', () => {
@@ -442,9 +442,9 @@ describe('sharing a service', () => {
       const onRows = vi.fn();
       render(<Harness initial={[row('r1', 'rehab')]} openPackages={[pkg]} onRows={onRows} />);
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveTextContent('Rahul still has session 5 of 10 on this package. This starts a new one.');
+      expect(alert).toHaveTextContent('Rahul still has 6 sessions left on this package. This row starts a new one.');
       // The general "open package isn't used" notice is not shown twice.
-      expect(screen.queryByText(/isn't used on this visit/)).toBeNull();
+      expect(screen.queryByText(/Open package:/)).toBeNull();
 
       fireEvent.click(screen.getByRole('button', { name: 'Use remaining session' }));
       const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
@@ -464,6 +464,30 @@ describe('sharing a service', () => {
       render(<Harness initial={[row('r1', 'pkg2'), row('r2', 'assess')]} openPackages={[pkg]} />);
       expect(screen.queryByRole('alert')).toBeNull();
     });
+  });
+
+  it('a share just added shows no error until its % box is left, or Save reveals it', () => {
+    const { unmount } = render(<Harness initial={[row('r1', 'assess')]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(screen.queryByText('Enter the % to share.')).toBeNull();
+    fireEvent.blur(screen.getByLabelText('Percent of this service'));
+    expect(screen.getByText('Enter the % to share.')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <ServiceRows
+        rows={[row('r1', 'assess', { sessionShare: { therapistId: 't2', pct: NaN } })]}
+        onChange={() => {}}
+        catalog={catalog}
+        openPackages={[]}
+        therapists={therapists}
+        primaryId="t1"
+        showAssistant
+        errors={new Map()}
+        revealProblems
+      />
+    );
+    expect(screen.getByText('Enter the % to share.')).toBeInTheDocument();
   });
 
   it('quick-add skips free services and a package that is already open', () => {

@@ -283,6 +283,8 @@ export function NewVisitPage() {
   const [rows, setRows] = useState<DraftLine[]>(() => [emptyDraftLine()]);
   // Messages from the last Save attempt, by row index (the package rule is checked live by ServiceRows).
   const [rowErrors, setRowErrors] = useState<Map<number, string>>(() => new Map());
+  // Set by a Save attempt so ServiceRows shows every row problem (a share added but left without a %).
+  const [revealRowProblems, setRevealRowProblems] = useState(false);
   const [adjustmentMode, setAdjustmentMode] = useState<BillAdjustmentMode>('none');
   const [adjustmentValueType, setAdjustmentValueType] = useState<BillAdjustmentValueType>('amount');
   const [adjustmentValue, setAdjustmentValue] = useState('');
@@ -866,7 +868,10 @@ export function NewVisitPage() {
             : 'Pick a service for each row, or remove the empty one.'
       );
     }
-    if (rowProblems(rows, catalogItems).size > 0) return setError('Fix the service marked above.');
+    if (rowProblems(rows, catalogItems).size > 0) {
+      setRevealRowProblems(true);
+      return setError('Fix the service marked above.');
+    }
     if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
       return setError('Enter a reason for the bill adjustment');
     }
@@ -1632,6 +1637,7 @@ export function NewVisitPage() {
             primaryId={therapistId}
             showAssistant={showAssistant}
             errors={rowErrors}
+            revealProblems={revealRowProblems}
             patientName={patient?.name}
             quickServices={quickServices}
           />
@@ -1683,6 +1689,8 @@ export function NewVisitPage() {
         <div id="visit-payment" className="scroll-mt-24">
           <SectionCard title="Payment">
             <div>
+            {/* One line from tablet up: when it's paid, then how (or the note for later). Wraps on phones. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
               <SegmentedToggle
                 value={paymentChoice}
                 onChange={setPaymentChoice}
@@ -1693,14 +1701,12 @@ export function NewVisitPage() {
               />
               {paymentChoice === 'paid' ? (
                 <>
-                  <div className="mt-2">
-                    <PaymentMethodChips
-                      value={paymentMethod}
-                      onChange={setPaymentMethod}
-                      options={paymentMethods}
-                      disabled={busy}
-                    />
-                  </div>
+                  <PaymentMethodChips
+                    value={paymentMethod}
+                    onChange={setPaymentMethod}
+                    options={paymentMethods}
+                    disabled={busy}
+                  />
                   {paymentMethod === 'upi' && patient && (
                     <ShowUpiQrButton
                       amountPaise={billPaise}
@@ -1712,12 +1718,13 @@ export function NewVisitPage() {
                 </>
               ) : (
                 <input
-                  className={`${inputCls} mt-2`}
+                  className={`${inputCls} min-w-[14rem] flex-1`}
                   placeholder="Optional note — e.g. will pay next Monday"
                   value={pendingNote}
                   onChange={(e) => setPendingNote(e.target.value)}
                 />
               )}
+            </div>
             </div>
           </SectionCard>
         </div>

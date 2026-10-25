@@ -134,6 +134,12 @@ export function draftLinesToItems(rows: DraftLine[], catalog: CatalogItem[]): Vi
 const linkBtn = 'text-xs font-medium text-[var(--teal)] hover:underline';
 
 
+/** "1 session" / "3 sessions" still to use on an open package. */
+function sessionsLeft(pkg: OpenPackage): string {
+  const left = Math.max(0, pkg.packageTotal - pkg.logged);
+  return `${left} session${left === 1 ? '' : 's'}`;
+}
+
 /**
  * The open package a purchase row would double up on: the row buys a package service (more than one session,
  * not a continuation) and the patient still has a session open on that same service.
@@ -173,6 +179,8 @@ export interface ServiceRowsProps {
   errors: Map<number, string>;
   patientName?: string;
   quickServices?: CatalogItem[];
+  /** True after a Save attempt: show every row problem, including a share whose % was never typed. */
+  revealProblems?: boolean;
 }
 
 /**
@@ -190,12 +198,15 @@ export function ServiceRows({
   errors,
   patientName,
   quickServices,
+  revealProblems = false,
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   // Rows where staff confirmed "yes, a new package" while the same one still has a session open.
   const [newPackageOk, setNewPackageOk] = useState<ReadonlySet<string>>(new Set());
+  // Shares whose % box has been left at least once: only then is an empty % worth a red message.
+  const [shareBlurred, setShareBlurred] = useState<ReadonlySet<string>>(new Set());
 
   const problems = useMemo(() => rowProblems(rows, catalog), [rows, catalog]);
   // Everyone who can do a service: the visit's therapist and the other active therapists.
@@ -318,7 +329,10 @@ export function ServiceRows({
       {rows.map((row, index) => {
         const named = hasService(row);
         const picking = !named || changing === row.key;
-        const error = errors.get(index) ?? problems.get(index);
+        // A share just added has no % yet: that is the next thing to type, not an error, until the box is left or Save is pressed.
+        const freshShare =
+          !revealProblems && row.sessionShare !== null && row.sessionShare !== undefined && Number.isNaN(row.sessionShare.pct) && !shareBlurred.has(row.key);
+        const error = errors.get(index) ?? (freshShare ? undefined : problems.get(index));
         const name = rowName(row, catalog);
         const cat = catalogOf(row, catalog);
         const openSame = openSamePackage(row, cat, openPackages);
@@ -392,7 +406,7 @@ export function ServiceRows({
               // The money guard, kept to one quiet line: this row sells a NEW package while the same one still has a session left.
               <p role="alert" className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-[var(--amber)]">
                 <span>
-                  {who} still has session {openSame.logged + 1} of {openSame.packageTotal} on this package. This starts a new one.
+                  {who} still has {sessionsLeft(openSame)} left on this package. This row starts a new one.
                 </span>
                 <button type="button" className={linkBtn} onClick={() => pick(row.key, `pkg:${openSame.packageGroupId}`)}>
                   Use remaining session
@@ -441,6 +455,7 @@ export function ServiceRows({
                   isPackage={isPackageRow(row, catalog)}
                   candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
                   onChange={(sessionShare) => update(row.key, { sessionShare })}
+                  onPctBlur={() => setShareBlurred((prev) => new Set(prev).add(row.key))}
                 />
               </div>
             )}
@@ -479,8 +494,8 @@ export function ServiceRows({
           {openPackages.length === 1 ? (
             <>
               <span>
-                {who} has an open package (session {openPackages[0].logged + 1} of {openPackages[0].packageTotal}).
-                It isn&apos;t used on this visit.
+                <span className="font-medium text-[var(--ink)]">Open package:</span> {openPackages[0].serviceName} —{' '}
+                {sessionsLeft(openPackages[0])} left ({openPackages[0].logged} of {openPackages[0].packageTotal} used).
               </span>
               <button
                 type="button"
@@ -496,12 +511,14 @@ export function ServiceRows({
                   }
                 }}
               >
-                Add package session
+                Use a session for this visit (₹0)
               </button>
             </>
           ) : (
             <div className="w-full space-y-1.5">
-              <span>{who} has {openPackages.length} open packages. Tap to continue:</span>
+              <span>
+                <span className="font-medium text-[var(--ink)]">Open packages:</span> {who} has {openPackages.length}. Use one for this visit (₹0):
+              </span>
               <div className="flex flex-wrap gap-1.5" data-testid="package-chips">
                 {openPackages.map((pkg) => {
                   const alreadyUsed = rows.some((r) => r.continuation?.packageGroupId === pkg.packageGroupId);
@@ -522,7 +539,7 @@ export function ServiceRows({
                       }}
                     >
                       <span className="font-medium">{pkg.serviceName}</span>
-                      <span className="text-[var(--muted)]">({pkg.logged + 1} of {pkg.packageTotal})</span>
+                      <span className="text-[var(--muted)]">· {sessionsLeft(pkg)} left</span>
                     </button>
                   );
                 })}
@@ -546,12 +563,14 @@ function RowShare({
   isPackage,
   candidates,
   onChange,
+  onPctBlur,
 }: {
   row: DraftLine;
   pricePaise: number;
   isPackage: boolean;
   candidates: Therapist[];
   onChange: (share: DraftLine['sessionShare']) => void;
+  onPctBlur?: () => void;
 }) {
   const share = row.sessionShare;
   if (!share) {
@@ -601,8 +620,8 @@ function RowShare({
           inputMode="numeric"
           aria-label="Percent of this service"
           className="h-8 w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] py-0 pl-2 pr-6 text-right text-base text-[var(--ink)] [appearance:textfield] sm:text-xs [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          placeholder="0"
           autoFocus={!Number.isFinite(share.pct)}
+          onBlur={onPctBlur}
           value={Number.isFinite(share.pct) ? share.pct : ''}
           onChange={(e) => onChange({ ...share, pct: e.target.value === '' ? NaN : Number(e.target.value) })}
         />
