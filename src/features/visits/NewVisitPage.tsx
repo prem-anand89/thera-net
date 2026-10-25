@@ -1116,10 +1116,11 @@ export function NewVisitPage() {
       : { kind: 'none' };
 
   const patientPanel = patient ? (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-2.5">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-3">
+      {/* 1. Header: Patient name & actions */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-display text-sm sm:text-base font-semibold text-[var(--ink)] truncate">
               {patient.name}
             </span>
@@ -1131,7 +1132,7 @@ export function NewVisitPage() {
               Edit
             </button>
           </div>
-          <div className="text-xs text-[var(--muted)] mt-0.5">
+          <div className="text-xs text-[var(--muted)] mt-0.5 leading-relaxed">
             Patient ID {patient.mrno}
             {patient.age != null && ` · ${patient.age}y`}
             {patient.sex && ` · ${patient.sex}`}
@@ -1139,117 +1140,119 @@ export function NewVisitPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {clinic.clinicalDocsEnabled && canWriteNotes && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--surface)] hover:border-[var(--teal)]"
-              onClick={() => {
-                if (search.appointmentId) {
-                  const appointmentId = search.appointmentId;
-                  void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
-                  void navigate({
-                    to: '/patients/$patientId/notes/new',
-                    params: { patientId: patient.id },
-                    search: { appointmentId },
-                  });
-                } else {
-                  setStartNoteOpen(true);
-                }
-              }}
-              title="Start clinical note first"
-            >
-              <IconPen className="h-3 w-3" />
-              <span className="hidden sm:inline">Start note</span>
-              <span className="sm:hidden">Note</span>
-            </button>
-          )}
-
-          {canChangePatient(search) && (
-            <button
-              type="button"
-              className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)]"
-              onClick={() => {
-                setPatient(null);
-                setCreatingPatient(false);
-                setQuery('');
-              }}
-            >
-              Change
-            </button>
-          )}
-        </div>
+        {canChangePatient(search) && (
+          <button
+            type="button"
+            className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)] shrink-0"
+            onClick={() => {
+              setPatient(null);
+              setCreatingPatient(false);
+              setQuery('');
+            }}
+          >
+            Change
+          </button>
+        )}
       </div>
 
       <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
 
-      {/* Folded status row: Package info & Last visit info */}
-      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between border-t border-[var(--border)] pt-2 text-xs">
-        {/* Package summary */}
-        <div className="min-w-0">
-          {openPackages !== undefined && (
-            openPackages.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-medium text-[var(--ink)]">
-                  📦 {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
-                </span>
-                <PackageThread
-                  sessionIndex={openPackages[0].logged + 1}
-                  packageTotal={openPackages[0].packageTotal}
-                />
-                {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
-                  <Pill tone="amber">Renew soon</Pill>
-                )}
-                {openPackages.length > 1 && (
-                  <Pill tone="teal">+{openPackages.length - 1} more</Pill>
-                )}
-              </div>
-            ) : (
-              <span className="text-[var(--muted)]">No open package</span>
-            )
-          )}
+      {/* 2. Structured Package Row */}
+      {openPackages !== undefined && openPackages.length > 0 && (
+        <div className="border-t border-[var(--border)] pt-2.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-[var(--ink)] truncate">
+              📦 {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
+            </span>
+            {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
+              <Pill tone="amber">Renew soon</Pill>
+            )}
+            {openPackages.length > 1 && (
+              <Pill tone="teal">+{openPackages.length - 1} more</Pill>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-[var(--muted)]">
+            <PackageThread
+              sessionIndex={openPackages[0].logged + 1}
+              packageTotal={openPackages[0].packageTotal}
+            />
+            <span>
+              {openPackages[0].logged} of {openPackages[0].packageTotal} used
+            </span>
+            <span>·</span>
+            <span>started {formatDateDMY(openPackages[0].startedOn)}</span>
+          </div>
         </div>
+      )}
 
-        {/* Last visit summary */}
-        <div className="min-w-0 shrink-0">
-          {patientVisits !== undefined && (
-            lastVisit ? (
-              (() => {
-                const state = computeVisitPaymentState(
-                  lastVisit.actualBillPaise,
-                  lastVisit.invoiceId,
-                  lastVisitDirectPaymentPaise,
-                  lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
-                );
-                const badge = paymentBadge({
-                  state,
-                  billPaise: lastVisit.actualBillPaise,
-                  collectedPaise: lastVisitDirectPaymentPaise,
-                  visitDate: lastVisit.visitDate,
-                  issuedAt: lastVisitInvoice?.issuedAt,
-                  isPackageSession: isPackageContinuation(
-                    lastVisit.sessionIndex,
-                    lastVisit.packageTotal
-                  ),
-                });
-                return (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[var(--muted)]">Last:</span>
+      {/* 3. Structured Last Visit Row */}
+      {patientVisits !== undefined && (
+        <div className="border-t border-[var(--border)] pt-2.5 text-xs">
+          {lastVisit ? (
+            (() => {
+              const state = computeVisitPaymentState(
+                lastVisit.actualBillPaise,
+                lastVisit.invoiceId,
+                lastVisitDirectPaymentPaise,
+                lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
+              );
+              const badge = paymentBadge({
+                state,
+                billPaise: lastVisit.actualBillPaise,
+                collectedPaise: lastVisitDirectPaymentPaise,
+                visitDate: lastVisit.visitDate,
+                issuedAt: lastVisitInvoice?.issuedAt,
+                isPackageSession: isPackageContinuation(
+                  lastVisit.sessionIndex,
+                  lastVisit.packageTotal
+                ),
+              });
+              return (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 truncate text-[var(--muted)]">
+                    <span>Last visit: </span>
                     <span className="font-medium text-[var(--ink)]">
                       {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                     </span>
-                    <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                      <span title={badge.title}>{badge.label}</span>
-                    </Pill>
                   </div>
-                );
-              })()
-            ) : (
-              <span className="text-[var(--muted)]">First visit</span>
-            )
+                  <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                    <span title={badge.title}>{badge.label}</span>
+                  </Pill>
+                </div>
+              );
+            })()
+          ) : (
+            <span className="text-[var(--muted)]">First visit (no previous records)</span>
           )}
         </div>
-      </div>
+      )}
+
+      {/* 4. Start note button (quiet secondary action at bottom) */}
+      {clinic.clinicalDocsEnabled && canWriteNotes && (
+        <div className="border-t border-[var(--border)] pt-2.5">
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] py-1.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--surface)] hover:border-[var(--teal)]"
+            onClick={() => {
+              if (search.appointmentId) {
+                const appointmentId = search.appointmentId;
+                void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
+                void navigate({
+                  to: '/patients/$patientId/notes/new',
+                  params: { patientId: patient.id },
+                  search: { appointmentId },
+                });
+              } else {
+                setStartNoteOpen(true);
+              }
+            }}
+            title="Start clinical note first (add service later)"
+          >
+            <IconPen className="h-3.5 w-3.5" />
+            <span>Start a note first</span>
+          </button>
+        </div>
+      )}
     </div>
   ) : (
     <SectionCard title="Patient">
