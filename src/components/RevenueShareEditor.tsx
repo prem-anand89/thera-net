@@ -270,7 +270,7 @@ export function RevenueShareEditor({
                 !confirmReset && (
                   <span className="flex items-center gap-2 text-xs">
                     <span className="rounded-full bg-[var(--amber-light,rgba(184,137,43,0.15))] px-2 py-0.5 font-medium text-[var(--ink)]">
-                      Set by hand
+                      Set manually
                     </span>
                     <button
                       type="button"
@@ -284,14 +284,14 @@ export function RevenueShareEditor({
               ) : editedNow ? (
                 <span
                   className="rounded-full bg-[var(--amber-light,rgba(184,137,43,0.15))] px-2 py-0.5 text-xs font-medium text-[var(--ink)]"
-                  title="Saving this makes the split set by hand: it won't follow the services any more."
+                  title="Saving this makes the split set manually: it won't follow the services any more."
                 >
-                  Edited · saves as set by hand
+                  Edited · saves as set manually
                 </span>
               ) : sharedNow ? (
                 <span
                   className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--ink)]"
-                  title="Based on who did each service. Saving your changes makes it set by hand."
+                  title="Based on who did each service. Saving your changes makes it set manually."
                 >
                   Automatic
                 </span>

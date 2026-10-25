@@ -70,7 +70,7 @@ export function assistantNamesShort(names: string[], maxChars = 14): string {
 
 /** The ring for a visit whose bill is shared by several therapists (share rows): the rust arc is everything
  *  that goes to someone other than the primary therapist, and hovering shows each therapist's rupee share.
- *  With `onEdit` it is a button that opens the split editor; `edited` marks a split set by hand. */
+ *  With `onEdit` it is a button that opens the split editor; `edited` marks a split set manually. */
 export function SharesRing({
   shares,
   primaryName,
@@ -95,7 +95,7 @@ export function SharesRing({
     .map((x) => `${x.assistantName}: ${x.name}`)
     .join('; ');
   const why = edited
-    ? 'Set by hand (not following services)'
+    ? 'Set manually (not following services)'
     : tagged
       ? `Split from services — ${tagged}`
       : 'Split from services';

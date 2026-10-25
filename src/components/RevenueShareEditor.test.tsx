@@ -88,7 +88,7 @@ describe('RevenueShareEditor', () => {
     expect(screen.getByText('Automatic')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Dr Sneha share in rupees'), { target: { value: '500' } });
     expect(screen.queryByText('Automatic')).toBeNull();
-    expect(screen.getByText('Edited · saves as set by hand')).toBeInTheDocument();
+    expect(screen.getByText('Edited · saves as set manually')).toBeInTheDocument();
   });
 
   it('shows no status chip when nobody is shared with', () => {
