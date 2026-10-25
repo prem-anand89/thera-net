@@ -163,6 +163,17 @@ export function formatPatientSearchResultSubtitle(patient: Pick<Patient, 'phone'
   return parts.join(' · ');
 }
 
+/** What is still owed on a just-saved visit. Nothing when it was collected on the form, whatever the payments query has read so far. */
+export function paymentStillDue(i: {
+  canCollect: boolean;
+  alreadyCollected: boolean;
+  billPaise: number;
+  receivedPaise: number;
+}): number {
+  if (!i.canCollect || i.alreadyCollected) return 0;
+  return Math.max(0, i.billPaise - i.receivedPaise);
+}
+
 export interface NewVisitSignatureInput {
   rows: DraftLine[];
   patientId: string | null;
@@ -335,6 +346,8 @@ export function NewVisitPage() {
     alreadyCollected: boolean;
     /** The whole bill was collected by the partner: no clinic bill is offered. */
     byPartner?: boolean;
+    /** How it was collected on the form ("UPI"), for the saved screen's confirmation line. */
+    collectedLabel?: string;
     therapistId: UUID;
     billPaise: number;
     visitDate: string;
@@ -919,6 +932,7 @@ export function NewVisitPage() {
         alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
         byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
         paymentError,
+        collectedLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label,
         therapistId,
         billPaise,
         visitDate,
@@ -940,9 +954,14 @@ export function NewVisitPage() {
 
   if (justSaved) {
     // Still owed on this visit (0 without billing access or when settled).
-    const paymentDue = canCollectPayment
-      ? Math.max(0, justSaved.billPaise - (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0))
-      : 0;
+    // Collected on the form: nothing is owed, even in the moment before the payments query answers
+    // (it reads empty first, which used to flash "Take payment" for a visit that was already paid).
+    const paymentDue = paymentStillDue({
+      canCollect: canCollectPayment,
+      alreadyCollected: justSaved.alreadyCollected,
+      billPaise: justSaved.billPaise,
+      receivedPaise: (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0),
+    });
     const invoiceTarget: IssueInvoiceTarget = {
       visitId: justSaved.visitId,
       patientId: justSaved.patientId,
@@ -961,6 +980,11 @@ export function NewVisitPage() {
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
           <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
+          {justSaved.alreadyCollected && (
+            <p className="mt-1 text-sm font-medium text-[var(--teal)]" data-testid="collected-line">
+              ✓ {formatINR(justSaved.billPaise)} collected{justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
+            </p>
+          )}
           {justSaved.paymentError && (
             <div className="mt-3">
               <ErrorNote message={`The visit was saved, but the payment was not recorded: ${justSaved.paymentError} Use Take payment to record it.`} />
@@ -1462,27 +1486,31 @@ export function NewVisitPage() {
             wrap inside a half-width column, visually crowding its own
             input. One column removes the ambiguity entirely. */}
         <div className="grid grid-cols-1 gap-3">
-          <Field
-            label="Date"
-            hint={
-              dateHint && (
-                <span className={dateHint.tone === 'warn' ? 'text-[var(--rust)]' : undefined}>{dateHint.text}</span>
-              )
-            }
-          >
-            <input
-              type="date"
-              className={inputCls}
-              value={visitDate}
-              onChange={(e) => setVisitDate(e.target.value)}
+          {/* Date and therapist share a row (one column only on very narrow phones). */}
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+            <Field
+              label="Date"
+              hint={
+                dateHint && (
+                  <span className={dateHint.tone === 'warn' ? 'text-[var(--rust)]' : undefined}>{dateHint.text}</span>
+                )
+              }
+            >
+              <input
+                type="date"
+                className={inputCls}
+                value={visitDate}
+                onChange={(e) => setVisitDate(e.target.value)}
+              />
+            </Field>
+            <SearchableSelect
+              label="Therapist *"
+              value={therapistId}
+              onChange={setTherapistId}
+              options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
             />
-          </Field>
-          <SearchableSelect
-            label="Therapist *"
-            value={therapistId}
-            onChange={setTherapistId}
-            options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
-          />
+
+          </div>
 
           {role === 'front_desk' && !clinicalDetailsExpanded ? (
             <button

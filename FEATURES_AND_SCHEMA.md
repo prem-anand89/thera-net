@@ -38,6 +38,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     patient is chosen, stays in view while the form scrolls. Touch sizes on phones: toggles 40px, row pills 40px, the
     row ✕ 40px, "+ Add another service" a 44px dashed button; the small selects/inputs on a service row use 16px text
     on phones so iOS does not zoom. Patient search is a labelled search box; Enter picks the first match.
+  - **Date and therapist** share one row (one column only below 360px). **After saving**: a visit collected on the
+    form shows "✓ ₹2,000 collected · UPI" and never offers "Take payment" (`paymentStillDue`); "Take payment" appears
+    only when the choice was "Take payment later", the payment failed to record, or part is still owed.
   - **Start a note first**: for clinics with clinical notes on, a quiet outlined button under the patient's Last visit / Package tiles ("Start a note first — Add the service later"), above "Change patient"; it opens the same start-note flow as before.
   - **Patient search & lookup**: Instant search by MRNO, name or phone number. Result rows show the patient's name, MRNO, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,

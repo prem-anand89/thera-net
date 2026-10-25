@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatPatientSearchResultSubtitle,
   isNewVisitDirty,
+  paymentStillDue,
   newVisitSignature,
   type NewVisitSignatureInput,
 } from './NewVisitPage';
@@ -139,5 +140,20 @@ describe('saveSummary (both save bars)', () => {
     expect(saveSummary(1, { kind: 'now', methodLabel: 'UPI' })).toBe('1 service · UPI, collected now');
     expect(saveSummary(2, { kind: 'later' })).toBe('2 services · to collect later');
     expect(saveSummary(2, { kind: 'none' })).toBe('2 services');
+  });
+});
+
+describe('paymentStillDue (the saved screen)', () => {
+  const base = { canCollect: true, alreadyCollected: false, billPaise: 200000, receivedPaise: 0 };
+  it('is nothing for a visit collected on the form, even before the payments have loaded', () => {
+    expect(paymentStillDue({ ...base, alreadyCollected: true })).toBe(0);
+  });
+  it('is the whole bill when payment was left for later, less any part payments', () => {
+    expect(paymentStillDue(base)).toBe(200000);
+    expect(paymentStillDue({ ...base, receivedPaise: 50000 })).toBe(150000);
+    expect(paymentStillDue({ ...base, receivedPaise: 250000 })).toBe(0);
+  });
+  it('is nothing without billing access', () => {
+    expect(paymentStillDue({ ...base, canCollect: false })).toBe(0);
   });
 });
