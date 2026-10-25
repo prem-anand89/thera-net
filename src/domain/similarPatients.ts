@@ -1,9 +1,8 @@
 import type { Patient } from './types';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from './nameSimilarity';
+import { lastTenDigits } from './phoneDigits';
 
 export type SimilarMatch = { patient: Patient; matchedBy: 'phone' | 'name'; score: number };
-
-const lastTenDigits = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '').slice(-10);
 
 /**
  * Existing patients who could be the person being typed: the same phone (last 10 digits) or a

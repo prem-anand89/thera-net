@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Invoice, PaymentMode } from '@/domain/types';
+import { INVOICE_PAYMENT_MODES } from '@/domain/paymentMethods';
 import { repos, invoiceService } from '@/services';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
@@ -14,7 +15,6 @@ import type { InvoicePrintBackTarget } from '@/app/router';
 // collection method at an Indian clinic front desk). The field itself
 // still defaults to the original invoice's own payment mode, not UPI —
 // see the useState initializer below.
-const PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
 
 /**
  * Reissues a corrected bill-cum-receipt for an already-issued invoice (e.g.
@@ -172,7 +172,7 @@ export function AmendInvoiceDialog({
                 value={paymentMode}
                 onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
               >
-                {PAYMENT_MODES.map((m) => (
+                {INVOICE_PAYMENT_MODES.map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>

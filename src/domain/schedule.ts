@@ -1,4 +1,5 @@
 import type { Appointment, WorkingHours } from './types';
+import { lastTenDigits } from './phoneDigits';
 
 export type ScheduleSlot = {
   minutes: number;
@@ -345,8 +346,6 @@ export function isPublicSlotTaken(
 
 export type Attendance = { attended: number; noShows: number; cancelled: number };
 
-const phoneDigits = (phone: string | null | undefined) => (phone ?? '').replace(/\D/g, '').slice(-10);
-
 /**
  * A patient's recent track record, for the "2 no-shows in 6 months" badge.
  * Matches by patient id when known, otherwise by the last 10 phone digits
@@ -362,13 +361,13 @@ export function patientAttendance(
 ): Attendance {
   const since = new Date(now);
   since.setMonth(since.getMonth() - (options.sinceMonths ?? 6));
-  const digits = phoneDigits(who.phone);
+  const digits = lastTenDigits(who.phone);
   const result: Attendance = { attended: 0, noShows: 0, cancelled: 0 };
   for (const a of appointments) {
     if (a.id === options.excludeId) continue;
     const same = who.patientId
-      ? a.patientId === who.patientId || (!a.patientId && digits.length === 10 && phoneDigits(a.patientPhone) === digits)
-      : digits.length === 10 && phoneDigits(a.patientPhone) === digits;
+      ? a.patientId === who.patientId || (!a.patientId && digits.length === 10 && lastTenDigits(a.patientPhone) === digits)
+      : digits.length === 10 && lastTenDigits(a.patientPhone) === digits;
     if (!same) continue;
     const at = new Date(a.scheduledAt);
     if (at >= now || at < since) continue;
@@ -385,7 +384,7 @@ export function nextAppointmentFor(
   who: { patientId?: string | null; phone?: string | null },
   now: Date
 ): Appointment | null {
-  const digits = phoneDigits(who.phone);
+  const digits = lastTenDigits(who.phone);
   return (
     appointments
       .filter(
@@ -393,7 +392,7 @@ export function nextAppointmentFor(
           (a.status === 'confirmed' || a.status === 'rescheduled') &&
           new Date(a.scheduledAt) >= now &&
           ((who.patientId && a.patientId === who.patientId) ||
-            (digits.length === 10 && phoneDigits(a.patientPhone) === digits))
+            (digits.length === 10 && lastTenDigits(a.patientPhone) === digits))
       )
       .sort((x, y) => x.scheduledAt.localeCompare(y.scheduledAt))[0] ?? null
   );

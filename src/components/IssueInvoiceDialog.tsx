@@ -15,6 +15,7 @@ import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/componen
 import { notify } from '@/lib/notify';
 import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
+import { INVOICE_PAYMENT_MODES } from '@/domain/paymentMethods';
 import { usePermissions } from '@/app/usePermissions';
 import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
@@ -30,7 +31,6 @@ import {
 // UPI first — the most common collection method at an Indian clinic front
 // desk, so it's both the default selection below and the top option here
 // rather than making staff scroll past Cash on every single bill.
-const PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
 // The invoice's payment mode is also how it was paid; the payment record
 // uses the (wider) PaymentMethod vocabulary. Insurance settles by transfer.
 const METHOD_FOR_MODE: Record<PaymentMode, PaymentMethod> = {
@@ -424,7 +424,7 @@ export function IssueInvoiceDialog({
                 value={paymentMode}
                 onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
               >
-                {PAYMENT_MODES.map((m) => (
+                {INVOICE_PAYMENT_MODES.map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>

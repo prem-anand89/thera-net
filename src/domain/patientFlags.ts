@@ -1,4 +1,5 @@
 import type { Appointment } from './types';
+import { lastTenDigits } from './phoneDigits';
 
 /**
  * Small at-a-glance facts about the patient behind an appointment — shown as
@@ -30,7 +31,7 @@ export interface PatientFlagContext {
 
 /** Patients may be unlinked (public requests): fall back to the last 10 phone digits. */
 export function patientKey(appointment: Pick<Appointment, 'patientId' | 'patientPhone'>): string {
-  return appointment.patientId ?? `phone:${appointment.patientPhone.replace(/\D/g, '').slice(-10)}`;
+  return appointment.patientId ?? `phone:${lastTenDigits(appointment.patientPhone)}`;
 }
 
 export const NO_SHOW_FLAG_AT = 2;
