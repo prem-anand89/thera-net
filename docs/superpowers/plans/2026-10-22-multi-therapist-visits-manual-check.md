@@ -81,10 +81,12 @@ Test setup (once, as admin): catalog has "Consultation" ₹1,000 and an add-on s
 
 ## L. Phone Save bar (360 px only)
 - [ ] New Visit on the phone.
-  - You should see: the Save bar sits ABOVE the bottom menu, shows for example "₹1,300 · 2 services · UPI, collected now", and does not cover the Payment card. Tapping the summary scrolls to Payment. Scroll to the very bottom: the Payment fields are still reachable.
+  - You should see: the phone bottom tab bar is hidden. The Save bar sits flush at the bottom edge in a single row with line 1 "₹1,300" (or "No service yet" when empty with Save disabled) and line 2 "2 services · UPI, collected now", plus Cancel and Save visit buttons. Tapping the summary scrolls to Payment. Scroll to the very bottom: the Payment fields are still reachable and there is no duplicate Cancel button under Payment.
+- [ ] Cancel/Back behavior on phone.
+  - You should see: pressing Cancel on an untouched form exits immediately. With a service chosen, Cancel or the top-left "←" back arrow prompts "Discard this visit? Unsaved changes will be lost.".
 
 ## M. Escape closes pickers
-- [ ] Open the service picker, press Escape. Open the assistant picker, press Escape. Open the revenue share editor, press Escape.
+- [ ] Open the service picker, press Escape. Open the "Done by" picker, press Escape. Open the revenue share editor, press Escape.
   - You should see: each one closes without changing the rows.
 
 ## N. Front desk
@@ -97,10 +99,24 @@ Test setup (once, as admin): catalog has "Consultation" ₹1,000 and an add-on s
 
 ## O. Therapist split OFF
 - [ ] Admin: Settings -> turn the therapist split OFF. New Visit with an assistant tagged on one service.
-  - You should see: the assistant chip is still there, there is NO "Revenue share" line, and the visit saves.
+  - You should see: the "Done by" pill is still there, there is NO "Revenue share" line, and the visit saves.
 - [ ] Saved visit and Monthly statement.
   - You should see: the assistant is still tagged on the service, still counted in the Assisted column, and the assisted row shows "revenue not shared". "Edit split" is not offered.
 - [ ] Turn the split back ON afterwards.
+
+## P. Share on every service (owner scenarios)
+- [ ] New Visit, a paid single service (e.g. ₹2,000), several-therapist clinic. Tap "Share", pick Dr B, type 30.
+  - You should see: "Shared with Dr B 30 % ≈ ₹600", and under Total "Revenue share · from services — Dr A ₹1,400 · Dr B ₹600". Add a ₹200 discount: it becomes ₹1,260 / ₹540. Save.
+- [ ] Today's list / Ledger row, then the monthly report and Credits and debits for that month.
+  - You should see: the ring shows 30%; Dr B gets +₹600 (₹540 with the discount) as a "Revenue share"; the ring says "Automatic" until someone edits the split.
+- [ ] A package session run by Dr B while Dr A is away: New Visit for a patient with an open package, tap "Done by: Dr A ▾", pick Dr B.
+  - You should see: the note about the session's share moving from the biller to Dr B; after saving, Credits and debits shows that session moving Dr A -> Dr B.
+- [ ] A package where Dr B helps over several sessions: on session 2 tap "Share", Dr B, 30, save. Open session 3.
+  - You should see: session 3 starts with Dr B 30 % and "Same as last session"; change the % and the note goes away. The audit shows 30% of each session to Dr B.
+- [ ] Choose Dr B in "Done by" on a row already shared with Dr B.
+  - You should see: the share is cleared (a service can't be shared with whoever does it).
+- [ ] Date hint and single total: set the date to yesterday, then to next week. With no discount, the form shows only a Total box.
+  - You should see: "Yesterday" in grey, "In 7 days — check the date" in red; the Subtotal box appears only once a discount or extra is set.
 
 ## Not covered here
 Anything that needs real UPI or WhatsApp. Note anything you could not check.

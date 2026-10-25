@@ -23,7 +23,7 @@ import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
-import { renderElementToPdf, shareFileToWhatsApp } from '@/lib/pdfShare';
+import { openPatientWhatsAppChat, renderElementToPdf, shareFileToWhatsApp } from '@/lib/pdfShare';
 import { toFriendlyMessage } from '@/lib/errors';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
 
@@ -445,21 +445,28 @@ export function InvoicePrintPage() {
   // falling back to a text-only wa.me link on a browser without Web Share
   // API file support (desktop, mainly). See src/lib/pdfShare.ts.
   async function shareViaWhatsApp() {
-    // TS can't carry the module-level `if (!invoice) return` guard's
-    // narrowing into this closure, so it's re-checked here — also a real
-    // (if practically unreachable) safety net since this function is
-    // defined fresh every render alongside that guard.
     if (!contentRef.current || !invoice) return;
     setSharing(true);
     setShareError(null);
+    const summary = `Invoice ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatINR(invoice.totalPaise)}. From ${clinic.name}.`;
+    const patientPhone = invoice.patientSnapshot.phone;
     try {
-      const file = await renderElementToPdf(
-        contentRef.current,
-        `${invoice.invoiceNo.replace(/\//g, '-')}.pdf`,
-        paper
-      );
-      const summary = `Invoice ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatINR(invoice.totalPaise)}. From ${clinic.name}.`;
-      await shareFileToWhatsApp(file, `Invoice ${invoice.invoiceNo}`, summary);
+      let file: File | null = null;
+      try {
+        file = await renderElementToPdf(
+          contentRef.current,
+          `${invoice.invoiceNo.replace(/\//g, '-')}.pdf`,
+          paper
+        );
+      } catch (renderErr) {
+        console.warn('Could not generate PDF for WhatsApp share, falling back to text:', renderErr);
+      }
+
+      if (file) {
+        await shareFileToWhatsApp(file, `Invoice ${invoice.invoiceNo}`, summary, patientPhone);
+      } else {
+        openPatientWhatsAppChat(summary, patientPhone);
+      }
     } catch (e) {
       setShareError(toFriendlyMessage(e));
     } finally {

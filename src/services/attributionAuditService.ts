@@ -47,6 +47,9 @@ export interface AttributionEntry {
   repaired: boolean;
   /** `package_attribution` only: the date of the visit that billed the package; null for the other mechanisms. */
   billingVisitDate: string | null;
+  /** `package_attribution` only: the session was shared with a helper (this % of its package share), and whether this entry is the helper's part. */
+  sessionSharePct?: number;
+  packageRole?: 'helper';
 }
 
 /**
@@ -118,6 +121,8 @@ export function createAttributionAuditService(repos: Repos) {
               packageSessionCount: packageTotal,
               sessionIndex: v.sessionIndex,
               billingVisitDate: billingVisit?.visitDate ?? null,
+              ...(m.sessionSharePct ? { sessionSharePct: m.sessionSharePct } : {}),
+              ...(m.packageRole ? { packageRole: m.packageRole } : {}),
               repaired: false,
             };
           }

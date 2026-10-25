@@ -1,7 +1,8 @@
+import { IconPen } from '@/components/StatIcons';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { patientsBackLink, type NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   repos,
@@ -20,6 +21,7 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { formatINR } from '@/domain/money';
 import { packageSessionShares } from '@/domain/payBase';
+import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -79,9 +81,12 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
-import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
+import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
+import { PaymentMethodChips } from './PaymentMethodChips';
+import { VisitLoggedCard } from './VisitLoggedCard';
+import { visitDateHint } from './visitDateHint';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 // UPI first — the most common collection method at an Indian clinic front
@@ -126,8 +131,9 @@ function SegmentedToggle<T extends string>({
           key={opt.value}
           type="button"
           disabled={opt.disabled}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`flex-1 rounded px-3 py-1.5 text-center font-medium transition-colors ${
+          className={`min-h-10 flex-1 rounded px-3 py-1.5 text-center font-medium transition-colors sm:min-h-0 ${
             value === opt.value
               ? 'bg-[var(--teal-light)] text-[var(--teal)]'
               : 'text-[var(--muted)] hover:bg-[var(--paper)]'
@@ -138,6 +144,80 @@ function SegmentedToggle<T extends string>({
       ))}
     </div>
   );
+}
+
+/**
+ * Formats a subtle subtitle for patient search results (e.g. "••••4821 · 34y").
+ * Omits any missing parts with no stray separators.
+ */
+export function formatPatientSearchResultSubtitle(patient: Pick<Patient, 'phone' | 'age'>): string {
+  const parts: string[] = [];
+  const digits = patient.phone ? patient.phone.replace(/\D/g, '') : '';
+  if (digits.length >= 4) {
+    parts.push(`••••${digits.slice(-4)}`);
+  } else if (digits.length > 0) {
+    parts.push(digits);
+  }
+  if (patient.age != null) {
+    parts.push(`${patient.age}y`);
+  }
+  return parts.join(' · ');
+}
+
+/** What is still owed on a just-saved visit. Nothing when it was collected on the form, whatever the payments query has read so far. */
+export function paymentStillDue(i: {
+  canCollect: boolean;
+  alreadyCollected: boolean;
+  billPaise: number;
+  receivedPaise: number;
+}): number {
+  if (!i.canCollect || i.alreadyCollected) return 0;
+  return Math.max(0, i.billPaise - i.receivedPaise);
+}
+
+export interface NewVisitSignatureInput {
+  rows: DraftLine[];
+  patientId: string | null;
+  creatingPatient: boolean;
+  newPatientName: string;
+  condition: string;
+  notes: string;
+  pendingNote: string;
+  treatmentIds: string[];
+  adjustmentMode: BillAdjustmentMode;
+}
+
+/** Everything the person can change on the form, as one string, so "changed" means "different from where it started". */
+export function newVisitSignature(input: NewVisitSignatureInput): string {
+  return JSON.stringify({
+    rows: input.rows.map((r) => [
+      r.continuation?.packageGroupId ?? r.serviceCatalogId ?? '',
+      r.assistingTherapistId ?? '',
+      r.sessionShare ? `${r.sessionShare.therapistId}:${r.sessionShare.pct}` : '',
+    ]),
+    patientId: input.patientId ?? '',
+    newPatient: input.creatingPatient ? input.newPatientName.trim() : '',
+    condition: input.condition.trim(),
+    notes: input.notes.trim(),
+    pendingNote: input.pendingNote.trim(),
+    treatmentIds: [...input.treatmentIds].sort(),
+    adjustmentMode: input.adjustmentMode,
+  });
+}
+
+/**
+ * Whether leaving would lose something the person did. The form starts out filled in by the page itself
+ * (a patient from the link, an open package's session, a repeated visit's services, an appointment's name):
+ * that is never "unsaved work". The baseline follows those changes until the person first touches the form
+ * (`touched`), then freezes; dirty means touched AND different from that baseline. Saved is never dirty.
+ */
+export function isNewVisitDirty(input: {
+  justSaved: boolean;
+  touched: boolean;
+  signature: string;
+  baseline: string;
+}): boolean {
+  return !input.justSaved && input.touched && input.signature !== input.baseline;
 }
 
 export function NewVisitPage() {
@@ -172,6 +252,10 @@ export function NewVisitPage() {
     } else {
       void navigate({ to: '/workspace' });
     }
+  }
+
+  function requestExit() {
+    goBack();
   }
 
   // Patient selection — a small state machine: searching (default) → either
@@ -263,6 +347,8 @@ export function NewVisitPage() {
     alreadyCollected: boolean;
     /** The whole bill was collected by the partner: no clinic bill is offered. */
     byPartner?: boolean;
+    /** How it was collected on the form ("UPI"), for the saved screen's confirmation line. */
+    collectedLabel?: string;
     therapistId: UUID;
     billPaise: number;
     visitDate: string;
@@ -272,6 +358,39 @@ export function NewVisitPage() {
   } | null>(null);
   // Synchronous double-tap guard: `busy` is React state and lags one render.
   const savingRef = useRef(false);
+
+  // See isNewVisitDirty: the baseline tracks the page's own prefill until the first touch, then freezes.
+  const signature = newVisitSignature({
+    rows,
+    patientId: patient?.id ?? null,
+    creatingPatient,
+    newPatientName: newPatient.name,
+    condition,
+    notes,
+    pendingNote,
+    treatmentIds,
+    adjustmentMode,
+  });
+  const touchedRef = useRef(false);
+  const baselineRef = useRef(signature);
+  if (!touchedRef.current) baselineRef.current = signature;
+  const isDirty = isNewVisitDirty({
+    justSaved: Boolean(justSaved),
+    touched: touchedRef.current,
+    signature,
+    baseline: baselineRef.current,
+  });
+
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+
+  useBlocker({
+    shouldBlockFn: () => {
+      if (!isDirtyRef.current) return false;
+      return !confirm('Discard this visit? Unsaved changes will be lost.');
+    },
+    enableBeforeUnload: () => isDirtyRef.current,
+  });
   const [invoicing, setInvoicing] = useState(false);
   const [takingPayment, setTakingPayment] = useState(false);
   // What's been received for the just-saved visit, so Take payment disappears
@@ -353,6 +472,8 @@ export function NewVisitPage() {
     }
     const items = await repos.catalog.list(clinic.id, true);
     const nameOf = new Map(items.map((i) => [i.id, i.name]));
+    const activeIds = new Set((await repos.therapists.list(clinic.id)).filter((t) => t.active).map((t) => t.id));
+    const sessionLines = await repos.visitItems.listByVisitIds(visits.filter((v) => v.packageGroupId).map((v) => v.id));
     const open: OpenPackage[] = [];
     for (const [gid, group] of groups) {
       const total = group[0].packageTotal ?? 1;
@@ -365,6 +486,7 @@ export function NewVisitPage() {
         logged: group.length,
         packageTotal: total,
         startedOn: sorted[0].visitDate,
+        lastShare: lastPackageShare(group, sessionLines, (id) => activeIds.has(id)),
       });
     }
     return { patientId: patient.id, list: open.sort((a, b) => b.startedOn.localeCompare(a.startedOn)) };
@@ -622,9 +744,21 @@ export function NewVisitPage() {
     return r.billerId ? { billerId: r.billerId, amountPaise: r.postTaxPaise } : null;
   }, [continuationGroupId, splitEnabled]);
   const runnerId = continuationRow ? (continuationRow.assistingTherapistId ?? therapistId) : '';
+  const helperShare = continuationRow?.sessionShare ?? null;
   const packageMoveNote =
-    packageMove && runnerId && packageMove.billerId !== runnerId && packageMove.amountPaise > 0
-      ? `${formatINR(packageMove.amountPaise)} of ${therapistsById.get(packageMove.billerId)?.name ?? 'the biller'}'s package moves to ${therapistsById.get(runnerId)?.name ?? 'the therapist'} for this session.`
+    packageMove && runnerId
+      ? buildPackageMoveNote({
+          amountPaise: packageMove.amountPaise,
+          biller: { id: packageMove.billerId, name: therapistsById.get(packageMove.billerId)?.name ?? 'the biller' },
+          runner: { id: runnerId, name: therapistsById.get(runnerId)?.name ?? 'the therapist' },
+          helper: helperShare
+            ? {
+                id: helperShare.therapistId,
+                name: therapistsById.get(helperShare.therapistId)?.name ?? 'a colleague',
+                pct: helperShare.pct,
+              }
+            : null,
+        })
       : null;
 
   // The bill: the discount / top-up applies to the rows' catalog total (₹0 for a package session).
@@ -635,6 +769,26 @@ export function NewVisitPage() {
   );
   const adjustmentPaise = billPaise - catalogPricePaise;
   const serviceLabel = rows.filter(hasService).map((r) => rowName(r, catalogItems)).join(' + ') || 'Visit';
+
+  /**
+   * Back to a blank visit after "Visit logged". Date, therapist and payment method stay (back-to-back entry);
+   * everything the last visit filled in goes. `touchedRef` is cleared so the unsaved-changes guard measures
+   * from this blank form, not from the one the page opened with (which made a fresh form look edited).
+   */
+  function startFreshVisitForm() {
+    setRows([emptyDraftLine()]);
+    setRowErrors(new Map());
+    setCondition('');
+    setNotes('');
+    setPendingNote('');
+    setTreatmentIds([]);
+    setPaymentChoice('paid');
+    setError(null);
+    setFeedbackRequested(false);
+    resetBillAdjustment();
+    touchedRef.current = false;
+    setJustSaved(null);
+  }
 
   function resetBillAdjustment() {
     setAdjustmentMode('none');
@@ -799,6 +953,7 @@ export function NewVisitPage() {
         alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
         byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
         paymentError,
+        collectedLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label,
         therapistId,
         billPaise,
         visitDate,
@@ -820,9 +975,14 @@ export function NewVisitPage() {
 
   if (justSaved) {
     // Still owed on this visit (0 without billing access or when settled).
-    const paymentDue = canCollectPayment
-      ? Math.max(0, justSaved.billPaise - (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0))
-      : 0;
+    // Collected on the form: nothing is owed, even in the moment before the payments query answers
+    // (it reads empty first, which used to flash "Take payment" for a visit that was already paid).
+    const paymentDue = paymentStillDue({
+      canCollect: canCollectPayment,
+      alreadyCollected: justSaved.alreadyCollected,
+      billPaise: justSaved.billPaise,
+      receivedPaise: (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0),
+    });
     const invoiceTarget: IssueInvoiceTarget = {
       visitId: justSaved.visitId,
       patientId: justSaved.patientId,
@@ -832,87 +992,53 @@ export function NewVisitPage() {
       // Settled up front, or since (Take payment above).
       alreadyCollected: justSaved.alreadyCollected || (canBill && justSaved.billPaise > 0 && paymentDue === 0),
     };
-    // One clear next step: collect what is owed, else write the note, else bill; everything else is quieter.
     const showBill = canBill && !justSaved.byPartner;
-    const primaryAction: 'payment' | 'note' | 'bill' | 'done' =
-      paymentDue > 0 ? 'payment' : clinic.clinicalDocsEnabled ? 'note' : showBill ? 'bill' : 'done';
-    const cls = (action: typeof primaryAction) => (primaryAction === action ? btnPrimary : btnSecondary);
+    const therapistName = therapistsById.get(justSaved.therapistId)?.name;
     return (
       <div className="mx-auto max-w-2xl space-y-4">
-        <SectionCard title="Visit logged">
-          <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
-          {justSaved.paymentError && (
-            <div className="mt-3">
-              <ErrorNote message={`The visit was saved, but the payment was not recorded: ${justSaved.paymentError} Use Take payment to record it.`} />
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {paymentDue > 0 && (
-              <button type="button" className={cls('payment')} onClick={() => setTakingPayment(true)}>
-                Take payment · {formatINR(paymentDue)}
-              </button>
-            )}
-            {showBill && (
-              <button
-                type="button"
-                className={cls('bill')}
-                onClick={() => setInvoicing(true)}
-              >
-                Give bill
-              </button>
-            )}
-            {clinic.clinicalDocsEnabled && (
-              <Link
-                to="/patients/$patientId/notes/new"
-                params={{ patientId: justSaved.patientId }}
-                search={{ visitId: justSaved.visitId }}
-                className={cls('note')}
-              >
-                Add clinical note
-              </Link>
-            )}
-            {clinic.enablePatientComms && (
-              <button
-                type="button"
-                className={btnSecondary}
-                disabled={feedbackRequested}
-                onClick={() => {
-                  setFeedbackRequested(true);
-                  void feedbackService
-                    .askForFeedback(
-                      justSaved.visitId,
-                      justSaved.patientName,
-                      justSaved.patientPhone,
-                      clinic.name
-                    )
-                    .catch((e) => {
-                      setFeedbackRequested(false);
-                      setError(toFriendlyMessage(e));
-                    });
-                }}
-                title="Ask this patient for feedback"
-              >
-                {feedbackRequested ? 'Sent ✓' : 'Feedback'}
-              </button>
-            )}
-            <button
-              type="button"
-              className="px-1 text-sm font-medium text-[var(--teal)] hover:underline"
-              onClick={() => {
-                setJustSaved(null);
-                void navigate({
-                  to: '/visits/new',
-                  search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
-                });
-              }}
-            >
-              Log a separate visit for {justSaved.patientName}
-            </button>
-            <button type="button" className={cls('done')} onClick={goBack}>
-              Done
-            </button>
-          </div>
-        </SectionCard>
+        <VisitLoggedCard
+          justSaved={justSaved}
+          therapistName={therapistName}
+          paymentDue={paymentDue}
+          canBill={showBill}
+          clinicalDocsEnabled={Boolean(clinic.clinicalDocsEnabled)}
+          enablePatientComms={Boolean(clinic.enablePatientComms)}
+          feedbackRequested={feedbackRequested}
+          onRequestFeedback={() => {
+            setFeedbackRequested(true);
+            void feedbackService
+              .askForFeedback(
+                justSaved.visitId,
+                justSaved.patientName,
+                justSaved.patientPhone,
+                clinic.name
+              )
+              .catch((e) => {
+                setFeedbackRequested(false);
+                setError(toFriendlyMessage(e));
+              });
+          }}
+          onTakePayment={() => setTakingPayment(true)}
+          onGiveBill={() => setInvoicing(true)}
+          onNewVisitSamePatient={() => {
+            // Re-run the "rows for this patient" step, so an open package's next session is offered again.
+            rowsPatientRef.current = null;
+            startFreshVisitForm();
+            void navigate({
+              to: '/visits/new',
+              search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
+            });
+          }}
+          onNewVisitNextPatient={() => {
+            setPatient(null);
+            startFreshVisitForm();
+            void navigate({
+              to: '/visits/new',
+              search: { ...(search.from ? { from: search.from } : {}) },
+            });
+          }}
+          onDone={goBack}
+        />
         {takingPayment && (
           <TakePaymentDialog
             clinicId={clinic.id}
@@ -976,30 +1102,6 @@ export function NewVisitPage() {
             </button>
           </div>
 
-          {clinic.clinicalDocsEnabled && canWriteNotes && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)]">
-              <span>Not ready to pick a service?</span>
-              <button
-                type="button"
-                className="font-medium text-[var(--teal)] hover:underline"
-                onClick={() => {
-                  if (search.appointmentId) {
-                    const appointmentId = search.appointmentId;
-                    void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
-                    void navigate({
-                      to: '/patients/$patientId/notes/new',
-                      params: { patientId: patient.id },
-                      search: { appointmentId },
-                    });
-                  } else {
-                    setStartNoteOpen(true);
-                  }
-                }}
-              >
-                Start a note first — add the service later →
-              </button>
-            </div>
-          )}
           <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
 
           {patientVisits !== undefined && (
@@ -1064,6 +1166,32 @@ export function NewVisitPage() {
                 <span className="text-[var(--muted)]">No open package</span>
               )}
             </SummaryTile>
+          )}
+
+          {clinic.clinicalDocsEnabled && canWriteNotes && (
+            <button
+              type="button"
+              className={`${btnSecondary} flex w-full flex-col items-center gap-0.5 py-2`}
+              onClick={() => {
+                  if (search.appointmentId) {
+                    const appointmentId = search.appointmentId;
+                    void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
+                    void navigate({
+                      to: '/patients/$patientId/notes/new',
+                      params: { patientId: patient.id },
+                      search: { appointmentId },
+                    });
+                  } else {
+                    setStartNoteOpen(true);
+                  }
+              }}
+            >
+              <span className="inline-flex items-center gap-1.5 font-medium text-[var(--teal)]">
+                <IconPen className="h-3.5 w-3.5" />
+                Start a note first
+              </span>
+              <span className="text-xs font-normal text-[var(--muted)]">Add the service later</span>
+            </button>
           )}
 
           {canChangePatient(search) && (
@@ -1248,25 +1376,45 @@ export function NewVisitPage() {
         // "who's next" case without typing anything.
         <div className="space-y-3">
           <input
+            type="search"
+            enterKeyHint="search"
+            aria-label="Find patient"
             className={inputCls}
             placeholder="Search ID, name or phone…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter takes the first match, so a typed ID or phone needs no extra tap.
+              if (e.key === 'Enter' && matches?.[0]) {
+                e.preventDefault();
+                selectPatientFromSearch(matches[0]);
+              }
+            }}
             autoFocus
           />
           {query.trim() ? (
             <>
-              {(matches ?? []).map((p) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
-                  onClick={() => selectPatientFromSearch(p)}
-                >
-                  <span>{p.name}</span>
-                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                </button>
-              ))}
+              {(matches ?? []).map((p) => {
+                const subtitle = formatPatientSearchResultSubtitle(p);
+                return (
+                  <button
+                    type="button"
+                    key={p.id}
+                    className="flex min-h-11 w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
+                    onClick={() => selectPatientFromSearch(p)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-[var(--ink)]">{p.name}</div>
+                      {subtitle && (
+                        <div className="truncate text-xs text-[var(--muted)]">
+                          {subtitle}
+                        </div>
+                      )}
+                    </div>
+                    <span className="ml-2 shrink-0 font-mono text-xs text-[var(--muted)]">{p.mrno}</span>
+                  </button>
+                );
+              })}
               {matches?.length === 0 && (
                 <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
                   No existing patient found.
@@ -1282,7 +1430,7 @@ export function NewVisitPage() {
                     <button
                       type="button"
                       key={p.patientId}
-                      className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                      className="min-h-9 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
                       onClick={() =>
                         void repos.patients
                           .get(p.patientId)
@@ -1304,6 +1452,9 @@ export function NewVisitPage() {
     </SectionCard>
   );
 
+  const dateHint = visitDateHint(visitDate, today);
+  const servicesChosen = rows.filter(hasService).length;
+
   const visitPanel = (
     <div className="space-y-4">
       <SectionCard title="Visit">
@@ -1317,20 +1468,31 @@ export function NewVisitPage() {
             wrap inside a half-width column, visually crowding its own
             input. One column removes the ambiguity entirely. */}
         <div className="grid grid-cols-1 gap-3">
-          <Field label="Date">
-            <input
-              type="date"
-              className={inputCls}
-              value={visitDate}
-              onChange={(e) => setVisitDate(e.target.value)}
+          {/* Date and therapist share a row (one column only on very narrow phones). */}
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+            <Field
+              label="Date"
+              hint={
+                dateHint && (
+                  <span className={dateHint.tone === 'warn' ? 'text-[var(--rust)]' : undefined}>{dateHint.text}</span>
+                )
+              }
+            >
+              <input
+                type="date"
+                className={inputCls}
+                value={visitDate}
+                onChange={(e) => setVisitDate(e.target.value)}
+              />
+            </Field>
+            <SearchableSelect
+              label="Therapist *"
+              value={therapistId}
+              onChange={setTherapistId}
+              options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
             />
-          </Field>
-          <SearchableSelect
-            label="Therapist *"
-            value={therapistId}
-            onChange={setTherapistId}
-            options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
-          />
+
+          </div>
 
           {role === 'front_desk' && !clinicalDetailsExpanded ? (
             <button
@@ -1373,8 +1535,10 @@ export function NewVisitPage() {
                       />
                     </div>
                   )}
+                  <p className="text-[11px] font-medium text-[var(--muted)]">Other treatments / notes</p>
                   <input
                     className={inputCls}
+                    aria-label="Other treatments / notes"
                     placeholder="Anything not in the list…"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -1406,6 +1570,7 @@ export function NewVisitPage() {
             catalogPricePaise={catalogPricePaise}
             catalogLabel="Subtotal"
             totalLabel="Total"
+            hideUnadjustedPrice
             disabled={catalogPricePaise === 0}
             mode={adjustmentMode}
             valueType={adjustmentValueType}
@@ -1455,17 +1620,14 @@ export function NewVisitPage() {
               />
               {paymentChoice === 'paid' ? (
                 <>
-                  <select
-                    className={`${inputCls} mt-2`}
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                  >
-                    {paymentMethods.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-2">
+                    <PaymentMethodChips
+                      value={paymentMethod}
+                      onChange={setPaymentMethod}
+                      options={paymentMethods}
+                      disabled={busy}
+                    />
+                  </div>
                   {paymentMethod === 'upi' && patient && (
                     <ShowUpiQrButton
                       amountPaise={billPaise}
@@ -1491,13 +1653,22 @@ export function NewVisitPage() {
       <div ref={errorRef}>
         <ErrorNote message={error} />
       </div>
-      <div className="flex gap-2">
-        {/* Phones save from the fixed bar below; tablet and up keep Save here, under Payment. */}
-        <button type="button" className={`${btnPrimary} hidden sm:inline-flex`} disabled={busy} onClick={() => void save()}>
-          {busy ? 'Saving…' : 'Save visit'}
-        </button>
-        <button type="button" className={btnSecondary} onClick={goBack}>
+      {/* Phones save from the fixed bar below. Tablet and up: the same summary and buttons stick to the bottom of
+          the form column, so Save and the total stay in reach however long the form gets. */}
+      <div className="sticky bottom-0 z-10 hidden items-center gap-3 border-t border-[var(--border)] bg-[var(--paper)] py-3 sm:flex">
+        <div className="min-w-0 flex-1">
+          <div className="font-num text-sm font-semibold text-[var(--ink)]">
+            {servicesChosen === 0 ? 'No service yet' : formatINR(billPaise)}
+          </div>
+          {servicesChosen > 0 && (
+            <div className="truncate text-xs text-[var(--muted)]">{saveSummary(servicesChosen, savePayment)}</div>
+          )}
+        </div>
+        <button type="button" className={btnSecondary} disabled={busy} onClick={requestExit}>
           Cancel
+        </button>
+        <button type="button" className={btnPrimary} disabled={busy} onClick={() => void save()}>
+          {busy ? 'Saving…' : 'Save visit'}
         </button>
       </div>
     </div>
@@ -1505,8 +1676,27 @@ export function NewVisitPage() {
 
   return (
     // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
-    <div className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+    <div
+      className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0"
+      onPointerDownCapture={() => {
+        touchedRef.current = true;
+      }}
+      onKeyDownCapture={() => {
+        touchedRef.current = true;
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Back"
+          disabled={busy}
+          onClick={requestExit}
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-40 sm:hidden"
+        >
+          <span aria-hidden="true" className="text-lg leading-none">←</span>
+        </button>
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+      </div>
       <VisitCapNotice />
 
       {/* Same two-column shape (reference panel left, form right) whether or
@@ -1515,16 +1705,23 @@ export function NewVisitPage() {
           page's own structure doesn't, so picking a patient doesn't cause a
           jarring column-count/width jump. Collapses to stacked below tab:. */}
       <div className="tab:flex tab:items-start tab:gap-4">
-        <div className="tab:w-80 tab:shrink-0">{patientPanel}</div>
+        <div
+          className={`tab:w-80 tab:shrink-0 ${
+            patient ? 'tab:sticky tab:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
+          }`}
+        >
+          {patientPanel}
+        </div>
         <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
       </div>
 
       <VisitSaveBar
         totalPaise={billPaise}
-        serviceCount={rows.filter(hasService).length}
+        serviceCount={servicesChosen}
         payment={savePayment}
         busy={busy}
         onSave={() => void save()}
+        onCancel={requestExit}
         onSummaryClick={() =>
           document.getElementById('visit-payment')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
         }

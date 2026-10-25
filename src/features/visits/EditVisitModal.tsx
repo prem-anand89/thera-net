@@ -46,6 +46,12 @@ const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
 const EMPTY_ITEMS: VisitItem[] = [];
 const EMPTY_CATALOG: CatalogItem[] = [];
 
+function shareOf(it: VisitItem): DraftLine['sessionShare'] {
+  return it.sessionShareTherapistId && it.sessionSharePct
+    ? { therapistId: it.sessionShareTherapistId, pct: it.sessionSharePct }
+    : null;
+}
+
 /** The visit's saved services as editable rows; a package session becomes a continuation row. */
 function rowsFromItems(visit: Visit, items: VisitItem[], catalog: CatalogItem[]): DraftLine[] {
   return items.map((it) => {
@@ -54,9 +60,15 @@ function rowsFromItems(visit: Visit, items: VisitItem[], catalog: CatalogItem[])
       return {
         ...continuationLine(ownPackage(visit, it, catalog), it.assistingTherapistId),
         key: it.id,
+        sessionShare: shareOf(it),
       };
     }
-    return { key: it.id, serviceCatalogId: it.serviceCatalogId, assistingTherapistId: it.assistingTherapistId };
+    return {
+      key: it.id,
+      serviceCatalogId: it.serviceCatalogId,
+      assistingTherapistId: it.assistingTherapistId,
+      sessionShare: shareOf(it),
+    };
   });
 }
 
@@ -217,12 +229,22 @@ export function EditVisitModal({
   function changeTherapist(id: string) {
     setTherapistId(id);
     // An assistant can't also be the visit's therapist.
-    setRows((prev) => prev.map((r) => (r.assistingTherapistId === id ? { ...r, assistingTherapistId: null } : r)));
+    setRows((prev) =>
+      prev.map((r) => {
+        const next = r.assistingTherapistId === id ? { ...r, assistingTherapistId: null } : r;
+        return next.sessionShare && next.sessionShare.therapistId === (next.assistingTherapistId ?? id)
+          ? { ...next, sessionShare: null }
+          : next;
+      })
+    );
   }
 
-  const signature = (list: { key: string; serviceCatalogId?: UUID; continuation?: OpenPackage; assistingTherapistId: UUID | null }[]) =>
+  const signature = (list: DraftLine[]) =>
     list
-      .map((r) => `${r.key}|${r.continuation?.serviceCatalogId ?? r.serviceCatalogId}|${r.assistingTherapistId ?? ''}`)
+      .map(
+        (r) =>
+          `${r.key}|${r.continuation?.serviceCatalogId ?? r.serviceCatalogId}|${r.assistingTherapistId ?? ''}|${r.sessionShare ? `${r.sessionShare.therapistId}:${r.sessionShare.pct}` : ''}`
+      )
       .join(',');
   const rowsChanged =
     signature(rows) !== signature(rowsFromItems(visit, items, catalogAll ?? [])) ||

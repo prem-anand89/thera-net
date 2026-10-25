@@ -61,11 +61,11 @@ describe('assistantNamesShort', () => {
 });
 
 describe('SharesRing hover reason', () => {
-  it('says whether the split follows services or was set by hand', () => {
+  it('says whether the split follows services or was set manually', () => {
     const services = [{ name: 'Kinesio Taping', assistantName: 'BM' }];
     const { rerender } = render(<SharesRing shares={shares} primaryName="Prem" services={services} />);
     expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain('Split from services — BM: Kinesio Taping');
     rerender(<SharesRing shares={shares} primaryName="Prem" services={services} edited />);
-    expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain('Set by hand');
+    expect(screen.getByLabelText('Revenue share: 20% to others').getAttribute('title')).toContain('Set manually');
   });
 });

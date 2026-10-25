@@ -65,7 +65,8 @@ export function lineNets(items: VisitItem[], billPaise: Paise): Map<UUID, Paise>
 /**
  * The visit's revenue shares in 'auto' mode: each therapist's share is the sum of the nets of the lines
  * they delivered. The package line's net therefore always goes to that line's deliverer (package money
- * is never redistributed here). The primary is always present (first), even at ₹0; others follow in
+ * is never redistributed here). A paid line with a share (`sessionShareTherapistId` + `sessionSharePct`)
+ * gives that colleague the % of its net, rounded half-up to the rupee, and its deliverer the rest. The primary is always present (first), even at ₹0; others follow in
  * the order they first appear on the visit, one merged row each.
  * Split off (`clinics.enable_therapist_split` false) overrides the package rule: every rupee, package
  * money included, goes to the primary. A ₹0 bill, or a visit with no live lines, also gives a single
@@ -84,7 +85,16 @@ export function autoCredits(
   const totals = new Map<UUID, Paise>([[primaryId, 0]]);
   for (const l of liveLines(items)) {
     const who = deliverer(l, primaryId);
-    totals.set(who, (totals.get(who) ?? 0) + (nets.get(l.id) ?? 0));
+    const net = nets.get(l.id) ?? 0;
+    // A share on a paid service gives that colleague a % of the line's net; the deliverer keeps the rest.
+    // A package line is skipped: its share moves through package attribution (payBase), never here.
+    if (!l.isPackageLine && l.sessionShareTherapistId && l.sessionSharePct && l.sessionShareTherapistId !== who) {
+      const part = Math.min(net, roundToRupeeHalfUp((net * l.sessionSharePct) / 100));
+      totals.set(who, (totals.get(who) ?? 0) + net - part);
+      totals.set(l.sessionShareTherapistId, (totals.get(l.sessionShareTherapistId) ?? 0) + part);
+      continue;
+    }
+    totals.set(who, (totals.get(who) ?? 0) + net);
   }
   return [...totals].map(([therapistId, amountPaise]) => ({ therapistId, amountPaise }));
 }

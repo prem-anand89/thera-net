@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { formatINR } from '@/domain/money';
 import {
   computeAdjustedBillPaise,
@@ -53,6 +54,8 @@ export interface BillAdjustmentFieldsProps {
   continuationSession?: boolean;
   /** Label for the teal result box; the New Visit form calls it "Total". */
   totalLabel?: string;
+  /** New Visit: with nothing adjusted the Total says the same as the price box, so show the price box only once it differs. */
+  hideUnadjustedPrice?: boolean;
   /** Greys out every control (New Visit while the subtotal is ₹0). */
   disabled?: boolean;
 }
@@ -70,6 +73,7 @@ export function BillAdjustmentFields({
   onReasonChange,
   continuationSession,
   totalLabel = 'Final bill',
+  hideUnadjustedPrice = false,
   disabled,
 }: BillAdjustmentFieldsProps) {
   const numericValue = Number(value);
@@ -81,28 +85,70 @@ export function BillAdjustmentFields({
   const billPaise = computeAdjustedBillPaise(catalogPricePaise, adjustment);
   const summary = describeBillAdjustment(catalogPricePaise, billPaise);
 
+  const hasAdjustment = mode !== 'none';
+  const [expanded, setExpanded] = useState(hasAdjustment);
+
+  useEffect(() => {
+    if (hasAdjustment) {
+      setExpanded(true);
+    }
+  }, [hasAdjustment]);
+
+  function handleModeChange(newMode: BillAdjustmentMode) {
+    if (newMode === 'none') {
+      setExpanded(false);
+    }
+    onModeChange(newMode);
+  }
+
   return (
     <fieldset disabled={disabled} className="m-0 min-w-0 space-y-3 border-0 p-0">
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
-        <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
-        <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
-      </div>
+            {(hasAdjustment || !hideUnadjustedPrice) && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
+          <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
+          <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
+        </div>
+      )}
 
-      <Field label="Adjustment">
-        <SegmentedToggle
-          value={mode}
-          onChange={onModeChange}
-          options={[
-            { value: 'none', label: 'None' },
-            {
-              value: 'discount',
-              label: 'Discount',
-              disabled: continuationSession && catalogPricePaise === 0,
-            },
-            { value: 'extra', label: 'Extra' },
-          ]}
-        />
-      </Field>
+      {!expanded && !hasAdjustment ? (
+        <div>
+          <button
+            type="button"
+            disabled={disabled || (continuationSession && catalogPricePaise === 0)}
+            onClick={() => setExpanded(true)}
+            className="min-h-11 inline-flex items-center text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            + Discount / Extra
+          </button>
+        </div>
+      ) : (
+        <div>
+          <Field label="Adjustment">
+            <SegmentedToggle
+              value={mode}
+              onChange={handleModeChange}
+              options={[
+                { value: 'none', label: 'None' },
+                {
+                  value: 'discount',
+                  label: 'Discount',
+                  disabled: continuationSession && catalogPricePaise === 0,
+                },
+                { value: 'extra', label: 'Extra' },
+              ]}
+            />
+          </Field>
+          {mode === 'none' && (
+            <button
+              type="button"
+              className="min-h-8 text-xs font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setExpanded(false)}
+            >
+              Hide
+            </button>
+          )}
+        </div>
+      )}
 
       {mode !== 'none' && (
         <>
@@ -132,11 +178,12 @@ export function BillAdjustmentFields({
       )}
 
       <div className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)]">
-        <span className="font-medium">{totalLabel}: {formatINR(billPaise)}</span>
+        <span className="font-medium">
+          {totalLabel}: {formatINR(billPaise)}
+        </span>
         {summary && (
           <span className="mt-0.5 block text-xs text-[var(--teal-strong)]/90">
-            {summary.kind === 'discount' ? 'Discount' : 'Extra'} of{' '}
-            {formatINR(summary.amountPaise)}
+            {summary.kind === 'discount' ? 'Discount' : 'Extra'} of {formatINR(summary.amountPaise)}
             {valueType === 'percent' && numericValue > 0 ? ` (${numericValue}%)` : ''}
           </span>
         )}

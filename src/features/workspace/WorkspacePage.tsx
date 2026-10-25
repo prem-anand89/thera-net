@@ -65,6 +65,7 @@ import { visitPermissions } from '@/features/visits/visitPermissions';
 import { splitDisplay, useVisitDetails, type VisitDetails } from '@/features/visits/visitDetails';
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
+import { MyCreditsCard } from './MyCreditsCard';
 
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -996,6 +997,12 @@ export function WorkspacePage() {
             assistantName={nameOfTherapist(scope.myTherapistId ?? '')}
             viewerIsAssistant
           />
+        </SectionCard>
+      )}
+
+      {canShareRevenue && !scope.isClinicWideView && scope.myTherapistId && (
+        <SectionCard title="My credits and debits">
+          <MyCreditsCard therapistId={scope.myTherapistId} />
         </SectionCard>
       )}
 

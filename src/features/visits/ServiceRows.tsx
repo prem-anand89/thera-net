@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatINR } from '@/domain/money';
+import { formatINR, roundToRupeeHalfUp } from '@/domain/money';
 import { effectivePricePerSession, type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/domain/types';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { IconClose, IconUserPlus } from '@/components/StatIcons';
@@ -12,6 +12,8 @@ export interface OpenPackage {
   logged: number;
   packageTotal: number;
   startedOn: string;
+  /** The share the package's most recent session that had one gave a colleague; the next session starts with it. */
+  lastShare?: { therapistId: UUID; pct: number } | null;
 }
 
 /**
@@ -24,6 +26,10 @@ export interface DraftLine {
   serviceCatalogId?: UUID;
   continuation?: OpenPackage;
   assistingTherapistId: UUID | null;
+  /** A colleague who helped with this service and the % of it they get (of the session's package share on a package row). */
+  sessionShare?: { therapistId: UUID; pct: number } | null;
+  /** The share was copied from the package's last session, not typed: the row says so until it is edited. */
+  sharePrefilled?: boolean;
 }
 
 let keyCounter = 0;
@@ -38,7 +44,13 @@ export function emptyDraftLine(): DraftLine {
 }
 
 export function continuationLine(pkg: OpenPackage, assistingTherapistId: UUID | null = null): DraftLine {
-  return { key: newDraftKey(), continuation: pkg, assistingTherapistId };
+  const line: DraftLine = { key: newDraftKey(), continuation: pkg, assistingTherapistId };
+  // A package helped over several sessions: this session starts with the last one's share (editable).
+  if (pkg.lastShare && pkg.lastShare.therapistId !== assistingTherapistId) {
+    line.sessionShare = pkg.lastShare;
+    line.sharePrefilled = true;
+  }
+  return line;
 }
 
 /** A row that has a service (or package session) chosen. */
@@ -77,9 +89,16 @@ export function rowProblems(rows: DraftLine[], catalog: CatalogItem[]): Map<numb
   let seenPackage = false;
   rows.forEach((r, i) => {
     if (!hasService(r)) return;
-    if (!isPackageRow(r, catalog)) return;
-    if (seenPackage) out.set(i, `${rowName(r, catalog)}: only one package per visit.`);
-    seenPackage = true;
+    if (isPackageRow(r, catalog)) {
+      if (seenPackage) {
+        out.set(i, `${rowName(r, catalog)}: only one package per visit.`);
+        return;
+      }
+      seenPackage = true;
+    }
+    if (r.sessionShare && (!Number.isInteger(r.sessionShare.pct) || r.sessionShare.pct < 1 || r.sessionShare.pct > 99)) {
+      out.set(i, Number.isNaN(r.sessionShare.pct) ? 'Enter the % to share.' : 'A share must be a whole number from 1 to 99%.');
+    }
   });
   return out;
 }
@@ -100,6 +119,9 @@ export function draftLinesToItems(rows: DraftLine[], catalog: CatalogItem[]): Vi
       catalogPricePaise: cat.basePricePaise,
       pricePaise: rowPricePaise(r, catalog),
       assistingTherapistId: r.assistingTherapistId,
+      ...(r.sessionShare
+        ? { sessionShareTherapistId: r.sessionShare.therapistId, sessionSharePct: r.sessionShare.pct }
+        : {}),
       durationMinutes: cat.durationMinutes ?? null,
       isPackageLine: isPackageRow(r, catalog),
       deleted: false,
@@ -133,9 +155,9 @@ export interface ServiceRowsProps {
   catalog: CatalogItem[];
   openPackages: OpenPackage[];
   therapists: Therapist[];
-  /** The visit's therapist — never offered as an assistant. */
+  /** The visit's therapist — who does a row unless "Done by" says otherwise. */
   primaryId: UUID;
-  /** False for a solo clinic: no "Assign assistant". */
+  /** False for a solo clinic: no "Done by" / "Share". */
   showAssistant: boolean;
   /** Messages the page wants on specific rows (by index), shown in addition to the package rule. */
   errors: Map<number, string>;
@@ -159,15 +181,14 @@ export function ServiceRows({
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
 
   const problems = useMemo(() => rowProblems(rows, catalog), [rows, catalog]);
-  const assistants = useMemo(
-    () => therapists.filter((t) => t.active && t.id !== primaryId),
+  // Everyone who can do a service: the visit's therapist and the other active therapists.
+  const doers = useMemo(
+    () => therapists.filter((t) => t.active || t.id === primaryId),
     [therapists, primaryId]
   );
-  const therapistName = (id: UUID) => therapists.find((t) => t.id === id)?.name ?? 'Assistant';
 
   const serviceOptions = useMemo(() => {
     const packages = openPackages.map((p) => ({
@@ -188,13 +209,47 @@ export function ServiceRows({
   }, [openPackages, catalog]);
 
   function update(key: string, patch: Partial<DraftLine>) {
-    onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    onChange(
+      rows.map((r) => {
+        if (r.key !== key) return r;
+        const next = { ...r, ...patch };
+        // Typing a share (or removing it) makes it the user's own: it is no longer "same as last session".
+        if ('sessionShare' in patch && !('sharePrefilled' in patch)) next.sharePrefilled = false;
+        // A service can't be shared with the therapist who does it.
+        const runner = next.assistingTherapistId ?? primaryId;
+        if (next.sessionShare && next.sessionShare.therapistId === runner) {
+          next.sessionShare = null;
+        }
+        return next;
+      })
+    );
   }
+
+  // A change of the visit's therapist can make the shared therapist the one who does the row: drop that share.
+  useEffect(() => {
+    if (rows.some((r) => r.sessionShare && r.sessionShare.therapistId === (r.assistingTherapistId ?? primaryId))) {
+      onChange(
+        rows.map((r) =>
+          r.sessionShare && r.sessionShare.therapistId === (r.assistingTherapistId ?? primaryId)
+            ? { ...r, sessionShare: null }
+            : r
+        )
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryId, rows]);
 
   function pick(key: string, value: string) {
     if (value.startsWith('pkg:')) {
       const pkg = openPackages.find((p) => p.packageGroupId === value.slice(4));
-      if (pkg) update(key, { continuation: pkg, serviceCatalogId: undefined });
+      if (pkg) {
+        const inherit = pkg.lastShare && pkg.lastShare.therapistId !== primaryId;
+        update(key, {
+          continuation: pkg,
+          serviceCatalogId: undefined,
+          ...(inherit ? { sessionShare: pkg.lastShare, sharePrefilled: true } : {}),
+        });
+      }
     } else {
       update(key, { serviceCatalogId: value.slice(4), continuation: undefined });
     }
@@ -231,8 +286,7 @@ export function ServiceRows({
             onKeyDown={(e) => {
               if (e.key !== 'Escape') return;
               setChanging(null);
-              setAssigning(null);
-            }}
+                          }}
             // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.
             className={
               named
@@ -288,46 +342,43 @@ export function ServiceRows({
               </div>
             )}
             {named && !row.continuation && cat && cat.sessionCount > 1 && (
-              <div className="mt-1 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
+              <div className="mt-0.5 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
             )}
 
-            {named && (
-              <div className="mt-1.5">
-                {row.assistingTherapistId ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs text-[var(--teal)]">
-                    {therapistName(row.assistingTherapistId)} · assisting
-                    <button
-                      type="button"
-                      aria-label={`Remove assistant ${therapistName(row.assistingTherapistId)}`}
-                      className="rounded-full p-0.5 hover:bg-[var(--surface)]"
-                      onClick={() => update(row.key, { assistingTherapistId: null })}
+            {named && showAssistant && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2.5">
+                {doers.length > 1 && (
+                  // A native select dressed as the pill: one tap, same look open or closed.
+                  <label
+                    className={`${pillBtn} relative cursor-pointer ${
+                      row.assistingTherapistId ? '!border-[var(--teal)] !text-[var(--teal)]' : ''
+                    }`}
+                    title="Who did this service. They get its money."
+                  >
+                    <IconUserPlus className="h-3.5 w-3.5" />
+                    <span>Done by:</span>
+                    <select
+                      aria-label="Done by"
+                      className="max-w-[10rem] cursor-pointer appearance-none truncate bg-transparent pr-3 text-base font-medium text-inherit focus:outline-none sm:text-xs"
+                      value={row.assistingTherapistId ?? primaryId}
+                      onChange={(e) => update(row.key, { assistingTherapistId: e.target.value === primaryId ? null : e.target.value })}
                     >
-                      <IconClose className="h-3 w-3" />
-                    </button>
-                  </span>
-                ) : showAssistant && assistants.length > 0 ? (
-                  assigning === row.key ? (
-                    <FocusedPicker
-                      autoFocus
-                      label="Assistant"
-                      value=""
-                      onChange={(v) => {
-                        update(row.key, { assistingTherapistId: v });
-                        setAssigning(null);
-                      }}
-                      options={assistants.map((t) => ({ value: t.id, label: t.name }))}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
-                      onClick={() => setAssigning(row.key)}
-                    >
-                      <IconUserPlus className="h-3.5 w-3.5" />
-                      + Assign assistant
-                    </button>
-                  )
-                ) : null}
+                      {doers.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span aria-hidden="true" className="pointer-events-none absolute right-2.5 text-[10px]">▾</span>
+                  </label>
+                )}
+                <RowShare
+                  row={row}
+                  pricePaise={rowPricePaise(row, catalog)}
+                  isPackage={isPackageRow(row, catalog)}
+                  candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
+                  onChange={(sessionShare) => update(row.key, { sessionShare })}
+                />
               </div>
             )}
 
@@ -336,7 +387,11 @@ export function ServiceRows({
         );
       })}
 
-      <button type="button" className={linkBtn} onClick={addRow}>
+      <button
+        type="button"
+        className="flex min-h-11 w-full items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-sm font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)]"
+        onClick={addRow}
+      >
         + Add another service
       </button>
 
@@ -377,12 +432,96 @@ export function ServiceRows({
   );
 }
 
+/**
+ * "Share": a colleague who helped gets a percentage of this service; whoever does it keeps the rest. On a
+ * paid service the money moves through the visit's revenue shares, on a package session through package
+ * attribution — the row just records who and how much.
+ */
+function RowShare({
+  row,
+  pricePaise,
+  isPackage,
+  candidates,
+  onChange,
+}: {
+  row: DraftLine;
+  pricePaise: number;
+  isPackage: boolean;
+  candidates: Therapist[];
+  onChange: (share: DraftLine['sessionShare']) => void;
+}) {
+  const share = row.sessionShare;
+  if (!share) {
+    if (candidates.length === 0) return null;
+    return (
+      <button
+        type="button"
+        className={pillBtn}
+        title="Give a colleague who helped a % of this service"
+        onClick={() => onChange({ therapistId: candidates[0]!.id, pct: NaN })}
+      >
+        Share
+      </button>
+    );
+  }
+  const preview =
+    !isPackage && Number.isFinite(share.pct) && share.pct > 0 && pricePaise > 0
+      ? formatINR(roundToRupeeHalfUp((pricePaise * share.pct) / 100))
+      : null;
+  return (
+    <div className="flex w-full flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+      <span>Shared with</span>
+      <select
+        aria-label="Shared with"
+        className="min-h-9 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-base text-[var(--ink)] sm:min-h-0 sm:text-xs"
+        value={share.therapistId}
+        onChange={(e) => onChange({ ...share, therapistId: e.target.value })}
+      >
+        {candidates.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      <label className="flex items-center gap-1">
+        <input
+          type="number"
+          min={1}
+          max={99}
+          inputMode="numeric"
+          aria-label="Percent of this service"
+          className="min-h-9 w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-base text-[var(--ink)] sm:min-h-0 sm:w-14 sm:text-xs"
+          placeholder="%"
+          autoFocus={!Number.isFinite(share.pct)}
+          value={Number.isFinite(share.pct) ? share.pct : ''}
+          onChange={(e) => onChange({ ...share, pct: e.target.value === '' ? NaN : Number(e.target.value) })}
+        />
+        {isPackage ? '% of this session' : '% of this service'}
+      </label>
+      {preview && <span className="font-num text-[var(--ink)]">≈ {preview}</span>}
+      {row.sharePrefilled && <span>· Same as last session</span>}
+      <button
+        type="button"
+        aria-label="Remove share"
+        className="flex h-9 w-9 items-center justify-center rounded hover:bg-[var(--paper)] sm:h-6 sm:w-6"
+        onClick={() => onChange(null)}
+      >
+        <IconClose className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
+/** Small outlined action pill under a service (Assistant, Share session). */
+const pillBtn =
+  'inline-flex min-h-10 sm:min-h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--teal)]';
+
 function RemoveButton({ name, onClick }: { name: string; onClick: () => void }) {
   return (
     <button
       type="button"
       aria-label={`Remove ${name}`}
-      className="shrink-0 rounded p-1 text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--rust)]"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--rust)] sm:h-7 sm:w-7"
       onClick={onClick}
     >
       <IconClose className="h-4 w-4" />

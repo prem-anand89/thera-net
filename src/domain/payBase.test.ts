@@ -440,3 +440,53 @@ describe('payBase', () => {
     });
   });
 });
+
+describe('a helper given part of a package session', () => {
+  const share = (therapistId: UUID, pct: number) => ({ sessionShareTherapistId: therapistId, sessionSharePct: pct });
+  const itemsFor = (g: string, s2: Partial<VisitItem>, s3: Partial<VisitItem> = {}) => [
+    item(`${g}-1`, { pricePaise: rs(3000), isPackageLine: true }),
+    item(`${g}-2`, { pricePaise: 0, isPackageLine: true, ...s2 }),
+    item(`${g}-3`, { pricePaise: 0, isPackageLine: true, ...s3 }),
+  ];
+  const credits = (g: string) => [credit(`${g}-1`, PREM, rs(3000)), credit(`${g}-2`, PREM, 0), credit(`${g}-3`, PREM, 0)];
+
+  it("the biller ran the session and a colleague helped: the helper's part comes off the session share", () => {
+    const all = package3('hp', {}, {});
+    const movements = attributionMovements(input(all, all, { items: itemsFor('hp', share(AISH, 40)), credits: credits('hp') }));
+    expect(movements).toEqual([
+      { mechanism: 'package_attribution', visitId: 'hp-2', fromTherapistId: PREM, toTherapistId: AISH, grossPaise: 0, clinicSharePaise: rs(300), postTaxPaise: rs(270), sessionSharePct: 40, packageRole: 'helper' },
+    ]);
+  });
+
+  it('a colleague ran it and another helped: the runner keeps the rest, both paid by the biller', () => {
+    const all = package3('hq', { therapistId: AISH }, {});
+    const items = itemsFor('hq', { assistingTherapistId: AISH, ...share(RAVI, 30) });
+    const movements = attributionMovements(input(all, all, { items, credits: credits('hq') }));
+    const to = (id: UUID) => movements.find((m) => m.toTherapistId === id)!;
+    expect(to(RAVI).postTaxPaise).toBe(rs(203)); // 30% of ₹675 = ₹202.50 → ₹203
+    expect(to(AISH).postTaxPaise).toBe(rs(675) - rs(203));
+    expect(movements.every((m) => m.fromTherapistId === PREM)).toBe(true);
+    const base = payBaseByTherapist(input(all, all, { items, credits: credits('hq') }));
+    expect(totalOf(base)).toEqual(sums(all));
+  });
+
+  it("a part given back to the biller changes nothing for the biller, the runner keeps the rest", () => {
+    const all = package3('hr', { therapistId: AISH }, {});
+    const items = itemsFor('hr', { assistingTherapistId: AISH, ...share(PREM, 25) });
+    const movements = attributionMovements(input(all, all, { items, credits: credits('hr') }));
+    expect(movements).toHaveLength(1);
+    expect(movements[0]).toMatchObject({ toTherapistId: AISH, postTaxPaise: rs(675) - rs(169) });
+  });
+
+  it('is ignored when the clinic split is off, and a part with nothing to give moves nothing', () => {
+    const all = package3('hs', {}, {});
+    expect(attributionMovements(input(all, all, { items: itemsFor('hs', share(AISH, 40)), credits: credits('hs'), splitEnabled: false }))).toEqual([]);
+  });
+
+  it('a session with no part is unchanged', () => {
+    const all = package3('ht', { therapistId: AISH }, {});
+    const movements = attributionMovements(input(all, all, { items: itemsFor('ht', { assistingTherapistId: AISH }), credits: credits('ht') }));
+    expect(movements).toHaveLength(1);
+    expect(movements[0]).toMatchObject({ toTherapistId: AISH, postTaxPaise: rs(675) });
+  });
+});

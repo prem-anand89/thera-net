@@ -28,6 +28,11 @@ export interface VisitLineInput {
    * catalog service with more than one session is a new package purchase.
    */
   packageContinuation?: { packageGroupId: UUID; sessionIndex: number; packageTotal: number };
+  /**
+   * Package line only: a colleague who helped with this session and gets `pct`% (1-99) of the session's
+   * package share; the line's deliverer keeps the rest. Moves money only through package attribution.
+   */
+  sessionShare?: { therapistId: UUID; pct: number } | null;
 }
 
 const VISIT_DELETED = 'This visit was deleted.';
@@ -82,6 +87,7 @@ export function createVisitService(repos: Repos) {
     /** A package session billed on an earlier visit: the line's price is ₹0. */
     zeroPrice: boolean;
     continuation?: VisitLineInput['packageContinuation'];
+    sessionShare: { therapistId: UUID; pct: number } | null;
   }
 
   /** Bill vs. catalog total → the stored bill and adjustment, with the usual reason rule. */
@@ -125,6 +131,14 @@ export function createVisitService(repos: Repos) {
         throw new Error("The assisting therapist must be someone other than the visit's therapist.");
       }
       if (sp.assistingTherapistId) assistants.add(sp.assistingTherapistId);
+      if (sp.sessionShare) {
+        const { therapistId, pct } = sp.sessionShare;
+        if (!Number.isInteger(pct) || pct < 1 || pct > 99) throw new Error('A share must be 1 to 99%.');
+        if (therapistId === (sp.assistingTherapistId ?? primaryId)) {
+          throw new Error("A service can't be shared with the therapist who did it.");
+        }
+        assistants.add(therapistId);
+      }
     }
     await assertInClinic(clinicId, [...assistants]);
   }
@@ -142,6 +156,7 @@ export function createVisitService(repos: Repos) {
       isPackage: false, // decided against the catalog in `withPackageFlags`
       zeroPrice: Boolean(l.packageContinuation),
       continuation: l.packageContinuation,
+      sessionShare: l.sessionShare ?? null,
     }));
   }
 
@@ -199,6 +214,10 @@ export function createVisitService(repos: Repos) {
       assistingTherapistId: sp.assistingTherapistId,
       durationMinutes: item.durationMinutes ?? null,
       isPackageLine: sp.isPackage,
+      // Only written when set: a row that never had a helper carries neither column, so it syncs the same as before.
+      ...(sp.sessionShare
+        ? { sessionShareTherapistId: sp.sessionShare.therapistId, sessionSharePct: sp.sessionShare.pct }
+        : {}),
       deleted: false,
       updatedAt: now,
     };
@@ -240,14 +259,21 @@ export function createVisitService(repos: Repos) {
       pool.splice(pool.indexOf(old), 1);
       const sameSnapshot =
         old.isPackageLine === fresh.isPackageLine && (old.pricePaise === 0) === (fresh.pricePaise === 0);
+      const sessionShareFields = sp.sessionShare
+        ? { sessionShareTherapistId: sp.sessionShare.therapistId, sessionSharePct: sp.sessionShare.pct }
+        : old.sessionShareTherapistId
+          ? { sessionShareTherapistId: null, sessionSharePct: null }
+          : {};
       const next: VisitItem = sameSnapshot
-        ? { ...old, position, assistingTherapistId: sp.assistingTherapistId }
-        : { ...fresh, id: old.id, createdBy: old.createdBy };
+        ? { ...old, position, assistingTherapistId: sp.assistingTherapistId, ...sessionShareFields }
+        : { ...fresh, id: old.id, createdBy: old.createdBy, ...sessionShareFields };
       if (sp.isPackage && old.isPackageLine) keptPackage = true;
       live.push(next);
       const changed =
         next.position !== old.position ||
         next.assistingTherapistId !== old.assistingTherapistId ||
+        (next.sessionShareTherapistId ?? null) !== (old.sessionShareTherapistId ?? null) ||
+        (next.sessionSharePct ?? null) !== (old.sessionSharePct ?? null) ||
         next.isPackageLine !== old.isPackageLine ||
         next.pricePaise !== old.pricePaise ||
         next.serviceName !== old.serviceName ||
@@ -324,6 +350,7 @@ export function createVisitService(repos: Repos) {
             assistingTherapistId: null,
             isPackage: false,
             zeroPrice: Boolean(input.isContinuation),
+            sessionShare: null,
           },
         ];
         legacyPackage = true;
@@ -717,11 +744,18 @@ export function createVisitService(repos: Repos) {
         // Old visits with no lines and no share rows stay on the old split path.
         if (items.length > 0 || credits.length > 0) {
           const now = updated.updatedAt;
-          const cleared = primaryChanged
-            ? items
-                .filter((i) => i.assistingTherapistId === updated.therapistId)
-                .map((i) => ({ ...i, assistingTherapistId: null, updatedAt: now }))
-            : [];
+          // A new primary can't also be a line's assistant, and can't be the helper of a session they now run.
+          const cleared: VisitItem[] = [];
+          if (primaryChanged) {
+            for (const i of items) {
+              let next = i;
+              if (next.assistingTherapistId === updated.therapistId) next = { ...next, assistingTherapistId: null };
+              if (next.sessionShareTherapistId && next.sessionShareTherapistId === (next.assistingTherapistId ?? updated.therapistId)) {
+                next = { ...next, sessionShareTherapistId: null, sessionSharePct: null };
+              }
+              if (next !== i) cleared.push({ ...next, updatedAt: now });
+            }
+          }
           let creditWrites: VisitCredit[] = [];
           if ((visit.creditsMode ?? 'auto') === 'manual' || isLegacySplit(visit, credits)) {
             sharesOutdated = credits.length > 0 || isLegacySplit(visit, credits);

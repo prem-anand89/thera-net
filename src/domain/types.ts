@@ -624,6 +624,13 @@ export interface VisitItem {
   durationMinutes: number | null;
   /** At most one per visit: the package purchase or session the visit's package columns describe. */
   isPackageLine: boolean;
+  /**
+   * Package line only: a colleague who helped with this session and gets `sessionSharePct`% of the session's
+   * package share (the runner, i.e. the line's deliverer, keeps the rest). Both set or both null; never the
+   * runner. Moves money only through package attribution, never through the visit's revenue shares.
+   */
+  sessionShareTherapistId?: UUID | null;
+  sessionSharePct?: number | null;
   deleted: boolean;
   createdBy?: UUID | null;
   updatedBy?: UUID | null;

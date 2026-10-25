@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterNavItems } from './Shell';
+import { filterNavItems, shouldShowPhoneBottomNav } from './Shell';
 
 describe('filterNavItems', () => {
   it('shows Settings to an admin in the main header nav', () => {
@@ -27,5 +27,15 @@ describe('filterNavItems', () => {
     const items = filterNavItems('unknown');
     const paths = items.map((i) => i.to);
     expect(paths).toEqual(['/workspace', '/ledger']);
+  });
+});
+
+describe('shouldShowPhoneBottomNav', () => {
+  it('hides phone bottom nav only on /visits/new', () => {
+    expect(shouldShowPhoneBottomNav('/visits/new')).toBe(false);
+    expect(shouldShowPhoneBottomNav('/workspace')).toBe(true);
+    expect(shouldShowPhoneBottomNav('/ledger')).toBe(true);
+    expect(shouldShowPhoneBottomNav('/schedule')).toBe(true);
+    expect(shouldShowPhoneBottomNav('/patients/abc')).toBe(true);
   });
 });

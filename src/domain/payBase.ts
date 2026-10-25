@@ -33,6 +33,10 @@ export type Movement = {
    * or not summing to the bill), so they were recomputed from its service lines (`autoCredits`) for this report. Absent when the rows were used as stored.
    */
   repaired?: boolean;
+  /** `package_attribution` only: this session was shared with a helper, who got this % (set on both of its movements). */
+  sessionSharePct?: number;
+  /** `package_attribution` only: this movement is the helper's part of a shared session (the other is the runner's). */
+  packageRole?: 'helper';
 };
 
 export interface PayBaseInput {
@@ -127,6 +131,16 @@ function lineShareMovements(v: Visit, credits: NonNullable<ReturnType<typeof eff
     postTaxPaise: postTax[k + 1],
     ...(credits.repaired ? { repaired: true } : {}),
   }));
+}
+
+/** The helper a session's package line gives part of the session to, if any (live line, both fields set). */
+function sessionShareOf(
+  items: Map<UUID, VisitItem[]>,
+  visitId: UUID
+): { therapistId: UUID; pct: number } | undefined {
+  const line = packageLineOf(items, visitId);
+  if (!line?.sessionShareTherapistId || !line.sessionSharePct) return undefined;
+  return { therapistId: line.sessionShareTherapistId, pct: line.sessionSharePct };
 }
 
 /**
@@ -279,18 +293,35 @@ export function attributionMovements(input: PayBaseInput): Movement[] {
     if (!billingVisit || !billerId || postTaxPaise <= 0) continue;
     for (const g of group) {
       if (g.visitDate < from || g.visitDate > to) continue;
-      if (g.id === billingVisit.id) continue;
+      const part = splitEnabled ? sessionShareOf(items, g.id) : undefined;
+      // The billing visit's own session is the biller's unless someone was given part of it.
+      if (g.id === billingVisit.id && !part) continue;
       const runner = packageSessionRunner(g, items, splitEnabled);
-      if (runner === billerId) continue;
-      movements.push({
-        mechanism: 'package_attribution',
-        visitId: g.id,
-        fromTherapistId: billerId,
-        toTherapistId: runner,
-        grossPaise: 0,
-        clinicSharePaise,
-        postTaxPaise,
-      });
+      // A helper's part comes off the session's share; the runner keeps the rest.
+      const helperClinic = part ? roundToRupeeHalfUp((clinicSharePaise * part.pct) / 100) : 0;
+      const helperPostTax = part ? roundToRupeeHalfUp((postTaxPaise * part.pct) / 100) : 0;
+      const recipients: { id: UUID; clinic: Paise; postTax: Paise; helper?: true }[] = [
+        { id: runner, clinic: clinicSharePaise - helperClinic, postTax: postTaxPaise - helperPostTax },
+      ];
+      if (part && part.therapistId !== runner) {
+        recipients.push({ id: part.therapistId, clinic: helperClinic, postTax: helperPostTax, helper: true });
+      } else if (part) {
+        recipients[0] = { id: runner, clinic: clinicSharePaise, postTax: postTaxPaise };
+      }
+      for (const r of recipients) {
+        if (r.id === billerId || (r.clinic <= 0 && r.postTax <= 0)) continue;
+        movements.push({
+          mechanism: 'package_attribution',
+          visitId: g.id,
+          fromTherapistId: billerId,
+          toTherapistId: r.id,
+          grossPaise: 0,
+          clinicSharePaise: r.clinic,
+          postTaxPaise: r.postTax,
+          ...(part && part.therapistId !== runner ? { sessionSharePct: part.pct } : {}),
+          ...(r.helper ? { packageRole: 'helper' as const } : {}),
+        });
+      }
     }
   }
 

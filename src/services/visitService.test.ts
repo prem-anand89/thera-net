@@ -634,6 +634,72 @@ describe('visitService: lines and shares', () => {
     expect(shareOf(v.id, 'th-prem')).toBe(rs(500));
   });
 
+  describe('sharing a package session with a helper', () => {
+    const cont = { packageGroupId: 'grp-1', sessionIndex: 2, packageTotal: 3 };
+
+    it('stores the helper and the percentage on the package line only', async () => {
+      const v = await svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont, sessionShare: { therapistId: 'th-aish', pct: 40 } }],
+      });
+      const pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect(pkg.sessionShareTherapistId).toBe('th-aish');
+      expect(pkg.sessionSharePct).toBe(40);
+    });
+
+    it('a line with no helper carries neither column', async () => {
+      const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont }] });
+      const pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect('sessionShareTherapistId' in pkg).toBe(false);
+    });
+
+    it('refuses the one who did it as the helper, a bad percentage and a stranger', async () => {
+      const make = (over: object, serviceCatalogId = 'svc-physio3') =>
+        svc.create({
+          ...base,
+          lines: [{ serviceCatalogId, ...(serviceCatalogId === 'svc-physio3' ? { packageContinuation: cont } : {}), ...over }],
+        });
+      await expect(make({ sessionShare: { therapistId: 'th-prem', pct: 40 } })).rejects.toThrow(/did it/);
+      await expect(make({ assistingTherapistId: 'th-aish', sessionShare: { therapistId: 'th-aish', pct: 40 } })).rejects.toThrow(/did it/);
+      await expect(make({ sessionShare: { therapistId: 'th-aish', pct: 100 } })).rejects.toThrow(/1 to 99/);
+      await expect(make({ sessionShare: { therapistId: 'th-away', pct: 40 } })).rejects.toThrow(/isn't part of this clinic/);
+      await expect(make({ sessionShare: { therapistId: 'th-aish', pct: 2.5 } })).rejects.toThrow(/1 to 99/);
+    });
+
+    it('editing the lines can clear or change the helper', async () => {
+      const v = await svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont, sessionShare: { therapistId: 'th-aish', pct: 40 } }],
+      });
+      await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont, sessionShare: { therapistId: 'th-ravi', pct: 25 } }]);
+      let pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect([pkg.sessionShareTherapistId, pkg.sessionSharePct]).toEqual(['th-ravi', 25]);
+      await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3', packageContinuation: cont }]);
+      pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect([pkg.sessionShareTherapistId, pkg.sessionSharePct]).toEqual([null, null]);
+    });
+  });
+
+  describe('sharing a paid service', () => {
+    it('stores the share on the line and splits the service between the two', async () => {
+      const v = await svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-consult', sessionShare: { therapistId: 'th-aish', pct: 30 } }],
+      });
+      const line = liveItems(v.id)[0]!;
+      expect([line.sessionShareTherapistId, line.sessionSharePct]).toEqual(['th-aish', 30]);
+      const bill = v.actualBillPaise;
+      expect(shareOf(v.id, 'th-aish')).toBe(Math.round((bill * 0.3) / 100) * 100);
+      expect((shareOf(v.id, 'th-prem') ?? 0) + (shareOf(v.id, 'th-aish') ?? 0)).toBe(bill);
+    });
+
+    it('refuses sharing with the one who did it', async () => {
+      await expect(
+        svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-consult', sessionShare: { therapistId: 'th-prem', pct: 30 } }] })
+      ).rejects.toThrow(/did it/);
+    });
+  });
+
   it('refuses a package group that belongs to another patient', async () => {
     const first = await svc.create({ ...base, patientId: 'pat-other', lines: [{ serviceCatalogId: 'svc-physio3' }] });
     await expect(
