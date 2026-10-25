@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { inputCls } from '@/components/ui';
 
 export type SearchableOption = { value: string; label: string; group?: string };
@@ -18,12 +18,14 @@ export function SearchableSelect({
   onChange,
   options,
   placeholder = 'Type to search…',
+  badge,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: SearchableOption[];
   placeholder?: string;
+  badge?: ReactNode;
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -62,7 +64,10 @@ export function SearchableSelect({
 
   return (
     <div className="block" ref={rootRef}>
-      <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{label}</span>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="block text-xs font-medium text-[var(--muted)]">{label}</span>
+        {badge}
+      </div>
       <div className="relative">
         <input
           className={inputCls}

@@ -47,7 +47,7 @@ import {
   ErrorNote,
   SectionCard,
   Pill,
-  PackageThread,
+  TherapistPill,
   MultiToggle,
 } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -1121,7 +1121,7 @@ export function NewVisitPage() {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-display text-sm sm:text-base font-semibold text-[var(--ink)] truncate">
+            <span className="font-display text-base sm:text-lg font-semibold text-[var(--ink)] truncate">
               {patient.name}
             </span>
             <button
@@ -1133,7 +1133,7 @@ export function NewVisitPage() {
             </button>
           </div>
           <div className="text-xs text-[var(--muted)] mt-0.5 leading-relaxed">
-            Patient ID {patient.mrno}
+            Patient ID <span className="font-num font-medium text-[var(--ink)]">{patient.mrno}</span>
             {patient.age != null && ` · ${patient.age}y`}
             {patient.sex && ` · ${patient.sex}`}
             {patient.primaryCondition && ` · ${patient.primaryCondition}`}
@@ -1161,8 +1161,8 @@ export function NewVisitPage() {
       {openPackages !== undefined && openPackages.length > 0 && (
         <div className="border-t border-[var(--border)] pt-2.5 text-xs">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-[var(--ink)] truncate">
-              📦 {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
+            <span className="font-semibold text-[var(--ink)] truncate">
+              {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
             </span>
             {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
               <Pill tone="amber">Renew soon</Pill>
@@ -1171,16 +1171,28 @@ export function NewVisitPage() {
               <Pill tone="teal">+{openPackages.length - 1} more</Pill>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-2 text-[var(--muted)]">
-            <PackageThread
-              sessionIndex={openPackages[0].logged + 1}
-              packageTotal={openPackages[0].packageTotal}
-            />
-            <span>
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-[var(--muted)]">
+            <span
+              className="inline-flex items-center gap-1 align-middle"
+              title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
+            >
+              {Array.from({ length: openPackages[0].packageTotal }, (_, i) => {
+                const isDone = i < openPackages[0].logged;
+                return (
+                  <span
+                    key={i}
+                    className={`h-2 w-2 rounded-full transition-colors ${
+                      isDone ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
+                    }`}
+                  />
+                );
+              })}
+            </span>
+            <span className="font-num">
               {openPackages[0].logged} of {openPackages[0].packageTotal} used
             </span>
             <span>·</span>
-            <span>started {formatDateDMY(openPackages[0].startedOn)}</span>
+            <span>started <span className="font-num">{formatDateDMY(openPackages[0].startedOn)}</span></span>
           </div>
         </div>
       )}
@@ -1208,16 +1220,18 @@ export function NewVisitPage() {
                 ),
               });
               return (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 truncate text-[var(--muted)]">
-                    <span>Last visit: </span>
-                    <span className="font-medium text-[var(--ink)]">
-                      {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[var(--muted)]">
+                      Last visit: <span className="font-num font-medium text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
                     </span>
+                    <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                      <span title={badge.title}>{badge.label}</span>
+                    </Pill>
                   </div>
-                  <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                    <span title={badge.title}>{badge.label}</span>
-                  </Pill>
+                  <div className="mt-1 font-medium text-[var(--ink)] truncate">
+                    {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
+                  </div>
                 </div>
               );
             })()
@@ -1516,8 +1530,8 @@ export function NewVisitPage() {
             wrap inside a half-width column, visually crowding its own
             input. One column removes the ambiguity entirely. */}
         <div className="grid grid-cols-1 gap-3">
-          {/* Date and therapist share a row (one column only on very narrow phones). */}
-          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+          {/* Date and therapist share a row (stacked on narrow phones to avoid DD/MM/YYYY overflow). */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field
               label="Date"
               hint={
@@ -1528,7 +1542,7 @@ export function NewVisitPage() {
             >
               <input
                 type="date"
-                className={inputCls}
+                className={`${inputCls} font-num`}
                 value={visitDate}
                 onChange={(e) => setVisitDate(e.target.value)}
               />
@@ -1538,8 +1552,14 @@ export function NewVisitPage() {
               value={therapistId}
               onChange={setTherapistId}
               options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
+              badge={
+                therapistId ? (
+                  <TherapistPill>
+                    {(therapists ?? []).find((t) => t.id === therapistId)?.name ?? 'Therapist'}
+                  </TherapistPill>
+                ) : undefined
+              }
             />
-
           </div>
 
           {role === 'front_desk' && !clinicalDetailsExpanded ? (

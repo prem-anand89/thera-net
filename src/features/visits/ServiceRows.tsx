@@ -413,22 +413,18 @@ export function ServiceRows({
       })}
 
       {availableQuickServices.length > 0 && (
-        <div className="pt-1 pb-0.5" data-testid="quick-services">
-          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-[var(--muted)]">
-            Frequently logged
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {availableQuickServices.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className="inline-flex min-h-7 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--paper)] hover:text-[var(--teal)] transition-colors"
-                onClick={() => pickQuickService(s)}
-              >
-                + {s.name}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 pb-0.5" data-testid="quick-services">
+          <span className="text-xs text-[var(--muted)]">Suggested:</span>
+          {availableQuickServices.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className="inline-flex min-h-7 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--paper)] hover:text-[var(--teal)] transition-colors"
+              onClick={() => pickQuickService(s)}
+            >
+              + {s.name}
+            </button>
+          ))}
         </div>
       )}
 

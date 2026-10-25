@@ -43,11 +43,11 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     edit the badge comes from the payments on record ("Payment due · ₹500 (paid ₹1,500)" when the bill rose,
     "✓ collected" otherwise), never from the collected-on-the-form flag. Escape closes an open service picker, not the
     dialog around it.
-  - **Date and therapist** share one row (one column only below 360px). **After saving**: a visit collected on the
+  - **Date and therapist** share one row on tablets and desktop (`sm:grid-cols-2`), stacked into full-width fields on phones to prevent `DD/MM/YYYY` overflow. The therapist picker features an active therapist badge for instant visual recognition. **After saving**: a visit collected on the
     form shows "✓ ₹2,000 collected · UPI" and never offers "Take payment" (`paymentStillDue`); "Take payment" appears
     only when the choice was "Take payment later", the payment failed to record, or part is still owed.
   - **Start a note first**: for clinics with clinical notes on, a quiet outlined button under the patient's Last visit / Package tiles ("Start a note first — Add the service later"), above "Change patient"; it opens the same start-note flow as before.
-  - **Patient search & lookup**: Instant search by MRNO, name or phone number. Result rows show the patient's name, MRNO, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
+  - **Patient search & lookup**: Instant search by Patient ID, name or phone number. Result rows show the patient's name, Patient ID, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
     presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
     the top; a row shows the service, its catalog price and two outlined pills (clinics with several therapists):
