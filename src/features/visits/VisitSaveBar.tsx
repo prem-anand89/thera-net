@@ -49,7 +49,7 @@ export function VisitSaveBar({
         className="min-w-0 flex-1 truncate text-left"
         onClick={onSummaryClick}
       >
-        <span className="block truncate text-sm font-bold text-[var(--ink)]">
+        <span className="block truncate text-base font-semibold tabular-nums text-[var(--ink)]">
           {serviceCount === 0 ? 'No service yet' : formatINR(totalPaise)}
         </span>
         {serviceCount > 0 && (

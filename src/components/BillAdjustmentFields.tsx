@@ -122,7 +122,7 @@ export function BillAdjustmentFields({
             type="button"
             disabled={disabled || (continuationSession && catalogPricePaise === 0)}
             onClick={() => setExpanded(true)}
-            className="min-h-11 inline-flex items-center text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex h-8 items-center text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
           >
             + Discount / Extra
           </button>

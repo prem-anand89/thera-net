@@ -106,7 +106,7 @@ export function PaymentMethodChips({
   }
 
   const baseChip =
-    'min-h-11 flex-1 min-w-[72px] sm:min-w-0 px-3 py-2 text-sm font-medium rounded-lg border transition-colors flex items-center justify-center text-center disabled:opacity-50 disabled:cursor-not-allowed';
+    'inline-flex h-8 items-center justify-center rounded-full border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div
@@ -143,7 +143,7 @@ export function PaymentMethodChips({
       })}
 
       {otherOptions.length > 0 && (
-        <div className="relative flex-1 min-w-[100px] sm:min-w-0">
+        <div className="relative">
           <button
             ref={otherButtonRef}
             id={`${groupId}-other`}
@@ -167,7 +167,7 @@ export function PaymentMethodChips({
                 handleKeyDown(e, otherIndex);
               }
             }}
-            className={`w-full ${baseChip} ${
+            className={`${baseChip} ${
               isOtherSelected
                 ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
                 : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
@@ -183,7 +183,7 @@ export function PaymentMethodChips({
             <div
               role="menu"
               aria-label="Additional payment methods"
-              className="absolute left-0 right-0 sm:left-auto sm:right-0 top-full mt-1.5 z-30 min-w-[200px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+              className="absolute left-0 top-full z-30 mt-1.5 min-w-[200px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
             >
               {otherOptions.map((opt) => {
                 const isItemActive = value === opt.value;
@@ -192,7 +192,7 @@ export function PaymentMethodChips({
                     key={opt.value}
                     type="button"
                     role="menuitem"
-                    className={`min-h-11 flex w-full items-center justify-between px-3 py-2 text-left text-sm rounded-md transition-colors ${
+                    className={`flex min-h-9 w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
                       isItemActive
                         ? 'bg-[var(--teal-light)] text-[var(--teal)] font-medium'
                         : 'text-[var(--ink)] hover:bg-[var(--paper)]'

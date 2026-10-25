@@ -116,7 +116,7 @@ function SegmentedToggle<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex rounded-md border border-[var(--border)] p-0.5 text-sm">
+    <div className="flex rounded-md border border-[var(--border)] p-0.5 text-xs sm:inline-flex">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -124,7 +124,7 @@ function SegmentedToggle<T extends string>({
           disabled={opt.disabled}
           aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`min-h-10 flex-1 rounded px-3 py-1.5 text-center font-medium transition-colors sm:min-h-0 ${
+          className={`h-8 flex-1 rounded px-3 text-center font-medium transition-colors ${
             value === opt.value
               ? 'bg-[var(--teal-light)] text-[var(--teal)]'
               : 'text-[var(--muted)] hover:bg-[var(--paper)]'
@@ -1132,7 +1132,7 @@ export function NewVisitPage() {
             </button>
           </div>
           <div className="text-xs text-[var(--muted)] mt-0.5 leading-relaxed">
-            Patient ID <span className="font-num font-medium text-[var(--ink)]">{patient.mrno}</span>
+            Patient ID <span className="font-medium tabular-nums text-[var(--ink)]">{patient.mrno}</span>
             {patient.age != null && ` · ${patient.age}y`}
             {patient.sex && ` · ${patient.sex}`}
             {patient.primaryCondition && ` · ${patient.primaryCondition}`}
@@ -1160,7 +1160,7 @@ export function NewVisitPage() {
       {openPackages !== undefined && openPackages.length > 0 && (
         <div className="border-t border-[var(--border)] pt-2.5 text-xs">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-[var(--ink)] truncate">
+            <span className="text-sm font-medium text-[var(--ink)]">
               {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
             </span>
             {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
@@ -1170,7 +1170,7 @@ export function NewVisitPage() {
               <Pill tone="teal">+{openPackages.length - 1} more</Pill>
             )}
           </div>
-          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-[var(--muted)]">
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted)]">
             <span
               className="inline-flex items-center gap-1 align-middle"
               title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
@@ -1187,11 +1187,11 @@ export function NewVisitPage() {
                 );
               })}
             </span>
-            <span className="font-num">
+            <span>
               {openPackages[0].logged} of {openPackages[0].packageTotal} used
             </span>
             <span>·</span>
-            <span>started <span className="font-num">{formatDateDMY(openPackages[0].startedOn)}</span></span>
+            <span>started {formatDateDMY(openPackages[0].startedOn)}</span>
           </div>
         </div>
       )}
@@ -1222,13 +1222,13 @@ export function NewVisitPage() {
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[var(--muted)]">
-                      Last visit: <span className="font-num font-medium text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
+                      Last visit: <span className="text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
                     </span>
                     <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
                       <span title={badge.title}>{badge.label}</span>
                     </Pill>
                   </div>
-                  <div className="mt-1 font-medium text-[var(--ink)] truncate">
+                  <div className="mt-0.5 truncate text-[var(--ink)]">
                     {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                   </div>
                 </div>
@@ -1245,7 +1245,7 @@ export function NewVisitPage() {
         <div className="border-t border-[var(--border)] pt-2.5">
           <button
             type="button"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] py-1.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--surface)] hover:border-[var(--teal)]"
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--surface)]"
             onClick={() => {
               if (search.appointmentId) {
                 const appointmentId = search.appointmentId;
@@ -1472,7 +1472,7 @@ export function NewVisitPage() {
                         </div>
                       )}
                     </div>
-                    <span className="ml-2 shrink-0 font-mono text-xs text-[var(--muted)]">{p.mrno}</span>
+                    <span className="ml-2 shrink-0 text-xs tabular-nums text-[var(--muted)]">{p.mrno}</span>
                   </button>
                 );
               })}
@@ -1541,7 +1541,7 @@ export function NewVisitPage() {
             >
               <input
                 type="date"
-                className={`${inputCls} font-num`}
+                className={inputCls}
                 value={visitDate}
                 onChange={(e) => setVisitDate(e.target.value)}
               />
@@ -1560,7 +1560,7 @@ export function NewVisitPage() {
                   lastVisitTherapistId: lastVisit?.therapistId,
                   myTherapistId,
                 });
-                return reason ? <Pill tone="slate">{reason}</Pill> : undefined;
+                return reason ? <span className="text-xs font-normal text-[var(--muted)]">{reason}</span> : undefined;
               })()}
             />
           </div>
@@ -1586,7 +1586,7 @@ export function NewVisitPage() {
                 <div className="space-y-2">
                   {rankedTreatments.frequent.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[11px] font-medium text-[var(--muted)]">Frequently used</p>
+                      <p className="text-xs text-[var(--muted)]">Frequently used</p>
                       <MultiToggle
                         options={rankedTreatments.frequent.map((t) => ({ value: t.id, label: t.name }))}
                         value={treatmentIds}
@@ -1597,7 +1597,7 @@ export function NewVisitPage() {
                   {rankedTreatments.rest.length > 0 && (
                     <div className="space-y-1">
                       {rankedTreatments.frequent.length > 0 && (
-                        <p className="text-[11px] font-medium text-[var(--muted)]">All treatments</p>
+                        <p className="text-xs text-[var(--muted)]">All treatments</p>
                       )}
                       <MultiToggle
                         options={rankedTreatments.rest.map((t) => ({ value: t.id, label: t.name }))}
@@ -1606,7 +1606,7 @@ export function NewVisitPage() {
                       />
                     </div>
                   )}
-                  <p className="text-[11px] font-medium text-[var(--muted)]">Other treatments / notes</p>
+                  <p className="text-xs text-[var(--muted)]">Other treatments / notes</p>
                   <input
                     className={inputCls}
                     aria-label="Other treatments / notes"
@@ -1728,9 +1728,9 @@ export function NewVisitPage() {
       </div>
       {/* Phones save from the fixed bar below. Tablet and up: the same summary and buttons stick to the bottom of
           the form column, so Save and the total stay in reach however long the form gets. */}
-      <div className="sticky bottom-0 z-10 hidden items-center gap-3 border-t border-[var(--border)] bg-[var(--paper)] py-3 sm:flex">
+      <div className="sticky bottom-3 z-10 hidden items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 shadow-[var(--shadow-2)] sm:flex">
         <div className="min-w-0 flex-1">
-          <div className="font-num text-sm font-semibold text-[var(--ink)]">
+          <div className="text-base font-semibold tabular-nums text-[var(--ink)]">
             {servicesChosen === 0 ? 'No service yet' : formatINR(billPaise)}
           </div>
           {servicesChosen > 0 && (

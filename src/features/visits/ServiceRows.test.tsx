@@ -442,23 +442,21 @@ describe('sharing a service', () => {
       const onRows = vi.fn();
       render(<Harness initial={[row('r1', 'rehab')]} openPackages={[pkg]} onRows={onRows} />);
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveTextContent('Rahul still has session 5 of 10 on this package.');
-      expect(alert).toHaveTextContent('₹5,000');
+      expect(alert).toHaveTextContent('Rahul still has session 5 of 10 on this package. This starts a new one.');
       // The general "open package isn't used" notice is not shown twice.
       expect(screen.queryByText(/isn't used on this visit/)).toBeNull();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Use the remaining session (₹0)' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Use remaining session' }));
       const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
       expect(last[0].continuation?.packageGroupId).toBe('g1');
       expect(last[0].serviceCatalogId).toBeUndefined();
     });
 
-    it('"Yes, a new package" keeps the purchase and replaces the warning with a quiet note', () => {
+    it('"Keep new package" keeps the purchase and the warning goes away', () => {
       const onRows = vi.fn();
       render(<Harness initial={[row('r1', 'rehab')]} openPackages={[pkg]} onRows={onRows} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Yes, a new package' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keep new package' }));
       expect(screen.queryByRole('alert')).toBeNull();
-      expect(screen.getByText('New package, separate from the open one.')).toBeInTheDocument();
       expect(onRows).not.toHaveBeenCalled();
     });
 
@@ -488,8 +486,11 @@ describe('sharing a service', () => {
     const pct = screen.getByLabelText('Percent of this service');
     const remove = screen.getByRole('button', { name: 'Remove share' });
     // One flex line holds all three controls; the label and the result are separate full-width lines.
-    expect(select.parentElement).toBe(pct.parentElement?.parentElement);
-    expect(remove.parentElement).toBe(select.parentElement);
+    const line = select.parentElement?.parentElement;
+    expect(pct.parentElement?.parentElement).toBe(line);
+    expect(remove.parentElement).toBe(line);
+    // What shows is the plain name, not the native select's own text.
+    expect(select.parentElement).toHaveTextContent('Dr Sneha');
     expect(screen.getByText(/Their share of this service/)).toHaveTextContent('≈ ₹160');
   });
 
