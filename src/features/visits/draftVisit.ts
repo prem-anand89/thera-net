@@ -4,8 +4,11 @@ import type { UUID } from '@/domain/types';
 import type { Visit, VisitItem } from '@/domain/types';
 import { continuationLine, emptyDraftLine, hasService, type DraftLine, type OpenPackage } from './ServiceRows';
 
+/** The message an empty service row gets; the page checks for it to word its own summary. */
+export const CHOOSE_A_SERVICE = 'Choose a service.';
+
 export const PACKAGE_NOT_OPEN =
-  'That package is no longer open for this patient. Remove it or pick another service.';
+  'This package is no longer open for this patient. Remove it or choose another service.';
 
 /**
  * The rows as `NewVisitInput.lines`. Every package session is checked against the patient's CURRENT open
@@ -38,7 +41,7 @@ export function draftLinesToVisitLines(
       return;
     }
     if (!hasService(r)) {
-      errors.set(i, 'Pick a service.');
+      errors.set(i, CHOOSE_A_SERVICE);
       return;
     }
     lines.push({

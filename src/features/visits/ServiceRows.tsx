@@ -12,6 +12,8 @@ export interface OpenPackage {
   logged: number;
   packageTotal: number;
   startedOn: string;
+  /** The visit the package was bought on (its first session): where its money and paid status live. */
+  purchaseVisitId?: UUID;
   /** The share the package's most recent session that had one gave a colleague; the next session starts with it. */
   lastShare?: { therapistId: UUID; pct: number } | null;
 }
@@ -91,13 +93,13 @@ export function rowProblems(rows: DraftLine[], catalog: CatalogItem[]): Map<numb
     if (!hasService(r)) return;
     if (isPackageRow(r, catalog)) {
       if (seenPackage) {
-        out.set(i, `${rowName(r, catalog)}: only one package per visit.`);
+        out.set(i, `Only one package per visit — remove ${rowName(r, catalog)} or the other one.`);
         return;
       }
       seenPackage = true;
     }
     if (r.sessionShare && (!Number.isInteger(r.sessionShare.pct) || r.sessionShare.pct < 1 || r.sessionShare.pct > 99)) {
-      out.set(i, Number.isNaN(r.sessionShare.pct) ? 'Enter the % to share.' : 'A share must be a whole number from 1 to 99%.');
+      out.set(i, Number.isNaN(r.sessionShare.pct) ? 'Enter their share (1–99%).' : 'Their share must be a whole number from 1 to 99%.');
     }
   });
   return out;
@@ -392,7 +394,7 @@ export function ServiceRows({
             {named && row.continuation && (
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
                 <span>
-                  Session {row.continuation.logged + 1} of {row.continuation.packageTotal} · package (₹0)
+                  Package session {row.continuation.logged + 1} of {row.continuation.packageTotal} · ₹0
                 </span>
                 <button type="button" className={linkBtn} onClick={() => switchToOtherService(row.key)}>
                   Use a different service
@@ -409,10 +411,10 @@ export function ServiceRows({
                   {who} still has {sessionsLeft(openSame)} left on this package. This row starts a new one.
                 </span>
                 <button type="button" className={linkBtn} onClick={() => pick(row.key, `pkg:${openSame.packageGroupId}`)}>
-                  Use remaining session
+                  Use the remaining session
                 </button>
                 <button type="button" className={linkBtn} onClick={() => setNewPackageOk((prev) => new Set(prev).add(row.key))}>
-                  Keep new package
+                  Keep the new package
                 </button>
               </p>
             )}

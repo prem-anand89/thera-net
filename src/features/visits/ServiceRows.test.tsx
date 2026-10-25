@@ -80,7 +80,7 @@ describe('ServiceRows', () => {
     // the page adds the row; here we show it renders as the package row and removes with its x
     const seen: DraftLine[][] = [];
     render(<Harness initial={[pkgRow(), row('b', 'assess')]} openPackages={[pkg]} onRows={(r) => seen.push(r)} />);
-    expect(screen.getByText('Session 5 of 10 · package (₹0)')).toBeInTheDocument();
+    expect(screen.getByText('Package session 5 of 10 · ₹0')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Rehab package' }));
     expect(seen.at(-1)!.map((r) => r.key)).toEqual(['b']);
   });
@@ -159,8 +159,8 @@ describe('ServiceRows', () => {
 
   it('second package row shows an error naming the service', () => {
     render(<Harness initial={[pkgRow(), row('b', 'pkg2')]} openPackages={[pkg]} />);
-    expect(screen.getByText('Back package: only one package per visit.')).toBeInTheDocument();
-    expect(screen.queryByText('Rehab package: only one package per visit.')).toBeNull();
+    expect(screen.getByText('Only one package per visit — remove Back package or the other one.')).toBeInTheDocument();
+    expect(screen.queryByText('Only one package per visit — remove Rehab package or the other one.')).toBeNull();
   });
 
   it('shows a row error passed in by the page on that row', () => {
@@ -173,10 +173,10 @@ describe('ServiceRows', () => {
         therapists={therapists}
         primaryId="t1"
         showAssistant
-        errors={new Map([[1, 'Pick a service.']])}
+        errors={new Map([[1, 'Choose a service.']])}
       />
     );
-    expect(screen.getByText('Pick a service.')).toBeInTheDocument();
+    expect(screen.getByText('Choose a service.')).toBeInTheDocument();
   });
 
   it('escape cancels an opened change-service picker', () => {
@@ -389,7 +389,7 @@ describe('sharing a service', () => {
 
   it('asks for the % while it is empty', () => {
     const rows = [row('a', 'assess', { sessionShare: { therapistId: 't2', pct: NaN } })];
-    expect(rowProblems(rows, catalog).get(0)).toBe('Enter the % to share.');
+    expect(rowProblems(rows, catalog).get(0)).toBe('Enter their share (1–99%).');
   });
 
   it('flags a percentage outside 1 to 99 on any row', () => {
@@ -446,16 +446,16 @@ describe('sharing a service', () => {
       // The general "open package isn't used" notice is not shown twice.
       expect(screen.queryByText(/Open package:/)).toBeNull();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Use remaining session' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Use the remaining session' }));
       const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
       expect(last[0].continuation?.packageGroupId).toBe('g1');
       expect(last[0].serviceCatalogId).toBeUndefined();
     });
 
-    it('"Keep new package" keeps the purchase and the warning goes away', () => {
+    it('"Keep the new package" keeps the purchase and the warning goes away', () => {
       const onRows = vi.fn();
       render(<Harness initial={[row('r1', 'rehab')]} openPackages={[pkg]} onRows={onRows} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Keep new package' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keep the new package' }));
       expect(screen.queryByRole('alert')).toBeNull();
       expect(onRows).not.toHaveBeenCalled();
     });
@@ -469,9 +469,9 @@ describe('sharing a service', () => {
   it('a share just added shows no error until its % box is left, or Save reveals it', () => {
     const { unmount } = render(<Harness initial={[row('r1', 'assess')]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-    expect(screen.queryByText('Enter the % to share.')).toBeNull();
+    expect(screen.queryByText('Enter their share (1–99%).')).toBeNull();
     fireEvent.blur(screen.getByLabelText('Percent of this service'));
-    expect(screen.getByText('Enter the % to share.')).toBeInTheDocument();
+    expect(screen.getByText('Enter their share (1–99%).')).toBeInTheDocument();
     unmount();
 
     render(
@@ -487,7 +487,7 @@ describe('sharing a service', () => {
         revealProblems
       />
     );
-    expect(screen.getByText('Enter the % to share.')).toBeInTheDocument();
+    expect(screen.getByText('Enter their share (1–99%).')).toBeInTheDocument();
   });
 
   it('quick-add skips free services and a package that is already open', () => {

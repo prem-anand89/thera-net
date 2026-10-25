@@ -28,7 +28,7 @@ describe('draftLinesToVisitLines', () => {
   });
   it('flags an empty row', () => {
     const out = draftLinesToVisitLines([{ key: 'x', assistingTherapistId: null }], []);
-    expect('errors' in out && out.errors.get(0)).toBe('Pick a service.');
+    expect('errors' in out && out.errors.get(0)).toBe('Choose a service.');
   });
 });
 

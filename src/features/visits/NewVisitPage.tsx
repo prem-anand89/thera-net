@@ -81,7 +81,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, therapistReason, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, therapistReason, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
@@ -487,6 +487,7 @@ export function NewVisitPage() {
         logged: group.length,
         packageTotal: total,
         startedOn: sorted[0].visitDate,
+        purchaseVisitId: sorted[0].id,
         lastShare: lastPackageShare(group, sessionLines, (id) => activeIds.has(id)),
       });
     }
@@ -604,6 +605,10 @@ export function NewVisitPage() {
     if (!rows.length) return null;
     return [...rows].sort((a, b) => b.visitDate.localeCompare(a.visitDate))[0];
   }, [patientVisits]);
+  const lastActiveTherapistId = useMemo(
+    () => (lastVisit && therapists?.some((t) => t.id === lastVisit.therapistId) ? lastVisit.therapistId : undefined),
+    [lastVisit, therapists]
+  );
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const statusByInvoiceId = useMemo(
     () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
@@ -625,6 +630,37 @@ export function NewVisitPage() {
     () => (lastVisit?.invoiceId ? repos.invoices.get(lastVisit.invoiceId) : undefined),
     [lastVisit?.invoiceId]
   );
+  // The open package's own paid status, from the visit it was bought on (sessions after it are ₹0, so the
+  // last visit alone never says whether the package itself was paid for).
+  const packagePurchase = useMemo(
+    () => (patientVisits ?? []).find((v) => v.id === openPackages?.[0]?.purchaseVisitId),
+    [patientVisits, openPackages]
+  );
+  const packagePayments = useLiveQuery(
+    () => (packagePurchase ? repos.payments.listByVisit(packagePurchase.id) : undefined),
+    [packagePurchase?.id]
+  );
+  const packageInvoice = useLiveQuery(
+    () => (packagePurchase?.invoiceId ? repos.invoices.get(packagePurchase.invoiceId) : undefined),
+    [packagePurchase?.invoiceId]
+  );
+  const packageBadge = useMemo(() => {
+    if (!packagePurchase || packagePurchase.actualBillPaise <= 0 || packagePayments === undefined) return null;
+    const collected = packagePayments.reduce((sum, p) => sum + p.amountPaise, 0);
+    const state = computeVisitPaymentState(
+      packagePurchase.actualBillPaise,
+      packagePurchase.invoiceId,
+      collected,
+      packagePurchase.invoiceId ? statusByInvoiceId.get(packagePurchase.invoiceId) : undefined
+    );
+    return paymentBadge({
+      state,
+      billPaise: packagePurchase.actualBillPaise,
+      collectedPaise: collected,
+      visitDate: packagePurchase.visitDate,
+      issuedAt: packageInvoice?.issuedAt,
+    });
+  }, [packagePurchase, packagePayments, packageInvoice, statusByInvoiceId]);
   const catalogNameById = useMemo(
     () => new Map((catalog ?? []).map((c) => [c.id, c.name])),
     [catalog]
@@ -642,8 +678,10 @@ export function NewVisitPage() {
     // Returning patients default to whoever saw them last. First visits
     // leave the current pick alone — blanking it raced with the user's
     // (or myTherapistId's) selection once Dexie resolved an empty history.
-    if (lastVisit?.therapistId) setTherapistId(lastVisit.therapistId);
-  }, [patient, patientVisits, lastVisit?.therapistId, search.repeatVisitId, search.appointmentId, fromAppointment]);
+    // Only someone still active: a therapist who has left isn't in the list, so the field would look empty
+    // while the visit was credited to them.
+    if (lastActiveTherapistId) setTherapistId(lastActiveTherapistId);
+  }, [patient, patientVisits, lastActiveTherapistId, search.repeatVisitId, search.appointmentId, fromAppointment]);
 
   // Once per repeated visit: a later openPackages update must not re-insert a package row the user removed.
   const repeatPackageAppliedRef = useRef<string | null>(null);
@@ -854,26 +892,26 @@ export function NewVisitPage() {
 
   async function save() {
     setError(null);
-    if (!patient) return setError('Select or create a patient first');
-    if (!therapistId) return setError('Select a therapist');
+    if (!patient) return setError('Choose a patient first, or add a new one.');
+    if (!therapistId || !therapists?.some((t) => t.id === therapistId)) return setError('Choose who treated the patient.');
     const built = draftLinesToVisitLines(rows, openPackages ?? []);
     if ('errors' in built) {
       setRowErrors(built.errors);
-      const onlyEmpty = [...built.errors.values()].every((m) => m === 'Pick a service.');
+      const onlyEmpty = [...built.errors.values()].every((m) => m === CHOOSE_A_SERVICE);
       return setError(
         !onlyEmpty
-          ? 'Fix the service marked above.'
+          ? 'Check the service marked in red.'
           : rows.length === 1
-            ? 'Select a service'
-            : 'Pick a service for each row, or remove the empty one.'
+            ? 'Choose a service.'
+            : 'Choose a service for each row, or remove the empty one.'
       );
     }
     if (rowProblems(rows, catalogItems).size > 0) {
       setRevealRowProblems(true);
-      return setError('Fix the service marked above.');
+      return setError('Check the service marked in red.');
     }
     if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
-      return setError('Enter a reason for the bill adjustment');
+      return setError('Add a reason for the discount or extra.');
     }
     if (
       entitlements.enforcementEnabled &&
@@ -1165,16 +1203,16 @@ export function NewVisitPage() {
       {openPackages !== undefined && openPackages.length > 0 && (
         <div className="border-t border-[var(--border)] pt-2.5 text-xs">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-[var(--ink)]">
-              {openPackages[0].serviceName} ({openPackages[0].logged}/{openPackages[0].packageTotal})
+            <span className="text-[var(--muted)]">
+              {openPackages.length > 1 ? `Open packages (${openPackages.length})` : 'Open package'}
             </span>
-            {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
-              <Pill tone="amber">Renew soon</Pill>
-            )}
-            {openPackages.length > 1 && (
-              <Pill tone="teal">+{openPackages.length - 1} more</Pill>
+            {packageBadge && (
+              <Pill tone={PAYMENT_CHIP[packageBadge.kind].tone}>
+                <span title={`The package itself: ${packageBadge.title}`}>{packageBadge.label}</span>
+              </Pill>
             )}
           </div>
+          <div className="mt-0.5 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
           <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted)]">
             <span
               className="inline-flex items-center gap-1 align-middle"
@@ -1197,6 +1235,12 @@ export function NewVisitPage() {
             </span>
             <span>·</span>
             <span>started {formatDateDMY(openPackages[0].startedOn)}</span>
+            {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
+              <>
+                <span>·</span>
+                <span className="text-[var(--amber)]">Renew soon</span>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1230,7 +1274,7 @@ export function NewVisitPage() {
                       Last visit: <span className="text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
                     </span>
                     <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                      <span title={badge.title}>{badge.label}</span>
+                      <span title={badge.title}>{badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}</span>
                     </Pill>
                   </div>
                   <div className="mt-0.5 truncate text-[var(--ink)]">
@@ -1240,7 +1284,7 @@ export function NewVisitPage() {
               );
             })()
           ) : (
-            <span className="text-[var(--muted)]">First visit (no previous records)</span>
+            <span className="text-[var(--muted)]">First visit</span>
           )}
         </div>
       )}
@@ -1560,7 +1604,7 @@ export function NewVisitPage() {
                 // Say WHY this therapist is chosen (the field already shows who): a returning patient's last
                 // therapist is a default, not a decision, and attribution depends on it being right.
                 const reason = therapistReason({
-                  therapistId,
+                  therapistId: therapists?.some((t) => t.id === therapistId) ? therapistId : '',
                   appointmentTherapistId: fromAppointment?.therapistId,
                   lastVisitTherapistId: lastVisit?.therapistId,
                   myTherapistId,

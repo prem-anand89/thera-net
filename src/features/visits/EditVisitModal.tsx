@@ -369,7 +369,7 @@ export function EditVisitModal({
         return;
       }
       if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
-        throw new Error('Enter a reason for the bill adjustment');
+        throw new Error('Add a reason for the discount or extra.');
       }
       let outdated = false;
       const details = {
@@ -378,11 +378,11 @@ export function EditVisitModal({
         treatmentIds,
       };
       if (hasLines) {
-        if (rowProblems(rows, catalog).size > 0) throw new Error('Fix the service marked above.');
+        if (rowProblems(rows, catalog).size > 0) throw new Error('Check the service marked in red.');
         const built = draftLinesToVisitLines(rows, ownPackages);
         if ('errors' in built) {
           setRowErrors(built.errors);
-          throw new Error('Fix the service marked above.');
+          throw new Error('Check the service marked in red.');
         }
         const writeLines = async () => {
           const res = await visitService.updateLines(visitId, built.lines, {
