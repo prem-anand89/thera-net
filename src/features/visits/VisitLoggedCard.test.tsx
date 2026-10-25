@@ -54,7 +54,7 @@ describe('VisitLoggedCard', () => {
 
     expect(screen.getByRole('heading', { name: 'Visit logged' })).toBeInTheDocument();
     expect(screen.getByText('Eeshaan Sharma')).toBeInTheDocument();
-    expect(screen.getByText('MRN #1042')).toBeInTheDocument();
+    expect(screen.getByText('Patient ID 1042')).toBeInTheDocument();
     expect(screen.getByText('Physiotherapy Assessment')).toBeInTheDocument();
     expect(screen.getByText('25/10/26')).toBeInTheDocument();
     expect(screen.getByText('Dr. Anand')).toBeInTheDocument();
@@ -148,5 +148,43 @@ describe('VisitLoggedCard', () => {
     const doneBtn = screen.getByRole('button', { name: 'Done' });
     fireEvent.click(doneBtn);
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  describe('one solid button at a time', () => {
+    const solid = (el: HTMLElement) => el.className.includes('bg-[var(--teal)]');
+    const base = {
+      justSaved: {
+        visitId: 'v', patientId: 'p', patientName: 'Eeshaan Sharma', patientPhone: null, serviceLabel: 'Assessment',
+        isPackage: false, alreadyCollected: false, therapistId: 't', billPaise: 150000, visitDate: '2026-10-25', mrno: '1042',
+      },
+    };
+
+    it('payment owed: only Take payment is solid', () => {
+      renderCard({ ...base, paymentDue: 150000 });
+      expect(solid(screen.getByRole('button', { name: /Take payment/ }))).toBe(true);
+      expect(solid(screen.getByTestId('clinical-note-link'))).toBe(false);
+    });
+
+    it('nothing owed: the note is solid, Give bill is not', () => {
+      renderCard({ justSaved: { ...base.justSaved, alreadyCollected: true } });
+      expect(solid(screen.getByTestId('clinical-note-link'))).toBe(true);
+      expect(solid(screen.getByRole('button', { name: /Give bill/ }))).toBe(false);
+    });
+
+    it('no clinical notes: Give bill is the solid one', () => {
+      renderCard({ justSaved: { ...base.justSaved, alreadyCollected: true }, clinicalDocsEnabled: false });
+      expect(solid(screen.getByRole('button', { name: /Give bill/ }))).toBe(true);
+    });
+  });
+
+  it('does not say "Settled" for a visit billed elsewhere', () => {
+    renderCard({
+      justSaved: {
+        visitId: 'v', patientId: 'p', patientName: 'Eeshaan Sharma', patientPhone: null, serviceLabel: 'Assessment',
+        isPackage: false, alreadyCollected: false, therapistId: 't', billPaise: 150000, visitDate: '2026-10-25', mrno: '1042',
+      },
+    });
+    expect(screen.queryByText('Settled')).toBeNull();
+    expect(screen.getByText('Billing handled separately')).toBeInTheDocument();
   });
 });

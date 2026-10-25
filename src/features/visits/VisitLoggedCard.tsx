@@ -130,6 +130,11 @@ export function VisitLoggedCard({
   onDone,
 }: VisitLoggedCardProps) {
   const patientFirstName = justSaved.patientName.trim().split(/\s+/)[0] || 'patient';
+  // One solid button at a time: what is owed, else the note, else the bill. Everything else is outlined.
+  const primary: 'payment' | 'note' | 'bill' | null =
+    paymentDue > 0 ? 'payment' : clinicalDocsEnabled ? 'note' : canBill ? 'bill' : null;
+  const solid = 'bg-[var(--teal)] text-white hover:opacity-95';
+  const outline = 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]';
 
   return (
     <SectionCard title="Visit logged">
@@ -141,7 +146,7 @@ export function VisitLoggedCard({
               {justSaved.patientName}
             </h3>
             {justSaved.mrno && (
-              <p className="text-xs text-[var(--muted)]">MRN #{justSaved.mrno}</p>
+              <p className="text-xs text-[var(--muted)]">Patient ID {justSaved.mrno}</p>
             )}
           </div>
           {paymentDue > 0 ? (
@@ -157,7 +162,11 @@ export function VisitLoggedCard({
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
-              {justSaved.isPackage ? 'Package session · ₹0' : 'Settled'}
+              {justSaved.billPaise === 0
+                ? justSaved.isPackage
+                  ? 'Package session · ₹0'
+                  : 'No charge'
+                : 'Billing handled separately'}
             </span>
           )}
         </div>
@@ -211,7 +220,7 @@ export function VisitLoggedCard({
               to="/patients/$patientId/notes/new"
               params={{ patientId: justSaved.patientId }}
               search={{ visitId: justSaved.visitId }}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:opacity-95 transition-colors"
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${primary === 'note' ? solid : outline}`}
             >
               <NoteIcon />
               <span>Add clinical note</span>
@@ -221,7 +230,7 @@ export function VisitLoggedCard({
           {canBill && (
             <button
               type="button"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${primary === 'bill' ? solid : outline}`}
               onClick={onGiveBill}
             >
               <ReceiptIcon />

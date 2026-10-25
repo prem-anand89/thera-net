@@ -770,6 +770,26 @@ export function NewVisitPage() {
   const adjustmentPaise = billPaise - catalogPricePaise;
   const serviceLabel = rows.filter(hasService).map((r) => rowName(r, catalogItems)).join(' + ') || 'Visit';
 
+  /**
+   * Back to a blank visit after "Visit logged". Date, therapist and payment method stay (back-to-back entry);
+   * everything the last visit filled in goes. `touchedRef` is cleared so the unsaved-changes guard measures
+   * from this blank form, not from the one the page opened with (which made a fresh form look edited).
+   */
+  function startFreshVisitForm() {
+    setRows([emptyDraftLine()]);
+    setRowErrors(new Map());
+    setCondition('');
+    setNotes('');
+    setPendingNote('');
+    setTreatmentIds([]);
+    setPaymentChoice('paid');
+    setError(null);
+    setFeedbackRequested(false);
+    resetBillAdjustment();
+    touchedRef.current = false;
+    setJustSaved(null);
+  }
+
   function resetBillAdjustment() {
     setAdjustmentMode('none');
     setAdjustmentValueType('amount');
@@ -1001,12 +1021,9 @@ export function NewVisitPage() {
           onTakePayment={() => setTakingPayment(true)}
           onGiveBill={() => setInvoicing(true)}
           onNewVisitSamePatient={() => {
-            setRows([emptyDraftLine()]);
-            setCondition('');
-            setNotes('');
-            setPendingNote('');
-            resetBillAdjustment();
-            setJustSaved(null);
+            // Re-run the "rows for this patient" step, so an open package's next session is offered again.
+            rowsPatientRef.current = null;
+            startFreshVisitForm();
             void navigate({
               to: '/visits/new',
               search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
@@ -1014,12 +1031,7 @@ export function NewVisitPage() {
           }}
           onNewVisitNextPatient={() => {
             setPatient(null);
-            setRows([emptyDraftLine()]);
-            setCondition('');
-            setNotes('');
-            setPendingNote('');
-            resetBillAdjustment();
-            setJustSaved(null);
+            startFreshVisitForm();
             void navigate({
               to: '/visits/new',
               search: { ...(search.from ? { from: search.from } : {}) },
