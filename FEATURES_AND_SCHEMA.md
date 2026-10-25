@@ -114,13 +114,14 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     invoicing and never
     change the patient's bill. The package holder rule (`packageHolder` in `domain/visitLines.ts`) is shared by
     the editor and `setShares`.
-  - **Visit editor** (`EditVisitModal`): a visit with services shows the same `ServiceRows` plus Subtotal /
-    discount / Total (`updateLines`; the discount is kept per the `updateLines` rule; the therapist/date go
-    through `updateBilling` first so the new services are checked against the right therapist). If a save
-    leaves manual shares behind (`sharesOutdated`) the share editor opens. An INVOICED visit shows its services
-    and bill read-only ("This visit is on an invoice. Its services and bill can't be changed.") while notes and
-    the revenue share ("Does not change the patient's bill.") stay editable. A visit saved before services were
-    tracked keeps the single-bill editor.
+  - **Visit editor** (`EditVisitModal`): structured dialog for correcting visits.
+    - Header shows patient name and Patient ID. Accessible dialog behavior (focus trap, Escape, click-outside) with unsaved change confirmation before discarding.
+    - Errors render inside the dialog via `<ErrorNote>` with automatic scroll-to-view.
+    - For uninvoiced visits: sections for "When & Who" (date with cross-month shift warning and therapist with assistant reassignment alert), "Services & Bill" (reusing `ServiceRows`, payment status badge showing collected vs balance due, single Total box), and "Clinical Notes" (condition and treatments).
+    - For invoiced visits: layout inverts to place Clinical Notes first, followed by locked read-only services and bill with invoice badge (`Locked on Invoice #...`).
+    - Destructive action: quiet red "Delete this visit" text link at the bottom of the dialog body (gated by `perms.canDelete`), never beside Save in the footer.
+    - Footer displays bill amount, payment status, Cancel, and Save.
+    - Post-save screen integration: `VisitLoggedCard` includes a quiet `Edit` button in the receipt card header next to patient name to immediately correct the visit just logged.
   - **Who can modify a saved visit** (`features/visits/visitPermissions.ts`, mirrors RLS): admin, front desk, or
     the visit's primary therapist can edit it and its revenue share; delete stays admin or the primary and only
     before invoicing; an assisting therapist who is not the primary sees no edit controls. The share editor is

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
+import { useSession } from '@/app/useSession';
 import { formatINR } from '@/domain/money';
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import {
@@ -14,7 +16,9 @@ import {
 } from './ServiceRows';
 import { adjustmentSurvives, draftLinesToVisitLines } from './draftVisit';
 import { toFriendlyMessage } from '@/lib/errors';
-import { formatDateDM } from '@/domain/fiscalYear';
+import { formatDateDM, monthName } from '@/domain/fiscalYear';
+import { visitDateHint } from './visitDateHint';
+import { toLocalDateStr } from '@/domain/schedule';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import {
   clinicBillingConfig,
@@ -25,7 +29,11 @@ import {
   type VisitItem,
 } from '@/domain/types';
 import type { TreatmentUsageRow } from '@/services/dashboardService';
-import { Field, inputCls, btnPrimary, btnSecondary, MultiToggle } from '@/components/ui';
+import { Field, inputCls, btnPrimary, btnSecondary, MultiToggle, ErrorNote } from '@/components/ui';
+import { askConfirm } from '@/lib/notify';
+import { useDialogBehavior } from '@/components/dialogBehavior';
+import { visitPermissions } from './visitPermissions';
+import { confirmAndDeleteVisit } from './confirmDeleteVisit';
 import {
   BillAdjustmentFields,
   billAdjustmentFromFields,
@@ -98,6 +106,9 @@ export function EditVisitModal({
   setError: (e: string | null) => void;
 }) {
   const clinic = useClinic();
+  const permissions = usePermissions();
+  const { session } = useSession();
+
   const visit = useLiveQuery(() => repos.visits.get(visitId), [visitId]);
   const therapists = useLiveQuery(
     () => (visit ? repos.therapists.list(visit.clinicId) : undefined),
@@ -124,6 +135,7 @@ export function EditVisitModal({
     [visit?.clinicId]
   );
   const itemsRaw = useLiveQuery(() => repos.visitItems.listByVisitIds([visitId]), [visitId]);
+  const payments = useLiveQuery(() => repos.payments.listByVisit(visitId), [visitId]);
   const credits = useLiveQuery(() => repos.visitCredits.listByVisitIds([visitId]), [visitId]);
   const treatments = useLiveQuery(
     () => (visit ? repos.treatmentCatalog.list(visit.clinicId) : undefined),
@@ -165,9 +177,19 @@ export function EditVisitModal({
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [error, setErrorState] = useState<string | null>(null);
   const [sharesFor, setSharesFor] = useState<Visit | null>(null);
   // True when the share editor was opened by the save itself (shares fell behind), which ends the edit.
   const [sharesEndEdit, setSharesEndEdit] = useState(false);
+  const initialSigRef = useRef<string | null>(null);
+
+  const signature = (list: DraftLine[]) =>
+    list
+      .map(
+        (r) =>
+          `${r.key}|${r.continuation?.serviceCatalogId ?? r.serviceCatalogId}|${r.assistingTherapistId ?? ''}|${r.sessionShare ? `${r.sessionShare.therapistId}:${r.sessionShare.pct}` : ''}`
+      )
+      .join(',');
 
   useEffect(() => {
     if (!visit || loaded || itemsRaw === undefined || catalogAll === undefined) return;
@@ -176,14 +198,71 @@ export function EditVisitModal({
     setCondition(visit.condition ?? '');
     setTreatmentNotes(visit.treatmentNotes ?? '');
     setTreatmentIds(visit.treatmentIds ?? []);
-    setRows(rowsFromItems(visit, items, catalogAll));
+    const initialRows = rowsFromItems(visit, items, catalogAll);
+    setRows(initialRows);
     const inferred = inferBillAdjustment(visit.catalogPricePaise, visit.actualBillPaise);
     setAdjustmentMode(inferred.mode);
     setAdjustmentValueType(inferred.valueType);
     setAdjustmentValue(inferred.value > 0 ? String(inferred.value) : '');
     setAdjustmentReason(visit.adjustmentReason ?? '');
+    initialSigRef.current = [
+      visit.therapistId,
+      visit.visitDate,
+      (visit.condition ?? '').trim(),
+      (visit.treatmentNotes ?? '').trim(),
+      [...(visit.treatmentIds ?? [])].sort().join(','),
+      signature(initialRows),
+      inferred.mode,
+      inferred.valueType,
+      inferred.value > 0 ? String(inferred.value) : '',
+      (visit.adjustmentReason ?? '').trim(),
+    ].join('::');
     setLoaded(true);
   }, [visit, loaded, itemsRaw, catalogAll, items]);
+
+  const currentSig = useMemo(
+    () =>
+      [
+        therapistId,
+        visitDate,
+        condition.trim(),
+        treatmentNotes.trim(),
+        [...treatmentIds].sort().join(','),
+        signature(rows),
+        adjustmentMode,
+        adjustmentValueType,
+        adjustmentValue,
+        adjustmentReason.trim(),
+      ].join('::'),
+    [
+      therapistId,
+      visitDate,
+      condition,
+      treatmentNotes,
+      treatmentIds,
+      rows,
+      adjustmentMode,
+      adjustmentValueType,
+      adjustmentValue,
+      adjustmentReason,
+    ]
+  );
+  const isDirty = loaded && initialSigRef.current !== null && initialSigRef.current !== currentSig;
+
+  async function requestClose() {
+    if (isDirty) {
+      const discard = await askConfirm({
+        title: 'Discard unsaved changes?',
+        message: 'Your edits to this visit will be lost.',
+        confirmLabel: 'Discard',
+        destructive: true,
+      });
+      if (!discard) return;
+    }
+    onClose();
+  }
+
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, () => void requestClose(), () => !busy);
 
   if (!visit) return null;
 
@@ -196,6 +275,16 @@ export function EditVisitModal({
   const ownPackages: OpenPackage[] = items
     .filter((i) => i.isPackageLine && i.pricePaise === 0 && visit.packageGroupId && (visit.sessionIndex ?? 1) > 1)
     .map((i) => ownPackage(visit, i, catalogAll ?? []));
+
+  // Permissions & Delete
+  const myTherapistId = (therapistsAll ?? therapists ?? []).find((t) => t.userId === session?.user?.id)?.id;
+  const perms = visitPermissions({
+    isAdmin: permissions.isAdmin,
+    isFrontDesk: permissions.role === 'front_desk',
+    myTherapistId,
+    visitTherapistId: visit.therapistId,
+    invoiced: Boolean(visit.invoiceId),
+  });
 
   // A saved row keeps the price it was saved at; a new or changed row takes today's catalog price.
   const rowPrice = (r: DraftLine) => {
@@ -210,6 +299,23 @@ export function EditVisitModal({
     billAdjustmentFromFields(adjustmentMode, adjustmentValueType, adjustmentValue)
   );
   const adjustmentPaise = billPaise - subtotalPaise;
+
+  const paidPaise = (payments ?? []).reduce((sum, p) => sum + p.amountPaise, 0);
+  const paymentDelta = billPaise - paidPaise;
+
+  // Month shift check
+  const originalMonth = visit.visitDate ? visit.visitDate.slice(0, 7) : '';
+  const newMonth = visitDate ? visitDate.slice(0, 7) : '';
+  const monthShifted = Boolean(visitDate && originalMonth && originalMonth !== newMonth);
+  const newMonthNum = newMonth ? parseInt(newMonth.slice(5, 7), 10) : 0;
+  const dateHint = visitDate ? visitDateHint(visitDate, toLocalDateStr(new Date())) : null;
+
+  // Therapist reassignment side effect check
+  const therapistWasAssisting = Boolean(
+    therapistId &&
+    therapistId !== visit.therapistId &&
+    items.some((i) => i.assistingTherapistId === therapistId)
+  );
 
   function resetBillAdjustment() {
     setAdjustmentMode('none');
@@ -239,13 +345,6 @@ export function EditVisitModal({
     );
   }
 
-  const signature = (list: DraftLine[]) =>
-    list
-      .map(
-        (r) =>
-          `${r.key}|${r.continuation?.serviceCatalogId ?? r.serviceCatalogId}|${r.assistingTherapistId ?? ''}|${r.sessionShare ? `${r.sessionShare.therapistId}:${r.sessionShare.pct}` : ''}`
-      )
-      .join(',');
   const rowsChanged =
     signature(rows) !== signature(rowsFromItems(visit, items, catalogAll ?? [])) ||
     billPaise !== visit.actualBillPaise;
@@ -253,6 +352,7 @@ export function EditVisitModal({
   async function submit() {
     if (!visit) return;
     setBusy(true);
+    setErrorState(null);
     try {
       // Re-read the visit before the first write: it may have been invoiced or deleted since this
       // editor opened (another device, front desk), and a stale edit must not go half through.
@@ -291,11 +391,6 @@ export function EditVisitModal({
           });
           outdated = outdated || res.sharesOutdated;
         };
-        // updateLines can still be refused by the service (for example a package that has later
-        // sessions). With the therapist unchanged the services go first, so a refusal leaves nothing
-        // half saved. A therapist change must be written first (the new services are checked against
-        // the new therapist), so a refusal there leaves the therapist/date saved and the services as
-        // they were; the error is shown and saving again is safe.
         const therapistMoved = therapistId !== current.therapistId;
         if (rowsChanged && !therapistMoved) await writeLines();
         const moved = await visitService.updateBilling(visitId, { therapistId, visitDate, ...details });
@@ -321,23 +416,106 @@ export function EditVisitModal({
       }
       onClose();
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      const friendly = toFriendlyMessage(e);
+      setErrorState(friendly);
+      setError(friendly);
     } finally {
       setBusy(false);
     }
   }
 
+  async function handleDelete() {
+    if (!visit) return;
+    await confirmAndDeleteVisit(visit.id);
+    const fresh = await repos.visits.get(visit.id);
+    if (!fresh || fresh.deleted) {
+      onClose();
+    }
+  }
+
   const nameOf = (id: string) => (therapistsAll ?? therapists ?? []).find((t) => t.id === id)?.name ?? 'Therapist';
   const liveCredits = (credits ?? []).filter((c) => !c.deleted);
+  const lastEditorName = visit.updatedBy
+    ? (therapistsAll ?? therapists ?? []).find((t) => t.userId === visit.updatedBy)?.name
+    : undefined;
+
+  // Reusable Clinical Notes section
+  const clinicalNotesSection = (
+    <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+        Clinical Notes
+      </h3>
+
+      <Field label="Condition">
+        <input
+          className={inputCls}
+          value={condition}
+          onChange={(e) => setCondition(e.target.value)}
+          placeholder="e.g., Cervical pain"
+        />
+      </Field>
+
+      <Field label="Treatments">
+        <div className="space-y-2">
+          {rankedTreatments.frequent.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-[var(--muted)]">Frequently used</p>
+              <MultiToggle
+                options={rankedTreatments.frequent.map((t) => ({ value: t.id, label: t.name }))}
+                value={treatmentIds}
+                onChange={setTreatmentIds}
+              />
+            </div>
+          )}
+          {rankedTreatments.rest.length > 0 && (
+            <div className="space-y-1">
+              {rankedTreatments.frequent.length > 0 && (
+                <p className="text-[11px] font-medium text-[var(--muted)]">All treatments</p>
+              )}
+              <MultiToggle
+                options={rankedTreatments.rest.map((t) => ({ value: t.id, label: t.name }))}
+                value={treatmentIds}
+                onChange={setTreatmentIds}
+              />
+            </div>
+          )}
+          <textarea
+            className={`${inputCls} min-h-20 resize-none`}
+            value={treatmentNotes}
+            onChange={(e) => setTreatmentNotes(e.target.value)}
+            placeholder="Anything not in the list…"
+          />
+        </div>
+      </Field>
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="modal-shell max-w-md w-full max-h-[90vh] flex flex-col">
-        <div className="modal-header shrink-0">
-          <h2>Edit visit</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-0 sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !busy) void requestClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-visit-title"
+        className="modal-shell w-full sm:max-w-xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col rounded-none sm:rounded-2xl"
+      >
+        <div className="modal-header shrink-0 flex items-center justify-between border-b border-[var(--border)] px-4 py-3 sm:px-5">
+          <div>
+            <h2 id="edit-visit-title" className="text-base font-semibold text-[var(--ink)]">
+              Edit visit
+            </h2>
+            <p className="text-xs text-[var(--muted)]">
+              {patient?.name ?? '—'}{patient?.mrno ? ` · Patient ID ${patient.mrno}` : ''}
+            </p>
+          </div>
           <button
             className="modal-close"
-            onClick={onClose}
+            onClick={() => void requestClose()}
             aria-label="Close"
             type="button"
           >
@@ -345,66 +523,26 @@ export function EditVisitModal({
           </button>
         </div>
 
-        <div className="modal-body space-y-4 overflow-y-auto">
-          <div className="text-xs text-[var(--muted)]">
-            {patient?.name ?? '—'} · {catalogItem?.name ?? '—'} · {formatDateDM(visit.visitDate)}
-          </div>
-
+        <div className="modal-body space-y-4 overflow-y-auto p-4 sm:p-5 flex-1">
           {frozen && (
-            <div className="rounded-md border-l-4 border-[var(--teal)] bg-[var(--teal-light)] p-3 text-xs text-[var(--ink)]">
-              <p>This visit is on an invoice. Its services and bill can't be changed.</p>
-              <p className="mt-1">
-                Invoice #{invoice?.invoiceNo ?? '—'}. Condition and treatment notes can still be updated.
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3 text-xs text-[var(--ink)]">
+              <p className="font-semibold text-[var(--teal)]">Locked on Invoice #{invoice?.invoiceNo ?? '—'}</p>
+              <p className="mt-0.5 text-[var(--muted)]">
+                Services and billing are locked. Condition and treatment notes can still be updated.
               </p>
             </div>
           )}
 
-          <Field label="Condition">
-            <input
-              className={inputCls}
-              value={condition}
-              onChange={(e) => setCondition(e.target.value)}
-              placeholder="e.g., Cervical pain"
-            />
-          </Field>
+          {/* When invoiced: Clinical notes come FIRST */}
+          {frozen && clinicalNotesSection}
 
-          <Field label="Treatments">
-            <div className="space-y-2">
-              {rankedTreatments.frequent.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-[var(--muted)]">Frequently used</p>
-                  <MultiToggle
-                    options={rankedTreatments.frequent.map((t) => ({ value: t.id, label: t.name }))}
-                    value={treatmentIds}
-                    onChange={setTreatmentIds}
-                  />
-                </div>
-              )}
-              {rankedTreatments.rest.length > 0 && (
-                <div className="space-y-1">
-                  {rankedTreatments.frequent.length > 0 && (
-                    <p className="text-[11px] font-medium text-[var(--muted)]">All treatments</p>
-                  )}
-                  <MultiToggle
-                    options={rankedTreatments.rest.map((t) => ({ value: t.id, label: t.name }))}
-                    value={treatmentIds}
-                    onChange={setTreatmentIds}
-                  />
-                </div>
-              )}
-              <textarea
-                className={`${inputCls} min-h-20 resize-none`}
-                value={treatmentNotes}
-                onChange={(e) => setTreatmentNotes(e.target.value)}
-                placeholder="Anything not in the list…"
-              />
-            </div>
-          </Field>
-
+          {/* When invoiced: Services & Bill are rendered read-only */}
           {hasLines && frozen && (
-            <div className="space-y-1" aria-label="Services">
-              <p className="text-xs font-medium text-[var(--muted)]">Services</p>
-              <ul className="space-y-1 text-sm text-[var(--ink)]">
+            <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4" aria-label="Services">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                Services & Bill (Locked)
+              </h3>
+              <ul className="space-y-1.5 text-sm text-[var(--ink)]">
                 {items.map((i) => (
                   <li key={i.id} className="flex justify-between gap-2">
                     <span>
@@ -413,74 +551,129 @@ export function EditVisitModal({
                         <span className="text-xs text-[var(--muted)]"> · {nameOf(i.assistingTherapistId)} assisting</span>
                       )}
                     </span>
-                    <span className="font-num">{formatINR(i.pricePaise)}</span>
+                    <span className="font-num font-medium">{formatINR(i.pricePaise)}</span>
                   </li>
                 ))}
               </ul>
-              <p className="flex justify-between text-sm font-medium text-[var(--ink)]">
-                <span>Bill</span>
+              <div className="border-t border-[var(--border)] pt-2 flex justify-between text-sm font-semibold text-[var(--ink)]">
+                <span>Total Billed</span>
                 <span className="font-num">{formatINR(visit.actualBillPaise)}</span>
-              </p>
+              </div>
             </div>
           )}
 
+          {/* When uninvoiced: When & Who, Services & Bill, then Clinical Notes */}
           {!frozen && (
             <>
-              {hasLines && (
-                <ServiceRows
-                  rows={rows}
-                  onChange={changeRows}
-                  catalog={catalog}
-                  openPackages={ownPackages}
-                  therapists={therapists ?? []}
-                  primaryId={therapistId || visit.therapistId}
-                  showAssistant={showAssistant}
-                  errors={rowErrors}
-                  patientName={patient?.name}
+              {/* When & Who */}
+              <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  When & Who
+                </h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <Field label="Visit date">
+                      <input
+                        type="date"
+                        className={inputCls}
+                        value={visitDate}
+                        onChange={(e) => setVisitDate(e.target.value)}
+                      />
+                    </Field>
+                    {monthShifted ? (
+                      <p className="mt-1 text-xs text-[var(--rust)]">
+                        This moves the visit into {monthName(newMonthNum)}'s report.
+                      </p>
+                    ) : dateHint ? (
+                      <p className={dateHint.tone === 'warn' ? 'mt-1 text-xs text-[var(--rust)]' : 'mt-1 text-xs text-[var(--muted)]'}>
+                        {dateHint.text}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <Field label="Therapist">
+                      <select
+                        className={inputCls}
+                        value={therapistId}
+                        onChange={(e) => changeTherapist(e.target.value)}
+                      >
+                        <option value="">Select a therapist</option>
+                        {(therapists ?? []).map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {therapistWasAssisting && (
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {nameOf(therapistId)} was assisting; that service will go back to the visit therapist.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Services & Billing */}
+              <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  Services & Bill
+                </h3>
+
+                {hasLines && (
+                  <ServiceRows
+                    rows={rows}
+                    onChange={changeRows}
+                    catalog={catalog}
+                    openPackages={ownPackages}
+                    therapists={therapists ?? []}
+                    primaryId={therapistId || visit.therapistId}
+                    showAssistant={showAssistant}
+                    errors={rowErrors}
+                    patientName={patient?.name}
+                  />
+                )}
+
+                {/* Payment status badge / line */}
+                <div className="rounded-lg bg-[var(--paper)] px-3 py-2 text-xs text-[var(--ink)] flex items-center justify-between">
+                  <span className="font-medium text-[var(--muted)]">Payment status</span>
+                  {paidPaise > 0 ? (
+                    paymentDelta === 0 ? (
+                      <span className="font-medium text-[var(--teal)]">Paid {formatINR(paidPaise)} · Settled</span>
+                    ) : paymentDelta > 0 ? (
+                      <span className="font-medium text-[var(--rust)]">Paid {formatINR(paidPaise)} · {formatINR(paymentDelta)} more to collect</span>
+                    ) : (
+                      <span className="font-medium text-[var(--teal)]">Paid {formatINR(paidPaise)} · {formatINR(Math.abs(paymentDelta))} overpaid</span>
+                    )
+                  ) : billPaise === 0 ? (
+                    <span className="text-[var(--muted)]">Package session · ₹0</span>
+                  ) : (
+                    <span className="font-medium text-[var(--rust)]">Payment due · {formatINR(billPaise)}</span>
+                  )}
+                </div>
+
+                <BillAdjustmentFields
+                  catalogPricePaise={subtotalPaise}
+                  catalogLabel={
+                    hasLines ? 'Subtotal' : catalogItem ? `Catalog — ${catalogItem.name}` : 'Catalog price'
+                  }
+                  totalLabel={hasLines ? 'Total' : undefined}
+                  disabled={hasLines && subtotalPaise === 0}
+                  mode={adjustmentMode}
+                  valueType={adjustmentValueType}
+                  value={adjustmentValue}
+                  reason={adjustmentReason}
+                  onModeChange={setAdjustmentMode}
+                  onValueTypeChange={setAdjustmentValueType}
+                  onValueChange={setAdjustmentValue}
+                  onReasonChange={setAdjustmentReason}
+                  continuationSession={subtotalPaise === 0}
                 />
-              )}
+              </div>
 
-              <BillAdjustmentFields
-                catalogPricePaise={subtotalPaise}
-                catalogLabel={
-                  hasLines ? 'Subtotal' : catalogItem ? `Catalog — ${catalogItem.name}` : 'Catalog price'
-                }
-                totalLabel={hasLines ? 'Total' : undefined}
-                disabled={hasLines && subtotalPaise === 0}
-                mode={adjustmentMode}
-                valueType={adjustmentValueType}
-                value={adjustmentValue}
-                reason={adjustmentReason}
-                onModeChange={setAdjustmentMode}
-                onValueTypeChange={setAdjustmentValueType}
-                onValueChange={setAdjustmentValue}
-                onReasonChange={setAdjustmentReason}
-                continuationSession={subtotalPaise === 0}
-              />
-
-              <Field label="Therapist">
-                <select
-                  className={inputCls}
-                  value={therapistId}
-                  onChange={(e) => changeTherapist(e.target.value)}
-                >
-                  <option value="">Select a therapist</option>
-                  {(therapists ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Visit date">
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={visitDate}
-                  onChange={(e) => setVisitDate(e.target.value)}
-                />
-              </Field>
+              {/* Clinical Notes */}
+              {clinicalNotesSection}
             </>
           )}
 
@@ -506,25 +699,63 @@ export function EditVisitModal({
               {frozen && <p>Does not change the patient's bill.</p>}
             </div>
           )}
+
+          {/* Last edited attribution */}
+          {visit.updatedAt && (
+            <p className="text-xs text-[var(--muted)]">
+              Last edited{lastEditorName ? ` by ${lastEditorName}` : ''}, {formatDateDM(visit.updatedAt)}
+            </p>
+          )}
+
+          {/* In-dialog error note */}
+          {error && (
+            <div className="pt-1">
+              <ErrorNote message={error} />
+            </div>
+          )}
+
+          {/* Quiet delete visit link (only if user has delete permissions) */}
+          {perms.canDelete && (
+            <div className="pt-3 border-t border-[var(--border)] text-center">
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--rust)] hover:underline"
+                onClick={() => void handleDelete()}
+                disabled={busy}
+              >
+                Delete this visit
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="modal-actions shrink-0">
-          <button
-            type="button"
-            className={btnSecondary}
-            onClick={onClose}
-            disabled={busy}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={submit}
-            disabled={busy || (!frozen && (!therapistId || !visitDate))}
-          >
-            {busy ? 'Saving…' : 'Save'}
-          </button>
+        {/* Sticky footer with bill/payment summary and actions */}
+        <div className="modal-actions shrink-0 flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 sm:px-5 bg-[var(--surface)]">
+          <div className="text-xs">
+            <span className="font-semibold text-sm text-[var(--ink)]">{formatINR(billPaise)}</span>
+            <span className="text-[var(--muted)] ml-1.5">
+              {paidPaise > 0 ? `· Paid ${formatINR(paidPaise)}` : '· Unpaid'}
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => void requestClose()}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={btnPrimary}
+              onClick={submit}
+              disabled={busy || (!frozen && (!therapistId || !visitDate))}
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
         </div>
       </div>
 

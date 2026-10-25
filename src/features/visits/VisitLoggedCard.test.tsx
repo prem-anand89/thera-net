@@ -187,4 +187,14 @@ describe('VisitLoggedCard', () => {
     expect(screen.queryByText('Settled')).toBeNull();
     expect(screen.getByText('Billing handled separately')).toBeInTheDocument();
   });
+
+  it('calls onEdit when the Edit button is clicked', () => {
+    const onEdit = vi.fn();
+    renderCard({ onEdit });
+    const editBtn = screen.getByRole('button', { name: 'Edit visit' });
+    expect(editBtn).toBeInTheDocument();
+    fireEvent.click(editBtn);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
 });
+
