@@ -35,8 +35,11 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Patient search & lookup**: Instant search by MRNO, name or phone number. Result rows show the patient's name, MRNO, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
     presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
-    the top; a row shows the service, its catalog price and a "Assistant" action (active therapists
-    minus the visit's therapist), which becomes the chip "Dr X · assisting ✕". "+ Add another service" adds a
+    the top; a row shows the service, its catalog price and two outlined pills (clinics with several therapists):
+    **"Done by: Dr X ▾"** (who did the service and gets its money — defaults to the visit's therapist; picking
+    another sets `assistingTherapistId`) and **"Share"** (a colleague who helped gets a % of this service — on any
+    service, paid or package; the open row reads "Shared with [Dr Y] [30] % ≈ ₹600 ✕", the ₹ being a preview of the
+    row price; "Same as last session" when a package session copied it). "+ Add another service" adds a
     row; a single row has no ✕, with two or more every row has one and removing the first promotes the next.
     Errors name the service ("Dry needling: only one package per visit.") and show on that row.
   - **Packages are chosen in the service picker** (there is no New/Continuation toggle): open packages
@@ -56,6 +59,10 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     visit for another patient ("That package belongs to another patient."). "Repeat last visit" applies its
     package row once, and pre-fills the discount only when the original visit had a single service. Esc closes
     an opened change-service / assistant picker.
+  - **Date hint, notes label, single total.** Under the date: "Yesterday", "3 days ago", or a red "In 2 days — check
+    the date" (`visitDateHint`). The free-text box under Treatments is labelled "Other treatments / notes".
+    While no discount/extra is set the form shows only the Total box (the Subtotal box appears once it differs; the
+    Edit visit dialog keeps its price box).
   - **Bill.** Subtotal = the rows' catalog prices (₹0 for a continuation). The discount / extra control
     (`BillAdjustmentFields`, ₹ or %, reason required whenever the bill differs from the subtotal) starts collapsed
     behind a quiet "+ Discount / Extra" button when no adjustment exists, and starts expanded whenever an adjustment
@@ -1811,10 +1818,12 @@ assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — nul
                            primary delivered it; set = assistant tagged on this service
 duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
 is_package_line           boolean NOT NULL (default false)
-session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — package line only: a colleague who
-                           helped with this session (never the runner = assisting_therapist_id ?? visit therapist)
-session_share_pct         smallint (NULLABLE, 1–99) — the helper's % of the session's package share; the runner
-                           keeps the rest. Both set or both null. Migration 20261026100000
+session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — "Share": a colleague who helped
+                           with this service (never the one who did it = assisting_therapist_id ?? visit therapist)
+session_share_pct         smallint (NULLABLE, 1–99) — their % of this service; whoever did it keeps the rest. Both
+                           set or both null. On a PACKAGE line the money moves through package attribution (payBase);
+                           on any other line through the visit's revenue shares (autoCredits). Migrations
+                           20261026100000 (package lines), 20261026110000 (any service). Names kept for sync
 deleted                   boolean NOT NULL (default false)
 INDEXES: visit_id; (clinic_id, updated_at, id); UNIQUE (visit_id) WHERE is_package_line AND NOT deleted
 
@@ -3759,10 +3768,12 @@ assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — nul
                            primary delivered it; set = assistant tagged on this service
 duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
 is_package_line           boolean NOT NULL (default false)
-session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — package line only: a colleague who
-                           helped with this session (never the runner = assisting_therapist_id ?? visit therapist)
-session_share_pct         smallint (NULLABLE, 1–99) — the helper's % of the session's package share; the runner
-                           keeps the rest. Both set or both null. Migration 20261026100000
+session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — "Share": a colleague who helped
+                           with this service (never the one who did it = assisting_therapist_id ?? visit therapist)
+session_share_pct         smallint (NULLABLE, 1–99) — their % of this service; whoever did it keeps the rest. Both
+                           set or both null. On a PACKAGE line the money moves through package attribution (payBase);
+                           on any other line through the visit's revenue shares (autoCredits). Migrations
+                           20261026100000 (package lines), 20261026110000 (any service). Names kept for sync
 deleted                   boolean NOT NULL (default false)
 INDEXES: visit_id; (clinic_id, updated_at, id); UNIQUE (visit_id) WHERE is_package_line AND NOT deleted
 
@@ -5244,14 +5255,23 @@ the same loader. Rules:
 - A package session moves `perSessionShare` of clinic share and post-tax
   (above), and **no gross** (so `Shared` is exactly the revenue-share /
   legacy-split movement).
-- **A helper's part of a session.** A package line may carry `session_share_therapist_id` + `session_share_pct`
-  (New Visit / Edit visit: "Share session" pill on a package row, with the clinic's therapist split on). The
+- **A share on a paid service.** Any non-package line may carry `session_share_therapist_id` + `session_share_pct`
+  ("Share" pill on a service row). `autoCredits` gives that colleague `roundToRupeeHalfUp(line net × pct / 100)`
+  and the line's deliverer the rest, so the shares still total the bill (₹2,000 done by Prem shared with BM at 30% →
+  Prem ₹1,400, BM ₹600; with a ₹200 discount the % applies to the ₹1,800 net → ₹1,260 / ₹540). It flows through the
+  visit's credit rows and `line_share` movements like any other share; `autoCredits` ignores the share on a PACKAGE
+  line (below) so nothing counts twice, and ignores it when the clinic's split is off. A visit whose shares were
+  edited manually keeps them (Edit split wins). Exact ₹ amounts: Edit split after saving.
+- **A colleague's part of a package session.** A package line may carry the same two columns
+  (New Visit / Edit visit: "Share" pill on a package row, with the clinic's therapist split on). The
   session's per-session share then splits: the helper gets `roundToRupeeHalfUp(share × pct / 100)` of the clinic
   share and of post-tax, the runner (the line's deliverer) keeps the rest, both paid by the biller as separate
   `package_attribution` movements (the helper's carries `packageRole: 'helper'`, both carry `sessionSharePct`);
   a recipient who is the biller moves nothing. It works on any session including the billing visit's own, is
   ignored when the split is off, and a line without the columns behaves exactly as before. The audit's Basis reads
-  "Session 2 of 3 · Dr B helped (40%) · from Dr A's ₹3,000 package billed …" / "run by Dr C (keeps 60%)".
+  "Session 2 of 3 · Dr B helped (40%) · from Dr A's ₹3,000 package billed …" / "run by Dr C (keeps 60%)". The next
+  session of the same package starts with the last session's share (`lastPackageShare`, if that colleague is still
+  active), editable and marked "Same as last session".
 `reportService` (Shared / Net / `netClinicSharePaise`) and the attribution
 audit both read from it; future payroll will too. **Never compute
 therapist attribution anywhere else** — add an input to `PayBaseInput`
