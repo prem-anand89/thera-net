@@ -83,7 +83,7 @@ import {
 } from './ServiceRows';
 import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
-import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
+import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
 import { visitDateHint } from './visitDateHint';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
@@ -130,8 +130,9 @@ function SegmentedToggle<T extends string>({
           key={opt.value}
           type="button"
           disabled={opt.disabled}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`flex-1 rounded px-3 py-1.5 text-center font-medium transition-colors ${
+          className={`min-h-10 flex-1 rounded px-3 py-1.5 text-center font-medium transition-colors sm:min-h-0 ${
             value === opt.value
               ? 'bg-[var(--teal-light)] text-[var(--teal)]'
               : 'text-[var(--muted)] hover:bg-[var(--paper)]'
@@ -1369,10 +1370,20 @@ export function NewVisitPage() {
         // "who's next" case without typing anything.
         <div className="space-y-3">
           <input
+            type="search"
+            enterKeyHint="search"
+            aria-label="Find patient"
             className={inputCls}
             placeholder="Search ID, name or phone…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter takes the first match, so a typed ID or phone needs no extra tap.
+              if (e.key === 'Enter' && matches?.[0]) {
+                e.preventDefault();
+                selectPatientFromSearch(matches[0]);
+              }
+            }}
             autoFocus
           />
           {query.trim() ? (
@@ -1413,7 +1424,7 @@ export function NewVisitPage() {
                     <button
                       type="button"
                       key={p.patientId}
-                      className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                      className="min-h-9 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
                       onClick={() =>
                         void repos.patients
                           .get(p.patientId)
@@ -1436,6 +1447,7 @@ export function NewVisitPage() {
   );
 
   const dateHint = visitDateHint(visitDate, today);
+  const servicesChosen = rows.filter(hasService).length;
 
   const visitPanel = (
     <div className="space-y-4">
@@ -1631,13 +1643,22 @@ export function NewVisitPage() {
       <div ref={errorRef}>
         <ErrorNote message={error} />
       </div>
-      <div className="flex items-center gap-2">
-        {/* Phones save and cancel from the fixed bar below; tablet and up keep them here, under Payment. */}
-        <button type="button" className={`${btnPrimary} hidden sm:inline-flex`} disabled={busy} onClick={() => void save()}>
-          {busy ? 'Saving…' : 'Save visit'}
-        </button>
-        <button type="button" className={`${btnSecondary} hidden sm:inline-flex`} disabled={busy} onClick={requestExit}>
+      {/* Phones save from the fixed bar below. Tablet and up: the same summary and buttons stick to the bottom of
+          the form column, so Save and the total stay in reach however long the form gets. */}
+      <div className="sticky bottom-0 z-10 hidden items-center gap-3 border-t border-[var(--border)] bg-[var(--paper)] py-3 sm:flex">
+        <div className="min-w-0 flex-1">
+          <div className="font-num text-sm font-semibold text-[var(--ink)]">
+            {servicesChosen === 0 ? 'No service yet' : formatINR(billPaise)}
+          </div>
+          {servicesChosen > 0 && (
+            <div className="truncate text-xs text-[var(--muted)]">{saveSummary(servicesChosen, savePayment)}</div>
+          )}
+        </div>
+        <button type="button" className={btnSecondary} disabled={busy} onClick={requestExit}>
           Cancel
+        </button>
+        <button type="button" className={btnPrimary} disabled={busy} onClick={() => void save()}>
+          {busy ? 'Saving…' : 'Save visit'}
         </button>
       </div>
     </div>
@@ -1674,13 +1695,19 @@ export function NewVisitPage() {
           page's own structure doesn't, so picking a patient doesn't cause a
           jarring column-count/width jump. Collapses to stacked below tab:. */}
       <div className="tab:flex tab:items-start tab:gap-4">
-        <div className="tab:w-80 tab:shrink-0">{patientPanel}</div>
+        <div
+          className={`tab:w-80 tab:shrink-0 ${
+            patient ? 'tab:sticky tab:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
+          }`}
+        >
+          {patientPanel}
+        </div>
         <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
       </div>
 
       <VisitSaveBar
         totalPaise={billPaise}
-        serviceCount={rows.filter(hasService).length}
+        serviceCount={servicesChosen}
         payment={savePayment}
         busy={busy}
         onSave={() => void save()}

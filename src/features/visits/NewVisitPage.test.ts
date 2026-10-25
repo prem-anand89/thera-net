@@ -131,3 +131,13 @@ describe('formatPatientSearchResultSubtitle', () => {
   });
 });
 
+
+describe('saveSummary (both save bars)', () => {
+  it('names the services and the payment choice', async () => {
+    const { saveSummary } = await import('./VisitSaveBar');
+    expect(saveSummary(0, { kind: 'now', methodLabel: 'UPI' })).toBe('');
+    expect(saveSummary(1, { kind: 'now', methodLabel: 'UPI' })).toBe('1 service · UPI, collected now');
+    expect(saveSummary(2, { kind: 'later' })).toBe('2 services · to collect later');
+    expect(saveSummary(2, { kind: 'none' })).toBe('2 services');
+  });
+});

@@ -359,7 +359,7 @@ export function ServiceRows({
                     <span>Done by:</span>
                     <select
                       aria-label="Done by"
-                      className="max-w-[10rem] cursor-pointer appearance-none truncate bg-transparent pr-3 text-xs font-medium text-inherit focus:outline-none"
+                      className="max-w-[10rem] cursor-pointer appearance-none truncate bg-transparent pr-3 text-base font-medium text-inherit focus:outline-none sm:text-xs"
                       value={row.assistingTherapistId ?? primaryId}
                       onChange={(e) => update(row.key, { assistingTherapistId: e.target.value === primaryId ? null : e.target.value })}
                     >
@@ -387,7 +387,11 @@ export function ServiceRows({
         );
       })}
 
-      <button type="button" className={linkBtn} onClick={addRow}>
+      <button
+        type="button"
+        className="flex min-h-11 w-full items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-sm font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)]"
+        onClick={addRow}
+      >
         + Add another service
       </button>
 
@@ -469,7 +473,7 @@ function RowShare({
       <span>Shared with</span>
       <select
         aria-label="Shared with"
-        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)]"
+        className="min-h-9 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-base text-[var(--ink)] sm:min-h-0 sm:text-xs"
         value={share.therapistId}
         onChange={(e) => onChange({ ...share, therapistId: e.target.value })}
       >
@@ -486,7 +490,7 @@ function RowShare({
           max={99}
           inputMode="numeric"
           aria-label="Percent of this service"
-          className="w-14 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-xs text-[var(--ink)]"
+          className="min-h-9 w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-base text-[var(--ink)] sm:min-h-0 sm:w-14 sm:text-xs"
           placeholder="%"
           autoFocus={!Number.isFinite(share.pct)}
           value={Number.isFinite(share.pct) ? share.pct : ''}
@@ -499,7 +503,7 @@ function RowShare({
       <button
         type="button"
         aria-label="Remove share"
-        className="rounded p-0.5 hover:bg-[var(--paper)]"
+        className="flex h-9 w-9 items-center justify-center rounded hover:bg-[var(--paper)] sm:h-6 sm:w-6"
         onClick={() => onChange(null)}
       >
         <IconClose className="h-3 w-3" />
@@ -510,14 +514,14 @@ function RowShare({
 
 /** Small outlined action pill under a service (Assistant, Share session). */
 const pillBtn =
-  'inline-flex min-h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--teal)]';
+  'inline-flex min-h-10 sm:min-h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--teal)]';
 
 function RemoveButton({ name, onClick }: { name: string; onClick: () => void }) {
   return (
     <button
       type="button"
       aria-label={`Remove ${name}`}
-      className="shrink-0 rounded p-1 text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--rust)]"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--rust)] sm:h-7 sm:w-7"
       onClick={onClick}
     >
       <IconClose className="h-4 w-4" />

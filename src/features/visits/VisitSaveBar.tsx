@@ -6,10 +6,19 @@ export type SavePayment =
   | { kind: 'later' }
   | { kind: 'none' };
 
+/** "2 services · UPI, collected now" — the line under the total in both save bars. */
+export function saveSummary(serviceCount: number, payment: SavePayment): string {
+  if (serviceCount === 0) return '';
+  const details = [`${serviceCount} ${serviceCount === 1 ? 'service' : 'services'}`];
+  if (payment.kind === 'now') details.push(`${payment.methodLabel}, collected now`);
+  if (payment.kind === 'later') details.push('to collect later');
+  return details.join(' · ');
+}
+
 /**
  * Phone-only save bar, fixed flush to the bottom edge. It spells out the payment choice so
  * a Save that floats away from the Payment card can't record a payment nobody chose to collect. Tapping
- * the summary jumps to the Payment card. Hidden from `sm:` up, where Save sits under the Payment card.
+ * the summary jumps to the Payment card. Hidden from `sm:` up, where the same summary and buttons stick to the bottom of the form column.
  */
 export function VisitSaveBar({
   totalPaise,
@@ -28,13 +37,7 @@ export function VisitSaveBar({
   onCancel: () => void;
   onSummaryClick: () => void;
 }) {
-  const details: string[] =
-    serviceCount > 0
-      ? [`${serviceCount} ${serviceCount === 1 ? 'service' : 'services'}`]
-      : [];
-  if (serviceCount > 0 && payment.kind === 'now') details.push(`${payment.methodLabel}, collected now`);
-  if (serviceCount > 0 && payment.kind === 'later') details.push('to collect later');
-  const detailText = details.join(' · ');
+  const detailText = saveSummary(serviceCount, payment);
 
   return (
     <div
