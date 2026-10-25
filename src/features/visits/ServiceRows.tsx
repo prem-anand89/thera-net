@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatINR, roundToRupeeHalfUp } from '@/domain/money';
 import { effectivePricePerSession, type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/domain/types';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { therapistColor } from '@/components/schedule/scheduleColors';
+import { PickerMenu } from './PickerMenu';
 import { IconClose, IconUserPlus } from '@/components/StatIcons';
 
 /** A package the patient has started and not finished — what a continuation row draws on. */
@@ -422,34 +424,22 @@ export function ServiceRows({
             {named && showAssistant && (
               <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2.5">
                 {doers.length > 1 && (
-                  // A native select dressed as the pill: one tap, same look open or closed.
-                  <label
-                    className={`${pillBtn} relative cursor-pointer ${
-                      row.assistingTherapistId ? '!border-[var(--teal)] !text-[var(--teal)]' : ''
-                    }`}
-                    title="Who did this service. They get its money."
-                  >
-                    <IconUserPlus className="h-3.5 w-3.5" />
-                    <span>Done by:</span>
-                    <span className="max-w-[10rem] truncate pr-3 text-[var(--ink)]">
-                      {doers.find((t) => t.id === (row.assistingTherapistId ?? primaryId))?.name ?? 'Choose'}
-                    </span>
-                    {/* The real select sits invisibly over the pill: it opens the native list, and its 16px text
-                        stops iOS zooming on tap, while what you see stays the page's 12px. */}
-                    <select
-                      aria-label="Done by"
-                      className="absolute inset-0 cursor-pointer appearance-none opacity-0 text-base"
-                      value={row.assistingTherapistId ?? primaryId}
-                      onChange={(e) => update(row.key, { assistingTherapistId: e.target.value === primaryId ? null : e.target.value })}
-                    >
-                      {doers.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                    <span aria-hidden="true" className="pointer-events-none absolute right-2.5 text-[10px]">▾</span>
-                  </label>
+                  <PickerMenu
+                    ariaLabel="Done by"
+                    caption="Who did this service"
+                    value={row.assistingTherapistId ?? primaryId}
+                    options={doers.map((t) => ({ value: t.id, label: t.name, dotColor: therapistColor(t.id, t.color) }))}
+                    onChange={(id) => update(row.key, { assistingTherapistId: id === primaryId ? null : id })}
+                    triggerClassName={`${pillBtn} ${row.assistingTherapistId ? '!border-[var(--teal)] !text-[var(--teal)]' : ''}`}
+                    renderTrigger={(selected) => (
+                      <>
+                        <IconUserPlus className="h-3.5 w-3.5" />
+                        <span>Done by:</span>
+                        <span className="max-w-[10rem] truncate text-[var(--ink)]">{selected?.label ?? 'Choose'}</span>
+                        <span aria-hidden="true" className="text-[10px]">▾</span>
+                      </>
+                    )}
+                  />
                 )}
                 <RowShare
                   row={row}
@@ -597,22 +587,21 @@ function RowShare({
     // sm+: label and controls share a line. Controls are 16px on touch (no iOS zoom), 14px with a mouse.
     <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5">
       <span className="w-full text-xs text-[var(--muted)] sm:w-auto">Shared with</span>
-      <div className="relative flex h-8 min-w-0 flex-1 items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] sm:min-w-[8rem] sm:flex-none">
-        <span className="truncate">{candidates.find((t) => t.id === share.therapistId)?.name ?? 'Choose'}</span>
-        <span aria-hidden="true" className="text-[10px] text-[var(--muted)]">▾</span>
-        {/* Invisible native select on top: the native list, no iOS zoom, 12px on screen. */}
-        <select
-          aria-label="Shared with"
-          className="absolute inset-0 cursor-pointer appearance-none opacity-0 text-base"
+      <div className="min-w-0 flex-1 sm:flex-none">
+        <PickerMenu
+          ariaLabel="Shared with"
+          caption="Share with"
           value={share.therapistId}
-          onChange={(e) => onChange({ ...share, therapistId: e.target.value })}
-        >
-          {candidates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+          options={candidates.map((t) => ({ value: t.id, label: t.name, dotColor: therapistColor(t.id, t.color) }))}
+          onChange={(therapistId) => onChange({ ...share, therapistId })}
+          triggerClassName="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-left text-xs text-[var(--ink)] hover:border-[var(--teal)] sm:min-w-[8rem]"
+          renderTrigger={(selected) => (
+            <>
+              <span className="truncate">{selected?.label ?? 'Choose'}</span>
+              <span aria-hidden="true" className="text-[10px] text-[var(--muted)]">▾</span>
+            </>
+          )}
+        />
       </div>
       <div className="relative shrink-0">
         <input

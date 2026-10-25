@@ -443,3 +443,12 @@ body {
   }
   .chart-panel:first-child { border-top-width: 0; padding-top: 0; }
 }
+
+/* New Visit: every field reads 14px, like the rest of the page's values (Date, Therapist and Condition used to be
+   16px on phones). iPhones zoom into any field under 16px, so on iOS phones only the fields stay 16px. */
+.nv-form :is(input, select, textarea) { font-size: 14px; }
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 639.98px) {
+    .nv-form :is(input, select, textarea) { font-size: 16px; }
+  }
+}

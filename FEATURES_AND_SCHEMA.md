@@ -154,7 +154,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     whenever they exist (also for a visit without services, which shows a shares-only line); the old
     `shared_therapist_id`/`shared_pct` line shows only for a visit with no share rows (`splitDisplay`), and the
     row action reads "Edit split" for a shared or legacy-split visit, else "Split revenue".
-  - **Phone save bar** (`VisitSaveBar`, below `sm:`): one-row bar fixed flush to the bottom edge
+  - **Done by / Shared with lists** (`PickerMenu.tsx`): the browser's own dropdown (different on every device, unstyleable) is replaced by a small list under the pill — a caption ("Who did this service" / "Share with"), one row per therapist with their schedule colour dot, the current one highlighted with a ✓; arrow keys / Home / End / Enter, Escape closes only the list (also inside Edit visit's dialog), a click outside closes it. The button is named "Done by: Dr Sneha" / "Shared with: Dr Sneha" for screen readers.
+- **Field text is 14px on every device** (the `.nv-form` rule in `index.css`, on the New Visit page): Date, Therapist, Condition and the notes box used to be 16px on phones, bigger than everything around them. Because iPhones zoom into any field under 16px, an `@supports (-webkit-touch-callout: none)` rule keeps them 16px on iOS phones only.
+- **Phone save bar** (`VisitSaveBar`, below `sm:`): one-row bar fixed flush to the bottom edge
     (`bottom: 0`, padding `env(safe-area-inset-bottom)`), reads line 1 "₹1,300" (or "No service yet" until a service is chosen, disabling Save)
     and line 2 "2 services · UPI, collected now" (or "to collect later"), with Cancel and Save visit buttons; tapping the summary scrolls to Payment.
     The phone bottom tab bar is hidden on `/visits/new`. Unsaved edits (anything changed since the page opened, not what the page prefilled itself: a patient from the link, an open package's session, a repeated visit) are guarded by a router blocker so Cancel, the back arrow and browser back prompt once to discard; tablet/desktop keep Save and Cancel together under Payment.

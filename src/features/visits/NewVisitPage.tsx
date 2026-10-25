@@ -1787,7 +1787,7 @@ export function NewVisitPage() {
   return (
     // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div
-      className="mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0"
+      className="nv-form mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0"
       onPointerDownCapture={() => {
         touchedRef.current = true;
       }}
