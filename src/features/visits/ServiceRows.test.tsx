@@ -374,6 +374,14 @@ describe('sharing a service', () => {
     expect(last[0]!.sessionShare).toBeNull();
   });
 
+  it('says "Same as last session" until the share is edited', () => {
+    const onRows = vi.fn();
+    render(<Harness initial={[{ ...pkgRow(), sessionShare: { therapistId: 't2', pct: 30 }, sharePrefilled: true }]} openPackages={[pkg]} onRows={onRows} />);
+    expect(screen.getByText(/Same as last session/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Percent of this service'), { target: { value: '40' } });
+    expect(screen.queryByText(/Same as last session/)).toBeNull();
+  });
+
   it('flags a percentage outside 1 to 99 on any row', () => {
     const rows = [row('a', 'assess', { sessionShare: { therapistId: 't2', pct: 0 } })];
     expect(rowProblems(rows, catalog).get(0)).toMatch(/1 to 99/);

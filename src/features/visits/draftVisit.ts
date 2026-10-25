@@ -1,6 +1,7 @@
 import type { VisitLineInput } from '@/services/visitService';
 import type { BillAdjustmentMode, BillAdjustmentValueType } from '@/domain/billAdjustment';
 import type { UUID } from '@/domain/types';
+import type { Visit, VisitItem } from '@/domain/types';
 import { continuationLine, emptyDraftLine, hasService, type DraftLine, type OpenPackage } from './ServiceRows';
 
 export const PACKAGE_NOT_OPEN =
@@ -92,4 +93,28 @@ export function rowsForNewPatient(
  */
 export function canChangePatient(search: { patientId?: string; repeatVisitId?: string }): boolean {
   return !search.patientId && !search.repeatVisitId;
+}
+
+/**
+ * The share a package's next session starts with: the one on the live package line of the most recent
+ * logged session that had one — so a colleague who helps over several sessions is entered once. Null when
+ * no session had a share, or that colleague is no longer active.
+ */
+export function lastPackageShare(
+  group: Visit[],
+  items: VisitItem[],
+  isActive: (therapistId: string) => boolean
+): { therapistId: string; pct: number } | null {
+  const newestFirst = [...group].sort(
+    (a, b) => b.visitDate.localeCompare(a.visitDate) || (b.sessionIndex ?? 0) - (a.sessionIndex ?? 0)
+  );
+  for (const v of newestFirst) {
+    const line = items.find((i) => i.visitId === v.id && !i.deleted && i.isPackageLine);
+    if (line?.sessionShareTherapistId && line.sessionSharePct) {
+      return isActive(line.sessionShareTherapistId)
+        ? { therapistId: line.sessionShareTherapistId, pct: line.sessionSharePct }
+        : null;
+    }
+  }
+  return null;
 }

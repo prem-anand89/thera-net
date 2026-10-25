@@ -80,7 +80,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 import { PaymentMethodChips } from './PaymentMethodChips';
@@ -455,6 +455,8 @@ export function NewVisitPage() {
     }
     const items = await repos.catalog.list(clinic.id, true);
     const nameOf = new Map(items.map((i) => [i.id, i.name]));
+    const activeIds = new Set((await repos.therapists.list(clinic.id)).filter((t) => t.active).map((t) => t.id));
+    const sessionLines = await repos.visitItems.listByVisitIds(visits.filter((v) => v.packageGroupId).map((v) => v.id));
     const open: OpenPackage[] = [];
     for (const [gid, group] of groups) {
       const total = group[0].packageTotal ?? 1;
@@ -467,6 +469,7 @@ export function NewVisitPage() {
         logged: group.length,
         packageTotal: total,
         startedOn: sorted[0].visitDate,
+        lastShare: lastPackageShare(group, sessionLines, (id) => activeIds.has(id)),
       });
     }
     return { patientId: patient.id, list: open.sort((a, b) => b.startedOn.localeCompare(a.startedOn)) };

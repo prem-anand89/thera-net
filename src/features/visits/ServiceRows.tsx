@@ -12,6 +12,8 @@ export interface OpenPackage {
   logged: number;
   packageTotal: number;
   startedOn: string;
+  /** The share the package's most recent session that had one gave a colleague; the next session starts with it. */
+  lastShare?: { therapistId: UUID; pct: number } | null;
 }
 
 /**
@@ -24,8 +26,10 @@ export interface DraftLine {
   serviceCatalogId?: UUID;
   continuation?: OpenPackage;
   assistingTherapistId: UUID | null;
-  /** Package rows only: a colleague who helped with this session and the % of the session's package share they get. */
+  /** A colleague who helped with this service and the % of it they get (of the session's package share on a package row). */
   sessionShare?: { therapistId: UUID; pct: number } | null;
+  /** The share was copied from the package's last session, not typed: the row says so until it is edited. */
+  sharePrefilled?: boolean;
 }
 
 let keyCounter = 0;
@@ -40,7 +44,13 @@ export function emptyDraftLine(): DraftLine {
 }
 
 export function continuationLine(pkg: OpenPackage, assistingTherapistId: UUID | null = null): DraftLine {
-  return { key: newDraftKey(), continuation: pkg, assistingTherapistId };
+  const line: DraftLine = { key: newDraftKey(), continuation: pkg, assistingTherapistId };
+  // A package helped over several sessions: this session starts with the last one's share (editable).
+  if (pkg.lastShare && pkg.lastShare.therapistId !== assistingTherapistId) {
+    line.sessionShare = pkg.lastShare;
+    line.sharePrefilled = true;
+  }
+  return line;
 }
 
 /** A row that has a service (or package session) chosen. */
@@ -205,6 +215,8 @@ export function ServiceRows({
       rows.map((r) => {
         if (r.key !== key) return r;
         const next = { ...r, ...patch };
+        // Typing a share (or removing it) makes it the user's own: it is no longer "same as last session".
+        if ('sessionShare' in patch && !('sharePrefilled' in patch)) next.sharePrefilled = false;
         // A service can't be shared with the therapist who does it.
         const runner = next.assistingTherapistId ?? primaryId;
         if (next.sessionShare && next.sessionShare.therapistId === runner) {
@@ -232,7 +244,14 @@ export function ServiceRows({
   function pick(key: string, value: string) {
     if (value.startsWith('pkg:')) {
       const pkg = openPackages.find((p) => p.packageGroupId === value.slice(4));
-      if (pkg) update(key, { continuation: pkg, serviceCatalogId: undefined });
+      if (pkg) {
+        const inherit = pkg.lastShare && pkg.lastShare.therapistId !== primaryId;
+        update(key, {
+          continuation: pkg,
+          serviceCatalogId: undefined,
+          ...(inherit ? { sessionShare: pkg.lastShare, sharePrefilled: true } : {}),
+        });
+      }
     } else {
       update(key, { serviceCatalogId: value.slice(4), continuation: undefined });
     }
@@ -478,6 +497,7 @@ function RowShare({
         {isPackage ? '% of this session' : '% of this service'}
       </label>
       {preview && <span className="font-num text-[var(--ink)]">≈ {preview}</span>}
+      {row.sharePrefilled && <span>· Same as last session</span>}
       <button
         type="button"
         aria-label="Remove share"

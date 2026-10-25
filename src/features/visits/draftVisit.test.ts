@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, PACKAGE_NOT_OPEN, rowsForNewPatient } from './draftVisit';
-import type { DraftLine, OpenPackage } from './ServiceRows';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient } from './draftVisit';
+import { continuationLine, type DraftLine, type OpenPackage } from './ServiceRows';
+import type { Visit, VisitItem } from '@/domain/types';
 
 const pkg = (logged: number): OpenPackage => ({
   packageGroupId: 'g1',
@@ -97,5 +98,37 @@ describe('canChangePatient', () => {
   it('is hidden for a linked patient and for the repeat-visit flow', () => {
     expect(canChangePatient({ patientId: 'p1' })).toBe(false);
     expect(canChangePatient({ repeatVisitId: 'v1' })).toBe(false);
+  });
+});
+
+describe('a package session starts with the last session\'s share', () => {
+  const visit = (id: string, visitDate: string, sessionIndex: number) => ({ id, visitDate, sessionIndex }) as unknown as Visit;
+  const item = (visitId: string, share?: { id: string; pct: number }) =>
+    ({
+      id: `i-${visitId}`,
+      visitId,
+      isPackageLine: true,
+      deleted: false,
+      ...(share ? { sessionShareTherapistId: share.id, sessionSharePct: share.pct } : {}),
+    }) as unknown as VisitItem;
+  const group = [visit('v1', '2026-10-01', 1), visit('v2', '2026-10-08', 2), visit('v3', '2026-10-15', 3)];
+  const active = () => true;
+
+  it('takes the most recent session that had a share', () => {
+    const items = [item('v1', { id: 'bm', pct: 20 }), item('v2', { id: 'bm', pct: 30 }), item('v3')];
+    expect(lastPackageShare(group, items, active)).toEqual({ therapistId: 'bm', pct: 30 });
+  });
+
+  it('is null when no session had a share, or that colleague is no longer active', () => {
+    expect(lastPackageShare(group, [item('v1'), item('v2')], active)).toBeNull();
+    expect(lastPackageShare(group, [item('v2', { id: 'bm', pct: 30 })], () => false)).toBeNull();
+  });
+
+  it('the continuation row carries it, marked as copied, unless that colleague does the session', () => {
+    const pkg = { packageGroupId: 'g', serviceCatalogId: 's', serviceName: 'P', logged: 2, packageTotal: 3, startedOn: '2026-10-01', lastShare: { therapistId: 'bm', pct: 30 } } as OpenPackage;
+    const row = continuationLine(pkg);
+    expect(row.sessionShare).toEqual({ therapistId: 'bm', pct: 30 });
+    expect(row.sharePrefilled).toBe(true);
+    expect(continuationLine(pkg, 'bm').sessionShare).toBeUndefined();
   });
 });
