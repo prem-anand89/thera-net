@@ -35,7 +35,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Patient search & lookup**: Instant search by MRNO, name or phone number. Result rows show the patient's name, MRNO, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
     presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
-    the top; a row shows the service, its catalog price and a "+ Assign assistant" action (active therapists
+    the top; a row shows the service, its catalog price and a "Assistant" action (active therapists
     minus the visit's therapist), which becomes the chip "Dr X · assisting ✕". "+ Add another service" adds a
     row; a single row has no ✕, with two or more every row has one and removing the first promotes the next.
     Errors name the service ("Dry needling: only one package per visit.") and show on that row.
@@ -59,12 +59,12 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Bill.** Subtotal = the rows' catalog prices (₹0 for a continuation). The discount / extra control
     (`BillAdjustmentFields`, ₹ or %, reason required whenever the bill differs from the subtotal) starts collapsed
     behind a quiet "+ Discount / Extra" button when no adjustment exists, and starts expanded whenever an adjustment
-    is already present (e.g. editing a visit or restoring a draft). Selecting "None" collapses it back and clears the adjustment.
+    is already present (e.g. editing a visit or restoring a draft). Selecting "None" collapses it back and clears the adjustment; with None selected a "Hide" link also closes it.
     The disclosure state does not affect dirty form tracking. It applies to the
     subtotal and **survives row changes**; it is cleared only when a ₹ discount no longer fits the new subtotal
     or the subtotal reaches ₹0, and the control is disabled at ₹0. The UPI QR, the payment amount and the phone
     bar use the total.
-  - **Payment method selection** (`PaymentMethodChips.tsx`): fast one-tap radio chips for the clinic's common methods (UPI, Cash, Card) and an "Other ▾" expandable chip for remaining methods (e.g., Bank transfer, Cheque, or "Collected by {partner}"). Arrow-key navigable with 44px touch targets. Selecting UPI reveals the dynamic UPI QR button.
+  - **Payment method selection** (`PaymentMethodChips.tsx`): fast one-tap radio chips for the clinic's common methods (UPI, Cash, Card) and an "Other ▾" expandable chip for remaining methods (e.g., Bank transfer, Cheque, or "Collected by {partner}"). Arrow-key navigable with 44px touch targets. Opening "Other" never changes the method; only picking an item does. Selecting UPI reveals the dynamic UPI QR button.
   - **Revenue share** is a read-only line under Total ("Revenue share · from services — Dr A ₹867 (67%) · Dr B
     ₹433 (33%)", `RevenueShareSummary`, from `autoCredits`) shown only when an assistant is tagged and the clinic's
     therapist split is on; a ₹0 package session on the visit therapist adds "Package sessions are credited through
@@ -5245,7 +5245,7 @@ the same loader. Rules:
   (above), and **no gross** (so `Shared` is exactly the revenue-share /
   legacy-split movement).
 - **A helper's part of a session.** A package line may carry `session_share_therapist_id` + `session_share_pct`
-  (New Visit / Edit visit: "+ Share this session" on a package row, with the clinic's therapist split on). The
+  (New Visit / Edit visit: "Share session" pill on a package row, with the clinic's therapist split on). The
   session's per-session share then splits: the helper gets `roundToRupeeHalfUp(share × pct / 100)` of the clinic
   share and of post-tax, the runner (the line's deliverer) keeps the rest, both paid by the biller as separate
   `package_attribution` movements (the helper's carries `packageRole: 'helper'`, both carry `sessionSharePct`);

@@ -154,8 +154,21 @@ describe('PaymentMethodChips', () => {
     fireEvent.keyDown(upiRadio, { key: 'ArrowRight' });
     expect(onChange).toHaveBeenCalledWith('cash');
 
-    // ArrowLeft moves from UPI to Other
+    // ArrowLeft moves focus from UPI to Other without picking one of its methods
+    onChange.mockClear();
     fireEvent.keyDown(upiRadio, { key: 'ArrowLeft' });
-    expect(onChange).toHaveBeenCalledWith('bank_transfer');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('opening Other and dismissing it leaves the method unchanged', () => {
+    const onChange = vi.fn();
+    render(<PaymentMethodChips value="upi" onChange={onChange} options={fullOptions} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: /Other/ }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

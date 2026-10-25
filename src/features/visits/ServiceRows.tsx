@@ -318,11 +318,11 @@ export function ServiceRows({
               </div>
             )}
             {named && !row.continuation && cat && cat.sessionCount > 1 && (
-              <div className="mt-1 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
+              <div className="mt-0.5 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
             )}
 
             {named && (
-              <div className="mt-1.5">
+              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2.5">
                 {row.assistingTherapistId ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs text-[var(--teal)]">
                     {therapistName(row.assistingTherapistId)} · assisting
@@ -337,36 +337,33 @@ export function ServiceRows({
                   </span>
                 ) : showAssistant && assistants.length > 0 ? (
                   assigning === row.key ? (
-                    <FocusedPicker
-                      autoFocus
-                      label="Assistant"
-                      value=""
-                      onChange={(v) => {
-                        update(row.key, { assistingTherapistId: v });
-                        setAssigning(null);
-                      }}
-                      options={assistants.map((t) => ({ value: t.id, label: t.name }))}
-                    />
+                    <div className="w-full">
+                      <FocusedPicker
+                        autoFocus
+                        label="Assistant"
+                        value=""
+                        onChange={(v) => {
+                          update(row.key, { assistingTherapistId: v });
+                          setAssigning(null);
+                        }}
+                        options={assistants.map((t) => ({ value: t.id, label: t.name }))}
+                      />
+                    </div>
                   ) : (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
-                      onClick={() => setAssigning(row.key)}
-                    >
+                    <button type="button" className={pillBtn} onClick={() => setAssigning(row.key)}>
                       <IconUserPlus className="h-3.5 w-3.5" />
-                      + Assign assistant
+                      Assistant
                     </button>
                   )
                 ) : null}
+                {showAssistant && isPackageRow(row, catalog) && (
+                  <SessionShare
+                    row={row}
+                    candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
+                    onChange={(sessionShare) => update(row.key, { sessionShare })}
+                  />
+                )}
               </div>
-            )}
-
-            {named && showAssistant && isPackageRow(row, catalog) && (
-              <SessionShare
-                row={row}
-                candidates={therapists.filter((t) => t.active && t.id !== (row.assistingTherapistId ?? primaryId))}
-                onChange={(sessionShare) => update(row.key, { sessionShare })}
-              />
             )}
 
             {error && <p className="mt-1.5 text-xs text-[var(--rust)]">{error}</p>}
@@ -431,16 +428,16 @@ function SessionShare({
     return (
       <button
         type="button"
-        className="mt-1 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
+        className={pillBtn}
         title="Give a colleague who helped part of this session's package share"
         onClick={() => onChange({ therapistId: candidates[0]!.id, pct: 50 })}
       >
-        + Share this session
+        Share session
       </button>
     );
   }
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
       <span>Shared with</span>
       <select
         aria-label="Colleague who helped"
@@ -478,6 +475,10 @@ function SessionShare({
     </div>
   );
 }
+
+/** Small outlined action pill under a service (Assistant, Share session). */
+const pillBtn =
+  'inline-flex min-h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--teal)]';
 
 function RemoveButton({ name, onClick }: { name: string; onClick: () => void }) {
   return (

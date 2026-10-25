@@ -127,7 +127,7 @@ describe('ServiceRows', () => {
 
   it("assistant list excludes the visit's therapist and inactive therapists", () => {
     render(<Harness initial={[row('a', 'assess')]} />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Assign assistant' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistant' }));
     const box = screen.getByRole('combobox', { name: 'Assistant' });
     fireEvent.focus(box);
     const names = screen.getAllByRole('option').map((o) => o.textContent);
@@ -137,7 +137,7 @@ describe('ServiceRows', () => {
   it('assign assistant tags only that row', () => {
     const seen: DraftLine[][] = [];
     render(<Harness initial={[row('a', 'assess'), row('b', 'needle')]} onRows={(r) => seen.push(r)} />);
-    fireEvent.click(screen.getAllByRole('button', { name: '+ Assign assistant' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Assistant' })[1]);
     fireEvent.focus(screen.getByRole('combobox', { name: 'Assistant' }));
     fireEvent.mouseDown(screen.getByRole('option', { name: 'Dr Sneha' }));
     expect(seen.at(-1)!.map((r) => r.assistingTherapistId)).toEqual([null, 't2']);
@@ -148,7 +148,7 @@ describe('ServiceRows', () => {
 
   it('solo clinic shows no assign assistant', () => {
     render(<Harness initial={[row('a', 'assess')]} showAssistant={false} />);
-    expect(screen.queryByRole('button', { name: '+ Assign assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
   });
 
   it('picker lists open packages before services', () => {
@@ -187,10 +187,10 @@ describe('ServiceRows', () => {
     expect(screen.getByRole('combobox', { name: 'Service' })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Service' }), { key: 'Escape' });
     expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '+ Assign assistant' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistant' }));
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Assistant' }), { key: 'Escape' });
     expect(screen.queryByRole('combobox', { name: 'Assistant' })).toBeNull();
-    expect(screen.getByRole('button', { name: '+ Assign assistant' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assistant' })).toBeInTheDocument();
   });
 
   it('adds another service row', () => {
@@ -330,7 +330,7 @@ describe('sharing a package session', () => {
   it('offers "Share this session" only on a package row, and seeds a helper who is not the runner', () => {
     const onRows = vi.fn();
     render(<Harness initial={[pkgRow(), row('n', 'needle')]} openPackages={[pkg]} onRows={onRows} />);
-    const links = screen.getAllByRole('button', { name: '+ Share this session' });
+    const links = screen.getAllByRole('button', { name: 'Share session' });
     expect(links).toHaveLength(1);
     fireEvent.click(links[0]!);
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
@@ -356,6 +356,6 @@ describe('sharing a package session', () => {
 
   it('shows no share control for a solo clinic', () => {
     render(<Harness initial={[pkgRow()]} openPackages={[pkg]} showAssistant={false} />);
-    expect(screen.queryByRole('button', { name: '+ Share this session' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share session' })).toBeNull();
   });
 });

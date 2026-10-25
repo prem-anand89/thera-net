@@ -117,21 +117,32 @@ export function BillAdjustmentFields({
           </button>
         </div>
       ) : (
-        <Field label="Adjustment">
-          <SegmentedToggle
-            value={mode}
-            onChange={handleModeChange}
-            options={[
-              { value: 'none', label: 'None' },
-              {
-                value: 'discount',
-                label: 'Discount',
-                disabled: continuationSession && catalogPricePaise === 0,
-              },
-              { value: 'extra', label: 'Extra' },
-            ]}
-          />
-        </Field>
+        <div>
+          <Field label="Adjustment">
+            <SegmentedToggle
+              value={mode}
+              onChange={handleModeChange}
+              options={[
+                { value: 'none', label: 'None' },
+                {
+                  value: 'discount',
+                  label: 'Discount',
+                  disabled: continuationSession && catalogPricePaise === 0,
+                },
+                { value: 'extra', label: 'Extra' },
+              ]}
+            />
+          </Field>
+          {mode === 'none' && (
+            <button
+              type="button"
+              className="min-h-8 text-xs font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setExpanded(false)}
+            >
+              Hide
+            </button>
+          )}
+        </div>
       )}
 
       {mode !== 'none' && (
@@ -162,11 +173,12 @@ export function BillAdjustmentFields({
       )}
 
       <div className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)]">
-        <span className="font-medium">{totalLabel}: {formatINR(billPaise)}</span>
+        <span className="font-medium">
+          {totalLabel}: {formatINR(billPaise)}
+        </span>
         {summary && (
           <span className="mt-0.5 block text-xs text-[var(--teal-strong)]/90">
-            {summary.kind === 'discount' ? 'Discount' : 'Extra'} of{' '}
-            {formatINR(summary.amountPaise)}
+            {summary.kind === 'discount' ? 'Discount' : 'Extra'} of {formatINR(summary.amountPaise)}
             {valueType === 'percent' && numericValue > 0 ? ` (${numericValue}%)` : ''}
           </span>
         )}

@@ -84,6 +84,19 @@ describe('BillAdjustmentFields', () => {
     expect(screen.getByRole('button', { name: '+ Discount / Extra' })).toBeInTheDocument();
   });
 
+  it('can be hidden again when opened by mistake with None selected', () => {
+    renderFields({ mode: 'none' });
+    fireEvent.click(screen.getByRole('button', { name: '+ Discount / Extra' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(screen.getByRole('button', { name: '+ Discount / Extra' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+  });
+
+  it('offers no Hide while an adjustment is set', () => {
+    renderFields({ mode: 'discount', value: '100' });
+    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+  });
+
   it('keeps pristine form not dirty when disclosure is opened without setting an adjustment', () => {
     const formInput = {
       rows: [{ key: 'r1', assistingTherapistId: null }],

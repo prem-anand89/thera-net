@@ -96,7 +96,8 @@ export function PaymentMethodChips({
 
     if (nextIndex !== null) {
       const targetItem = radioItems[nextIndex];
-      onChange(targetItem.value);
+      // Arrowing onto "Other" focuses it without picking one of its methods.
+      if (targetItem.kind === 'primary' || isOtherSelected) onChange(targetItem.value);
       setMenuOpen(false);
       // Focus the new radio item
       const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
@@ -154,10 +155,7 @@ export function PaymentMethodChips({
             tabIndex={isOtherSelected ? 0 : -1}
             disabled={disabled}
             onClick={() => {
-              if (!isOtherSelected) {
-                // If opening "Other" for the first time, select the first other option and open menu
-                onChange(otherOptions[0].value);
-              }
+              // Opening the menu never changes the method; only picking an item does.
               setMenuOpen((prev) => !prev);
             }}
             onKeyDown={(e) => {
