@@ -19,7 +19,6 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
-import { formatINR } from '@/domain/money';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
@@ -82,7 +81,8 @@ import {
 } from './ServiceRows';
 import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, therapistReason, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
-import { VisitSaveBar, saveSummary, type SavePayment } from './VisitSaveBar';
+import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
+import { treatmentsDisplayText } from '@/components/visit/formatters';
 import { PaymentMethodChips } from './PaymentMethodChips';
 import { VisitLoggedCard } from './VisitLoggedCard';
 import { visitPermissions } from './visitPermissions';
@@ -660,6 +660,15 @@ export function NewVisitPage() {
       issuedAt: packageInvoice?.issuedAt,
     });
   }, [packagePurchase, packagePayments, packageInvoice, statusByInvoiceId]);
+  // What was done at the last visit: the treatments ticked (including ones since retired) and any free-text notes.
+  const allTreatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const lastVisitTreatments = useMemo(() => {
+    if (!lastVisit) return '';
+    const nameById = new Map((allTreatments ?? []).map((t) => [t.id, t.name]));
+    const names = (lastVisit.treatmentIds ?? []).map((id) => nameById.get(id)).filter((n): n is string => Boolean(n));
+    const text = treatmentsDisplayText(names, lastVisit.treatmentNotes);
+    return text === '—' ? '' : text;
+  }, [lastVisit, allTreatments]);
   const catalogNameById = useMemo(
     () => new Map((catalog ?? []).map((c) => [c.id, c.name])),
     [catalog]
@@ -1262,10 +1271,17 @@ export function NewVisitPage() {
                       <span title={badge.title}>{badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}</span>
                     </Pill>
                   </div>
-                  <div className="mt-1 text-sm font-medium text-[var(--ink)]">
-                    {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
+                    <span className="min-w-0 truncate text-xs text-[var(--muted)]">
+                      {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
+                    </span>
                   </div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">{formatDateDMY(lastVisit.visitDate)}</div>
+                  {lastVisitTreatments && (
+                    <div className="mt-0.5 text-xs text-[var(--muted)]">
+                      Treatments: <span className="text-[var(--ink)]">{lastVisitTreatments}</span>
+                    </div>
+                  )}
                 </div>
               );
             })()
@@ -1763,31 +1779,13 @@ export function NewVisitPage() {
       <div ref={errorRef}>
         <ErrorNote message={error} />
       </div>
-      {/* Phones save from the fixed bar below. Tablet and up: the same summary and buttons stick to the bottom of
-          the form column, so Save and the total stay in reach however long the form gets. */}
-      <div className="sticky bottom-3 z-10 hidden items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 shadow-[var(--shadow-2)] sm:flex">
-        <div className="min-w-0 flex-1">
-          <div className="text-base font-semibold tabular-nums text-[var(--ink)]">
-            {servicesChosen === 0 ? 'No service yet' : formatINR(billPaise)}
-          </div>
-          {servicesChosen > 0 && (
-            <div className="truncate text-xs text-[var(--muted)]">{saveSummary(servicesChosen, savePayment, billPaise)}</div>
-          )}
-        </div>
-        <button type="button" className={btnSecondary} disabled={busy} onClick={requestExit}>
-          Cancel
-        </button>
-        <button type="button" className={btnPrimary} disabled={busy} onClick={() => void save()}>
-          {busy ? 'Saving…' : 'Save visit'}
-        </button>
-      </div>
     </div>
   );
 
   return (
-    // Phones get extra bottom room so the fixed save bar never covers the Payment card or the last field.
+    // Extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div
-      className="nv-form mx-auto max-w-4xl space-y-4 pb-24 sm:pb-0"
+      className="nv-form mx-auto max-w-4xl space-y-4 pb-24"
       onPointerDownCapture={() => {
         touchedRef.current = true;
       }}
@@ -1844,6 +1842,7 @@ export function NewVisitPage() {
         payment={savePayment}
         busy={busy}
         onSave={() => void save()}
+        onCancel={requestExit}
         onSummaryClick={() =>
           document.getElementById('visit-payment')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
         }

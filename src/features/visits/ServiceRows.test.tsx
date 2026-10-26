@@ -261,9 +261,10 @@ describe('RevenueShareSummary', () => {
 });
 
 describe('VisitSaveBar', () => {
-  it('phone save bar states the payment choice, has no Cancel, and handles busy and disabled states', () => {
+  it('save bar states the payment choice, shows Cancel from tablet up only, and handles busy and disabled states', () => {
     const onSave = vi.fn();
     const onSummary = vi.fn();
+    const onCancel = vi.fn();
     const { rerender } = render(
       <VisitSaveBar
         totalPaise={130000}
@@ -271,6 +272,7 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'now', methodLabel: 'UPI' }}
         busy={false}
         onSave={onSave}
+        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
@@ -281,12 +283,19 @@ describe('VisitSaveBar', () => {
     fireEvent.click(within(bar).getByRole('button', { name: 'Save visit' }));
     expect(onSave).toHaveBeenCalled();
 
-    // The page header's back arrow is the way out; a Cancel beside Save is a slip away from losing the visit.
-    expect(within(bar).queryByRole('button', { name: 'Cancel' })).toBeNull();
+    // Cancel is for tablet and up (hidden below sm:); on a phone the page header's back arrow is the way out.
+    const cancel = within(bar).getByRole('button', { name: 'Cancel' });
+    expect(cancel.className).toContain('hidden');
+    expect(cancel.className).toContain('sm:inline-flex');
+    fireEvent.click(cancel);
+    expect(onCancel).toHaveBeenCalled();
 
     fireEvent.click(within(bar).getByText('₹1,300'));
     expect(onSummary).toHaveBeenCalled();
-    expect(bar.className).toContain('sm:hidden');
+    // One fixed bar at the bottom edge at every width, not a floating card.
+    expect(bar.className).toContain('fixed');
+    expect(bar.className).toContain('bottom-0');
+    expect(bar.className).not.toContain('sm:hidden');
 
     // With no service: "No service yet" and Save is disabled
     rerender(
@@ -296,6 +305,7 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'none' }}
         busy={false}
         onSave={onSave}
+        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
@@ -310,6 +320,7 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'later' }}
         busy={false}
         onSave={onSave}
+        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
@@ -319,7 +330,7 @@ describe('VisitSaveBar', () => {
 
     // A free package session says so instead of showing a payment
     rerender(
-      <VisitSaveBar totalPaise={0} serviceCount={1} payment={{ kind: 'none' }} busy={false} onSave={onSave} onSummaryClick={onSummary} />
+      <VisitSaveBar totalPaise={0} serviceCount={1} payment={{ kind: 'none' }} busy={false} onSave={onSave} onCancel={onCancel} onSummaryClick={onSummary} />
     );
     expect(within(bar).getByText('1 service · no charge')).toBeInTheDocument();
 
@@ -331,6 +342,7 @@ describe('VisitSaveBar', () => {
         payment={{ kind: 'later' }}
         busy={true}
         onSave={onSave}
+        onCancel={onCancel}
         onSummaryClick={onSummary}
       />
     );
