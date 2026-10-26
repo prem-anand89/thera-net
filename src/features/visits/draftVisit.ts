@@ -168,3 +168,29 @@ export function visibleTreatmentOptions<T extends { id: string }>(
   if (showAll) return ordered;
   return ordered.filter((t, i) => i < limit || selectedIds.includes(t.id));
 }
+
+/**
+ * The most recent package this patient used up entirely (every session logged), for the line in the patient card
+ * when they have no open package: without it a patient whose package just finished shows nothing about packages
+ * at all, and it reads as if the package had never been found.
+ */
+export function lastFinishedPackage(
+  visits: { packageGroupId: string | null; packageTotal: number | null; visitDate: string; serviceCatalogId: string; deleted?: boolean }[]
+): { serviceCatalogId: string; total: number; finishedOn: string } | null {
+  const groups = new Map<string, typeof visits>();
+  for (const v of visits) {
+    if (v.deleted || !v.packageGroupId) continue;
+    const group = groups.get(v.packageGroupId) ?? [];
+    group.push(v);
+    groups.set(v.packageGroupId, group);
+  }
+  let best: { serviceCatalogId: string; total: number; finishedOn: string } | null = null;
+  for (const group of groups.values()) {
+    const total = Math.max(...group.map((v) => v.packageTotal ?? 0));
+    if (total <= 1 || group.length < total) continue;
+    const sorted = [...group].sort((a, b) => a.visitDate.localeCompare(b.visitDate));
+    const finishedOn = sorted[sorted.length - 1]!.visitDate;
+    if (!best || finishedOn > best.finishedOn) best = { serviceCatalogId: sorted[0]!.serviceCatalogId, total, finishedOn };
+  }
+  return best;
+}

@@ -213,6 +213,21 @@ describe('ServiceRows', () => {
   });
 });
 
+describe('the add-service row', () => {
+  it('has no "+ Add another service" while a row is still empty (that row is where the next service goes)', () => {
+    render(<Harness initial={[row('a', 'assess'), { key: 'e', assistingTherapistId: null }]} />);
+    expect(screen.queryByRole('button', { name: '+ Add another service' })).toBeNull();
+  });
+
+  it('puts "+ Add another service" and the quick adds on one row', () => {
+    render(<Harness initial={[row('a', 'assess')]} quickServices={[catalog[1]]} />);
+    const add = screen.getByRole('button', { name: '+ Add another service' });
+    const quick = screen.getByRole('button', { name: /\+ Dry needling/ });
+    expect(add.parentElement).toBe(quick.parentElement);
+    expect(add.parentElement).toHaveAttribute('data-testid', 'quick-services');
+  });
+});
+
 describe('draft helpers', () => {
   it('subtotal counts a continuation as zero', () => {
     expect(draftSubtotalPaise([pkgRow(), row('b', 'assess')], catalog)).toBe(80000);

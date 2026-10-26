@@ -457,29 +457,27 @@ export function ServiceRows({
         );
       })}
 
-      {availableQuickServices.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 pb-0.5" data-testid="quick-services">
-          <span className="text-xs text-[var(--muted)]">Quick add:</span>
-          {availableQuickServices.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={chip}
-              onClick={() => pickQuickService(s)}
-            >
-              + {s.name}
+      {/* Under the last service, left-aligned: "+ Add another service" and the quick adds share one row. While a row
+          is still empty (nothing chosen yet) that empty row is where the next service goes, so there is no add button. */}
+      {(!rows.some((r) => !hasService(r)) || availableQuickServices.length > 0) && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pt-1" data-testid="quick-services">
+          {!rows.some((r) => !hasService(r)) && (
+            <button type="button" className={`${chip} border-dashed text-[var(--teal)]`} onClick={addRow}>
+              + Add another service
             </button>
-          ))}
+          )}
+          {availableQuickServices.length > 0 && (
+            <>
+              <span className="text-xs text-[var(--muted)]">Quick add:</span>
+              {availableQuickServices.map((s) => (
+                <button key={s.id} type="button" className={chip} onClick={() => pickQuickService(s)}>
+                  + {s.name}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
-
-      <button
-        type="button"
-        className="flex h-9 w-full items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)]"
-        onClick={addRow}
-      >
-        + Add another service
-      </button>
 
       {showGuardrail && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">

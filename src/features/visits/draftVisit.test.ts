@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason, shouldFoldTreatments, visibleTreatmentOptions } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason, shouldFoldTreatments, visibleTreatmentOptions, lastFinishedPackage } from './draftVisit';
 import { continuationLine, type DraftLine, type OpenPackage } from './ServiceRows';
 import type { Visit, VisitItem } from '@/domain/types';
 
@@ -181,5 +181,31 @@ describe('visibleTreatmentOptions', () => {
   it('shows every one on request, and everything when there are few', () => {
     expect(visibleTreatmentOptions(all, [], true)).toHaveLength(9);
     expect(visibleTreatmentOptions(all.slice(0, 4), [], false)).toHaveLength(4);
+  });
+});
+
+describe('lastFinishedPackage', () => {
+  const v = (group: string | null, total: number | null, date: string, svc = 'pkg') => ({
+    packageGroupId: group,
+    packageTotal: total,
+    visitDate: date,
+    serviceCatalogId: svc,
+  });
+
+  it('finds a package whose sessions are all logged, with the day it finished', () => {
+    const visits = [v('g', 3, '2026-09-01'), v('g', 3, '2026-09-10'), v('g', 3, '2026-09-20')];
+    expect(lastFinishedPackage(visits)).toEqual({ serviceCatalogId: 'pkg', total: 3, finishedOn: '2026-09-20' });
+  });
+
+  it('ignores a package that is still open, single-session visits and deleted visits', () => {
+    expect(lastFinishedPackage([v('g', 3, '2026-09-01'), v('g', 3, '2026-09-10')])).toBeNull();
+    expect(lastFinishedPackage([v(null, null, '2026-09-01'), v('s', 1, '2026-09-02')])).toBeNull();
+    const gone = [{ ...v('g', 2, '2026-09-01'), deleted: true }, v('g', 2, '2026-09-02')];
+    expect(lastFinishedPackage(gone)).toBeNull();
+  });
+
+  it('picks the one that finished most recently', () => {
+    const visits = [v('a', 2, '2026-08-01', 'x'), v('a', 2, '2026-08-05', 'x'), v('b', 2, '2026-09-01', 'y'), v('b', 2, '2026-09-09', 'y')];
+    expect(lastFinishedPackage(visits)?.serviceCatalogId).toBe('y');
   });
 });

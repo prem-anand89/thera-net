@@ -652,10 +652,13 @@ export function MultiToggle({
   options,
   value,
   onChange,
+  trailing,
 }: {
   options: readonly MultiToggleOption[];
   value: string[];
   onChange: (next: string[]) => void;
+  /** An extra item at the end of the chip row (a "+ 3 more" button), so it flows with the chips, not onto its own row. */
+  trailing?: ReactNode;
 }) {
   return (
     <div className="chip-row">
@@ -676,6 +679,7 @@ export function MultiToggle({
           </button>
         );
       })}
+      {trailing}
     </div>
   );
 }

@@ -78,7 +78,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, shouldFoldTreatments, therapistReason, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, shouldFoldTreatments, therapistReason, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 import { PickerMenu } from './PickerMenu';
@@ -684,6 +684,9 @@ export function NewVisitPage() {
     () => (patientVisits && patientPaid ? patientDue(patientVisits, patientPaid, statusByInvoiceId) : null),
     [patientVisits, patientPaid, statusByInvoiceId]
   );
+  // Everyone, retired therapists included: the last visit names who did it, even if they have since left.
+  const allTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const finishedPackage = useMemo(() => lastFinishedPackage(patientVisits ?? []), [patientVisits]);
   const allTreatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const chosenCount = useMemo(() => rows.filter(hasService).length, [rows]);
   const hasTreatmentInfo = treatmentIds.length > 0 || notes.trim() !== '';
@@ -1261,6 +1264,19 @@ export function NewVisitPage() {
         </div>
       )}
 
+      {/* No open package, but one just finished: say so, so it never looks like the package was missed. */}
+      {openPackages !== undefined && openPackages.length === 0 && finishedPackage && (
+        <div className="border-t border-[var(--border)] pt-3">
+          <div className="text-xs text-[var(--muted)]">Open package</div>
+          <div className="mt-1 text-sm text-[var(--ink)]">None</div>
+          <div className="mt-0.5 text-xs text-[var(--muted)]">
+            Last package finished {formatDateDMY(finishedPackage.finishedOn)} ·{' '}
+            {catalogNameById.get(finishedPackage.serviceCatalogId) ?? 'Package'} ({finishedPackage.total} of{' '}
+            {finishedPackage.total} used)
+          </div>
+        </div>
+      )}
+
       {/* Open package: label + its own Paid/Due status, the package, then progress. */}
       {openPackages !== undefined && openPackages.length > 0 && (
         <div className="border-t border-[var(--border)] pt-3">
@@ -1333,6 +1349,16 @@ export function NewVisitPage() {
                       {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
                     </span>
                   </div>
+                  {(() => {
+                    // Which session of a package it was, and who did it — so front desk knows where things stand.
+                    const session =
+                      lastVisit.sessionIndex && lastVisit.packageTotal && lastVisit.packageTotal > 1
+                        ? `Session ${lastVisit.sessionIndex} of ${lastVisit.packageTotal}`
+                        : null;
+                    const who = allTherapists?.find((t) => t.id === lastVisit.therapistId)?.name ?? null;
+                    const line = [session, who].filter(Boolean).join(' · ');
+                    return line ? <div className="mt-0.5 text-xs text-[var(--ink)]">{line}</div> : null;
+                  })()}
                   {lastVisitTreatments && (
                     <div className="mt-0.5 text-xs text-[var(--muted)]">
                       Treatments: <span className="text-[var(--ink)]">{lastVisitTreatments}</span>
@@ -1747,16 +1773,18 @@ export function NewVisitPage() {
           options={visibleTreatments.map((t) => ({ value: t.id, label: t.name }))}
           value={treatmentIds}
           onChange={setTreatmentIds}
+          trailing={
+            hiddenTreatments > 0 ? (
+              <button
+                type="button"
+                className="inline-flex h-8 items-center rounded-full border border-dashed border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+                onClick={() => setShowAllTreatments(true)}
+              >
+                + {hiddenTreatments} more
+              </button>
+            ) : undefined
+          }
         />
-        {hiddenTreatments > 0 && (
-          <button
-            type="button"
-            className="inline-flex h-8 items-center rounded-full border border-dashed border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)]"
-            onClick={() => setShowAllTreatments(true)}
-          >
-            + {hiddenTreatments} more
-          </button>
-        )}
         <p className="text-xs text-[var(--muted)]">Other treatments / notes</p>
         <input
           className={inputCls}
