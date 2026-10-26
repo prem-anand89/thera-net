@@ -1367,3 +1367,31 @@ describe('dashboardService.monthlyNewCounts', () => {
     expect(summary.totalPaise).toBe(0);
   });
 });
+
+describe('dashboardService.serviceUsageCounts', () => {
+  it('counts service lines, falls back to the visit service for legacy visits, ignores deleted lines', async () => {
+    const fake = makeFakeRepos();
+    const today = new Date();
+    const d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    fake.visits.set('v1', baseVisit('v1', { visitDate: d }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: d }));
+    fake.visits.set('v3', baseVisit('v3', { visitDate: d, serviceCatalogId: 'svc-legacy' }));
+    const items = [
+      { id: 'l1', visitId: 'v1', serviceCatalogId: 'svc-a', deleted: false },
+      { id: 'l2', visitId: 'v1', serviceCatalogId: 'svc-b', deleted: false },
+      { id: 'l3', visitId: 'v2', serviceCatalogId: 'svc-a', deleted: false },
+      { id: 'l4', visitId: 'v2', serviceCatalogId: 'svc-b', deleted: true },
+    ];
+    (fake.repos as unknown as { visitItems: unknown }).visitItems = {
+      listByVisitIds: async (ids: string[]) => items.filter((i) => ids.includes(i.visitId)),
+      listByClinic: async () => [],
+      bulkPut: async () => {},
+    };
+    const rows = await createDashboardService(fake.repos).serviceUsageCounts('clinic-1');
+    expect(rows).toEqual([
+      { serviceId: 'svc-a', count: 2 },
+      { serviceId: 'svc-b', count: 1 },
+      { serviceId: 'svc-legacy', count: 1 },
+    ]);
+  });
+});

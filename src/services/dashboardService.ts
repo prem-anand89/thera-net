@@ -133,10 +133,8 @@ export interface TreatmentUsageRow {
   count: number;
 }
 
-export interface ServiceUsageCountRow {
-  serviceId: UUID;
-  count: number;
-}
+import type { ServiceUsageCountRow } from '@/domain/serviceUsage';
+export type { ServiceUsageCountRow } from '@/domain/serviceUsage';
 
 export interface ConditionUsagePatientRow {
   patientId: UUID;
