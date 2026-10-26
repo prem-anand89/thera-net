@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason, shouldFoldTreatments, visibleTreatmentOptions } from './draftVisit';
 import { continuationLine, type DraftLine, type OpenPackage } from './ServiceRows';
 import type { Visit, VisitItem } from '@/domain/types';
 
@@ -151,5 +151,35 @@ describe('therapistReason', () => {
   it('says nothing for a therapist picked by hand, or before one is chosen', () => {
     expect(therapistReason({ ...base, lastVisitTherapistId: 't2', myTherapistId: 't3' })).toBeNull();
     expect(therapistReason({ ...base, therapistId: '' })).toBeNull();
+  });
+});
+
+describe('shouldFoldTreatments', () => {
+  const base = { previousServiceCount: 0, serviceCount: 1, hasTreatmentInfo: true, foldedOnce: false };
+
+  it('folds when a service is chosen after something was ticked or typed', () => {
+    expect(shouldFoldTreatments(base)).toBe(true);
+    expect(shouldFoldTreatments({ ...base, previousServiceCount: 1, serviceCount: 2 })).toBe(true);
+  });
+
+  it('does not fold with nothing ticked, when no service was added, or after it already folded once', () => {
+    expect(shouldFoldTreatments({ ...base, hasTreatmentInfo: false })).toBe(false);
+    expect(shouldFoldTreatments({ ...base, previousServiceCount: 1, serviceCount: 1 })).toBe(false);
+    expect(shouldFoldTreatments({ ...base, previousServiceCount: 2, serviceCount: 1 })).toBe(false);
+    expect(shouldFoldTreatments({ ...base, foldedOnce: true })).toBe(false);
+  });
+});
+
+describe('visibleTreatmentOptions', () => {
+  const all = Array.from({ length: 9 }, (_, i) => ({ id: `t${i}` }));
+
+  it('shows the first six, and never hides one that is ticked', () => {
+    expect(visibleTreatmentOptions(all, [], false).map((t) => t.id)).toEqual(['t0', 't1', 't2', 't3', 't4', 't5']);
+    expect(visibleTreatmentOptions(all, ['t8'], false).map((t) => t.id)).toEqual(['t0', 't1', 't2', 't3', 't4', 't5', 't8']);
+  });
+
+  it('shows every one on request, and everything when there are few', () => {
+    expect(visibleTreatmentOptions(all, [], true)).toHaveLength(9);
+    expect(visibleTreatmentOptions(all.slice(0, 4), [], false)).toHaveLength(4);
   });
 });

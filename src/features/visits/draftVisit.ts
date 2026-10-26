@@ -140,3 +140,31 @@ export function therapistReason(input: {
   if (input.myTherapistId === input.therapistId) return 'You';
   return null;
 }
+
+/**
+ * Whether the Treatments card should fold itself to its summary line now: a service was just chosen (the count
+ * grew), something was ticked or typed, and it has not folded before for this patient. Never on any other change,
+ * so it can't jump away while someone is still ticking, and it stays open once they re-open it.
+ */
+export function shouldFoldTreatments(input: {
+  previousServiceCount: number;
+  serviceCount: number;
+  hasTreatmentInfo: boolean;
+  foldedOnce: boolean;
+}): boolean {
+  return input.serviceCount > input.previousServiceCount && input.hasTreatmentInfo && !input.foldedOnce;
+}
+
+/**
+ * The treatment chips to show: the first `limit` (most used first) plus anything already ticked, so a ticked
+ * treatment is never hidden behind "+ N more". `showAll` shows every one.
+ */
+export function visibleTreatmentOptions<T extends { id: string }>(
+  ordered: T[],
+  selectedIds: string[],
+  showAll: boolean,
+  limit = 6
+): T[] {
+  if (showAll) return ordered;
+  return ordered.filter((t, i) => i < limit || selectedIds.includes(t.id));
+}

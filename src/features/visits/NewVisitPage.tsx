@@ -47,7 +47,6 @@ import {
   Pill,
   MultiToggle,
 } from '@/components/ui';
-import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
@@ -79,9 +78,13 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, therapistReason, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, shouldFoldTreatments, therapistReason, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
+import { PickerMenu } from './PickerMenu';
+import { therapistColor } from '@/components/schedule/scheduleColors';
+import { patientDue } from '@/domain/patientDue';
+import { formatINR } from '@/domain/money';
 import { treatmentsDisplayText } from '@/components/visit/formatters';
 import { PaymentMethodChips } from './PaymentMethodChips';
 import { VisitLoggedCard } from './VisitLoggedCard';
@@ -311,6 +314,12 @@ export function NewVisitPage() {
       setClinicalDetailsExpanded(true);
     }
   }, [role, clinicalDetailsExpanded, condition]);
+  // Treatments folds to one summary line once, when a service is chosen after something was ticked or typed. Never
+  // while it is being edited, and not again once the person re-opens it (Edit) — their choice then stands.
+  const [treatmentsOpen, setTreatmentsOpen] = useState(true);
+  const [showAllTreatments, setShowAllTreatments] = useState(false);
+  const foldedOnceRef = useRef(false);
+  const prevServicesRef = useRef(0);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   const paymentMethods = paymentMethodOptions(clinic);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
@@ -661,7 +670,44 @@ export function NewVisitPage() {
     });
   }, [packagePurchase, packagePayments, packageInvoice, statusByInvoiceId]);
   // What was done at the last visit: the treatments ticked (including ones since retired) and any free-text notes.
+  // What this patient still owes, from their own visits — shown as one quiet line in the patient card.
+  const patientPaid = useLiveQuery(async () => {
+    if (!patient) return new Map<string, number>();
+    const ids = new Set((patientVisits ?? []).map((v) => v.id));
+    const paid = new Map<string, number>();
+    for (const pay of await repos.payments.list(clinic.id)) {
+      if (ids.has(pay.visitId)) paid.set(pay.visitId, (paid.get(pay.visitId) ?? 0) + pay.amountPaise);
+    }
+    return paid;
+  }, [clinic.id, patient?.id, patientVisits]);
+  const patientBalance = useMemo(
+    () => (patientVisits && patientPaid ? patientDue(patientVisits, patientPaid, statusByInvoiceId) : null),
+    [patientVisits, patientPaid, statusByInvoiceId]
+  );
   const allTreatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const chosenCount = useMemo(() => rows.filter(hasService).length, [rows]);
+  const hasTreatmentInfo = treatmentIds.length > 0 || notes.trim() !== '';
+  useEffect(() => {
+    const previousServiceCount = prevServicesRef.current;
+    prevServicesRef.current = chosenCount;
+    if (
+      shouldFoldTreatments({
+        previousServiceCount,
+        serviceCount: chosenCount,
+        hasTreatmentInfo,
+        foldedOnce: foldedOnceRef.current,
+      })
+    ) {
+      foldedOnceRef.current = true;
+      setTreatmentsOpen(false);
+    }
+  }, [chosenCount, hasTreatmentInfo]);
+  // A different patient starts a fresh form: treatments open again, ready to fold once.
+  useEffect(() => {
+    foldedOnceRef.current = false;
+    setTreatmentsOpen(true);
+    setShowAllTreatments(false);
+  }, [patient?.id]);
   const lastVisitTreatments = useMemo(() => {
     if (!lastVisit) return '';
     const nameById = new Map((allTreatments ?? []).map((t) => [t.id, t.name]));
@@ -1205,6 +1251,16 @@ export function NewVisitPage() {
 
       <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
 
+      {patientBalance && patientBalance.duePaise > 0 && (
+        <div
+          role="status"
+          className="rounded-lg bg-[var(--amber-light)] px-3 py-1.5 text-xs font-medium text-[var(--amber)]"
+        >
+          Balance due {formatINR(patientBalance.duePaise)} · {patientBalance.unpaidVisits} unpaid{' '}
+          {patientBalance.unpaidVisits === 1 ? 'visit' : 'visits'}
+        </div>
+      )}
+
       {/* Open package: label + its own Paid/Due status, the package, then progress. */}
       {openPackages !== undefined && openPackages.length > 0 && (
         <div className="border-t border-[var(--border)] pt-3">
@@ -1567,110 +1623,171 @@ export function NewVisitPage() {
   const dateHint = visitDateHint(visitDate, today);
   const servicesChosen = rows.filter(hasService).length;
 
-  const visitPanel = (
-    <div className="space-y-4">
-      <SectionCard title="Visit">
-        {/* Single column throughout, matching the Patient panel above —
-            the previous sm:grid-cols-2 paired up whichever two fields
-            happened to land in the same row by grid auto-placement, which
-            shifted depending on runtime state (adjustment reason showing
-            or not, payment section showing or not): unrelated fields at
-            different heights ended up side by side, and a long dynamic
-            label (e.g. "Adjustment reason * (discount of ₹500)") had to
-            wrap inside a half-width column, visually crowding its own
-            input. One column removes the ambiguity entirely. */}
-        <div className="grid grid-cols-1 gap-3">
-          {/* Date and therapist share a row (stacked on narrow phones to avoid DD/MM/YYYY overflow). */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field
-              label="Date"
-              hint={
-                dateHint && (
-                  <span className={dateHint.tone === 'warn' ? 'text-[var(--rust)]' : undefined}>{dateHint.text}</span>
-                )
-              }
-            >
+  // --- "This visit": when, who treated, why — the context of the visit, beside the patient (not among the billing).
+  const therapistList = therapists ?? [];
+  const therapistChosen = therapistList.some((t) => t.id === therapistId);
+  const therapistWhy = therapistReason({
+    therapistId: therapistChosen ? therapistId : '',
+    appointmentTherapistId: fromAppointment?.therapistId,
+    lastVisitTherapistId: lastVisit?.therapistId,
+    myTherapistId,
+  });
+  const visitDateLabel = (() => {
+    const [y, m, d] = visitDate.split('-').map(Number);
+    return y && m && d
+      ? new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : visitDate;
+  })();
+  const clinicalHidden = role === 'front_desk' && !clinicalDetailsExpanded;
+  const thisVisitCard = (
+    <SectionCard title="This visit">
+      <div className="space-y-3">
+        <div>
+          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Date</span>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {/* The native date input sits invisibly over the pill: it opens the device's own date picker. */}
+            <label className="relative inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:border-[var(--teal)]">
+              <span className="tabular-nums">{visitDateLabel}</span>
+              <span aria-hidden="true" className="text-[10px]">▾</span>
               <input
                 type="date"
-                className={inputCls}
+                aria-label="Visit date"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 value={visitDate}
                 onChange={(e) => setVisitDate(e.target.value)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {
+                    /* not allowed here: the native control still works by keyboard and tap */
+                  }
+                }}
               />
-            </Field>
-            <SearchableSelect
-              label="Therapist *"
-              value={therapistId}
-              onChange={setTherapistId}
-              options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
-              badge={(() => {
-                // Say WHY this therapist is chosen (the field already shows who): a returning patient's last
-                // therapist is a default, not a decision, and attribution depends on it being right.
-                const reason = therapistReason({
-                  therapistId: therapists?.some((t) => t.id === therapistId) ? therapistId : '',
-                  appointmentTherapistId: fromAppointment?.therapistId,
-                  lastVisitTherapistId: lastVisit?.therapistId,
-                  myTherapistId,
-                });
-                return reason ? <span className="text-xs font-normal text-[var(--muted)]">{reason}</span> : undefined;
-              })()}
-            />
+            </label>
+            <span className={`text-xs ${dateHint?.tone === 'warn' ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
+              {dateHint ? dateHint.text : 'Today'}
+            </span>
           </div>
-
-          {role === 'front_desk' && !clinicalDetailsExpanded ? (
-            <button
-              type="button"
-              className="justify-self-start text-left text-xs font-medium text-[var(--teal)] hover:underline"
-              onClick={() => setClinicalDetailsExpanded(true)}
-            >
-              + Add condition / treatments (optional)
-            </button>
-          ) : (
-            <>
-              <Field label="Condition (this visit)">
-                <input
-                  className={inputCls}
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value)}
-                />
-              </Field>
-              <Field label="Treatments">
-                <div className="space-y-2">
-                  {rankedTreatments.frequent.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-[var(--muted)]">Frequently used</p>
-                      <MultiToggle
-                        options={rankedTreatments.frequent.map((t) => ({ value: t.id, label: t.name }))}
-                        value={treatmentIds}
-                        onChange={setTreatmentIds}
-                      />
-                    </div>
-                  )}
-                  {rankedTreatments.rest.length > 0 && (
-                    <div className="space-y-1">
-                      {rankedTreatments.frequent.length > 0 && (
-                        <p className="text-xs text-[var(--muted)]">All treatments</p>
-                      )}
-                      <MultiToggle
-                        options={rankedTreatments.rest.map((t) => ({ value: t.id, label: t.name }))}
-                        value={treatmentIds}
-                        onChange={setTreatmentIds}
-                      />
-                    </div>
-                  )}
-                  <p className="text-xs text-[var(--muted)]">Other treatments / notes</p>
-                  <input
-                    className={inputCls}
-                    aria-label="Other treatments / notes"
-                    placeholder="Anything not in the list…"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </div>
-              </Field>
-            </>
-          )}
         </div>
-      </SectionCard>
+
+        <div>
+          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Therapist *</span>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <PickerMenu
+              ariaLabel="Therapist"
+              caption="Who treated the patient"
+              value={therapistChosen ? therapistId : ''}
+              options={therapistList.map((t) => ({ value: t.id, label: t.name, dotColor: therapistColor(t.id, t.color) }))}
+              onChange={setTherapistId}
+              triggerClassName={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium ${
+                therapistChosen
+                  ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                  : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
+              }`}
+              renderTrigger={(selected) => (
+                <>
+                  {selected?.dotColor && (
+                    <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: selected.dotColor }} />
+                  )}
+                  <span className="max-w-[12rem] truncate">{selected?.label ?? 'Choose therapist'}</span>
+                  <span aria-hidden="true" className="text-[10px]">▾</span>
+                </>
+              )}
+            />
+            {therapistWhy && <span className="text-xs text-[var(--muted)]">{therapistWhy}</span>}
+          </div>
+        </div>
+
+        {clinicalHidden ? (
+          <button
+            type="button"
+            className="text-left text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={() => setClinicalDetailsExpanded(true)}
+          >
+            + Add condition / treatments (optional)
+          </button>
+        ) : (
+          <Field label="Condition (this visit)">
+            <input className={inputCls} value={condition} onChange={(e) => setCondition(e.target.value)} />
+          </Field>
+        )}
+      </div>
+    </SectionCard>
+  );
+
+  // --- Treatments: the chips while ticking, one summary line once folded.
+  const treatmentNameById = new Map((allTreatments ?? treatments).map((t) => [t.id, t.name]));
+  const orderedTreatments = [...rankedTreatments.frequent, ...rankedTreatments.rest];
+  const visibleTreatments = visibleTreatmentOptions(orderedTreatments, treatmentIds, showAllTreatments);
+  const hiddenTreatments = orderedTreatments.length - visibleTreatments.length;
+  const treatmentSummary =
+    [
+      treatmentIds.map((id) => treatmentNameById.get(id)).filter(Boolean).join(' · '),
+      notes.trim(),
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'None added';
+  const treatmentsCard = clinicalHidden ? null : treatmentsOpen ? (
+    <SectionCard
+      title="Treatments"
+      action={
+        hasTreatmentInfo ? (
+          <button
+            type="button"
+            className="h-8 text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={() => setTreatmentsOpen(false)}
+          >
+            Done ▴
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="space-y-2">
+        <MultiToggle
+          options={visibleTreatments.map((t) => ({ value: t.id, label: t.name }))}
+          value={treatmentIds}
+          onChange={setTreatmentIds}
+        />
+        {hiddenTreatments > 0 && (
+          <button
+            type="button"
+            className="inline-flex h-8 items-center rounded-full border border-dashed border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+            onClick={() => setShowAllTreatments(true)}
+          >
+            + {hiddenTreatments} more
+          </button>
+        )}
+        <p className="text-xs text-[var(--muted)]">Other treatments / notes</p>
+        <input
+          className={inputCls}
+          aria-label="Other treatments / notes"
+          placeholder="Anything not in the list…"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </div>
+    </SectionCard>
+  ) : (
+    <SectionCard
+      title="Treatments"
+      action={
+        <button
+          type="button"
+          className="h-8 text-xs font-medium text-[var(--teal)] hover:underline"
+          aria-expanded={false}
+          onClick={() => setTreatmentsOpen(true)}
+        >
+          Edit ▾
+        </button>
+      }
+    >
+      <p className="text-sm text-[var(--ink)]">{treatmentSummary}</p>
+    </SectionCard>
+  );
+
+  const visitPanel = (
+    <div className="space-y-4">
+      {treatmentsCard}
 
       <SectionCard title="Services">
         <div className="grid grid-cols-1 gap-3">
@@ -1825,15 +1942,18 @@ export function NewVisitPage() {
           changes (search/create UI vs. confirmed-patient banner), but the
           page's own structure doesn't, so picking a patient doesn't cause a
           jarring column-count/width jump. Collapses to stacked below desktop:. */}
-      <div className="desktop:flex desktop:items-start desktop:gap-4">
+      <div className="grid gap-4 desktop:grid-cols-[20rem_minmax(0,1fr)] desktop:items-start">
+        {/* Who and the context of this visit. Phone: stacked. iPad portrait: side by side. Desktop: one column,
+            sticky (it is short enough to stay in view while the work column scrolls). */}
         <div
-          className={`desktop:w-80 desktop:shrink-0 ${
+          className={`grid content-start gap-4 sm:grid-cols-2 sm:items-start desktop:grid-cols-1 ${
             patient ? 'desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
           }`}
         >
           {patientPanel}
+          {thisVisitCard}
         </div>
-        <div className="mt-4 min-w-0 flex-1 desktop:mt-0">{visitPanel}</div>
+        <div className="min-w-0">{visitPanel}</div>
       </div>
 
       <VisitSaveBar
