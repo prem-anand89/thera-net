@@ -123,11 +123,11 @@ export function lastPackageShare(
 }
 
 /**
- * Why the visit's therapist is who it is, for the small label beside the field ("Booked", "Last visit", "You").
+ * Why the visit's therapist is who it is, for the small label beside the field ("Booked", "You"; the patient card already names the last visit's therapist).
  * Mirrors the order the page fills it in: the appointment's therapist, else the patient's last one, else the
- * logged-in therapist. Null when the person was picked by hand and matches none of them.
+ * logged-in therapist (the last one gets no label). Null when the person was picked by hand and matches none of them.
  */
-export type TherapistReason = 'Booked' | 'Last visit' | 'You';
+export type TherapistReason = 'Booked' | 'You';
 export function therapistReason(input: {
   therapistId: string;
   appointmentTherapistId?: string | null;
@@ -136,7 +136,6 @@ export function therapistReason(input: {
 }): TherapistReason | null {
   if (!input.therapistId) return null;
   if (input.appointmentTherapistId === input.therapistId) return 'Booked';
-  if (input.lastVisitTherapistId === input.therapistId) return 'Last visit';
   if (input.myTherapistId === input.therapistId) return 'You';
   return null;
 }

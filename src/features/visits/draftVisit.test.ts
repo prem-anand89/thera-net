@@ -144,7 +144,8 @@ describe('therapistReason', () => {
 
   it('follows the order the page fills the therapist in: booked, then last visit, then you', () => {
     expect(therapistReason({ ...base, appointmentTherapistId: 't1', lastVisitTherapistId: 't1', myTherapistId: 't1' })).toBe('Booked');
-    expect(therapistReason({ ...base, lastVisitTherapistId: 't1', myTherapistId: 't1' })).toBe('Last visit');
+    expect(therapistReason({ ...base, lastVisitTherapistId: 't1', myTherapistId: 't1' })).toBe('You');
+    expect(therapistReason({ ...base, lastVisitTherapistId: 't1' })).toBeNull();
     expect(therapistReason({ ...base, myTherapistId: 't1' })).toBe('You');
   });
 
