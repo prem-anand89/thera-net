@@ -18,11 +18,13 @@ export function ShowUpiQrButton({
   mrno,
   visitDate,
   patientName,
+  className,
 }: {
   amountPaise: Paise;
   mrno: string;
   visitDate: string;
   patientName?: string | null;
+  className?: string;
 }) {
   const clinic = useClinic();
   const [open, setOpen] = useState(false);
@@ -33,10 +35,30 @@ export function ShowUpiQrButton({
     <>
       <button
         type="button"
-        className="inline-flex h-8 items-center text-xs font-medium text-[var(--teal)] hover:underline"
+        className={
+          className ??
+          'inline-flex h-8 items-center gap-1.5 text-xs font-medium text-[var(--teal)] hover:underline'
+        }
         onClick={() => setOpen(true)}
       >
-        Show UPI QR
+        <svg
+          className="h-3.5 w-3.5 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="3" height="3" />
+          <path d="M14 20h3" />
+          <path d="M20 14v6" />
+        </svg>
+        <span>Show UPI QR</span>
       </button>
       {open && (
         <UpiQrModal

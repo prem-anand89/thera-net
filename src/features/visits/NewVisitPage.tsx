@@ -118,7 +118,7 @@ function SegmentedToggle<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex rounded-md border border-[var(--border)] p-0.5 text-xs sm:inline-flex">
+    <div className="flex w-full rounded-md border border-[var(--border)] p-0.5 text-xs sm:w-auto sm:inline-flex">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -925,6 +925,8 @@ export function NewVisitPage() {
     if (differentConfirmed && (!newPatient.age || !newPatient.sex)) {
       return setError('Add age and sex so this patient can be told apart from the similar one.');
     }
+    if (busy) return;
+    setBusy(true);
     try {
       const created = await patientService.create({
         clinicId: clinic.id,
@@ -944,6 +946,8 @@ export function NewVisitPage() {
       if (created.primaryCondition) setCondition(created.primaryCondition);
     } catch (e) {
       setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1245,6 +1249,7 @@ export function NewVisitPage() {
               setPatient(null);
               setCreatingPatient(false);
               setQuery('');
+              touchedRef.current = false;
             }}
           >
             Change
@@ -1554,10 +1559,10 @@ export function NewVisitPage() {
             <button
               type="button"
               className={btnPrimary}
-              disabled={!newPatient.name.trim()}
+              disabled={busy || !newPatient.name.trim()}
               onClick={() => void createPatient()}
             >
-              Create patient
+              {busy ? 'Creating…' : 'Create patient'}
             </button>
             <button type="button" className={btnSecondary} onClick={backToSearch}>
               Back to search
@@ -1817,7 +1822,7 @@ export function NewVisitPage() {
     <div className="space-y-4">
       {treatmentsCard}
 
-      <SectionCard title="Services">
+      <SectionCard id="visit-services" title="Services">
         <div className="grid grid-cols-1 gap-3">
           <ServiceRows
             rows={rows}
@@ -1879,9 +1884,8 @@ export function NewVisitPage() {
       {billPaise > 0 && canCollectPayment && (
         <div id="visit-payment" className="scroll-mt-24">
           <SectionCard title="Payment">
-            <div>
-            {/* One line from tablet up: when it's paid, then how (or the note for later). Wraps on phones. */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+            {/* One line from tablet up: when it's paid, then how (or the note for later). Stacked with room on phones. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2.5">
               <SegmentedToggle
                 value={paymentChoice}
                 onChange={setPaymentChoice}
@@ -1891,7 +1895,7 @@ export function NewVisitPage() {
                 ]}
               />
               {paymentChoice === 'paid' ? (
-                <>
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                   <PaymentMethodChips
                     value={paymentMethod}
                     onChange={setPaymentMethod}
@@ -1904,18 +1908,18 @@ export function NewVisitPage() {
                       mrno={patient.mrno}
                       visitDate={visitDate}
                       patientName={patient.name}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors shadow-2xs"
                     />
                   )}
-                </>
+                </div>
               ) : (
                 <input
-                  className={`${inputCls} min-w-[14rem] flex-1`}
+                  className={`${inputCls} w-full sm:min-w-[14rem] sm:flex-1`}
                   placeholder="Optional note — e.g. will pay next Monday"
                   value={pendingNote}
                   onChange={(e) => setPendingNote(e.target.value)}
                 />
               )}
-            </div>
             </div>
           </SectionCard>
         </div>
@@ -1930,7 +1934,7 @@ export function NewVisitPage() {
   return (
     // Extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div
-      className="nv-form mx-auto max-w-4xl space-y-4 pb-24"
+      className="nv-form mx-auto max-w-4xl space-y-4 pb-32 sm:pb-24"
       onPointerDownCapture={() => {
         touchedRef.current = true;
       }}
@@ -1991,9 +1995,10 @@ export function NewVisitPage() {
         busy={busy}
         onSave={() => void save()}
         onCancel={requestExit}
-        onSummaryClick={() =>
-          document.getElementById('visit-payment')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-        }
+        onSummaryClick={() => {
+          const el = document.getElementById('visit-payment') ?? document.getElementById('visit-services');
+          el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        }}
       />
 
       {patient && editingPatient && (
