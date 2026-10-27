@@ -112,7 +112,7 @@ export function BillAdjustmentFields({
             {(hasAdjustment || !hideUnadjustedPrice) && (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm">
           <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
-          <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
+          <span className="font-num font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
         </div>
       )}
 
@@ -188,7 +188,7 @@ export function BillAdjustmentFields({
           hideTotalWhenPlain && !summary ? 'hidden' : ''
         }`}
       >
-        <span className="font-medium">
+        <span className="font-num font-medium">
           {totalLabel}: {formatINR(billPaise)}
         </span>
         {summary && (

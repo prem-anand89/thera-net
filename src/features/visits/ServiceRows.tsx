@@ -384,7 +384,7 @@ export function ServiceRows({
                 >
                   {name}
                 </button>
-                <span className="shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">
+                <span className="shrink-0 font-num text-sm font-medium text-[var(--ink)]">
                   {formatINR(rowPricePaise(row, catalog))}
                 </span>
                 {rows.length > 1 && (
@@ -468,7 +468,7 @@ export function ServiceRows({
           )}
           {availableQuickServices.length > 0 && (
             <>
-              <span className="text-xs text-[var(--muted)]">Quick add:</span>
+              <span className="text-xs font-medium text-[var(--muted)]">Quick add:</span>
               {availableQuickServices.map((s) => (
                 <button key={s.id} type="button" className={chip} onClick={() => pickQuickService(s)}>
                   + {s.name}
@@ -629,7 +629,7 @@ function RowShare({
         {preview && (
           <>
             {' · '}
-            <span className="tabular-nums text-[var(--ink)]">≈ {preview}</span>
+            <span className="font-num text-[var(--ink)]">≈ {preview}</span>
           </>
         )}
         {row.sharePrefilled && ' · Same as last session'}

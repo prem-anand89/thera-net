@@ -1303,191 +1303,429 @@ export function NewVisitPage() {
     }
   };
 
-  const patientPanel = patient ? (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-3.5">
-      {/* 1. Patient identity (no duplicate condition display here) */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="truncate font-display text-base font-semibold text-[var(--ink)]">{patient.name}</span>
-            <button
-              type="button"
-              className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
-              onClick={() => setEditingPatient(true)}
-            >
-              Edit
-            </button>
-          </div>
-          <div className="mt-0.5 text-xs text-[var(--muted)]">
-            Patient ID <span className="font-medium tabular-nums text-[var(--ink)]">{patient.mrno}</span>
-            {patient.age != null && ` · ${patient.age}y`}
-            {patient.sex && ` · ${patient.sex}`}
-          </div>
-        </div>
-
-        {canChangePatient(search) && (
-          <button
-            type="button"
-            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)] transition-colors"
-            onClick={() => {
-              setPatient(null);
-              setCreatingPatient(false);
-              setQuery('');
-              touchedRef.current = false;
-            }}
-          >
-            Change
-          </button>
-        )}
-      </div>
-
-      <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
-
-      {patientBalance && patientBalance.duePaise > 0 && (
-        <div
-          role="status"
-          className="rounded-lg bg-[var(--amber-light)] px-3 py-1.5 text-xs font-medium text-[var(--amber)]"
-        >
-          Balance due {formatINR(patientBalance.duePaise)} · {patientBalance.unpaidVisits} unpaid{' '}
-          {patientBalance.unpaidVisits === 1 ? 'visit' : 'visits'}
-        </div>
-      )}
-
-      {/* 2. Recessed History Well: Package status & Last visit grouped */}
-      {(Boolean(openPackages?.length) || Boolean(finishedPackage) || Boolean(lastVisit)) && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 space-y-3">
-          {/* Package Row */}
-          {openPackages !== undefined && openPackages.length > 0 ? (
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-[var(--muted)]">
-                  {openPackages.length > 1 ? `Open packages (${openPackages.length})` : 'Open package'}
-                </span>
-                {packageBadge && (
-                  <Pill tone={PAYMENT_CHIP[packageBadge.kind].tone}>
-                    <span title={`The package itself: ${packageBadge.title}`}>{packageBadge.label}</span>
-                  </Pill>
-                )}
-              </div>
-              <div className="mt-1 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
-                <span
-                  className="inline-flex items-center gap-1"
-                  title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
-                >
-                  {Array.from({ length: openPackages[0].packageTotal }, (_, i) => (
-                    <span
-                      key={i}
-                      className={`h-2 w-2 rounded-full ${
-                        i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
-                      }`}
-                    />
-                  ))}
-                </span>
-                <span>
-                  {openPackages[0].logged} of {openPackages[0].packageTotal} used
-                </span>
-                <span>· started {formatDateDMY(openPackages[0].startedOn)}</span>
-              </div>
-            </div>
-          ) : finishedPackage ? (
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-[var(--muted)]">Package</span>
+  const leftCard = (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-4">
+      {/* 1. Patient section */}
+      {patient ? (
+        <div className="space-y-3.5">
+          {/* Patient identity header */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <h2 className="truncate font-display text-base font-semibold text-[var(--ink)]">{patient.name}</h2>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
-                  onClick={renewFinishedPackage}
+                  className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
+                  onClick={() => setEditingPatient(true)}
                 >
-                  + Renew {finishedPackage.total}d pkg
+                  Edit
                 </button>
               </div>
               <div className="mt-0.5 text-xs text-[var(--muted)]">
-                Last package finished {formatDateDMY(finishedPackage.finishedOn)} ·{' '}
-                {catalogNameById.get(finishedPackage.serviceCatalogId) ?? 'Package'} ({finishedPackage.total} of{' '}
-                {finishedPackage.total} used)
+                Patient ID <span className="font-num font-medium text-[var(--ink)]">{patient.mrno}</span>
+                {patient.age != null && ` · ${patient.age}y`}
+                {patient.sex && ` · ${patient.sex}`}
               </div>
             </div>
-          ) : null}
 
-          {/* Last Visit Row */}
-          {patientVisits !== undefined && lastVisit && (
-            <div className={openPackages?.length || finishedPackage ? 'border-t border-[var(--border)] pt-2.5' : ''}>
-              {(() => {
-                const state = computeVisitPaymentState(
-                  lastVisit.actualBillPaise,
-                  lastVisit.invoiceId,
-                  lastVisitDirectPaymentPaise,
-                  lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
-                );
-                const badge = paymentBadge({
-                  state,
-                  billPaise: lastVisit.actualBillPaise,
-                  collectedPaise: lastVisitDirectPaymentPaise,
-                  visitDate: lastVisit.visitDate,
-                  issuedAt: lastVisitInvoice?.issuedAt,
-                  isPackageSession: isPackageContinuation(
-                    lastVisit.sessionIndex,
-                    lastVisit.packageTotal
-                  ),
-                });
-                const session =
-                  lastVisit.sessionIndex && lastVisit.packageTotal && lastVisit.packageTotal > 1
-                    ? `Session ${lastVisit.sessionIndex} of ${lastVisit.packageTotal}`
-                    : null;
-                const who = allTherapists?.find((t) => t.id === lastVisit.therapistId)?.name ?? null;
-                const sessionAndWho = [session, who].filter(Boolean).join(' · ');
+            {canChangePatient(search) && (
+              <button
+                type="button"
+                className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)] transition-colors"
+                onClick={() => {
+                  setPatient(null);
+                  setCreatingPatient(false);
+                  setQuery('');
+                  touchedRef.current = false;
+                }}
+              >
+                Change
+              </button>
+            )}
+          </div>
 
-                return (
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-[var(--muted)]">Last visit</span>
-                        <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                          <span title={badge.title}>
-                            {badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}
-                          </span>
-                        </Pill>
-                      </div>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
-                        onClick={repeatLastVisit}
-                        title="Pre-fill therapist, treatments, and service from last visit"
-                      >
-                        <span aria-hidden="true">↻</span> Repeat visit
-                      </button>
-                    </div>
-                    <div className="mt-1 flex items-baseline gap-2">
-                      <span className="shrink-0 text-xs font-medium tabular-nums text-[var(--ink)]">
-                        {formatDateDMY(lastVisit.visitDate)}
-                      </span>
-                      <span className="min-w-0 truncate text-xs text-[var(--muted)]">
-                        · {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
-                      </span>
-                    </div>
-                    {sessionAndWho && <div className="mt-0.5 text-xs text-[var(--ink)]">{sessionAndWho}</div>}
-                    {lastVisitTreatments && (
-                      <div className="mt-0.5 text-xs text-[var(--muted)]">
-                        Treatments: <span className="text-[var(--ink)]">{lastVisitTreatments}</span>
-                      </div>
+          <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
+
+          {patientBalance && patientBalance.duePaise > 0 && (
+            <div
+              role="status"
+              className="rounded-lg bg-[var(--amber-light)] px-3 py-1.5 text-xs font-medium text-[var(--amber)]"
+            >
+              Balance due {formatINR(patientBalance.duePaise)} · {patientBalance.unpaidVisits} unpaid{' '}
+              {patientBalance.unpaidVisits === 1 ? 'visit' : 'visits'}
+            </div>
+          )}
+
+          {/* Recessed History Well: Package status & Last visit grouped */}
+          {(Boolean(openPackages?.length) || Boolean(finishedPackage) || Boolean(lastVisit)) && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 space-y-3">
+              {/* Package Row */}
+              {openPackages !== undefined && openPackages.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-[var(--muted)]">
+                      {openPackages.length > 1 ? `Open packages (${openPackages.length})` : 'Open package'}
+                    </span>
+                    {packageBadge && (
+                      <Pill tone={PAYMENT_CHIP[packageBadge.kind].tone}>
+                        <span title={`The package itself: ${packageBadge.title}`}>{packageBadge.label}</span>
+                      </Pill>
                     )}
                   </div>
-                );
-              })()}
+                  <div className="mt-1 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
+                    <span
+                      className="inline-flex items-center gap-1"
+                      title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
+                    >
+                      {Array.from({ length: openPackages[0].packageTotal }, (_, i) => (
+                        <span
+                          key={i}
+                          className={`h-2 w-2 rounded-full ${
+                            i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
+                          }`}
+                        />
+                      ))}
+                    </span>
+                    <span>
+                      {openPackages[0].logged} of {openPackages[0].packageTotal} used
+                    </span>
+                    <span>· started {formatDateDMY(openPackages[0].startedOn)}</span>
+                  </div>
+                </div>
+              ) : finishedPackage ? (
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-[var(--muted)]">Package</span>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
+                      onClick={renewFinishedPackage}
+                    >
+                      + Renew {finishedPackage.total}d pkg
+                    </button>
+                  </div>
+                  <div className="mt-0.5 text-xs text-[var(--muted)]">
+                    Last package finished {formatDateDMY(finishedPackage.finishedOn)} ·{' '}
+                    {catalogNameById.get(finishedPackage.serviceCatalogId) ?? 'Package'} ({finishedPackage.total} of{' '}
+                    {finishedPackage.total} used)
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Last Visit Row */}
+              {patientVisits !== undefined && lastVisit && (
+                <div className={openPackages?.length || finishedPackage ? 'border-t border-[var(--border)] pt-2.5' : ''}>
+                  {(() => {
+                    const state = computeVisitPaymentState(
+                      lastVisit.actualBillPaise,
+                      lastVisit.invoiceId,
+                      lastVisitDirectPaymentPaise,
+                      lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
+                    );
+                    const badge = paymentBadge({
+                      state,
+                      billPaise: lastVisit.actualBillPaise,
+                      collectedPaise: lastVisitDirectPaymentPaise,
+                      visitDate: lastVisit.visitDate,
+                      issuedAt: lastVisitInvoice?.issuedAt,
+                      isPackageSession: isPackageContinuation(
+                        lastVisit.sessionIndex,
+                        lastVisit.packageTotal
+                      ),
+                    });
+                    const session =
+                      lastVisit.sessionIndex && lastVisit.packageTotal && lastVisit.packageTotal > 1
+                        ? `Session ${lastVisit.sessionIndex} of ${lastVisit.packageTotal}`
+                        : null;
+                    const who = allTherapists?.find((t) => t.id === lastVisit.therapistId)?.name ?? null;
+                    const sessionAndWho = [session, who].filter(Boolean).join(' · ');
+
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-[var(--muted)]">Last visit</span>
+                            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                              <span title={badge.title}>
+                                {badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}
+                              </span>
+                            </Pill>
+                          </div>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
+                            onClick={repeatLastVisit}
+                            title="Pre-fill therapist, treatments, and service from last visit"
+                          >
+                            <span aria-hidden="true">↻</span> Repeat visit
+                          </button>
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-2">
+                          <span className="shrink-0 text-xs font-medium tabular-nums text-[var(--ink)]">
+                            {formatDateDMY(lastVisit.visitDate)}
+                          </span>
+                          <span className="min-w-0 truncate text-xs text-[var(--muted)]">
+                            · {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
+                          </span>
+                        </div>
+                        {sessionAndWho && <div className="mt-0.5 text-xs text-[var(--ink)]">{sessionAndWho}</div>}
+                        {lastVisitTreatments && (
+                          <div className="mt-0.5 text-xs text-[var(--muted)]">
+                            Treatments: <span className="text-[var(--ink)]">{lastVisitTreatments}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-semibold text-[var(--ink)]">Patient</h2>
+          </div>
+          {creatingPatient ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3">
+                <Field label="Name *">
+                  <input
+                    className={inputCls}
+                    value={newPatient.name}
+                    onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                    placeholder="Patient name"
+                    autoFocus
+                  />
+                </Field>
+                <Field label="Phone" htmlFor="new-visit-phone">
+                  <PhoneField
+                    id="new-visit-phone"
+                    placeholder="Recommended"
+                    value={newPatient.phone}
+                    onChange={(phone) => setNewPatient({ ...newPatient, phone })}
+                  />
+                </Field>
+                <SimilarPatients
+                  matches={similar}
+                  lastVisitOn={lastVisitOn}
+                  differentConfirmed={differentConfirmed}
+                  onUse={(p) => {
+                    selectPatientFromSearch(p);
+                    setCreatingPatient(false);
+                  }}
+                  onDifferent={() => setDifferentKey(similarKey)}
+                />
+                {!newPatient.phone.trim() && (
+                  <p className="text-xs text-[var(--muted)]">
+                    No phone on file — fine for a walk-in with none, but it limits later search and duplicate checks.
+                  </p>
+                )}
+                <Field label="Age">
+                  <input
+                    type="number"
+                    className={inputCls}
+                    placeholder="Optional"
+                    value={newPatient.age}
+                    onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+                  />
+                </Field>
+                <Field label="Sex">
+                  <select
+                    className={inputCls}
+                    value={newPatient.sex}
+                    onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
+                  >
+                    <option value="">—</option>
+                    <option value="M">M</option>
+                    <option value="F">F</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Primary condition">
+                  <input
+                    className={inputCls}
+                    placeholder="e.g. Neck Pain"
+                    value={newPatient.primaryCondition}
+                    onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
+                  />
+                </Field>
+                <Field label="Referring source">
+                  <select
+                    className={inputCls}
+                    value={newPatient.referringSourceId}
+                    onChange={(e) =>
+                      setNewPatient({
+                        ...newPatient,
+                        referringSourceId: e.target.value,
+                        referringSourceDetail: '',
+                      })
+                    }
+                  >
+                    <option value="">—</option>
+                    {referringSources.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
+                  <Field
+                    label={
+                      referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!
+                    }
+                  >
+                    <input
+                      className={inputCls}
+                      value={newPatient.referringSourceDetail}
+                      onChange={(e) =>
+                        setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })
+                      }
+                    />
+                  </Field>
+                )}
+                <details
+                  className="rounded-lg border border-[var(--border)] px-3 py-2"
+                  open={Boolean(newPatient.email || newPatient.altPhone || newPatient.mrno)}
+                >
+                  <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
+                    More details <span className="font-normal text-[var(--muted)]">(optional)</span>
+                  </summary>
+                  <div className="mt-3 grid grid-cols-1 gap-3">
+                    <Field label="Email">
+                      <input
+                        type="email"
+                        className={inputCls}
+                        value={newPatient.email}
+                        onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Alternate phone" htmlFor="new-visit-alt-phone">
+                      <PhoneField
+                        id="new-visit-alt-phone"
+                        placeholder="Family member, landline…"
+                        value={newPatient.altPhone}
+                        onChange={(altPhone) => setNewPatient({ ...newPatient, altPhone })}
+                      />
+                    </Field>
+                    <Field label="Patient ID">
+                      <input
+                        className={inputCls}
+                        placeholder="Leave blank to auto-generate"
+                        value={newPatient.mrno}
+                        onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
+                      />
+                    </Field>
+                    <p className="text-xs text-[var(--muted)]">Use Patient ID only to keep a number from old records.</p>
+                  </div>
+                </details>
+              </div>
+              <p className="text-xs text-[var(--muted)]">
+                You can complete the rest of these later from the profile.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  disabled={busy || !newPatient.name.trim()}
+                  onClick={() => void createPatient()}
+                >
+                  {busy ? 'Creating…' : 'Create patient'}
+                </button>
+                <button type="button" className={btnSecondary} onClick={backToSearch}>
+                  Back to search
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input
+                type="search"
+                enterKeyHint="search"
+                aria-label="Find patient"
+                className={inputCls}
+                placeholder="Search ID, name or phone…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && matches?.[0]) {
+                    e.preventDefault();
+                    selectPatientFromSearch(matches[0]);
+                  }
+                }}
+                autoFocus
+              />
+              {query.trim() ? (
+                <>
+                  {(matches ?? []).map((p) => {
+                    const subtitle = formatPatientSearchResultSubtitle(p);
+                    return (
+                      <button
+                        type="button"
+                        key={p.id}
+                        className="flex min-h-11 w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)] transition-colors"
+                        onClick={() => selectPatientFromSearch(p)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-display font-medium text-[var(--ink)]">{p.name}</div>
+                          {subtitle && (
+                            <div className="truncate text-xs text-[var(--muted)]">
+                              {subtitle}
+                            </div>
+                          )}
+                        </div>
+                        <span className="ml-2 shrink-0 text-xs tabular-nums text-[var(--muted)]">{p.mrno}</span>
+                      </button>
+                    );
+                  })}
+                  {matches?.length === 0 && (
+                    <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
+                      No existing patient found.
+                    </p>
+                  )}
+                </>
+              ) : (
+                recentPatients.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Recently seen</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {recentPatients.map((p) => (
+                        <button
+                          type="button"
+                          key={p.patientId}
+                          className="min-h-9 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
+                          onClick={() =>
+                            void repos.patients
+                              .get(p.patientId)
+                              .then((full) => full && selectPatientFromSearch(full))
+                          }
+                        >
+                          <span className="font-display font-medium">{p.patientName}</span>{' '}
+                          <span className="font-num text-[var(--muted)]">{p.mrno}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
+              <button type="button" className={btnSecondary} onClick={startCreatingPatient}>
+                + New patient
+              </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 3. This visit interactive inputs */}
-      <div className="border-t border-[var(--border)] pt-3.5 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">This visit</span>
-        </div>
+      {/* 2. Divider between Patient and This Visit */}
+      <div className="border-t border-[var(--border)]" />
 
-        <div>
-          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Place of service</span>
+      {/* 3. This visit interactive inputs */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-base font-semibold text-[var(--ink)]">This visit</h2>
           <SegmentedToggle
             value={location}
             onChange={setLocation}
@@ -1624,9 +1862,9 @@ export function NewVisitPage() {
         )}
       </div>
 
-      {/* 4. Start note button (quiet secondary action at bottom) */}
-      {clinic.clinicalDocsEnabled && canWriteNotes && (
-        <div className="border-t border-[var(--border)] pt-3">
+      {/* 4. Start note button (quiet clinical bridge at bottom, only when patient selected) */}
+      {patient && clinic.clinicalDocsEnabled && canWriteNotes && (
+        <div className="border-t border-[var(--border)] pt-1">
           <button
             type="button"
             className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--surface)] transition-colors"
@@ -1651,342 +1889,6 @@ export function NewVisitPage() {
         </div>
       )}
     </div>
-  ) : (
-    <SectionCard title="Patient">
-      {creatingPatient ? (
-        // Creating — no existing match; capture the new patient. Only
-        // name and phone are asked for up front, everything else is
-        // explicitly optional and can be filled in later from the profile.
-        // Single column, not sm:grid-cols-2 -- this always renders in the
-        // fixed-width side panel now, and sm: is a viewport breakpoint,
-        // not a container one, so it would force two columns into a
-        // panel too narrow for them on any normal-width screen. None of
-        // the fields below may carry col-span-2 either, even though the
-        // grid is single-column already -- a spanning child still forces
-        // CSS Grid to open a second implicit column and auto-place every
-        // other field two-per-row into it, silently reintroducing the
-        // exact squeeze this comment says was ruled out.
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <Field label="Name *">
-              <input
-                className={inputCls}
-                value={newPatient.name}
-                onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                placeholder="Patient name"
-                autoFocus
-              />
-            </Field>
-            <Field label="Phone" htmlFor="new-visit-phone">
-              <PhoneField
-                id="new-visit-phone"
-                placeholder="Recommended"
-                value={newPatient.phone}
-                onChange={(phone) => setNewPatient({ ...newPatient, phone })}
-              />
-            </Field>
-            <SimilarPatients
-              matches={similar}
-              lastVisitOn={lastVisitOn}
-              differentConfirmed={differentConfirmed}
-              onUse={(p) => {
-                selectPatientFromSearch(p);
-                setCreatingPatient(false);
-              }}
-              onDifferent={() => setDifferentKey(similarKey)}
-            />
-            {!newPatient.phone.trim() && (
-              <p className="text-xs text-[var(--muted)]">
-                No phone on file — fine for a walk-in with none, but it limits later search and
-                duplicate checks.
-              </p>
-            )}
-            <Field label="Age">
-              <input
-                type="number"
-                className={inputCls}
-                placeholder="Optional"
-                value={newPatient.age}
-                onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-              />
-            </Field>
-            <Field label="Sex">
-              <select
-                className={inputCls}
-                value={newPatient.sex}
-                onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
-              >
-                <option value="">—</option>
-                <option value="M">M</option>
-                <option value="F">F</option>
-                <option value="Other">Other</option>
-              </select>
-            </Field>
-            <Field label="Primary condition">
-              <input
-                className={inputCls}
-                placeholder="e.g. Neck Pain"
-                value={newPatient.primaryCondition}
-                onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
-              />
-            </Field>
-            <Field label="Referring source">
-              <select
-                className={inputCls}
-                value={newPatient.referringSourceId}
-                onChange={(e) =>
-                  setNewPatient({
-                    ...newPatient,
-                    referringSourceId: e.target.value,
-                    referringSourceDetail: '',
-                  })
-                }
-              >
-                <option value="">—</option>
-                {referringSources.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
-              <Field
-                label={
-                  referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!
-                }
-              >
-                <input
-                  className={inputCls}
-                  value={newPatient.referringSourceDetail}
-                  onChange={(e) =>
-                    setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })
-                  }
-                />
-              </Field>
-            )}
-            <details className="rounded-lg border border-[var(--border)] px-3 py-2" open={Boolean(newPatient.email || newPatient.altPhone || newPatient.mrno)}>
-              <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
-                More details <span className="font-normal text-[var(--muted)]">(optional)</span>
-              </summary>
-              <div className="mt-3 grid grid-cols-1 gap-3">
-                <Field label="Email">
-                  <input
-                    type="email"
-                    className={inputCls}
-                    value={newPatient.email}
-                    onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
-                  />
-                </Field>
-                <Field label="Alternate phone" htmlFor="new-visit-alt-phone">
-                  <PhoneField
-                    id="new-visit-alt-phone"
-                    placeholder="Family member, landline…"
-                    value={newPatient.altPhone}
-                    onChange={(altPhone) => setNewPatient({ ...newPatient, altPhone })}
-                  />
-                </Field>
-                <Field label="Patient ID">
-                  <input
-                    className={inputCls}
-                    placeholder="Leave blank to auto-generate"
-                    value={newPatient.mrno}
-                    onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
-                  />
-                </Field>
-                <p className="text-xs text-[var(--muted)]">Use Patient ID only to keep a number from old records.</p>
-              </div>
-            </details>
-          </div>
-          <p className="text-xs text-[var(--muted)]">
-            You can complete the rest of these later from the profile.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={btnPrimary}
-              disabled={busy || !newPatient.name.trim()}
-              onClick={() => void createPatient()}
-            >
-              {busy ? 'Creating…' : 'Create patient'}
-            </button>
-            <button type="button" className={btnSecondary} onClick={backToSearch}>
-              Back to search
-            </button>
-          </div>
-        </div>
-      ) : (
-        // Searching — the default state. A single box matches Patient ID,
-        // name, or phone; a recent-patients quick-pick covers the common
-        // "who's next" case without typing anything.
-        <div className="space-y-3">
-          <input
-            type="search"
-            enterKeyHint="search"
-            aria-label="Find patient"
-            className={inputCls}
-            placeholder="Search ID, name or phone…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter takes the first match, so a typed ID or phone needs no extra tap.
-              if (e.key === 'Enter' && matches?.[0]) {
-                e.preventDefault();
-                selectPatientFromSearch(matches[0]);
-              }
-            }}
-            autoFocus
-          />
-          {query.trim() ? (
-            <>
-              {(matches ?? []).map((p) => {
-                const subtitle = formatPatientSearchResultSubtitle(p);
-                return (
-                  <button
-                    type="button"
-                    key={p.id}
-                    className="flex min-h-11 w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
-                    onClick={() => selectPatientFromSearch(p)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium text-[var(--ink)]">{p.name}</div>
-                      {subtitle && (
-                        <div className="truncate text-xs text-[var(--muted)]">
-                          {subtitle}
-                        </div>
-                      )}
-                    </div>
-                    <span className="ml-2 shrink-0 text-xs tabular-nums text-[var(--muted)]">{p.mrno}</span>
-                  </button>
-                );
-              })}
-              {matches?.length === 0 && (
-                <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
-                  No existing patient found.
-                </p>
-              )}
-            </>
-          ) : (
-            recentPatients.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Recently seen</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {recentPatients.map((p) => (
-                    <button
-                      type="button"
-                      key={p.patientId}
-                      className="min-h-9 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                      onClick={() =>
-                        void repos.patients
-                          .get(p.patientId)
-                          .then((full) => full && selectPatientFromSearch(full))
-                      }
-                    >
-                      {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          )}
-          <button type="button" className={btnSecondary} onClick={startCreatingPatient}>
-            + New patient
-          </button>
-        </div>
-      )}
-    </SectionCard>
-  );
-
-  const thisVisitCard = (
-    <SectionCard title="This visit">
-      <div className="space-y-3">
-        <div>
-          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Place of service</span>
-          <SegmentedToggle
-            value={location}
-            onChange={setLocation}
-            options={[
-              { value: 'clinic', label: 'Clinic' },
-              { value: 'home', label: 'Home visit' },
-            ]}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Date</span>
-            <label className="relative flex h-8 cursor-pointer items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] transition-colors">
-              <span className="truncate tabular-nums">{visitDateLabel}</span>
-              <span aria-hidden="true" className="shrink-0 text-[10px] text-[var(--muted)] ml-1">▾</span>
-              <input
-                type="date"
-                aria-label="Visit date"
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                value={visitDate}
-                onChange={(e) => setVisitDate(e.target.value)}
-                onClick={(e) => {
-                  try {
-                    e.currentTarget.showPicker?.();
-                  } catch {
-                    /* fallback */
-                  }
-                }}
-              />
-            </label>
-          </div>
-
-          <div>
-            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Therapist *</span>
-            <PickerMenu
-              ariaLabel="Therapist"
-              caption="Who treated the patient"
-              value={therapistChosen ? therapistId : ''}
-              options={therapistList.map((t) => ({
-                value: t.id,
-                label: t.id === myTherapistId ? `${t.name} (You)` : t.name,
-                dotColor: therapistColor(t.id, t.color),
-              }))}
-              onChange={setTherapistId}
-              triggerClassName={`flex h-8 w-full items-center justify-between rounded-full border px-3 text-xs font-medium transition-colors ${
-                therapistChosen
-                  ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
-                  : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
-              }`}
-              renderTrigger={(selected) => (
-                <>
-                  <div className="flex min-w-0 items-center gap-1.5 truncate">
-                    {selected?.dotColor && (
-                      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: selected.dotColor }} />
-                    )}
-                    <span className="truncate">{selected?.label ?? 'Choose therapist'}</span>
-                  </div>
-                  <span aria-hidden="true" className="shrink-0 text-[10px] ml-1 opacity-70">▾</span>
-                </>
-              )}
-            />
-          </div>
-        </div>
-
-        {clinicalHidden ? (
-          <button
-            type="button"
-            className="text-left text-xs font-medium text-[var(--teal)] hover:underline"
-            onClick={() => setClinicalDetailsExpanded(true)}
-          >
-            + Add condition / treatments (optional)
-          </button>
-        ) : (
-          <Field label="Condition (this visit)">
-            <input
-              className={inputCls}
-              placeholder="e.g. Knee Pain"
-              value={condition}
-              onChange={(e) => setCondition(e.target.value)}
-            />
-          </Field>
-        )}
-      </div>
-    </SectionCard>
   );
 
   // --- Treatments: the chips while ticking, one summary line once folded.
@@ -2033,7 +1935,7 @@ export function NewVisitPage() {
             ) : undefined
           }
         />
-        <p className="text-xs text-[var(--muted)]">Other treatments / notes</p>
+        <p className="mb-1 text-xs font-medium text-[var(--muted)]">Other treatments / notes</p>
         <input
           className={inputCls}
           aria-label="Other treatments / notes"
@@ -2057,7 +1959,9 @@ export function NewVisitPage() {
         </button>
       }
     >
-      <p className="text-sm text-[var(--ink)]">{treatmentSummary}</p>
+      <p className={`text-sm ${treatmentSummary === 'None added' ? 'text-[var(--muted)]' : 'text-[var(--ink)]'}`}>
+        {treatmentSummary}
+      </p>
     </SectionCard>
   );
 
@@ -2128,40 +2032,46 @@ export function NewVisitPage() {
         <div id="visit-payment" className="scroll-mt-24">
           <SectionCard title="Payment">
             {/* One line from tablet up: when it's paid, then how (or the note for later). Stacked with room on phones. */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2.5">
-              <SegmentedToggle
-                value={paymentChoice}
-                onChange={setPaymentChoice}
-                options={[
-                  { value: 'paid', label: 'Collected now' },
-                  { value: 'pending', label: 'Take payment later' },
-                ]}
-              />
-              {paymentChoice === 'paid' ? (
-                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2.5">
+                <SegmentedToggle
+                  value={paymentChoice}
+                  onChange={setPaymentChoice}
+                  options={[
+                    { value: 'paid', label: 'Collected now' },
+                    { value: 'pending', label: 'Take payment later' },
+                  ]}
+                />
+                {paymentChoice === 'paid' ? (
                   <PaymentMethodChips
                     value={paymentMethod}
                     onChange={setPaymentMethod}
                     options={paymentMethods}
                     disabled={busy}
                   />
-                  {paymentMethod === 'upi' && patient && (
-                    <ShowUpiQrButton
-                      amountPaise={billPaise}
-                      mrno={patient.mrno}
-                      visitDate={visitDate}
-                      patientName={patient.name}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors shadow-2xs"
-                    />
-                  )}
+                ) : (
+                  <input
+                    className={`${inputCls} w-full sm:min-w-[14rem] sm:flex-1`}
+                    placeholder="Optional note — e.g. will pay next Monday"
+                    value={pendingNote}
+                    onChange={(e) => setPendingNote(e.target.value)}
+                  />
+                )}
+              </div>
+
+              {paymentChoice === 'paid' && paymentMethod === 'upi' && patient && (
+                <div className="flex items-center gap-2.5 pt-0.5">
+                  <ShowUpiQrButton
+                    amountPaise={billPaise}
+                    mrno={patient.mrno}
+                    visitDate={visitDate}
+                    patientName={patient.name}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors shadow-2xs"
+                  />
+                  <span className="text-xs text-[var(--muted)]">
+                    Scan to collect {formatINR(billPaise)} directly to clinic UPI
+                  </span>
                 </div>
-              ) : (
-                <input
-                  className={`${inputCls} w-full sm:min-w-[14rem] sm:flex-1`}
-                  placeholder="Optional note — e.g. will pay next Monday"
-                  value={pendingNote}
-                  onChange={(e) => setPendingNote(e.target.value)}
-                />
               )}
             </div>
           </SectionCard>
@@ -2185,29 +2095,45 @@ export function NewVisitPage() {
         touchedRef.current = true;
       }}
     >
-      {/* Phones: the app header is hidden on this page (Shell), so this slim bar is the page's header — it stays
-          while the form scrolls, so the way out and who the visit is for are always in view. */}
-      <div className="flex items-center gap-1 max-sm:sticky max-sm:top-0 max-sm:z-20 max-sm:-mx-4 max-sm:-mt-6 max-sm:border-b max-sm:border-[var(--border)] max-sm:bg-[var(--surface)] max-sm:px-2 max-sm:pt-[env(safe-area-inset-top)] sm:gap-2">
-        <button
-          type="button"
-          aria-label="Back"
-          disabled={busy}
-          onClick={requestExit}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-40 sm:hidden"
-        >
-          <span aria-hidden="true" className="text-xl leading-none">←</span>
-        </button>
-        <h1 className="shrink-0 font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
-        {patient && (
-          <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)] sm:hidden">· {patient.name}</span>
-        )}
+      {/* Page navigational sub-header: breadcrumb back, title, and status */}
+      <div className="flex items-center justify-between gap-3 max-sm:sticky max-sm:top-0 max-sm:z-20 max-sm:-mx-4 max-sm:-mt-6 max-sm:border-b max-sm:border-[var(--border)] max-sm:bg-[var(--surface)] max-sm:px-2 max-sm:pt-[env(safe-area-inset-top)] sm:pt-1 sm:pb-0.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Back button on phone (icon) and desktop (pill/breadcrumb) */}
+          <button
+            type="button"
+            aria-label="Back"
+            disabled={busy}
+            onClick={requestExit}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-40 sm:hidden"
+          >
+            <span aria-hidden="true" className="text-xl leading-none">←</span>
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={requestExit}
+            className="hidden items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] transition-colors sm:inline-flex"
+            title="Back to previous page"
+          >
+            <span aria-hidden="true">←</span>
+            <span>{search.from === '/schedule' ? 'Schedule' : search.from === '/ledger' ? 'Ledger' : 'Workspace'}</span>
+          </button>
+          <span className="hidden text-xs text-[var(--border)] sm:inline" aria-hidden="true">/</span>
+          <h1 className="shrink-0 font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+          {patient && (
+            <span className="min-w-0 truncate text-xs text-[var(--muted)]">· {patient.name}</span>
+          )}
+        </div>
         {isDirty && (
-          <span
-            role="img"
-            aria-label="Unsaved changes"
-            title="Unsaved changes"
-            className="mr-2 ml-auto h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--amber)] sm:hidden"
-          />
+          <div className="flex items-center gap-1.5 text-xs text-[var(--amber)]">
+            <span
+              role="img"
+              aria-label="Unsaved changes"
+              title="Unsaved changes"
+              className="h-2 w-2 shrink-0 rounded-full bg-[var(--amber)]"
+            />
+            <span className="hidden sm:inline font-medium">Unsaved changes</span>
+          </div>
         )}
       </div>
       <VisitCapNotice />
@@ -2218,17 +2144,9 @@ export function NewVisitPage() {
           page's own structure doesn't, so picking a patient doesn't cause a
           jarring column-count/width jump. Collapses to stacked below desktop:. */}
       <div className="grid gap-4 desktop:grid-cols-[22.5rem_minmax(0,1fr)] desktop:items-start">
-        {/* Who and the context of this visit. Phone: stacked. iPad portrait: side by side if searching, single card if patient confirmed. Desktop: one column,
-            sticky (it is short enough to stay in view while the work column scrolls). */}
-        <div
-          className={`grid content-start gap-4 ${
-            patient ? 'grid-cols-1' : 'sm:grid-cols-2 desktop:grid-cols-1'
-          } ${
-            patient ? 'desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
-          }`}
-        >
-          {patientPanel}
-          {!patient && thisVisitCard}
+        {/* Left card: unified patient info + this visit context */}
+        <div className="desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]">
+          {leftCard}
         </div>
         <div className="min-w-0">{visitPanel}</div>
       </div>
