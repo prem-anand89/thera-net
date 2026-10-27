@@ -2104,9 +2104,9 @@ export function NewVisitPage() {
         touchedRef.current = true;
       }}
     >
-      {/* Page navigational sub-header: Back button, title, and status */}
-      <div className="space-y-3 sm:space-y-4">
-        <div className="flex items-center justify-between gap-3">
+      {/* Page navigational header: Back button, title beside it, and status on the right */}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             disabled={busy}
@@ -2117,58 +2117,22 @@ export function NewVisitPage() {
             <IconChevronLeft className="h-4 w-4" aria-hidden="true" />
             <span>{backLabel}</span>
           </button>
-
-          {isDirty && (
-            <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber)]">
-              <span
-                role="img"
-                aria-label="Unsaved changes"
-                title="Unsaved changes"
-                className="h-2 w-2 shrink-0 rounded-full bg-[var(--amber)]"
-              />
-              <span>Unsaved changes</span>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--ink)] sm:text-3xl">
+          <h1 className="font-display text-xl font-semibold text-[var(--ink)] sm:text-2xl">
             New visit
           </h1>
-          {patient ? (
-            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-[var(--muted)]">
-              <span>
-                For <strong className="font-display font-medium text-[var(--ink)]">{patient.name}</strong>
-              </span>
-              <span className="text-[var(--border)]" aria-hidden="true">·</span>
-              <span>
-                Patient ID <span className="font-num font-medium text-[var(--ink)]">{patient.mrno}</span>
-              </span>
-              {patient.age != null && (
-                <>
-                  <span className="text-[var(--border)]" aria-hidden="true">·</span>
-                  <span>{patient.age}y</span>
-                </>
-              )}
-              {patient.sex && (
-                <>
-                  <span className="text-[var(--border)]" aria-hidden="true">·</span>
-                  <span>{patient.sex}</span>
-                </>
-              )}
-              {patient.phone && (
-                <>
-                  <span className="text-[var(--border)]" aria-hidden="true">·</span>
-                  <span>📞 {patient.phone}</span>
-                </>
-              )}
-            </div>
-          ) : (
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Log treatments, billable services, and collect payment for a visit.
-            </p>
-          )}
         </div>
+
+        {isDirty && (
+          <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber)]">
+            <span
+              role="img"
+              aria-label="Unsaved changes"
+              title="Unsaved changes"
+              className="h-2 w-2 shrink-0 rounded-full bg-[var(--amber)]"
+            />
+            <span>Unsaved changes</span>
+          </div>
+        )}
       </div>
       <VisitCapNotice />
 
