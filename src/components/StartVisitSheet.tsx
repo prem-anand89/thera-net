@@ -1,6 +1,7 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import type { NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -186,11 +187,19 @@ export function StartVisitSheet({
   }
 
   const therapistName = (therapists ?? []).find((t) => t.id === therapistId)?.name;
+  const isKnownPatient = Boolean(appointment?.patientId || initialPatientId);
+  const isFromNewVisit = Boolean(initialPatientId && !appointment);
+  const targetPatient = (patients ?? []).find(
+    (p) => p.id === (patientId || appointment?.patientId || initialPatientId)
+  );
 
-  return (
+  if (!open) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        ref={dialogRef} role="dialog"
+        ref={dialogRef}
+        role="dialog"
         aria-modal="true"
         aria-labelledby="start-visit-title"
         className="w-full rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
@@ -199,19 +208,44 @@ export function StartVisitSheet({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 id="start-visit-title" className="font-display text-lg font-semibold text-[var(--ink)]">
-              {appointment ? `Start with ${appointment.patientName}` : 'Start a visit'}
+              {isFromNewVisit
+                ? 'Start clinical note'
+                : appointment
+                  ? `Start with ${appointment.patientName}`
+                  : 'Start a visit'}
             </h2>
             <p className="text-sm text-[var(--muted)]">
-              Write notes now and add the service and payment later — or log the visit straight away.
+              {isFromNewVisit
+                ? 'Write clinical notes now — your visit services and payment can be completed anytime.'
+                : 'Write notes now and add the service and payment later — or log the visit straight away.'}
             </p>
           </div>
-          <button type="button" className="min-h-11 px-2 text-sm text-[var(--muted)]" onClick={onClose}>
+          <button type="button" className="min-h-11 px-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]" onClick={onClose}>
             Close
           </button>
         </div>
 
         <div className="space-y-4">
-          {!(appointment?.patientId) && (
+          {isKnownPatient ? (
+            <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--teal-light)] font-display text-base font-semibold text-[var(--teal)]">
+                {targetPatient?.name?.slice(0, 2).toUpperCase() ?? appointment?.patientName?.slice(0, 2).toUpperCase() ?? 'PT'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display font-medium text-[var(--ink)]">
+                  {targetPatient?.name ?? appointment?.patientName}
+                </div>
+                <div className="text-xs text-[var(--muted)]">
+                  {targetPatient?.mrno && (
+                    <span>Patient ID <span className="font-num font-medium text-[var(--ink)]">{targetPatient.mrno}</span></span>
+                  )}
+                  {targetPatient?.age != null && ` · ${targetPatient.age}y`}
+                  {targetPatient?.sex && ` · ${targetPatient.sex}`}
+                  {targetPatient?.phone && ` · ${targetPatient.phone}`}
+                </div>
+              </div>
+            </div>
+          ) : (
             <div>
               <div className="mb-3 flex gap-2">
                 <button type="button" className={mode === 'find' ? btnPrimary : btnSecondary} onClick={() => setMode('find')}>
@@ -287,9 +321,15 @@ export function StartVisitSheet({
                 {busy ? 'Starting…' : 'Start note'}
               </button>
             )}
-            <button type="button" className={canWriteNotes ? btnSecondary : btnPrimary} disabled={busy} onClick={() => void logVisit()}>
-              Log visit now
-            </button>
+            {isFromNewVisit ? (
+              <button type="button" className={btnSecondary} disabled={busy} onClick={onClose}>
+                Cancel
+              </button>
+            ) : (
+              <button type="button" className={canWriteNotes ? btnSecondary : btnPrimary} disabled={busy} onClick={() => void logVisit()}>
+                Log visit now
+              </button>
+            )}
           </div>
           {canWriteNotes && (
             <p className="text-xs text-[var(--muted)]">
@@ -298,6 +338,7 @@ export function StartVisitSheet({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

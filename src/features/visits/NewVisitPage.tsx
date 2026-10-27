@@ -1,4 +1,4 @@
-import { IconPen } from '@/components/StatIcons';
+import { IconChevronLeft, IconPen } from '@/components/StatIcons';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { patientsBackLink, type NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -46,6 +46,7 @@ import {
   SectionCard,
   Pill,
   MultiToggle,
+  ConfirmDialog,
 } from '@/components/ui';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
@@ -249,9 +250,21 @@ export function NewVisitPage() {
       void navigate({ to: '/workspace' });
     }
   }
+  const backLabel =
+    search.from === '/schedule'
+      ? 'Schedule'
+      : search.from === '/ledger'
+        ? 'Ledger'
+        : search.from === '/patients'
+          ? 'Patients'
+          : 'Workspace';
 
   function requestExit() {
-    goBack();
+    if (isDirtyRef.current) {
+      setDiscardOpen(true);
+    } else {
+      goBack();
+    }
   }
 
   // Patient selection — a small state machine: searching (default) → either
@@ -390,14 +403,12 @@ export function NewVisitPage() {
 
   const isDirtyRef = useRef(false);
   isDirtyRef.current = isDirty;
-
-  useBlocker({
-    shouldBlockFn: () => {
-      if (!isDirtyRef.current) return false;
-      return !confirm('Discard this visit? Unsaved changes will be lost.');
-    },
+  const blocker = useBlocker({
+    shouldBlockFn: () => isDirtyRef.current,
+    withResolver: true,
     enableBeforeUnload: () => isDirtyRef.current,
   });
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [takingPayment, setTakingPayment] = useState(false);
   const [editingVisit, setEditingVisit] = useState(false);
@@ -1344,8 +1355,6 @@ export function NewVisitPage() {
             )}
           </div>
 
-          <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
-
           {patientBalance && patientBalance.duePaise > 0 && (
             <div
               role="status"
@@ -2095,46 +2104,71 @@ export function NewVisitPage() {
         touchedRef.current = true;
       }}
     >
-      {/* Page navigational sub-header: breadcrumb back, title, and status */}
-      <div className="flex items-center justify-between gap-3 max-sm:sticky max-sm:top-0 max-sm:z-20 max-sm:-mx-4 max-sm:-mt-6 max-sm:border-b max-sm:border-[var(--border)] max-sm:bg-[var(--surface)] max-sm:px-2 max-sm:pt-[env(safe-area-inset-top)] sm:pt-1 sm:pb-0.5">
-        <div className="flex min-w-0 items-center gap-2">
-          {/* Back button on phone (icon) and desktop (pill/breadcrumb) */}
-          <button
-            type="button"
-            aria-label="Back"
-            disabled={busy}
-            onClick={requestExit}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-40 sm:hidden"
-          >
-            <span aria-hidden="true" className="text-xl leading-none">←</span>
-          </button>
+      {/* Page navigational sub-header: Back button, title, and status */}
+      <div className="space-y-3 sm:space-y-4">
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             disabled={busy}
             onClick={requestExit}
-            className="hidden items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] transition-colors sm:inline-flex"
-            title="Back to previous page"
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 pl-1.5 pr-3 text-sm font-medium text-[var(--muted)] transition-colors hover:border-[var(--teal)]/40 hover:bg-[var(--paper)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] disabled:opacity-50 shadow-2xs"
+            title={`Back to ${backLabel}`}
           >
-            <span aria-hidden="true">←</span>
-            <span>{search.from === '/schedule' ? 'Schedule' : search.from === '/ledger' ? 'Ledger' : 'Workspace'}</span>
+            <IconChevronLeft className="h-4 w-4" aria-hidden="true" />
+            <span>{backLabel}</span>
           </button>
-          <span className="hidden text-xs text-[var(--border)] sm:inline" aria-hidden="true">/</span>
-          <h1 className="shrink-0 font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
-          {patient && (
-            <span className="min-w-0 truncate text-xs text-[var(--muted)]">· {patient.name}</span>
+
+          {isDirty && (
+            <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber)]">
+              <span
+                role="img"
+                aria-label="Unsaved changes"
+                title="Unsaved changes"
+                className="h-2 w-2 shrink-0 rounded-full bg-[var(--amber)]"
+              />
+              <span>Unsaved changes</span>
+            </div>
           )}
         </div>
-        {isDirty && (
-          <div className="flex items-center gap-1.5 text-xs text-[var(--amber)]">
-            <span
-              role="img"
-              aria-label="Unsaved changes"
-              title="Unsaved changes"
-              className="h-2 w-2 shrink-0 rounded-full bg-[var(--amber)]"
-            />
-            <span className="hidden sm:inline font-medium">Unsaved changes</span>
-          </div>
-        )}
+
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--ink)] sm:text-3xl">
+            New visit
+          </h1>
+          {patient ? (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-[var(--muted)]">
+              <span>
+                For <strong className="font-display font-medium text-[var(--ink)]">{patient.name}</strong>
+              </span>
+              <span className="text-[var(--border)]" aria-hidden="true">·</span>
+              <span>
+                Patient ID <span className="font-num font-medium text-[var(--ink)]">{patient.mrno}</span>
+              </span>
+              {patient.age != null && (
+                <>
+                  <span className="text-[var(--border)]" aria-hidden="true">·</span>
+                  <span>{patient.age}y</span>
+                </>
+              )}
+              {patient.sex && (
+                <>
+                  <span className="text-[var(--border)]" aria-hidden="true">·</span>
+                  <span>{patient.sex}</span>
+                </>
+              )}
+              {patient.phone && (
+                <>
+                  <span className="text-[var(--border)]" aria-hidden="true">·</span>
+                  <span>📞 {patient.phone}</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Log treatments, billable services, and collect payment for a visit.
+            </p>
+          )}
+        </div>
       </div>
       <VisitCapNotice />
 
@@ -2176,6 +2210,38 @@ export function NewVisitPage() {
           }}
         />
       )}
+
+      <StartVisitSheet
+        open={startNoteOpen}
+        initialPatientId={patient?.id}
+        returnTo={search.from}
+        onClose={() => setStartNoteOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={blocker.status === 'blocked' || discardOpen}
+        title="Discard this visit?"
+        message="You have unsaved changes on this visit. Are you sure you want to discard them and leave?"
+        confirmLabel="Discard & leave"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={() => {
+          touchedRef.current = false;
+          isDirtyRef.current = false;
+          if (blocker.status === 'blocked') {
+            blocker.proceed?.();
+          } else {
+            setDiscardOpen(false);
+            goBack();
+          }
+        }}
+        onCancel={() => {
+          if (blocker.status === 'blocked') {
+            blocker.reset?.();
+          }
+          setDiscardOpen(false);
+        }}
+      />
     </div>
   );
 }
