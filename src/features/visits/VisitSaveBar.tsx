@@ -51,7 +51,7 @@ export function VisitSaveBar({
       data-testid="visit-save-bar"
       className="no-print fixed inset-x-0 bottom-0 z-20 border-t border-[var(--border)] bg-[var(--surface)] px-[max(1rem,env(safe-area-inset-left))] py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-2)]"
     >
-      <div className="mx-auto flex max-w-4xl items-center gap-3">
+      <div className="mx-auto flex max-w-5xl items-center gap-3">
       <button
         type="button"
         className="min-w-0 flex-1 text-left"

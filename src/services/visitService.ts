@@ -76,6 +76,8 @@ export interface NewVisitInput {
    * (not this field) is what actually drives outstanding calculations.
    */
   pendingPaymentNote?: string | null;
+  /** Where the visit happened. Defaults to 'clinic'. */
+  location?: 'clinic' | 'home';
 }
 
 export function createVisitService(repos: Repos) {
@@ -447,6 +449,7 @@ export function createVisitService(repos: Repos) {
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         creditsMode: 'auto',
         serviceLinesCount: items.length,
+        location: input.location ?? 'clinic',
         deleted: false,
         // Flags the visit for a clinical note until one is completed against
         // it (see consultationNoteService.saveAssessment, which closes this

@@ -71,6 +71,7 @@ import {
   draftLinesToItems,
   draftSubtotalPaise,
   emptyDraftLine,
+  newDraftKey,
   hasService,
   isPackageRow,
   rowName,
@@ -78,7 +79,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, shouldFoldTreatments, therapistReason, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, shouldFoldTreatments, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 import { PickerMenu } from './PickerMenu';
@@ -178,6 +179,7 @@ export interface NewVisitSignatureInput {
   pendingNote: string;
   treatmentIds: string[];
   adjustmentMode: BillAdjustmentMode;
+  location?: 'clinic' | 'home';
 }
 
 /** Everything the person can change on the form, as one string, so "changed" means "different from where it started". */
@@ -195,6 +197,7 @@ export function newVisitSignature(input: NewVisitSignatureInput): string {
     pendingNote: input.pendingNote.trim(),
     treatmentIds: [...input.treatmentIds].sort(),
     adjustmentMode: input.adjustmentMode,
+    location: input.location ?? 'clinic',
   });
 }
 
@@ -281,6 +284,8 @@ export function NewVisitPage() {
   const today = toLocalDateStr(new Date());
   const [visitDate, setVisitDate] = useState(today);
   const [therapistId, setTherapistId] = useState('');
+  const [location, setLocation] = useState<'clinic' | 'home'>('clinic');
+  const [customConditionOpen, setCustomConditionOpen] = useState(false);
   // The services performed, in order; the first is the visit's main service. One empty row to start.
   const [rows, setRows] = useState<DraftLine[]>(() => [emptyDraftLine()]);
   // Messages from the last Save attempt, by row index (the package rule is checked live by ServiceRows).
@@ -371,6 +376,7 @@ export function NewVisitPage() {
     pendingNote,
     treatmentIds,
     adjustmentMode,
+    location,
   });
   const touchedRef = useRef(false);
   const baselineRef = useRef(signature);
@@ -866,6 +872,27 @@ export function NewVisitPage() {
   const adjustmentPaise = billPaise - catalogPricePaise;
   const serviceLabel = rows.filter(hasService).map((r) => rowName(r, catalogItems)).join(' + ') || 'Visit';
 
+  const dateHint = visitDateHint(visitDate, today);
+  const servicesChosen = rows.filter(hasService).length;
+
+  const visitDateLabel = useMemo(() => {
+    const [y, m, d] = visitDate.split('-').map(Number);
+    if (!y || !m || !d) return visitDate;
+    const shortDate = new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    if (visitDate === today) return `Today, ${shortDate}`;
+    if (dateHint?.text === 'Yesterday') return `Yesterday, ${shortDate}`;
+    return `${shortDate} '${String(y).slice(-2)}`;
+  }, [visitDate, today, dateHint]);
+
+  const knownConditions = useMemo(() => {
+    const set = new Set<string>();
+    if (patient?.primaryCondition?.trim()) set.add(patient.primaryCondition.trim());
+    (patientVisits ?? []).forEach((v) => {
+      if (v.condition?.trim()) set.add(v.condition.trim());
+    });
+    return Array.from(set);
+  }, [patient?.primaryCondition, patientVisits]);
+
   /**
    * Back to a blank visit after "Visit logged". Date, therapist and payment method stay (back-to-back entry);
    * everything the last visit filled in goes. `touchedRef` is cleared so the unsaved-changes guard measures
@@ -879,6 +906,8 @@ export function NewVisitPage() {
     setPendingNote('');
     setTreatmentIds([]);
     setPaymentChoice('paid');
+    setLocation('clinic');
+    setCustomConditionOpen(false);
     setError(null);
     setFeedbackRequested(false);
     resetBillAdjustment();
@@ -992,6 +1021,7 @@ export function NewVisitPage() {
         patientId: patient.id,
         therapistId,
         visitDate,
+        location,
         lines: built.lines,
         condition,
         treatmentNotes: notes,
@@ -1218,9 +1248,64 @@ export function NewVisitPage() {
         : { kind: 'later' }
       : { kind: 'none' };
 
+  const therapistList = therapists ?? [];
+  const therapistChosen = therapistList.some((t) => t.id === therapistId);
+  const clinicalHidden = role === 'front_desk' && !clinicalDetailsExpanded;
+
+  const renewFinishedPackage = () => {
+    if (!finishedPackage) return;
+    const catItem = catalogItems.find((c) => c.id === finishedPackage.serviceCatalogId);
+    if (!catItem) return;
+    const newRow: DraftLine = {
+      key: newDraftKey(),
+      serviceCatalogId: catItem.id,
+      assistingTherapistId: null,
+    };
+    setRows((prev) => {
+      if (prev.length === 1 && !hasService(prev[0])) {
+        return [newRow];
+      }
+      return [...prev, newRow];
+    });
+  };
+
+  const repeatLastVisit = () => {
+    if (!lastVisit) return;
+    if (lastVisit.therapistId && therapists?.some((t) => t.id === lastVisit.therapistId)) {
+      setTherapistId(lastVisit.therapistId);
+    }
+    if (lastVisit.condition) setCondition(lastVisit.condition);
+    if (lastVisit.treatmentNotes) setNotes(lastVisit.treatmentNotes);
+    if (lastVisit.treatmentIds && lastVisit.treatmentIds.length > 0) {
+      setTreatmentIds(lastVisit.treatmentIds);
+    }
+    if (lastVisit.location) {
+      setLocation(lastVisit.location);
+    }
+    if (lastVisit.packageGroupId) {
+      const openPkg = openPackages?.find((op) => op.packageGroupId === lastVisit.packageGroupId);
+      if (openPkg) {
+        setRows([continuationLine(openPkg, null)]);
+        return;
+      }
+    }
+    if (lastVisit.serviceCatalogId) {
+      const catItem = catalogItems.find((c) => c.id === lastVisit.serviceCatalogId);
+      if (catItem) {
+        setRows([
+          {
+            key: newDraftKey(),
+            serviceCatalogId: catItem.id,
+            assistingTherapistId: null,
+          },
+        ]);
+      }
+    }
+  };
+
   const patientPanel = patient ? (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-3">
-      {/* Who: name and Edit, then ID · age · sex, then the condition on its own line (so nothing dangles). */}
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-sm space-y-3.5">
+      {/* 1. Patient identity (no duplicate condition display here) */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
@@ -1238,13 +1323,12 @@ export function NewVisitPage() {
             {patient.age != null && ` · ${patient.age}y`}
             {patient.sex && ` · ${patient.sex}`}
           </div>
-          {patient.primaryCondition && <div className="text-xs text-[var(--muted)]">{patient.primaryCondition}</div>}
         </div>
 
         {canChangePatient(search) && (
           <button
             type="button"
-            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)]"
+            className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)] transition-colors"
             onClick={() => {
               setPatient(null);
               setCreatingPatient(false);
@@ -1269,121 +1353,283 @@ export function NewVisitPage() {
         </div>
       )}
 
-      {/* No open package, but one just finished: say so, so it never looks like the package was missed. */}
-      {openPackages !== undefined && openPackages.length === 0 && finishedPackage && (
-        <div className="border-t border-[var(--border)] pt-3">
-          <div className="text-xs text-[var(--muted)]">Open package</div>
-          <div className="mt-1 text-sm text-[var(--ink)]">None</div>
-          <div className="mt-0.5 text-xs text-[var(--muted)]">
-            Last package finished {formatDateDMY(finishedPackage.finishedOn)} ·{' '}
-            {catalogNameById.get(finishedPackage.serviceCatalogId) ?? 'Package'} ({finishedPackage.total} of{' '}
-            {finishedPackage.total} used)
-          </div>
-        </div>
-      )}
-
-      {/* Open package: label + its own Paid/Due status, the package, then progress. */}
-      {openPackages !== undefined && openPackages.length > 0 && (
-        <div className="border-t border-[var(--border)] pt-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-[var(--muted)]">
-              {openPackages.length > 1 ? `Open packages (${openPackages.length})` : 'Open package'}
-            </span>
-            {packageBadge && (
-              <Pill tone={PAYMENT_CHIP[packageBadge.kind].tone}>
-                <span title={`The package itself: ${packageBadge.title}`}>{packageBadge.label}</span>
-              </Pill>
-            )}
-          </div>
-          <div className="mt-1 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
-            <span
-              className="inline-flex items-center gap-1"
-              title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
-            >
-              {Array.from({ length: openPackages[0].packageTotal }, (_, i) => (
+      {/* 2. Recessed History Well: Package status & Last visit grouped */}
+      {(Boolean(openPackages?.length) || Boolean(finishedPackage) || Boolean(lastVisit)) && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 space-y-3">
+          {/* Package Row */}
+          {openPackages !== undefined && openPackages.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-[var(--muted)]">
+                  {openPackages.length > 1 ? `Open packages (${openPackages.length})` : 'Open package'}
+                </span>
+                {packageBadge && (
+                  <Pill tone={PAYMENT_CHIP[packageBadge.kind].tone}>
+                    <span title={`The package itself: ${packageBadge.title}`}>{packageBadge.label}</span>
+                  </Pill>
+                )}
+              </div>
+              <div className="mt-1 text-sm font-medium text-[var(--ink)]">{openPackages[0].serviceName}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
                 <span
-                  key={i}
-                  className={`h-2 w-2 rounded-full ${
-                    i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
-                  }`}
-                />
-              ))}
-            </span>
-            <span>
-              {openPackages[0].logged} of {openPackages[0].packageTotal} used
-            </span>
-            <span>· started {formatDateDMY(openPackages[0].startedOn)}</span>
-          </div>
-        </div>
-      )}
+                  className="inline-flex items-center gap-1"
+                  title={`${openPackages[0].logged} of ${openPackages[0].packageTotal} sessions used`}
+                >
+                  {Array.from({ length: openPackages[0].packageTotal }, (_, i) => (
+                    <span
+                      key={i}
+                      className={`h-2 w-2 rounded-full ${
+                        i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
+                      }`}
+                    />
+                  ))}
+                </span>
+                <span>
+                  {openPackages[0].logged} of {openPackages[0].packageTotal} used
+                </span>
+                <span>· started {formatDateDMY(openPackages[0].startedOn)}</span>
+              </div>
+            </div>
+          ) : finishedPackage ? (
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-[var(--muted)]">Package</span>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
+                  onClick={renewFinishedPackage}
+                >
+                  + Renew {finishedPackage.total}d pkg
+                </button>
+              </div>
+              <div className="mt-0.5 text-xs text-[var(--muted)]">
+                Last package finished {formatDateDMY(finishedPackage.finishedOn)} ·{' '}
+                {catalogNameById.get(finishedPackage.serviceCatalogId) ?? 'Package'} ({finishedPackage.total} of{' '}
+                {finishedPackage.total} used)
+              </div>
+            </div>
+          ) : null}
 
-      {/* Last visit: same shape as the package block above — label + status, the service, then the date. */}
-      {patientVisits !== undefined && (
-        <div className="border-t border-[var(--border)] pt-3">
-          {lastVisit ? (
-            (() => {
-              const state = computeVisitPaymentState(
-                lastVisit.actualBillPaise,
-                lastVisit.invoiceId,
-                lastVisitDirectPaymentPaise,
-                lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
-              );
-              const badge = paymentBadge({
-                state,
-                billPaise: lastVisit.actualBillPaise,
-                collectedPaise: lastVisitDirectPaymentPaise,
-                visitDate: lastVisit.visitDate,
-                issuedAt: lastVisitInvoice?.issuedAt,
-                isPackageSession: isPackageContinuation(
-                  lastVisit.sessionIndex,
-                  lastVisit.packageTotal
-                ),
-              });
-              return (
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-[var(--muted)]">Last visit</span>
-                    <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                      <span title={badge.title}>{badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}</span>
-                    </Pill>
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-2">
-                    <span className="shrink-0 text-sm font-medium tabular-nums text-[var(--ink)]">{formatDateDMY(lastVisit.visitDate)}</span>
-                    <span className="min-w-0 truncate text-xs text-[var(--muted)]">
-                      {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
-                    </span>
-                  </div>
-                  {(() => {
-                    // Which session of a package it was, and who did it — so front desk knows where things stand.
-                    const session =
-                      lastVisit.sessionIndex && lastVisit.packageTotal && lastVisit.packageTotal > 1
-                        ? `Session ${lastVisit.sessionIndex} of ${lastVisit.packageTotal}`
-                        : null;
-                    const who = allTherapists?.find((t) => t.id === lastVisit.therapistId)?.name ?? null;
-                    const line = [session, who].filter(Boolean).join(' · ');
-                    return line ? <div className="mt-0.5 text-xs text-[var(--ink)]">{line}</div> : null;
-                  })()}
-                  {lastVisitTreatments && (
-                    <div className="mt-0.5 text-xs text-[var(--muted)]">
-                      Treatments: <span className="text-[var(--ink)]">{lastVisitTreatments}</span>
+          {/* Last Visit Row */}
+          {patientVisits !== undefined && lastVisit && (
+            <div className={openPackages?.length || finishedPackage ? 'border-t border-[var(--border)] pt-2.5' : ''}>
+              {(() => {
+                const state = computeVisitPaymentState(
+                  lastVisit.actualBillPaise,
+                  lastVisit.invoiceId,
+                  lastVisitDirectPaymentPaise,
+                  lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
+                );
+                const badge = paymentBadge({
+                  state,
+                  billPaise: lastVisit.actualBillPaise,
+                  collectedPaise: lastVisitDirectPaymentPaise,
+                  visitDate: lastVisit.visitDate,
+                  issuedAt: lastVisitInvoice?.issuedAt,
+                  isPackageSession: isPackageContinuation(
+                    lastVisit.sessionIndex,
+                    lastVisit.packageTotal
+                  ),
+                });
+                const session =
+                  lastVisit.sessionIndex && lastVisit.packageTotal && lastVisit.packageTotal > 1
+                    ? `Session ${lastVisit.sessionIndex} of ${lastVisit.packageTotal}`
+                    : null;
+                const who = allTherapists?.find((t) => t.id === lastVisit.therapistId)?.name ?? null;
+                const sessionAndWho = [session, who].filter(Boolean).join(' · ');
+
+                return (
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-[var(--muted)]">Last visit</span>
+                        <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                          <span title={badge.title}>
+                            {badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}
+                          </span>
+                        </Pill>
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
+                        onClick={repeatLastVisit}
+                        title="Pre-fill therapist, treatments, and service from last visit"
+                      >
+                        <span aria-hidden="true">↻</span> Repeat visit
+                      </button>
                     </div>
-                  )}
-                </div>
-              );
-            })()
-          ) : (
-            <span className="text-xs text-[var(--muted)]">First visit</span>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="shrink-0 text-xs font-medium tabular-nums text-[var(--ink)]">
+                        {formatDateDMY(lastVisit.visitDate)}
+                      </span>
+                      <span className="min-w-0 truncate text-xs text-[var(--muted)]">
+                        · {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'Service'}
+                      </span>
+                    </div>
+                    {sessionAndWho && <div className="mt-0.5 text-xs text-[var(--ink)]">{sessionAndWho}</div>}
+                    {lastVisitTreatments && (
+                      <div className="mt-0.5 text-xs text-[var(--muted)]">
+                        Treatments: <span className="text-[var(--ink)]">{lastVisitTreatments}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </div>
       )}
+
+      {/* 3. This visit interactive inputs */}
+      <div className="border-t border-[var(--border)] pt-3.5 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">This visit</span>
+        </div>
+
+        <div>
+          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Place of service</span>
+          <SegmentedToggle
+            value={location}
+            onChange={setLocation}
+            options={[
+              { value: 'clinic', label: 'Clinic' },
+              { value: 'home', label: 'Home visit' },
+            ]}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Date</span>
+            <label className="relative flex h-8 cursor-pointer items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] transition-colors">
+              <span className="truncate tabular-nums">{visitDateLabel}</span>
+              <span aria-hidden="true" className="shrink-0 text-[10px] text-[var(--muted)] ml-1">▾</span>
+              <input
+                type="date"
+                aria-label="Visit date"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                value={visitDate}
+                onChange={(e) => setVisitDate(e.target.value)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {
+                    /* fallback */
+                  }
+                }}
+              />
+            </label>
+          </div>
+
+          <div>
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Therapist *</span>
+            <PickerMenu
+              ariaLabel="Therapist"
+              caption="Who treated the patient"
+              value={therapistChosen ? therapistId : ''}
+              options={therapistList.map((t) => ({
+                value: t.id,
+                label: t.id === myTherapistId ? `${t.name} (You)` : t.name,
+                dotColor: therapistColor(t.id, t.color),
+              }))}
+              onChange={setTherapistId}
+              triggerClassName={`flex h-8 w-full items-center justify-between rounded-full border px-3 text-xs font-medium transition-colors ${
+                therapistChosen
+                  ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                  : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
+              }`}
+              renderTrigger={(selected) => (
+                <>
+                  <div className="flex min-w-0 items-center gap-1.5 truncate">
+                    {selected?.dotColor && (
+                      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: selected.dotColor }} />
+                    )}
+                    <span className="truncate">{selected?.label ?? 'Choose therapist'}</span>
+                  </div>
+                  <span aria-hidden="true" className="shrink-0 text-[10px] ml-1 opacity-70">▾</span>
+                </>
+              )}
+            />
+          </div>
+        </div>
+
+        {clinicalHidden ? (
+          <button
+            type="button"
+            className="text-left text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={() => setClinicalDetailsExpanded(true)}
+          >
+            + Add condition / treatments (optional)
+          </button>
+        ) : (
+          <div>
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Condition (this visit)</span>
+            {customConditionOpen || (condition && !knownConditions.includes(condition)) ? (
+              <div className="flex items-center gap-2">
+                <input
+                  className={inputCls}
+                  autoFocus
+                  placeholder="Condition for this visit…"
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="text-xs text-[var(--muted)] hover:text-[var(--ink)] shrink-0"
+                  onClick={() => {
+                    setCustomConditionOpen(false);
+                    if (!knownConditions.includes(condition)) setCondition('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : knownConditions.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {knownConditions.map((cond) => {
+                  const isSelected = condition === cond;
+                  return (
+                    <button
+                      type="button"
+                      key={cond}
+                      onClick={() => setCondition(isSelected ? '' : cond)}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        isSelected
+                          ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                          : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]'
+                      }`}
+                    >
+                      {isSelected && <span aria-hidden="true">✓</span>}
+                      <span>{cond}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+                  onClick={() => setCustomConditionOpen(true)}
+                >
+                  + Other
+                </button>
+              </div>
+            ) : (
+              <input
+                className={inputCls}
+                placeholder="e.g. Knee Pain"
+                value={condition}
+                onChange={(e) => setCondition(e.target.value)}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 4. Start note button (quiet secondary action at bottom) */}
       {clinic.clinicalDocsEnabled && canWriteNotes && (
         <div className="border-t border-[var(--border)] pt-3">
           <button
             type="button"
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--surface)]"
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--surface)] transition-colors"
             onClick={() => {
               if (search.appointmentId) {
                 const appointmentId = search.appointmentId;
@@ -1651,35 +1897,27 @@ export function NewVisitPage() {
     </SectionCard>
   );
 
-  const dateHint = visitDateHint(visitDate, today);
-  const servicesChosen = rows.filter(hasService).length;
-
-  // --- "This visit": when, who treated, why — the context of the visit, beside the patient (not among the billing).
-  const therapistList = therapists ?? [];
-  const therapistChosen = therapistList.some((t) => t.id === therapistId);
-  const therapistWhy = therapistReason({
-    therapistId: therapistChosen ? therapistId : '',
-    appointmentTherapistId: fromAppointment?.therapistId,
-    lastVisitTherapistId: lastVisit?.therapistId,
-    myTherapistId,
-  });
-  const visitDateLabel = (() => {
-    const [y, m, d] = visitDate.split('-').map(Number);
-    return y && m && d
-      ? new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-      : visitDate;
-  })();
-  const clinicalHidden = role === 'front_desk' && !clinicalDetailsExpanded;
   const thisVisitCard = (
     <SectionCard title="This visit">
       <div className="space-y-3">
         <div>
-          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Date</span>
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            {/* The native date input sits invisibly over the pill: it opens the device's own date picker. */}
-            <label className="relative inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:border-[var(--teal)]">
-              <span className="tabular-nums">{visitDateLabel}</span>
-              <span aria-hidden="true" className="text-[10px]">▾</span>
+          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Place of service</span>
+          <SegmentedToggle
+            value={location}
+            onChange={setLocation}
+            options={[
+              { value: 'clinic', label: 'Clinic' },
+              { value: 'home', label: 'Home visit' },
+            ]}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Date</span>
+            <label className="relative flex h-8 cursor-pointer items-center justify-between rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] transition-colors">
+              <span className="truncate tabular-nums">{visitDateLabel}</span>
+              <span aria-hidden="true" className="shrink-0 text-[10px] text-[var(--muted)] ml-1">▾</span>
               <input
                 type="date"
                 aria-label="Visit date"
@@ -1690,42 +1928,42 @@ export function NewVisitPage() {
                   try {
                     e.currentTarget.showPicker?.();
                   } catch {
-                    /* not allowed here: the native control still works by keyboard and tap */
+                    /* fallback */
                   }
                 }}
               />
             </label>
-            <span className={`text-xs ${dateHint?.tone === 'warn' ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
-              {dateHint ? dateHint.text : 'Today'}
-            </span>
           </div>
-        </div>
 
-        <div>
-          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Therapist *</span>
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <div>
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Therapist *</span>
             <PickerMenu
               ariaLabel="Therapist"
               caption="Who treated the patient"
               value={therapistChosen ? therapistId : ''}
-              options={therapistList.map((t) => ({ value: t.id, label: t.name, dotColor: therapistColor(t.id, t.color) }))}
+              options={therapistList.map((t) => ({
+                value: t.id,
+                label: t.id === myTherapistId ? `${t.name} (You)` : t.name,
+                dotColor: therapistColor(t.id, t.color),
+              }))}
               onChange={setTherapistId}
-              triggerClassName={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium ${
+              triggerClassName={`flex h-8 w-full items-center justify-between rounded-full border px-3 text-xs font-medium transition-colors ${
                 therapistChosen
                   ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
                   : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
               }`}
               renderTrigger={(selected) => (
                 <>
-                  {selected?.dotColor && (
-                    <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: selected.dotColor }} />
-                  )}
-                  <span className="max-w-[12rem] truncate">{selected?.label ?? 'Choose therapist'}</span>
-                  <span aria-hidden="true" className="text-[10px]">▾</span>
+                  <div className="flex min-w-0 items-center gap-1.5 truncate">
+                    {selected?.dotColor && (
+                      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: selected.dotColor }} />
+                    )}
+                    <span className="truncate">{selected?.label ?? 'Choose therapist'}</span>
+                  </div>
+                  <span aria-hidden="true" className="shrink-0 text-[10px] ml-1 opacity-70">▾</span>
                 </>
               )}
             />
-            {therapistWhy && <span className="text-xs text-[var(--muted)]">{therapistWhy}</span>}
           </div>
         </div>
 
@@ -1739,7 +1977,12 @@ export function NewVisitPage() {
           </button>
         ) : (
           <Field label="Condition (this visit)">
-            <input className={inputCls} value={condition} onChange={(e) => setCondition(e.target.value)} />
+            <input
+              className={inputCls}
+              placeholder="e.g. Knee Pain"
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+            />
           </Field>
         )}
       </div>
@@ -1934,7 +2177,7 @@ export function NewVisitPage() {
   return (
     // Extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div
-      className="nv-form mx-auto max-w-4xl space-y-4 pb-32 sm:pb-24"
+      className="nv-form mx-auto max-w-5xl space-y-4 pb-32 sm:pb-24"
       onPointerDownCapture={() => {
         touchedRef.current = true;
       }}
@@ -1974,16 +2217,18 @@ export function NewVisitPage() {
           changes (search/create UI vs. confirmed-patient banner), but the
           page's own structure doesn't, so picking a patient doesn't cause a
           jarring column-count/width jump. Collapses to stacked below desktop:. */}
-      <div className="grid gap-4 desktop:grid-cols-[20rem_minmax(0,1fr)] desktop:items-start">
-        {/* Who and the context of this visit. Phone: stacked. iPad portrait: side by side. Desktop: one column,
+      <div className="grid gap-4 desktop:grid-cols-[22.5rem_minmax(0,1fr)] desktop:items-start">
+        {/* Who and the context of this visit. Phone: stacked. iPad portrait: side by side if searching, single card if patient confirmed. Desktop: one column,
             sticky (it is short enough to stay in view while the work column scrolls). */}
         <div
-          className={`grid content-start gap-4 sm:grid-cols-2 sm:items-start desktop:grid-cols-1 ${
+          className={`grid content-start gap-4 ${
+            patient ? 'grid-cols-1' : 'sm:grid-cols-2 desktop:grid-cols-1'
+          } ${
             patient ? 'desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]' : ''
           }`}
         >
           {patientPanel}
-          {thisVisitCard}
+          {!patient && thisVisitCard}
         </div>
         <div className="min-w-0">{visitPanel}</div>
       </div>
