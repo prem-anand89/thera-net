@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, clockTextMinutes, requestedSlotTime, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -690,3 +690,46 @@ describe('displayHoursFor', () => {
   });
 });
 
+
+describe('clockTextMinutes', () => {
+  it('reads the slot labels the public booking form saves', () => {
+    expect(clockTextMinutes('10:30 AM')).toBe(10 * 60 + 30);
+    expect(clockTextMinutes('2:00 PM')).toBe(14 * 60);
+    expect(clockTextMinutes('12:00 PM')).toBe(12 * 60);
+    expect(clockTextMinutes('12:15 am')).toBe(15);
+    expect(clockTextMinutes('14:30')).toBe(14 * 60 + 30);
+  });
+
+  it('gives null for anything that is not a clock time', () => {
+    expect(clockTextMinutes(null)).toBeNull();
+    expect(clockTextMinutes('')).toBeNull();
+    expect(clockTextMinutes('morning')).toBeNull();
+    expect(clockTextMinutes('after 5')).toBeNull();
+    expect(clockTextMinutes('13:00 PM')).toBeNull();
+    expect(clockTextMinutes('10:75 AM')).toBeNull();
+  });
+});
+
+describe('requestedSlotTime', () => {
+  const request = { preferredDate: '2026-10-30', preferredTimeText: '10:00 AM', preferredTherapistId: 't1' };
+
+  it('pre-selects the requested time when that therapist is free', () => {
+    expect(requestedSlotTime(request, [], '2026-10-28', 30)).toBe('10:00');
+  });
+
+  it('gives nothing when the time is taken, unreadable, in the past, or no therapist is named', () => {
+    const taken = [appt({ therapistId: 't1', scheduledAt: at('2026-10-30', '10:00') })];
+    expect(requestedSlotTime(request, taken, '2026-10-28', 30)).toBeNull();
+    expect(requestedSlotTime({ ...request, preferredTimeText: 'morning' }, [], '2026-10-28', 30)).toBeNull();
+    expect(requestedSlotTime(request, [], '2026-11-02', 30)).toBeNull();
+    expect(requestedSlotTime({ ...request, preferredTherapistId: null }, [], '2026-10-28', 30)).toBeNull();
+  });
+
+  it('is not blocked by a cancelled appointment or another therapist', () => {
+    const others = [
+      appt({ therapistId: 't1', scheduledAt: at('2026-10-30', '10:00'), status: 'cancelled' }),
+      appt({ id: 'b', therapistId: 't2', scheduledAt: at('2026-10-30', '10:00') }),
+    ];
+    expect(requestedSlotTime(request, others, '2026-10-28', 30)).toBe('10:00');
+  });
+});

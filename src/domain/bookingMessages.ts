@@ -49,6 +49,12 @@ export function patientMessage(
   }
 }
 
+/** Sent when staff decline a public booking request: polite, and offers to find another time. */
+export function requestDeclinedMessage(input: { patientName: string; clinicName: string; requestedFor: string }): string {
+  const asked = input.requestedFor ? ` for ${input.requestedFor}` : '';
+  return `Hi ${input.patientName}, thank you for your request${asked} at ${input.clinicName}. We couldn't fit that time. Reply here and we'll find another time that suits you.`;
+}
+
 export type TherapistMessageKind = 'booked' | 'rescheduled' | 'cancelled';
 
 export function therapistMessage(

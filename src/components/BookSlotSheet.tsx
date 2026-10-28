@@ -35,6 +35,8 @@ import {
   seriesProblem,
   WEEKDAY_NAMES,
   workingIntervals,
+  clockTextMinutes,
+  minutesToTime,
 } from '@/domain/schedule';
 import type { Appointment, UUID, Patient } from '@/domain/types';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
@@ -270,6 +272,9 @@ export function BookSlotSheet({
       fallbackMinutes: slotMinutes,
       ignoreAppointmentId: rescheduleAppointment?.id,
     });
+  // The time the patient asked for was taken in the meantime (nothing is locked at request time): say why it wasn't pre-selected.
+  const askedMinutes = requestId ? clockTextMinutes(requestPreferredTimeText) : null;
+  const askedTimeTaken = askedMinutes !== null && occupied(minutesToTime(askedMinutes));
   const therapistRow = (therapists ?? []).find((t) => t.id === therapistId);
   const therapistName = therapistRow?.name;
   const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, { startHour, endHour });
@@ -575,7 +580,12 @@ export function BookSlotSheet({
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
           {requestId && (requestNotes || requestPreferredTimeText) && (
             <div className="rounded-xl bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]">
-              {requestPreferredTimeText && <p><span className="text-[var(--muted)]">Requested</span> {requestPreferredTimeText}</p>}
+              {requestPreferredTimeText && (
+                <p>
+                  <span className="text-[var(--muted)]">Requested</span> {requestPreferredTimeText}
+                  {askedTimeTaken && <span className="font-medium text-[var(--rust)]"> — now booked, pick another time</span>}
+                </p>
+              )}
               {requestNotes && <p className="mt-0.5"><span className="text-[var(--muted)]">Reason</span> {requestNotes}</p>}
             </div>
           )}

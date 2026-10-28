@@ -123,7 +123,8 @@ describe('TodayAppointments', () => {
     expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
     fireEvent.click(within(section).getByRole('button', { name: 'See all 4 requests' }));
     expect(onSeeAll).toHaveBeenCalled();
-    expect(screen.getByText(/No appointments today/)).toBeInTheDocument();
+    // The card header already says "none today"; the body does not repeat it next to the requests.
+    expect(screen.queryByText(/No appointments today/)).toBeNull();
   });
 });
 

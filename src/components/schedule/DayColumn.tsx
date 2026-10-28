@@ -8,6 +8,7 @@ import { CLOSED_HATCH_STYLE, appointmentFill } from './scheduleColors';
 import { patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 import { BlockFlagBadges } from './BlockFlagBadges';
 import { WideBlock } from './WideBlock';
+import { RequestGhostBlock, type RequestGhost } from './RequestGhostBlock';
 import { useElementWidth } from './useElementWidth';
 import { densityFor } from '@/features/schedule/schedulePhoneHelpers';
 import { PX_PER_MINUTE, GridHours, RAIL_W, MultiLaneConfig, ColumnDrag } from './gridShared';
@@ -61,6 +62,8 @@ type DayColumnProps = {
   rail?: boolean;
   /** Several therapists share this column: capped lanes, therapist pills, shared free time. */
   multi?: MultiLaneConfig;
+  /** Pending booking requests, drawn as quiet markers at their requested time. */
+  ghosts?: RequestGhost[];
 };
 
 /** Grid block look from the shared status colour code (`appointmentFill`). */
@@ -101,6 +104,7 @@ export function DayColumn({
   phone = false,
   rail = false,
   multi,
+  ghosts,
 }: DayColumnProps) {
   const [columnElement, setColumnElement] = useState<HTMLDivElement | null>(null);
   const columnWidth = useElementWidth(phone || multi ? columnElement : null, 150);
@@ -443,6 +447,19 @@ export function DayColumn({
           </button>
         );
       })}
+      {ghosts
+        ?.filter((g) => g.minutes >= hours.startHour * 60 && g.minutes < hours.endHour * 60)
+        .map((g) => (
+          <RequestGhostBlock
+            key={g.id}
+            ghost={g}
+            hoursStart={hours.startHour}
+            pxPerMinute={pxPerMinute}
+            overlapsAppointment={blocks.some(
+              (b) => b.appointment.status !== 'cancelled' && b.start <= g.minutes && b.end > g.minutes
+            )}
+          />
+        ))}
       {drag?.ghost && drag.ghost.columnKey === drag.columnKey && (
         <div
           className={`pointer-events-none absolute inset-x-1 z-[4] rounded-md border-2 border-dashed px-1.5 py-0.5 text-[11px] font-medium ${

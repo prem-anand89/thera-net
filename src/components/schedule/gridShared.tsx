@@ -1,3 +1,4 @@
+import type { RequestGhost } from './RequestGhostBlock';
 import type { Appointment } from '@/domain/types';
 import { type ClosedDayInfo, type Interval } from '@/domain/schedule';
 
@@ -59,6 +60,8 @@ export type GridColumn = {
   isColleague?: boolean;
   /** Several therapists share this column (multi-therapist week). */
   multi?: MultiLaneConfig;
+  /** Pending booking requests drawn as quiet markers at their requested time. */
+  ghosts?: RequestGhost[];
 };
 
 export type MoveTarget = { date: string; therapistId: string | null; start: number; duration: number };

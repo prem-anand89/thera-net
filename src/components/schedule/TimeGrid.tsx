@@ -9,6 +9,7 @@ import { LoadLine, type LoadSummary } from './LoadLine';
 import { type PatientFlagContext } from '@/domain/patientFlags';
 import { PX_PER_MINUTE, GridHours, PHONE_STICKY_TOP, PHONE_BOTTOM_NAV, GridColumn, GridDragOptions } from './gridShared';
 import { DayColumn } from './DayColumn';
+import type { RequestGhost } from './RequestGhostBlock';
 import { useGridDrag } from './useGridDrag';
 export { PX_PER_MINUTE } from './gridShared';
 export type { MultiLaneConfig, GridDragOptions, MoveTarget, GridHours, DragGhost, GridColumn } from './gridShared';
@@ -242,6 +243,7 @@ export function GridFrame({
             drag={columnDrag(column)}
             isColleague={column.isColleague}
             multi={column.multi}
+            ghosts={column.ghosts}
           />
         ))}
       </div>
@@ -281,6 +283,7 @@ export function ResourceDayGrid({
   drag,
   phone = false,
   pxPerMinute,
+  ghosts,
 }: {
   date: string;
   today: string;
@@ -308,6 +311,8 @@ export function ResourceDayGrid({
   /** Phone presentation (see GridFrame). */
   phone?: boolean;
   pxPerMinute?: number;
+  /** Pending booking requests; each is drawn in its therapist's column on this date. */
+  ghosts?: RequestGhost[];
 }) {
   const columns: GridColumn[] = therapists.map((therapist) => {
     const isColleague = Boolean(therapist.id && !canBookFor(therapist.id));
@@ -319,6 +324,7 @@ export function ResourceDayGrid({
       label: therapist.name,
       date,
       closed,
+      ghosts: therapist.id ? ghosts?.filter((g) => g.date === date && g.therapistId === therapist.id) : undefined,
       appointments: appointments.filter(
         (appointment) =>
           appointmentStartsOnDate(appointment, date) &&
@@ -428,6 +434,7 @@ export function WeekTimeGrid({
   pxPerMinute,
   isColleague = false,
   multi,
+  ghosts,
 }: {
   days: string[];
   today: string;
@@ -456,6 +463,8 @@ export function WeekTimeGrid({
   isColleague?: boolean;
   /** Several therapists in the same columns (desktop / iPad week). */
   multi?: WeekMultiTherapist;
+  /** Pending booking requests for the shown therapist(s); each is drawn on its date. */
+  ghosts?: RequestGhost[];
 }) {
   const [overflowList, setOverflowList] = useState<{ title: string; appointments: Appointment[] } | null>(null);
   const columns: GridColumn[] = days.map((day) => {
@@ -505,6 +514,7 @@ export function WeekTimeGrid({
       date: day,
       closed: closedFor(day),
       appointments: dayAppointments,
+      ghosts: ghosts?.filter((g) => g.date === day),
       header: (
         <button type="button" onClick={() => onOpenDay(day)} className="w-full text-left" aria-label={`Open ${day} in day view`}>
           <span className={`block text-[11px] uppercase ${day === today ? 'text-[var(--teal)]' : 'text-[var(--muted)]'}`}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { patientMessage, shortPatientName, therapistDayListMessage, therapistMessage } from './bookingMessages';
+import { patientMessage, requestDeclinedMessage, shortPatientName, therapistDayListMessage, therapistMessage } from './bookingMessages';
 import { localDateTime } from './schedule';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -38,5 +38,20 @@ describe('booking messages', () => {
     expect(text.indexOf('Priya N.')).toBeLessThan(text.indexOf('Rohit V.'));
     expect(text).toContain('(45 min)');
     expect(therapistDayListMessage({ therapistName: 'Asha', date: '2026-10-02', appointments: [] })).toContain('no appointments');
+  });
+});
+
+describe('requestDeclinedMessage', () => {
+  it('thanks the patient, names what they asked for and offers another time', () => {
+    const text = requestDeclinedMessage({ patientName: 'Kavin', clinicName: 'BM Physio', requestedFor: 'Sat, 31 Oct, 12:00 PM' });
+    expect(text).toContain('Hi Kavin');
+    expect(text).toContain('Sat, 31 Oct, 12:00 PM');
+    expect(text).toContain('another time');
+  });
+
+  it('copes with a request that named no time', () => {
+    expect(requestDeclinedMessage({ patientName: 'Kavin', clinicName: 'BM', requestedFor: '' })).toBe(
+      "Hi Kavin, thank you for your request at BM. We couldn't fit that time. Reply here and we'll find another time that suits you."
+    );
   });
 });

@@ -56,6 +56,28 @@ describe('ResourceDayGrid', () => {
     expect(screen.getByRole('meter', { name: 'Day booked' })).toHaveAttribute('aria-valuenow', '20');
   });
 
+  it("draws a booking request in its therapist's column on that date only, shrunk when an appointment is there", () => {
+    const ghost = (id: string, over: object) => ({
+      id, name: `Req ${id}`, date: '2026-10-01', minutes: 11 * 60, therapistId: 't2', onConfirm: vi.fn(), onDecline: vi.fn(), ...over,
+    });
+    render(
+      <ResourceDayGrid
+        {...baseProps({
+          ghosts: [
+            ghost('a', {}),
+            ghost('b', { date: '2026-10-02' }),
+            ghost('c', { therapistId: 't1', minutes: 10 * 60 + 15 }),
+          ],
+        })}
+      />
+    );
+    expect(screen.getByRole('button', { name: /Booking request from Req a/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Booking request from Req b/ })).toBeNull();
+    // t1 has Priya 10:00-10:45, so the request at 10:15 becomes the small "Req" tab
+    expect(screen.getByRole('button', { name: /Booking request from Req c/ })).toHaveTextContent('Req');
+    expect(screen.getByRole('button', { name: /Booking request from Req a/ })).toHaveTextContent('Req a?');
+  });
+
   it('sizes and positions a block by its start and length', () => {
     render(<ResourceDayGrid {...baseProps()} />);
     const block = screen.getByRole('button', { name: /Priya/ });

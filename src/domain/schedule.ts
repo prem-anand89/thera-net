@@ -249,6 +249,50 @@ export function minutesLabel(total: number): string {
   return `${hour % 12 || 12}:${pad(minute)} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
+/**
+ * Minutes after midnight for a time the public booking form saved as text ("10:30 AM", "2:00 PM", "14:30"), or
+ * null when it isn't a clock time (older requests say "morning" or "after 5").
+ */
+export function clockTextMinutes(text: string | null | undefined): number | null {
+  const match = /^\s*(\d{1,2}):(\d{2})\s*(am|pm)?\s*$/i.exec(text ?? '');
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const meridiem = match[3]?.toLowerCase();
+  if (minute > 59) return null;
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = (hour % 12) + (meridiem === 'pm' ? 12 : 0);
+  } else if (hour > 23) {
+    return null;
+  }
+  return hour * 60 + minute;
+}
+
+/**
+ * The time to pre-select when staff confirm a booking request: the clock time the patient asked for, but only when
+ * the day is not past, the therapist is known and that therapist is free then. Null otherwise (staff pick one).
+ */
+export function requestedSlotTime(
+  request: { preferredDate: string | null; preferredTimeText: string | null; preferredTherapistId: string | null },
+  appointments: Appointment[],
+  today: string,
+  slotMinutes: number
+): string | null {
+  const minutes = clockTextMinutes(request.preferredTimeText);
+  if (minutes === null || !request.preferredDate || request.preferredDate < today || !request.preferredTherapistId) return null;
+  const time = minutesToTime(minutes);
+  const busy = isTherapistSlotOccupied(
+    appointments.filter((a) => a.status !== 'cancelled'),
+    request.preferredTherapistId,
+    request.preferredDate,
+    time,
+    slotMinutes,
+    { fallbackMinutes: slotMinutes }
+  );
+  return busy ? null : time;
+}
+
 export function minutesToTime(total: number): string {
   return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 }

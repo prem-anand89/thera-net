@@ -4,6 +4,8 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { BookedStrip } from '@/components/schedule/BookedStrip';
+import type { RequestGhost } from '@/components/schedule/RequestGhostBlock';
+import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
 import { ConfirmDialog, Panel } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
@@ -34,6 +36,8 @@ import {
   type ClosedRange,
   dayLoad,
   startStepMinutes,
+  clockTextMinutes,
+  requestedSlotTime,
 } from '@/domain/schedule';
 import type { Appointment, AppointmentRequest, UUID, WorkingHours } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -43,7 +47,7 @@ import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
-import { RequestsInbox } from '@/components/schedule/RequestsInbox';
+import { RequestsInbox, requestWants } from '@/components/schedule/RequestsInbox';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
@@ -534,6 +538,7 @@ export function ScheduleBookingsView({
     return () => clearTimeout(timer);
   }, [undo]);
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
+  const [declined, setDeclined] = useState<DeclinedRequest | null>(null);
 
   const selectedAppointment = selectedId ? scopedAppointments.find((a) => a.id === selectedId) ?? null : null;
   const seriesLabel = useMemo(() => {
@@ -613,6 +618,7 @@ export function ScheduleBookingsView({
   function confirmRequest(request: AppointmentRequest) {
     openBooking({
       date: request.preferredDate && request.preferredDate >= today ? request.preferredDate : date,
+      time: requestedSlotTime(request, allAppointments ?? [], today, slotMinutes) ?? undefined,
       requestId: request.id,
       patientName: request.name,
       patientPhone: request.phone,
@@ -620,6 +626,42 @@ export function ScheduleBookingsView({
       requestNotes: request.notes ?? undefined,
       requestPreferredTimeText: request.preferredTimeText ?? undefined,
     });
+  }
+
+  // A pending request drawn on the grid at the time the patient asked for, in the requested therapist's column (or the
+  // clinic's only therapist when none was named). Requests with no readable time, day or column stay in the sidebar only.
+  const [highlightRequestId, setHighlightRequestId] = useState<UUID | null>(null);
+  const soleTherapistId = roster.filter((t) => t.active !== false).length === 1 ? roster.find((t) => t.active !== false)!.id : null;
+  const requestGhosts: RequestGhost[] = useMemo(() => {
+    if (!canManageAll) return [];
+    return pendingRequests.flatMap((request) => {
+      const minutes = clockTextMinutes(request.preferredTimeText);
+      const therapistId = request.preferredTherapistId ?? soleTherapistId;
+      if (minutes === null || !request.preferredDate || !therapistId) return [];
+      return [
+        {
+          id: request.id,
+          name: request.name,
+          date: request.preferredDate,
+          minutes,
+          therapistId,
+          highlight: request.id === highlightRequestId,
+          onConfirm: () => confirmRequest(request),
+          onDecline: () => setDeclining({ id: request.id, name: request.name }),
+        },
+      ];
+    });
+    // confirmRequest only reads values that change with the request list and the date
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManageAll, pendingRequests, soleTherapistId, highlightRequestId, date]);
+
+  /** Sidebar card tapped: go to the requested day, make sure its therapist's column is shown, ring the marker. */
+  function showRequestOnCalendar(request: AppointmentRequest) {
+    if (request.preferredDate) setSchedule({ view: 'schedule', date: request.preferredDate });
+    const therapistId = request.preferredTherapistId ?? soleTherapistId;
+    if (therapistId && selectedIds.length && !selectedIds.includes(therapistId)) setTherapists([...selectedIds, therapistId]);
+    setHighlightRequestId(request.id);
+    setTimeout(() => setHighlightRequestId((current) => (current === request.id ? null : current)), 5000);
   }
 
   const canManageAppointment = (appointment: Appointment) =>
@@ -703,8 +745,10 @@ export function ScheduleBookingsView({
   }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, hoursTherapistId, myHoursOpen, setSchedule, step, weekAvailable]);
 
   async function decline(requestId: UUID) {
+    const request = requestById.get(requestId);
     try {
       await bookingService.declineAppointmentRequest(requestId);
+      if (request) setDeclined({ name: request.name, phone: request.phone, requestedFor: requestWants(request) });
     } catch (error) {
       notify.error(toFriendlyMessage(error));
     }
@@ -872,6 +916,7 @@ export function ScheduleBookingsView({
                     onConfirm={confirmRequest}
                     onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
                     onSeeAll={() => setSchedule({ view: 'requests' })}
+                    onFocus={showRequestOnCalendar}
                     limit={3}
                   />
                 ) : null
@@ -1072,6 +1117,7 @@ export function ScheduleBookingsView({
                     summaryFor={summaryFor}
                     workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
+                    ghosts={requestGhosts}
                   />
                 ) : threeDayTherapist ? (
                   <MobileThreeDayGrid
@@ -1122,6 +1168,7 @@ export function ScheduleBookingsView({
                       onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
                       workingFor={(day) => workingFor(singleTherapist.id, day)}
                       drag={dragOptions}
+                      ghosts={requestGhosts.filter((g) => g.therapistId === singleTherapist.id)}
                     />
                   ) : (
                     <WeekTimeGrid
@@ -1140,6 +1187,7 @@ export function ScheduleBookingsView({
                       onSelect={(a) => setSelectedId(a.id)}
                       onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
                       drag={dragOptions}
+                      ghosts={requestGhosts.filter((g) => visibleRoster.some((t) => t.id === g.therapistId))}
                       multi={{
                         therapists: weekGridTherapists,
                         canBookFor,
@@ -1223,6 +1271,8 @@ export function ScheduleBookingsView({
           mrnoFor={mrnoFor}
         />
       )}
+
+      {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
 
       {confirmed && (
         <BookedStrip
@@ -1443,7 +1493,7 @@ export function ScheduleBookingsView({
       <ConfirmDialog
         open={declining !== null}
         title="Decline this request?"
-        message={declining ? `Removes ${declining.name}'s request. Message them separately if needed.` : ''}
+        message={declining ? `Removes ${declining.name}'s request. You can message them right after.` : ''}
         confirmLabel="Decline"
         destructive
         onCancel={() => setDeclining(null)}

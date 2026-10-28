@@ -253,16 +253,11 @@ export function TodayAppointments({
   ) : null;
 
   if (appointments.length === 0) {
-    return (
-      <div className="space-y-4">
-        {requestsSection}
-        <p className="text-sm text-[var(--muted)]">
-          No appointments today ·{' '}
-          <Link to="/schedule" className="font-medium text-[var(--teal)] hover:underline">
-            Open schedule →
-          </Link>
-        </p>
-      </div>
+    // The card header says "none today" and offers the schedule link; with requests listed there is nothing more to say.
+    return hasRequests ? (
+      <div className="space-y-4">{requestsSection}</div>
+    ) : (
+      <p className="text-sm text-[var(--muted)]">No appointments today</p>
     );
   }
 

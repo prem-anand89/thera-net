@@ -20,7 +20,7 @@ import {
   type AppointmentRequest,
   type Visit,
 } from '@/domain/types';
-import { appointmentStartsOnDate, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
+import { appointmentStartsOnDate, minutesOfDay, patientAttendance, requestedSlotTime, toLocalDateStr } from '@/domain/schedule';
 import { TodayAppointments } from '@/components/schedule/TodayAppointments';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
@@ -30,6 +30,8 @@ import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetail
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { BookedStrip } from '@/components/schedule/BookedStrip';
+import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
+import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -374,6 +376,7 @@ export function WorkspacePage() {
   const [confirmingRequest, setConfirmingRequest] = useState<AppointmentRequest | null>(null);
   // After a booking, a strip offers the one-tap WhatsApp to the patient (booking never messages anyone itself).
   const [booked, setBooked] = useState<BookedSlot | null>(null);
+  const [declined, setDeclined] = useState<DeclinedRequest | null>(null);
   const [decliningRequest, setDecliningRequest] = useState<AppointmentRequest | null>(null);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -694,8 +697,7 @@ export function WorkspacePage() {
   ];
   // `todayAppointments` now carries cancelled rows (for the Cancelled fold); counts ignore them.
   const appointmentsLeft =
-    todayAppointments.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length +
-    pendingRequestCount;
+    todayAppointments.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length;
 
   return (
     <div className="space-y-5">
@@ -749,6 +751,11 @@ export function WorkspacePage() {
             : undefined
         }
         prefilledTherapistId={confirmingRequest?.preferredTherapistId ?? undefined}
+        prefilledTime={
+          confirmingRequest
+            ? requestedSlotTime(confirmingRequest, workspaceAppointments ?? [], toLocalDateStr(new Date()), clinic.slotDurationMinutes || 30) ?? undefined
+            : undefined
+        }
         prefilledPatientName={confirmingRequest?.name}
         prefilledPatientPhone={confirmingRequest?.phone}
         requestId={confirmingRequest?.id}
@@ -759,7 +766,7 @@ export function WorkspacePage() {
       <ConfirmDialog
         open={decliningRequest !== null}
         title="Decline this request?"
-        message={decliningRequest ? `${decliningRequest.name}'s request will be removed from the list. Let them know separately if needed.` : ''}
+        message={decliningRequest ? `${decliningRequest.name}'s request will be removed from the list. You can message them right after.` : ''}
         confirmLabel="Decline"
         destructive
         onCancel={() => setDecliningRequest(null)}
@@ -767,7 +774,10 @@ export function WorkspacePage() {
           const request = decliningRequest;
           setDecliningRequest(null);
           if (request) {
-            bookingService.declineAppointmentRequest(request.id).catch((error: unknown) => notify.error(toFriendlyMessage(error)));
+            bookingService
+              .declineAppointmentRequest(request.id)
+              .then(() => setDeclined({ name: request.name, phone: request.phone, requestedFor: requestWants(request) }))
+              .catch((error: unknown) => notify.error(toFriendlyMessage(error)));
           }
         }}
       />
@@ -778,6 +788,7 @@ export function WorkspacePage() {
         rescheduleAppointment={reschedulingAppointment ?? undefined}
         onBooked={setBooked}
       />
+      {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
       {booked && (
         <BookedStrip
           booked={booked}
@@ -878,16 +889,21 @@ export function WorkspacePage() {
               ? `Appointments · ${appointmentsLeft} left`
               : appointmentsForList.some((a) => a.status !== 'cancelled')
                 ? 'Appointments · all done'
-                : 'Appointments'
+                : 'Appointments · none today'
           }
           action={
-            <Link
-              to="/schedule"
-              className="shrink-0 whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-            >
-              <span className="sm:hidden">Schedule →</span>
-              <span className="hidden sm:inline">Open schedule →</span>
-            </Link>
+            <span className="flex shrink-0 items-center gap-2.5">
+              {pendingRequestCount > 0 && (
+                <span className="rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-xs font-medium text-[var(--amber)]">
+                  {pendingRequestCount} {pendingRequestCount === 1 ? 'request' : 'requests'}
+                  <span className="hidden sm:inline"> to confirm</span>
+                </span>
+              )}
+              <Link to="/schedule" className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline">
+                <span className="sm:hidden">Schedule →</span>
+                <span className="hidden sm:inline">Open schedule →</span>
+              </Link>
+            </span>
           }
         >
           <TodayAppointments

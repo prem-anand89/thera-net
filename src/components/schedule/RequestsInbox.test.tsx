@@ -62,6 +62,31 @@ describe('RequestsInbox', () => {
     expect(screen.getByRole('link', { name: '9820000002' })).toHaveAttribute('href', 'tel:9820000002');
   });
 
+  it('rail: the name and time are the jump button; Confirm, Decline and the phone link stay separate, and nothing truncates', () => {
+    const onFocus = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <RequestsInbox
+        variant="rail"
+        requests={[request({ notes: 'ACL rehab' })]}
+        therapistNameFor={() => 'Prem Anand'}
+        onConfirm={onConfirm}
+        onDecline={vi.fn()}
+        onSeeAll={vi.fn()}
+        onFocus={onFocus}
+      />
+    );
+    const jump = screen.getByRole('button', { name: /Meera/ });
+    expect(jump).toHaveTextContent('Fri, 2 Oct, 10:30 AM · Prem Anand');
+    expect(jump.querySelector('.truncate')).toBeNull();
+    expect(jump.contains(screen.getByRole('link', { name: '9820000002' }))).toBe(false);
+    expect(jump.contains(screen.getByRole('button', { name: 'Confirm' }))).toBe(false);
+    expect(screen.getByText('ACL rehab')).toBeInTheDocument();
+    fireEvent.click(jump);
+    expect(onFocus).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it('rail: shows a limited list and a See all link', () => {
     const onSeeAll = vi.fn();
     render(

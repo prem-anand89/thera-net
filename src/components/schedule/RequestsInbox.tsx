@@ -23,37 +23,47 @@ function RequestRow({
   therapistName,
   onConfirm,
   onDecline,
+  onFocus,
 }: {
   request: AppointmentRequest;
   therapistName: string | null;
   onConfirm: () => void;
   onDecline: () => void;
+  /** Show it on the calendar (jump to its day and time). The name and time become the button; the phone link and actions stay separate. */
+  onFocus?: () => void;
 }) {
+  const summary = (
+    <>
+      <span className="block text-sm font-medium text-[var(--ink)]">
+        {request.name} <span className="text-xs font-normal text-[var(--muted)]">· {timeAgo(request.createdAt)}</span>
+      </span>
+      <span className="block text-xs text-[var(--muted)]">
+        {requestWants(request)}
+        {therapistName ? ` · ${therapistName}` : ''}
+      </span>
+    </>
+  );
   return (
     <li className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-[var(--ink)]">
-            {request.name} <span className="text-xs font-normal text-[var(--muted)]">· {timeAgo(request.createdAt)}</span>
-          </p>
-          <p className="truncate text-xs text-[var(--muted)]">
-            {requestWants(request)}
-            {therapistName ? ` · ${therapistName}` : ''}
-          </p>
-          <a href={`tel:${request.phone}`} className="text-xs text-[var(--teal)] hover:underline">
-            {request.phone}
-          </a>
-        </div>
-        <div className="flex shrink-0 flex-col gap-1">
-          <button type="button" className="min-h-9 rounded-lg bg-[var(--teal)] px-3 text-xs font-medium text-white" onClick={onConfirm}>
-            Confirm
-          </button>
-          <button type="button" className="min-h-9 px-3 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={onDecline}>
-            Decline
-          </button>
-        </div>
+      {onFocus ? (
+        <button type="button" className="block w-full text-left hover:opacity-80" onClick={onFocus} title="Show on the calendar">
+          {summary}
+        </button>
+      ) : (
+        <div>{summary}</div>
+      )}
+      <a href={`tel:${request.phone}`} className="inline-block py-0.5 text-xs text-[var(--teal)] hover:underline">
+        {request.phone}
+      </a>
+      {request.notes && <p className="line-clamp-2 text-xs text-[var(--ink)]">{request.notes}</p>}
+      <div className="mt-1.5 flex items-center gap-2">
+        <button type="button" className="min-h-9 rounded-lg bg-[var(--teal)] px-3 text-xs font-medium text-white" onClick={onConfirm}>
+          Confirm
+        </button>
+        <button type="button" className="min-h-9 px-2 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={onDecline}>
+          Decline
+        </button>
       </div>
-      {request.notes && <p className="mt-1 line-clamp-2 text-xs text-[var(--ink)]">{request.notes}</p>}
     </li>
   );
 }
@@ -70,6 +80,7 @@ export function RequestsInbox({
   onConfirm,
   onDecline,
   onSeeAll,
+  onFocus,
   limit = 5,
 }: {
   requests: AppointmentRequest[];
@@ -79,6 +90,8 @@ export function RequestsInbox({
   onConfirm: (request: AppointmentRequest) => void;
   onDecline: (request: AppointmentRequest) => void;
   onSeeAll: () => void;
+  /** Jump the calendar to a request's day and time (Schedule only). */
+  onFocus?: (request: AppointmentRequest) => void;
   limit?: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -94,6 +107,7 @@ export function RequestsInbox({
           therapistName={therapistNameFor(request.preferredTherapistId)}
           onConfirm={() => onConfirm(request)}
           onDecline={() => onDecline(request)}
+          onFocus={onFocus ? () => onFocus(request) : undefined}
         />
       ))}
       {requests.length > shown.length && (
