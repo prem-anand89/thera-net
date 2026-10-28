@@ -413,8 +413,26 @@ export function ServiceRows({
                 <span className="shrink-0 font-num text-sm font-semibold text-[var(--ink)]">
                   {formatINR(rowPricePaise(row, catalog))}
                 </span>
-                {rows.length > 1 && (
+                {rows.length > 1 ? (
                   <RemoveButton name={name} onClick={() => onChange(rows.filter((r) => r.key !== row.key))} />
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={`Clear ${name}`}
+                    title={`Clear ${name}`}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--rust)] transition-colors"
+                    onClick={() => {
+                      update(row.key, {
+                        serviceCatalogId: undefined,
+                        continuation: undefined,
+                        assistingTherapistId: null,
+                        sessionShare: null,
+                      });
+                      setChanging(null);
+                    }}
+                  >
+                    <IconClose className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             )}
@@ -430,7 +448,17 @@ export function ServiceRows({
               </div>
             )}
             {named && !row.continuation && cat && cat.sessionCount > 1 && (
-              <div className="mt-0.5 text-xs text-[var(--muted)]">{cat.sessionCount}-session package</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[var(--muted)]">
+                <span>{cat.sessionCount}-session package</span>
+                <span>·</span>
+                <span className="font-num font-medium text-[var(--ink)]">
+                  {formatINR(effectivePricePerSession(cat))}/session
+                </span>
+                <span>·</span>
+                <span className="inline-flex items-center rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[11px] font-semibold text-[var(--teal-strong)]">
+                  Uses 1 of {cat.sessionCount} today
+                </span>
+              </div>
             )}
             {openSame && !newPackageOk.has(row.key) && (
               // The money guard, kept to one quiet line: this row sells a NEW package while the same one still has a session left.

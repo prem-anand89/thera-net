@@ -920,23 +920,19 @@ export function NewVisitPage() {
     [allTreatments, treatments]
   );
 
-  const itemizedSubtext = useMemo(() => {
-    if (servicesChosen === 0) return '';
+  const footerSummaryLine = useMemo(() => {
+    if (servicesChosen === 0) return null;
     const activeRows = rows.filter((r) => Boolean(r.serviceCatalogId || r.continuation));
-    const serviceParts = activeRows.map((r) => {
+    const serviceNames = activeRows.map((r) => {
       const cat = catalogItems.find((c) => c.id === r.serviceCatalogId);
-      const name = r.continuation?.serviceName ?? cat?.name ?? 'Service';
-      const shortName = name.replace(/\s+Therapy/i, '').trim() || name;
-      const priceStr = r.continuation ? '₹0' : formatINR(cat?.basePricePaise ?? 0);
-      return `${shortName} ${priceStr}`;
+      const rawName = r.continuation?.serviceName ?? cat?.name ?? 'Service';
+      return rawName.replace(/\s+Therapy/i, '').trim() || rawName;
     });
-    const servicesLabel = `${servicesChosen} ${servicesChosen === 1 ? 'service' : 'services'}`;
-    const servicesBreakdown = serviceParts.length > 0 ? ` (${serviceParts.join(' + ')})` : '';
+    const servicesTitle = serviceNames.join(' + ') || 'Service';
 
     const selectedTreatmentNames = treatmentIds
       .map((id) => treatmentNameById.get(id))
       .filter((n): n is string => Boolean(n));
-
     let treatmentsLabel = '';
     if (selectedTreatmentNames.length === 1) {
       treatmentsLabel = ` · ${selectedTreatmentNames[0]}`;
@@ -944,8 +940,53 @@ export function NewVisitPage() {
       treatmentsLabel = ` · ${selectedTreatmentNames.length} treatments`;
     }
 
-    return `${servicesLabel}${servicesBreakdown}${treatmentsLabel}`;
-  }, [servicesChosen, rows, catalogItems, treatmentIds, treatmentNameById]);
+    const hasAdjustment = adjustmentMode !== 'none' && billPaise !== catalogPricePaise;
+
+    if (!hasAdjustment) {
+      const countLabel = `${servicesChosen} ${servicesChosen === 1 ? 'service' : 'services'}`;
+      return {
+        hasAdjustment: false,
+        text: `${countLabel} · ${servicesTitle}${treatmentsLabel}`,
+      };
+    }
+
+    const subtotalFormatted = formatINR(catalogPricePaise);
+    const diffFormatted = formatINR(Math.abs(catalogPricePaise - billPaise));
+    const isDiscount = adjustmentMode === 'discount';
+    const sign = isDiscount ? '−' : '+';
+    const modeLabel = isDiscount ? 'discount' : 'extra';
+
+    let reasonPart = '';
+    if (adjustmentValueType === 'percent' && adjustmentValue && adjustmentReason) {
+      reasonPart = ` (${adjustmentValue}% · ${adjustmentReason})`;
+    } else if (adjustmentValueType === 'percent' && adjustmentValue) {
+      reasonPart = ` (${adjustmentValue}%)`;
+    } else if (adjustmentReason) {
+      reasonPart = ` (${adjustmentReason})`;
+    }
+
+    return {
+      hasAdjustment: true,
+      subtotalFormatted,
+      servicesTitle,
+      sign,
+      diffFormatted,
+      modeLabel,
+      reasonPart,
+    };
+  }, [
+    servicesChosen,
+    rows,
+    catalogItems,
+    treatmentIds,
+    treatmentNameById,
+    adjustmentMode,
+    billPaise,
+    catalogPricePaise,
+    adjustmentValueType,
+    adjustmentValue,
+    adjustmentReason,
+  ]);
 
   /**
    * Back to a blank visit after "Visit logged". Date, therapist and payment method stay (back-to-back entry);
@@ -2147,48 +2188,48 @@ export function NewVisitPage() {
 
             {/* Total & Save: Flush recessed footer inside Payment card */}
             <div className="-mx-5 -mb-5 mt-4 rounded-b-2xl border-t border-[var(--border)] bg-[var(--paper)] px-5 py-3.5 space-y-1.5">
-              {/* Line 1: Itemized services and treatments (or empty-state guidance) */}
+              {/* Single clean line directly above the total */}
               {servicesChosen === 0 ? (
                 <p className="text-xs text-[var(--muted)]">
                   Choose patient, therapist &amp; service to save
                 </p>
-              ) : itemizedSubtext ? (
-                <p className="text-xs text-[var(--muted)] truncate" title={itemizedSubtext}>
-                  {itemizedSubtext}
+              ) : footerSummaryLine && !footerSummaryLine.hasAdjustment ? (
+                <p className="text-xs text-[var(--muted)] truncate" title={footerSummaryLine.text}>
+                  {footerSummaryLine.text}
+                </p>
+              ) : footerSummaryLine && footerSummaryLine.hasAdjustment ? (
+                <p className="flex flex-wrap items-center gap-x-1.5 font-num text-xs text-[var(--muted)]">
+                  <span className="font-semibold text-[var(--ink)]">
+                    {footerSummaryLine.subtotalFormatted}
+                  </span>
+                  <span className="font-sans text-[var(--muted)]">
+                    ({footerSummaryLine.servicesTitle})
+                  </span>
+                  <span className="mx-1 font-sans font-bold text-[var(--ink)]">
+                    {footerSummaryLine.sign}
+                  </span>
+                  <span className="font-semibold text-[var(--teal-strong)]">
+                    {footerSummaryLine.diffFormatted}
+                  </span>
+                  <span className="text-[var(--teal-strong)] font-sans">
+                    {footerSummaryLine.modeLabel}
+                    {footerSummaryLine.reasonPart}
+                  </span>
                 </p>
               ) : null}
 
-              {/* Line 2: Inline math grouped right above Total when an adjustment exists */}
-              {servicesChosen > 0 && adjustmentMode !== 'none' && billPaise !== catalogPricePaise && (
-                <p className="flex flex-wrap items-center gap-x-1.5 font-num text-xs text-[var(--muted)]">
-                  <span className="font-sans text-[var(--muted)]">Subtotal</span>{' '}
-                  <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>{' '}
-                  <span className="mx-1 font-sans font-bold text-[var(--ink)]">
-                    {adjustmentMode === 'discount' ? '−' : '+'}
-                  </span>{' '}
-                  <span className="font-medium text-[var(--teal-strong)]">
-                    {formatINR(Math.abs(catalogPricePaise - billPaise))}
-                  </span>{' '}
-                  <span className="text-[var(--teal-strong)] font-sans">
-                    {adjustmentMode === 'discount' ? 'discount' : 'extra'}
-                    {adjustmentValueType === 'percent' && adjustmentValue ? ` (${adjustmentValue}%)` : ''}
-                    {adjustmentReason ? ` · ${adjustmentReason}` : ''}
-                  </span>
-                </p>
-              )}
-
-              {/* Line 3: Execution row with Total on the left and actions on the right */}
+              {/* Execution row: Big price BEFORE label so numbers left-align cleanly, and actions on right */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-0.5">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                    Total
-                  </span>
                   <span
-                    className={`font-num text-2xl font-bold tracking-tight ${
+                    className={`font-num text-2xl font-extrabold tracking-tight tabular-nums ${
                       servicesChosen === 0 ? 'text-[var(--muted)]' : 'text-[var(--ink)]'
                     }`}
                   >
                     {servicesChosen === 0 ? '₹0' : formatINR(billPaise)}
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                    Total
                   </span>
                 </div>
 
@@ -2205,19 +2246,12 @@ export function NewVisitPage() {
                   <button
                     type="button"
                     aria-label={busy ? 'Saving…' : 'Save visit'}
-                    className={`${btnPrimary} flex-1 sm:flex-initial flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl whitespace-nowrap px-5 text-xs font-semibold shadow-xs hover:shadow-md transition-all`}
+                    title="Save visit (⌘ + Enter)"
+                    className={`${btnPrimary} flex-1 sm:flex-initial flex h-10 shrink-0 items-center justify-center rounded-xl whitespace-nowrap px-5 text-xs font-semibold shadow-xs hover:shadow-md transition-all`}
                     disabled={busy || servicesChosen === 0}
                     onClick={() => void save()}
                   >
                     <span>{busy ? 'Saving…' : 'Save visit'}</span>
-                    {!busy && servicesChosen > 0 && (
-                      <kbd
-                        aria-hidden="true"
-                        className="hidden sm:inline-flex items-center rounded border border-white/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-mono leading-none text-white/90"
-                      >
-                        ⌘↵
-                      </kbd>
-                    )}
                   </button>
                 </div>
               </div>
