@@ -922,7 +922,7 @@ export function NewVisitPage() {
         return `${cleanName} Pkg ₹0`;
       }
       if (hasMultiple && hasContinuation && cat) {
-        return `${cleanName} ${formatINR(cat.pricePaise)}`;
+        return `${cleanName} ${formatINR(cat.basePricePaise)}`;
       }
       return cleanName;
     });
