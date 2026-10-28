@@ -53,10 +53,10 @@ describe('BillAdjustmentFields', () => {
     const trigger = screen.getByRole('button', { name: '+ Discount / Extra' });
     fireEvent.click(trigger);
 
-    // Now the toggle options are visible
-    expect(screen.getByText('None')).toBeInTheDocument();
-    expect(screen.getByText('Discount')).toBeInTheDocument();
-    expect(screen.getByText('Extra')).toBeInTheDocument();
+    // Now the toggle options and remove button are visible
+    expect(screen.getByRole('button', { name: 'Discount' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Extra' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Remove adjustment/i })).toBeInTheDocument();
   });
 
   it('starts expanded when an adjustment already exists (mode !== none)', () => {
@@ -68,14 +68,14 @@ describe('BillAdjustmentFields', () => {
     });
 
     // Toggle options are immediately visible
-    expect(screen.getByText('Discount')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discount' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '+ Discount / Extra' })).not.toBeInTheDocument();
 
-    // Reason field is present
-    expect(screen.getByLabelText(/Reason \*/)).toBeInTheDocument();
+    // Reason input is present
+    expect(screen.getByPlaceholderText(/loyalty discount/i)).toBeInTheDocument();
   });
 
-  it('collapses back when None is selected', () => {
+  it('collapses back when remove button is clicked', () => {
     const onModeChange = vi.fn();
     renderFields({
       mode: 'none',
@@ -84,14 +84,30 @@ describe('BillAdjustmentFields', () => {
 
     // Expand
     fireEvent.click(screen.getByRole('button', { name: '+ Discount / Extra' }));
-    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discount' })).toBeInTheDocument();
 
-    // Click None
-    fireEvent.click(screen.getByText('None'));
+    // Click remove (✕)
+    fireEvent.click(screen.getByRole('button', { name: /Remove adjustment/i }));
     expect(onModeChange).toHaveBeenCalledWith('none');
 
     // Collapsed back to + Discount / Extra
     expect(screen.getByRole('button', { name: '+ Discount / Extra' })).toBeInTheDocument();
+  });
+
+  it('clicking a % preset chip updates value and sets valueType to percent', () => {
+    const onValueChange = vi.fn();
+    const onValueTypeChange = vi.fn();
+    renderFields({
+      mode: 'discount',
+      valueType: 'amount',
+      value: '',
+      onValueChange,
+      onValueTypeChange,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '10%' }));
+    expect(onValueTypeChange).toHaveBeenCalledWith('percent');
+    expect(onValueChange).toHaveBeenCalledWith('10');
   });
 
   it('shows one total box when nothing is adjusted, and the price box once it differs (New Visit)', () => {
@@ -107,17 +123,30 @@ describe('BillAdjustmentFields', () => {
     expect(screen.getByText(/Subtotal/)).toBeInTheDocument();
   });
 
-  it('can be hidden again when opened by mistake with None selected', () => {
-    renderFields({ mode: 'none' });
-    fireEvent.click(screen.getByRole('button', { name: '+ Discount / Extra' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
-    expect(screen.getByRole('button', { name: '+ Discount / Extra' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+  it('clicking a reason preset chip updates reason in 1 tap', () => {
+    const onReasonChange = vi.fn();
+    renderFields({
+      mode: 'discount',
+      valueType: 'percent',
+      value: '10',
+      reason: '',
+      onReasonChange,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Loyalty' }));
+    expect(onReasonChange).toHaveBeenCalledWith('Loyalty');
   });
 
-  it('offers no Hide while an adjustment is set', () => {
-    renderFields({ mode: 'discount', value: '100' });
-    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull();
+  it('reveals custom reason input when + Other... is clicked', () => {
+    renderFields({
+      mode: 'discount',
+      valueType: 'percent',
+      value: '10',
+      reason: '',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Other...' }));
+    expect(screen.getByPlaceholderText(/senior citizen concession/i)).toBeInTheDocument();
   });
 
   it('keeps pristine form not dirty when disclosure is opened without setting an adjustment', () => {

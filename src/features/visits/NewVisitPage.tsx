@@ -82,7 +82,6 @@ import {
 } from './ServiceRows';
 import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, shouldFoldTreatments, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
-import { VisitSaveBar, type SavePayment } from './VisitSaveBar';
 import { PickerMenu } from './PickerMenu';
 import { therapistColor } from '@/components/schedule/scheduleColors';
 import { patientDue } from '@/domain/patientDue';
@@ -896,13 +895,57 @@ export function NewVisitPage() {
   }, [visitDate, today, dateHint]);
 
   const knownConditions = useMemo(() => {
-    const set = new Set<string>();
-    if (patient?.primaryCondition?.trim()) set.add(patient.primaryCondition.trim());
-    (patientVisits ?? []).forEach((v) => {
-      if (v.condition?.trim()) set.add(v.condition.trim());
-    });
-    return Array.from(set);
+    const map = new Map<string, string>();
+    const add = (raw: string | undefined | null) => {
+      const trimmed = raw?.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, trimmed);
+      } else {
+        const existing = map.get(key)!;
+        // Prefer Title Case over ALL-CAPS or weird "ANkle" caps
+        if (/[A-Z]{2,}/.test(existing) && !/[A-Z]{2,}/.test(trimmed)) {
+          map.set(key, trimmed);
+        }
+      }
+    };
+    add(patient?.primaryCondition);
+    (patientVisits ?? []).forEach((v) => add(v.condition));
+    return Array.from(map.values());
   }, [patient?.primaryCondition, patientVisits]);
+
+  const treatmentNameById = useMemo(
+    () => new Map((allTreatments ?? treatments).map((t) => [t.id, t.name])),
+    [allTreatments, treatments]
+  );
+
+  const itemizedSubtext = useMemo(() => {
+    if (servicesChosen === 0) return '';
+    const activeRows = rows.filter((r) => Boolean(r.serviceCatalogId || r.continuation));
+    const serviceParts = activeRows.map((r) => {
+      const cat = catalogItems.find((c) => c.id === r.serviceCatalogId);
+      const name = r.continuation?.serviceName ?? cat?.name ?? 'Service';
+      const shortName = name.replace(/\s+Therapy/i, '').trim() || name;
+      const priceStr = r.continuation ? '₹0' : formatINR(cat?.basePricePaise ?? 0);
+      return `${shortName} ${priceStr}`;
+    });
+    const servicesLabel = `${servicesChosen} ${servicesChosen === 1 ? 'service' : 'services'}`;
+    const servicesBreakdown = serviceParts.length > 0 ? ` (${serviceParts.join(' + ')})` : '';
+
+    const selectedTreatmentNames = treatmentIds
+      .map((id) => treatmentNameById.get(id))
+      .filter((n): n is string => Boolean(n));
+
+    let treatmentsLabel = '';
+    if (selectedTreatmentNames.length === 1) {
+      treatmentsLabel = ` · ${selectedTreatmentNames[0]}`;
+    } else if (selectedTreatmentNames.length > 1) {
+      treatmentsLabel = ` · ${selectedTreatmentNames.length} treatments`;
+    }
+
+    return `${servicesLabel}${servicesBreakdown}${treatmentsLabel}`;
+  }, [servicesChosen, rows, catalogItems, treatmentIds, treatmentNameById]);
 
   /**
    * Back to a blank visit after "Visit logged". Date, therapist and payment method stay (back-to-back entry);
@@ -1117,6 +1160,20 @@ export function NewVisitPage() {
     }
   }
 
+  // Global keyboard shortcut: Cmd+Enter or Ctrl+Enter saves the visit
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        if (!busy && !savingRef.current && servicesChosen > 0) {
+          e.preventDefault();
+          void save();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [busy, servicesChosen]);
+
   if (justSaved) {
     // Still owed on this visit (0 without billing access or when settled).
     // Collected on the form: nothing is owed, even in the moment before the payments query answers
@@ -1251,14 +1308,6 @@ export function NewVisitPage() {
       </div>
     );
   }
-
-  const savePayment: SavePayment =
-    billPaise > 0 && canCollectPayment
-      ? paymentChoice === 'paid'
-        ? { kind: 'now', methodLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label ?? '' }
-        : { kind: 'later' }
-      : { kind: 'none' };
-
   const therapistList = therapists ?? [];
   const therapistChosen = therapistList.some((t) => t.id === therapistId);
   const clinicalHidden = role === 'front_desk' && !clinicalDetailsExpanded;
@@ -1811,7 +1860,7 @@ export function NewVisitPage() {
         ) : (
           <div>
             <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Condition (this visit)</span>
-            {customConditionOpen || (condition && !knownConditions.includes(condition)) ? (
+            {customConditionOpen || (condition && !knownConditions.some((c) => c.toLowerCase() === condition.toLowerCase())) ? (
               <div className="flex items-center gap-2">
                 <input
                   className={inputCls}
@@ -1825,7 +1874,7 @@ export function NewVisitPage() {
                   className="text-xs text-[var(--muted)] hover:text-[var(--ink)] shrink-0"
                   onClick={() => {
                     setCustomConditionOpen(false);
-                    if (!knownConditions.includes(condition)) setCondition('');
+                    if (!knownConditions.some((c) => c.toLowerCase() === condition.toLowerCase())) setCondition('');
                   }}
                 >
                   Cancel
@@ -1901,7 +1950,6 @@ export function NewVisitPage() {
   );
 
   // --- Treatments: the chips while ticking, one summary line once folded.
-  const treatmentNameById = new Map((allTreatments ?? treatments).map((t) => [t.id, t.name]));
   const orderedTreatments = [...rankedTreatments.frequent, ...rankedTreatments.rest];
   const visibleTreatments = visibleTreatmentOptions(orderedTreatments, treatmentIds, showAllTreatments);
   const hiddenTreatments = orderedTreatments.length - visibleTreatments.length;
@@ -1994,25 +2042,6 @@ export function NewVisitPage() {
             quickServices={quickServices}
           />
 
-          {/* The rows are the itemised bill: subtotal, the discount / top-up, then the total. The
-              discount survives row edits and is off while there is nothing to discount. */}
-          <BillAdjustmentFields
-            catalogPricePaise={catalogPricePaise}
-            catalogLabel="Subtotal"
-            totalLabel="Total"
-            hideTotalWhenPlain
-            hideUnadjustedPrice
-            disabled={catalogPricePaise === 0}
-            mode={adjustmentMode}
-            valueType={adjustmentValueType}
-            value={adjustmentValue}
-            reason={adjustmentReason}
-            onModeChange={setAdjustmentMode}
-            onValueTypeChange={setAdjustmentValueType}
-            onValueChange={setAdjustmentValue}
-            onReasonChange={setAdjustmentReason}
-          />
-
           {showAssistant && (
             <RevenueShareSummary
               items={draftLinesToItems(rows, catalogItems)}
@@ -2037,55 +2066,164 @@ export function NewVisitPage() {
         </div>
       </SectionCard>
 
-      {billPaise > 0 && canCollectPayment && (
-        <div id="visit-payment" className="scroll-mt-24">
-          <SectionCard title="Payment">
-            {/* One line from tablet up: when it's paid, then how (or the note for later). Stacked with room on phones. */}
-            <div className="space-y-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2.5">
-                <SegmentedToggle
-                  value={paymentChoice}
-                  onChange={setPaymentChoice}
-                  options={[
-                    { value: 'paid', label: 'Collected now' },
-                    { value: 'pending', label: 'Take payment later' },
-                  ]}
-                />
-                {paymentChoice === 'paid' ? (
-                  <PaymentMethodChips
-                    value={paymentMethod}
-                    onChange={setPaymentMethod}
-                    options={paymentMethods}
-                    disabled={busy}
+      <div id="visit-payment" className="scroll-mt-24">
+        <SectionCard title="Payment">
+          <div className="space-y-4">
+            {canCollectPayment && (catalogPricePaise > 0 || billPaise > 0) ? (
+              <div className="space-y-3.5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2.5">
+                  <SegmentedToggle
+                    value={paymentChoice}
+                    onChange={setPaymentChoice}
+                    options={[
+                      { value: 'paid', label: 'Collected now' },
+                      { value: 'pending', label: 'Take payment later' },
+                    ]}
                   />
-                ) : (
-                  <input
-                    className={`${inputCls} w-full sm:min-w-[14rem] sm:flex-1`}
-                    placeholder="Optional note — e.g. will pay next Monday"
-                    value={pendingNote}
-                    onChange={(e) => setPendingNote(e.target.value)}
-                  />
-                )}
-              </div>
+                  {paymentChoice === 'paid' ? (
+                    <PaymentMethodChips
+                      value={paymentMethod}
+                      onChange={setPaymentMethod}
+                      options={paymentMethods}
+                      disabled={busy}
+                    />
+                  ) : (
+                    <input
+                      className={`${inputCls} w-full sm:min-w-[14rem] sm:flex-1`}
+                      placeholder="Optional note — e.g. will pay next Monday"
+                      value={pendingNote}
+                      onChange={(e) => setPendingNote(e.target.value)}
+                    />
+                  )}
+                </div>
 
-              {paymentChoice === 'paid' && paymentMethod === 'upi' && patient && (
-                <div className="flex items-center gap-2.5 pt-0.5">
-                  <ShowUpiQrButton
-                    amountPaise={billPaise}
-                    mrno={patient.mrno}
-                    visitDate={visitDate}
-                    patientName={patient.name}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors shadow-2xs"
+                {paymentChoice === 'paid' && paymentMethod === 'upi' && patient && (
+                  <div className="flex items-center gap-2.5 pt-0.5">
+                    <ShowUpiQrButton
+                      amountPaise={billPaise}
+                      mrno={patient.mrno}
+                      visitDate={visitDate}
+                      patientName={patient.name}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors shadow-2xs"
+                    />
+                    <span className="text-xs text-[var(--muted)]">
+                      Scan to collect {formatINR(billPaise)} directly to clinic UPI
+                    </span>
+                  </div>
+                )}
+
+                {/* Compact Adjustment: Discount / Extra */}
+                <div className="pt-0.5">
+                  <BillAdjustmentFields
+                    catalogPricePaise={catalogPricePaise}
+                    catalogLabel="Subtotal"
+                    totalLabel="Total"
+                    hideSummaryBoxes
+                    disabled={catalogPricePaise === 0}
+                    mode={adjustmentMode}
+                    valueType={adjustmentValueType}
+                    value={adjustmentValue}
+                    reason={adjustmentReason}
+                    onModeChange={setAdjustmentMode}
+                    onValueTypeChange={setAdjustmentValueType}
+                    onValueChange={setAdjustmentValue}
+                    onReasonChange={setAdjustmentReason}
                   />
-                  <span className="text-xs text-[var(--muted)]">
-                    Scan to collect {formatINR(billPaise)} directly to clinic UPI
+                </div>
+              </div>
+            ) : billPaise === 0 && servicesChosen > 0 ? (
+              <p className="text-xs text-[var(--muted)]">
+                📦 Package session — no payment needed for this session.
+              </p>
+            ) : !canCollectPayment && billPaise > 0 ? (
+              <p className="text-xs text-[var(--muted)]">
+                This visit will be saved as unbilled — billing is handled separately at this clinic.
+              </p>
+            ) : (
+              <p className="text-xs text-[var(--muted)]">
+                Select a service above to calculate bill and record payment.
+              </p>
+            )}
+
+            {/* Total & Save: Flush recessed footer inside Payment card */}
+            <div className="-mx-5 -mb-5 mt-4 rounded-b-2xl border-t border-[var(--border)] bg-[var(--paper)] px-5 py-3.5 space-y-1.5">
+              {/* Line 1: Itemized services and treatments (or empty-state guidance) */}
+              {servicesChosen === 0 ? (
+                <p className="text-xs text-[var(--muted)]">
+                  Choose patient, therapist &amp; service to save
+                </p>
+              ) : itemizedSubtext ? (
+                <p className="text-xs text-[var(--muted)] truncate" title={itemizedSubtext}>
+                  {itemizedSubtext}
+                </p>
+              ) : null}
+
+              {/* Line 2: Inline math grouped right above Total when an adjustment exists */}
+              {servicesChosen > 0 && adjustmentMode !== 'none' && billPaise !== catalogPricePaise && (
+                <p className="font-num text-xs text-[var(--muted)]">
+                  <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span> subtotal{' '}
+                  <span className="mx-1 font-sans text-[var(--muted)]">
+                    {adjustmentMode === 'discount' ? '−' : '+'}
+                  </span>{' '}
+                  <span className="font-medium text-[var(--teal-strong)]">
+                    {formatINR(Math.abs(catalogPricePaise - billPaise))}
+                  </span>{' '}
+                  <span className="text-[var(--teal-strong)] font-sans">
+                    {adjustmentMode === 'discount' ? 'discount' : 'extra'}
+                    {adjustmentValueType === 'percent' && adjustmentValue ? ` (${adjustmentValue}%)` : ''}
+                    {adjustmentReason ? ` · ${adjustmentReason}` : ''}
+                  </span>
+                </p>
+              )}
+
+              {/* Line 3: Execution row with Total on the left and actions on the right */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-0.5">
+                <div className="flex items-baseline gap-2">
+                  <span
+                    className={`font-num text-2xl font-bold tracking-tight ${
+                      servicesChosen === 0 ? 'text-[var(--muted)]' : 'text-[var(--ink)]'
+                    }`}
+                  >
+                    {servicesChosen === 0 ? '₹0' : formatINR(billPaise)}
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                    Total
                   </span>
                 </div>
-              )}
+
+                {/* Actions: Cancel & Save Visit */}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    className={`${btnSecondary} h-10 rounded-xl px-4 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)]`}
+                    disabled={busy}
+                    onClick={requestExit}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={busy ? 'Saving…' : 'Save visit'}
+                    className={`${btnPrimary} flex h-10 shrink-0 items-center gap-2 rounded-xl whitespace-nowrap px-5 text-xs font-semibold shadow-xs hover:shadow-md transition-all`}
+                    disabled={busy || servicesChosen === 0}
+                    onClick={() => void save()}
+                  >
+                    <span>{busy ? 'Saving…' : 'Save visit'}</span>
+                    {!busy && servicesChosen > 0 && (
+                      <kbd
+                        aria-hidden="true"
+                        className="inline-flex items-center rounded border border-white/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-mono leading-none text-white/90"
+                      >
+                        ⌘↵
+                      </kbd>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
-          </SectionCard>
-        </div>
-      )}
+          </div>
+        </SectionCard>
+      </div>
 
       <div ref={errorRef}>
         <ErrorNote message={error} />
@@ -2094,9 +2232,8 @@ export function NewVisitPage() {
   );
 
   return (
-    // Extra bottom room so the fixed save bar never covers the Payment card or the last field.
     <div
-      className="nv-form mx-auto max-w-5xl space-y-4 pb-32 sm:pb-24"
+      className="nv-form mx-auto max-w-5xl space-y-4 pb-12"
       onPointerDownCapture={() => {
         touchedRef.current = true;
       }}
@@ -2148,19 +2285,6 @@ export function NewVisitPage() {
         </div>
         <div className="min-w-0">{visitPanel}</div>
       </div>
-
-      <VisitSaveBar
-        totalPaise={billPaise}
-        serviceCount={servicesChosen}
-        payment={savePayment}
-        busy={busy}
-        onSave={() => void save()}
-        onCancel={requestExit}
-        onSummaryClick={() => {
-          const el = document.getElementById('visit-payment') ?? document.getElementById('visit-services');
-          el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-        }}
-      />
 
       {patient && editingPatient && (
         <EditPatientModal

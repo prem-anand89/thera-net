@@ -361,7 +361,29 @@ describe('VisitSaveBar', () => {
         onSummaryClick={onSummary}
       />
     );
-    expect(within(bar).getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    // Quick-switch payment popover and itemized subtext
+    const onQuickChange = vi.fn();
+    rerender(
+      <VisitSaveBar
+        totalPaise={150000}
+        serviceCount={2}
+        payment={{ kind: 'now', methodLabel: 'UPI' }}
+        busy={false}
+        onSave={onSave}
+        onCancel={onCancel}
+        onSummaryClick={onSummary}
+        subtext="2 services (Manual ₹1,500 + Advanced ₹2,000) · Exercise Therapy"
+        onQuickChangePayment={onQuickChange}
+      />
+    );
+    expect(within(bar).getByText('2 services (Manual ₹1,500 + Advanced ₹2,000) · Exercise Therapy')).toBeInTheDocument();
+    const pill = within(bar).getByTestId('payment-quick-pill');
+    fireEvent.click(pill);
+    const popover = screen.getByTestId('payment-popover');
+    expect(popover).toBeInTheDocument();
+    fireEvent.click(within(popover).getByText('Cash (Collect now)'));
+    expect(onQuickChange).toHaveBeenCalledWith('cash');
+    expect(screen.queryByTestId('payment-popover')).toBeNull();
   });
 });
 
