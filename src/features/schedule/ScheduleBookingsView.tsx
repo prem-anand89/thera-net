@@ -48,6 +48,7 @@ import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
 import { RequestsInbox, requestWants } from '@/components/schedule/RequestsInbox';
+import { PendingRequestsBar } from '@/components/schedule/PendingRequestsBar';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
@@ -72,7 +73,6 @@ import {
 import { useIsPhone } from './useIsPhone';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
-import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
@@ -368,24 +368,6 @@ export function ScheduleBookingsView({
   );
   const closedToday = closedFor(date);
   const dayNow = date === today ? now.minutes : null;
-  // Hook must run unconditionally on every render (rules-of-hooks) — kept
-  // above the component's early returns below, not beside the other derived
-  // day state it logically belongs with.
-  const dayGaps = useMemo(() => {
-    if (closedToday.closed || date < today) return [];
-    const activeIds = selectedIds.length ? selectedIds : roster.map((t) => t.id);
-    if (activeIds.length > 6) return []; // Don't overwhelm the mobile view if too many therapists
-    return activeIds
-      .flatMap((id) => {
-        const t = rosterById.get(id);
-        if (!t || t.active === false) return [];
-        // Free time is only offered where the viewer can book (a colleague's column is view-only).
-        if (!canManageAll && id !== myTherapistId) return [];
-        const gaps = freeGaps(dayAppointments, id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, alignStep: stepMinutes, minMinutes: stepMinutes, working: workingFor(id, date) });
-        return gaps.map((g) => ({ ...g, therapistId: id, therapistName: t.name }));
-      })
-      .sort((a, b) => a.start - b.start);
-  }, [closedToday.closed, date, today, selectedIds, roster, rosterById, dayAppointments, hours, slotMinutes, stepMinutes, dayNow, workingFor, canManageAll, myTherapistId]);
   const closures = useMemo(
     () => groupClosedRanges(closedDates ?? []).filter((range) => range.to >= today).slice(0, 8),
     [closedDates, today]
@@ -438,25 +420,6 @@ export function ScheduleBookingsView({
   );
   const requestById = useMemo(() => new Map((requests ?? []).map((r) => [r.id, r])), [requests]);
 
-  // Pending requests that now fit an opening on the day currently being
-  // viewed — reuses the same free-gap data already computed for the phone
-  // free-gap data (dayGaps), so this is live, not tied to a
-  // specific cancel/reschedule event.
-  const waitlistMatches = useMemo(() => {
-    if (!dayGaps.length || !pendingRequests.length) return [];
-    const seen = new Set<string>();
-    const matches: AppointmentRequest[] = [];
-    for (const gap of dayGaps) {
-      for (const r of matchingWaitlistEntries(pendingRequests, { date, therapistId: gap.therapistId, timeOfDay: timeOfDayFor(gap.start) })) {
-        if (!seen.has(r.id)) {
-          seen.add(r.id);
-          matches.push(r);
-        }
-      }
-    }
-    return matches;
-  }, [dayGaps, pendingRequests, date]);
-  const [dismissedWaitlistBannerDate, setDismissedWaitlistBannerDate] = useState<string | null>(null);
 
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1069,33 +1032,18 @@ export function ScheduleBookingsView({
               </div>
             )}
 
-            {mode === 'day' && waitlistMatches.length > 0 && dismissedWaitlistBannerDate !== date && (
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
-                {/* Names who asked for this day and says which day it is (it used to say "today" on any day). */}
-                <span>
-                  <strong>
-                    {waitlistMatches.length === 1
-                      ? waitlistMatches[0].name
-                      : `${waitlistMatches.length} requests`}
-                  </strong>{' '}
-                  asked for{' '}
-                  {date === today ? 'today' : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  {waitlistMatches.length === 1 && waitlistMatches[0].preferredTimeText ? ` (${waitlistMatches[0].preferredTimeText})` : ''} — there is free time.
-                </span>
-                <span className="flex items-center gap-3">
-                  {waitlistMatches.length === 1 ? (
-                    <button type="button" className="min-h-8 text-xs font-semibold underline" onClick={() => confirmRequest(waitlistMatches[0])}>
-                      Confirm
-                    </button>
-                  ) : (
-                    <button type="button" className="min-h-8 text-xs font-semibold underline" onClick={() => setSchedule({ view: 'requests' })}>
-                      See requests
-                    </button>
-                  )}
-                  <button type="button" className="min-h-8 text-xs font-medium text-[var(--teal-strong)]/70 hover:text-[var(--teal-strong)]" onClick={() => setDismissedWaitlistBannerDate(date)}>
-                    Dismiss
-                  </button>
-                </span>
+            {/* Beside the side list: on desktop with the side panel, the request wanted soonest stays here on every day,
+                so it can be answered at once. Elsewhere the collapsible strip above does the same job. */}
+            {canManageAll && showRail && (
+              <div className="hidden desktop:block">
+                <PendingRequestsBar
+                  requests={pendingRequests}
+                  therapistNameFor={(id) => (id ? rosterById.get(id)?.name ?? null : null)}
+                  onConfirm={confirmRequest}
+                  onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+                  onFocus={showRequestOnCalendar}
+                  onSeeAll={() => setSchedule({ view: 'requests' })}
+                />
               </div>
             )}
 
