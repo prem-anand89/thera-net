@@ -83,6 +83,20 @@ longer-term retention view (patients who never came back, with reasons). A misse
 - **Patient profile** shows the follow-up and its state.
 - (Later, not v1) a faint marker on the Schedule's mini-calendar on the due date.
 
+### End-to-end workflow
+
+1. **Set.** After the session (saved screen, visit row, profile, or note) someone picks *2 days / 3 days / 1 week / a date* and an optional note.
+   The patient's `follow_up_on` is stored; nothing is sent.
+2. **Therapist is reminded.** The evening before, the therapist's agenda email lists "Follow-ups due" (due tomorrow or overdue up to 7 days).
+   Front desk sees the same patients on Workspace → Follow up → Reviews → Due.
+3. **Patient is reminded.** Anyone taps **Message patient**: WhatsApp opens with the patient's number and a pre-filled message asking what time suits.
+   (A tick marks it "messaged today" on this device so two people don't both send it.)
+4. **Patient replies with a time.** Front desk taps **Book**: the booking sheet opens with the patient, therapist and due date filled in; staff pick the agreed time and confirm.
+5. **Booking is confirmed to the patient.** The existing "Message patient" strip appears after booking (WhatsApp: "your appointment ... is confirmed for ..."), and the therapist can be messaged too.
+6. **It clears itself.** An appointment dated after the day the follow-up was set removes it from Due. If that appointment is later cancelled or marked no-show, it returns (and a no-show also shows under *No-shows*).
+7. **If nothing happens.** After 7 days past the due date it moves to **Missed**: reminders stop, and the row offers "are you still planning to come in?". Staff can nudge, book, or Dismiss; after 30 days it drops off the list.
+8. **If the patient says no / not needed.** Dismiss clears it. If they want a different date, *Change date* re-sets it (and the reminders restart from the new date).
+
 ### Reminding the therapist
 
 `send-agenda` (evening email, default 8 PM, about **tomorrow**; the owner confirmed the evening email is enough, no push in v1) gains a "Follow-ups" section for each therapist:
