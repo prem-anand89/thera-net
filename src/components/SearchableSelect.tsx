@@ -1,14 +1,34 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { inputCls } from '@/components/ui';
 
-export type SearchableOption = { value: string; label: string; group?: string };
+export type SearchableOption = {
+  value: string;
+  label: string;
+  group?: string;
+  title?: string;
+  subtitle?: string;
+  price?: string;
+};
 
 /** Case-insensitive match on the option label or its group heading. */
 export function filterSearchableOptions(options: SearchableOption[], query: string): SearchableOption[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return options;
   return options.filter(
-    (o) => o.label.toLowerCase().includes(needle) || (o.group ?? '').toLowerCase().includes(needle)
+    (o) =>
+      o.label.toLowerCase().includes(needle) ||
+      (o.title ?? '').toLowerCase().includes(needle) ||
+      (o.subtitle ?? '').toLowerCase().includes(needle) ||
+      (o.group ?? '').toLowerCase().includes(needle)
+  );
+}
+
+function SearchIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <circle cx="11" cy="11" r="8" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+    </svg>
   );
 }
 
@@ -18,12 +38,18 @@ export function SearchableSelect({
   onChange,
   options,
   placeholder = 'Type to search…',
+  hideLabel = false,
+  variant = 'boxed',
+  inputClassName,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: SearchableOption[];
   placeholder?: string;
+  hideLabel?: boolean;
+  variant?: 'boxed' | 'embedded';
+  inputClassName?: string;
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -60,20 +86,34 @@ export function SearchableSelect({
     setQ('');
   }
 
+  const isEmbedded = variant === 'embedded';
+
   return (
     <div className="block" ref={rootRef}>
-      <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{label}</span>
+      {!hideLabel && label ? (
+        <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{label}</span>
+      ) : null}
       <div className="relative">
+        {isEmbedded && (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">
+            <SearchIcon className="h-4 w-4" />
+          </span>
+        )}
         <input
-          className={inputCls}
+          className={
+            inputClassName ||
+            (isEmbedded
+              ? 'w-full rounded-lg border border-[var(--border)] bg-[var(--paper)] py-2 pl-9 pr-8 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] shadow-2xs transition-all focus:border-[var(--teal)] focus:bg-[var(--surface)] focus:outline-none'
+              : inputCls)
+          }
           role="combobox"
-          aria-label={label}
+          aria-label={label || 'Service'}
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
           autoComplete="off"
-          placeholder={selected ? selected.label : placeholder}
-          value={open ? q : (selected?.label ?? '')}
+          placeholder={selected ? (selected.title ?? selected.label) : placeholder}
+          value={open ? q : (selected ? (selected.title ?? selected.label) : '')}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -95,42 +135,82 @@ export function SearchableSelect({
             }
           }}
         />
+        {open && q && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)]"
+            onClick={() => setQ('')}
+          >
+            ✕
+          </button>
+        )}
         {open && (
           <ul
             id={listId}
             role="listbox"
-            className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 shadow-[var(--shadow-2)]"
+            className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg divide-y divide-[var(--border)]/30"
           >
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-[var(--muted)]">No matches</li>
+              <li className="px-3.5 py-3 text-xs text-center text-[var(--muted)]">No matching services found</li>
             ) : (
               groups.flatMap(([group, items]) => [
                 group ? (
                   <li
                     key={`g-${group}`}
-                    className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]"
+                    className="sticky top-0 z-10 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] bg-[var(--paper)]/80 backdrop-blur-xs"
                   >
                     {group}
                   </li>
                 ) : null,
-                ...items.map((i) => (
-                  <li key={i.value}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={i.value === value}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--teal-light)] ${
-                        i.value === value ? 'bg-[var(--teal-light)] text-[var(--teal)]' : 'text-[var(--ink)]'
-                      }`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        pick(i.value);
-                      }}
-                    >
-                      {i.label}
-                    </button>
-                  </li>
-                )),
+                ...items.map((i) => {
+                  const isSelected = i.value === value;
+                  return (
+                    <li key={i.value}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors ${
+                          isSelected
+                            ? 'bg-[var(--teal-light)] text-[var(--teal-strong)] font-medium'
+                            : 'text-[var(--ink)] hover:bg-[var(--paper)]'
+                        }`}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          pick(i.value);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium leading-snug truncate">
+                            {i.title ?? i.label}
+                          </div>
+                          {i.subtitle && (
+                            <div className="text-xs text-[var(--muted)] truncate mt-0.5">
+                              {i.subtitle}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {i.price && (
+                            <span
+                              className={`font-num text-xs sm:text-sm font-semibold ${
+                                isSelected ? 'text-[var(--teal-strong)]' : 'text-[var(--ink)]'
+                              }`}
+                            >
+                              {i.price}
+                            </span>
+                          )}
+                          {isSelected && (
+                            <span className="text-xs font-bold text-[var(--teal)]" aria-hidden="true">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                }),
               ])
             )}
           </ul>

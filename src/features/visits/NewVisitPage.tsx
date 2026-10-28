@@ -2160,9 +2160,10 @@ export function NewVisitPage() {
 
               {/* Line 2: Inline math grouped right above Total when an adjustment exists */}
               {servicesChosen > 0 && adjustmentMode !== 'none' && billPaise !== catalogPricePaise && (
-                <p className="font-num text-xs text-[var(--muted)]">
-                  <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span> subtotal{' '}
-                  <span className="mx-1 font-sans text-[var(--muted)]">
+                <p className="flex flex-wrap items-center gap-x-1.5 font-num text-xs text-[var(--muted)]">
+                  <span className="font-sans text-[var(--muted)]">Subtotal</span>{' '}
+                  <span className="font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>{' '}
+                  <span className="mx-1 font-sans font-bold text-[var(--ink)]">
                     {adjustmentMode === 'discount' ? '−' : '+'}
                   </span>{' '}
                   <span className="font-medium text-[var(--teal-strong)]">
@@ -2179,6 +2180,9 @@ export function NewVisitPage() {
               {/* Line 3: Execution row with Total on the left and actions on the right */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-0.5">
                 <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                    Total
+                  </span>
                   <span
                     className={`font-num text-2xl font-bold tracking-tight ${
                       servicesChosen === 0 ? 'text-[var(--muted)]' : 'text-[var(--ink)]'
@@ -2186,16 +2190,13 @@ export function NewVisitPage() {
                   >
                     {servicesChosen === 0 ? '₹0' : formatINR(billPaise)}
                   </span>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                    Total
-                  </span>
                 </div>
 
-                {/* Actions: Cancel & Save Visit */}
-                <div className="flex items-center gap-2.5 shrink-0">
+                {/* Actions: Cancel & Save Visit (touch-friendly and responsive) */}
+                <div className="flex w-full sm:w-auto items-center gap-2.5 shrink-0">
                   <button
                     type="button"
-                    className={`${btnSecondary} h-10 rounded-xl px-4 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)]`}
+                    className={`${btnSecondary} flex-1 sm:flex-initial justify-center h-10 rounded-xl px-4 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)]`}
                     disabled={busy}
                     onClick={requestExit}
                   >
@@ -2204,7 +2205,7 @@ export function NewVisitPage() {
                   <button
                     type="button"
                     aria-label={busy ? 'Saving…' : 'Save visit'}
-                    className={`${btnPrimary} flex h-10 shrink-0 items-center gap-2 rounded-xl whitespace-nowrap px-5 text-xs font-semibold shadow-xs hover:shadow-md transition-all`}
+                    className={`${btnPrimary} flex-1 sm:flex-initial flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl whitespace-nowrap px-5 text-xs font-semibold shadow-xs hover:shadow-md transition-all`}
                     disabled={busy || servicesChosen === 0}
                     onClick={() => void save()}
                   >
@@ -2212,7 +2213,7 @@ export function NewVisitPage() {
                     {!busy && servicesChosen > 0 && (
                       <kbd
                         aria-hidden="true"
-                        className="inline-flex items-center rounded border border-white/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-mono leading-none text-white/90"
+                        className="hidden sm:inline-flex items-center rounded border border-white/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-mono leading-none text-white/90"
                       >
                         ⌘↵
                       </kbd>

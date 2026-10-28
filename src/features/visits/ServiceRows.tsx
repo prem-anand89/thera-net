@@ -223,6 +223,7 @@ export function ServiceRows({
     const packages = openPackages.map((p) => ({
       value: `pkg:${p.packageGroupId}`,
       label: `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)`,
+      title: `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)`,
       group: 'Open packages',
     }));
     const services = catalog.map((i) => ({
@@ -232,7 +233,15 @@ export function ServiceRows({
           ? ` (${i.sessionCount} sessions, ${formatINR(effectivePricePerSession(i))}/session)`
           : ''
       }`,
-      group: i.category,
+      title: i.name,
+      subtitle:
+        i.sessionCount > 1
+          ? `${i.sessionCount} sessions · ${formatINR(effectivePricePerSession(i))}/session`
+          : i.durationMinutes
+            ? `${i.durationMinutes} min`
+            : undefined,
+      price: formatINR(i.basePricePaise),
+      group: i.category || 'Services',
     }));
     return [...packages, ...services];
   }, [openPackages, catalog]);
@@ -349,42 +358,59 @@ export function ServiceRows({
               if (changing === row.key || !named) e.stopPropagation();
               setChanging(null);
             }}
-            // A chosen service is a card; an empty row is just the search box (its own border), not a box inside a box.
-            className={
-              named
-                ? `rounded-lg border bg-[var(--surface)] p-3 ${error ? 'border-[var(--rust)]' : 'border-[var(--border)]'}`
-                : ''
-            }
+            className={`rounded-xl border bg-[var(--surface)] p-3 sm:p-3.5 shadow-2xs transition-all ${
+              error ? 'border-[var(--rust)]' : 'border-[var(--border)]'
+            }`}
           >
             {picking ? (
-              <div className="flex items-start gap-2">
+              <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <FocusedPicker
                     autoFocus={focusKey === row.key}
                     label="Service"
+                    hideLabel
+                    variant="embedded"
+                    placeholder="Search service or package…"
                     value={row.continuation ? `pkg:${row.continuation.packageGroupId}` : row.serviceCatalogId ? `svc:${row.serviceCatalogId}` : ''}
                     onChange={(v) => pick(row.key, v)}
                     options={serviceOptions}
                   />
                 </div>
+                {named && changing === row.key && (
+                  <button
+                    type="button"
+                    onClick={() => setChanging(null)}
+                    className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
                 {rows.length > 1 && (
                   <RemoveButton name={named ? name : 'service'} onClick={() => onChange(rows.filter((r) => r.key !== row.key))} />
                 )}
               </div>
             ) : (
-              <div className="flex items-start gap-2">
+              <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left text-sm font-medium text-[var(--ink)] hover:text-[var(--teal)]"
-                  title="Change service"
+                  aria-label={name}
+                  className="group min-w-0 flex-1 text-left"
+                  title="Click to change service"
                   onClick={() => {
                     setChanging(row.key);
                     setFocusKey(row.key);
                   }}
                 >
-                  {name}
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-semibold text-[var(--ink)] group-hover:text-[var(--teal)] transition-colors">
+                      {name}
+                    </span>
+                    <span className="text-xs text-[var(--muted)] group-hover:text-[var(--teal)] underline decoration-dotted transition-colors">
+                      Change
+                    </span>
+                  </div>
                 </button>
-                <span className="shrink-0 font-num text-sm font-medium text-[var(--ink)]">
+                <span className="shrink-0 font-num text-sm font-semibold text-[var(--ink)]">
                   {formatINR(rowPricePaise(row, catalog))}
                 </span>
                 {rows.length > 1 && (
