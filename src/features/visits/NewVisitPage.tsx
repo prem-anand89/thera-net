@@ -88,7 +88,7 @@ import { patientDue } from '@/domain/patientDue';
 import { formatINR } from '@/domain/money';
 import { treatmentsDisplayText } from '@/components/visit/formatters';
 import { PaymentMethodChips } from './PaymentMethodChips';
-import { VisitLoggedCard } from './VisitLoggedCard';
+import { VisitLoggedCard, type SavedVisitInfo } from './VisitLoggedCard';
 import { visitPermissions } from './visitPermissions';
 import { EditVisitModal } from './EditVisitModal';
 import { visitDateHint } from './visitDateHint';
@@ -355,25 +355,7 @@ export function NewVisitPage() {
   // after saving while the therapist is still on the page. Clinics that
   // haven't opted in see no change: save still navigates straight to
   // Workspace.
-  const [justSaved, setJustSaved] = useState<{
-    visitId: UUID;
-    patientId: UUID;
-    patientName: string;
-    patientPhone: string | null;
-    serviceLabel: string;
-    isPackage: boolean;
-    alreadyCollected: boolean;
-    /** The whole bill was collected by the partner: no clinic bill is offered. */
-    byPartner?: boolean;
-    /** How it was collected on the form ("UPI"), for the saved screen's confirmation line. */
-    collectedLabel?: string;
-    therapistId: UUID;
-    billPaise: number;
-    visitDate: string;
-    mrno: string;
-    /** The visit saved but its payment didn't — shown on the saved screen instead of the form, so a retry can't create a second visit. */
-    paymentError?: string;
-  } | null>(null);
+  const [justSaved, setJustSaved] = useState<SavedVisitInfo | null>(null);
   // Synchronous double-tap guard: `busy` is React state and lags one render.
   const savingRef = useRef(false);
 
@@ -1178,13 +1160,36 @@ export function NewVisitPage() {
           .catch((e) => console.error('Could not attach earlier notes to this visit', e));
       }
 
+      // Check if this visit was continuing an open package or purchasing a multi-session package
+      const continuationRow = rows.find((r) => r.continuation);
+      let packageSessionNumber: number | undefined;
+      let packageTotalSessions: number | undefined;
+      if (continuationRow?.continuation) {
+        packageSessionNumber = continuationRow.continuation.logged + 1;
+        packageTotalSessions = continuationRow.continuation.packageTotal;
+      } else {
+        const pkgRow = rows.find((r) => {
+          const cat = catalogItems.find((c) => c.id === r.serviceCatalogId);
+          return Boolean(cat && cat.sessionCount > 1);
+        });
+        if (pkgRow) {
+          const cat = catalogItems.find((c) => c.id === pkgRow.serviceCatalogId);
+          if (cat) {
+            packageSessionNumber = 1;
+            packageTotalSessions = cat.sessionCount;
+          }
+        }
+      }
+
       setJustSaved({
         visitId: visit.id,
         patientId: patient.id,
         patientName: patient.name,
         patientPhone: patient.phone,
         serviceLabel,
-        isPackage: rows.some((r) => r.continuation),
+        isPackage: Boolean(packageSessionNumber) || rows.some((r) => r.continuation),
+        packageSessionNumber,
+        packageTotalSessions,
         alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
         byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
         paymentError,

@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { formatINR } from '@/domain/money';
-import { ErrorNote, SectionCard } from '@/components/ui';
+import { ErrorNote } from '@/components/ui';
 import type { UUID } from '@/domain/types';
 
 export interface SavedVisitInfo {
@@ -11,6 +11,8 @@ export interface SavedVisitInfo {
   patientPhone: string | null;
   serviceLabel: string;
   isPackage: boolean;
+  packageSessionNumber?: number;
+  packageTotalSessions?: number;
   alreadyCollected: boolean;
   byPartner?: boolean;
   collectedLabel?: string;
@@ -42,7 +44,7 @@ export interface VisitLoggedCardProps {
 
 function PencilIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
       <path
         d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"
         stroke="currentColor"
@@ -56,7 +58,7 @@ function PencilIcon() {
 
 function NoteIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
       <path
         d="M4.5 3.5h11a1 1 0 011 1v11a1 1 0 01-1 1h-11a1 1 0 01-1-1v-11a1 1 0 011-1z"
         stroke="currentColor"
@@ -76,7 +78,7 @@ function NoteIcon() {
 
 function ReceiptIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
       <path
         d="M5 3.5h10a1 1 0 011 1v12l-2.5-1.5L11 16.5l-2.5-1.5L6 16.5 3.5 15v-10.5a1 1 0 011-1z"
         stroke="currentColor"
@@ -91,7 +93,7 @@ function ReceiptIcon() {
 
 function StarIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
       <path
         d="M10 3.5l2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7-3.4-3.3 4.7-.7L10 3.5z"
         stroke="currentColor"
@@ -105,7 +107,7 @@ function StarIcon() {
 
 function UserPlusIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
       <path
         d="M10 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM4 16.5c0-2.5 2.7-4.5 6-4.5m4 2.5v4m-2-2h4"
         stroke="currentColor"
@@ -119,7 +121,7 @@ function UserPlusIcon() {
 
 function NextPatientIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
       <path
         d="M8 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 16.5c0-2.5 2.5-4.5 5.5-4.5M14 6v6m-3-3h6"
         stroke="currentColor"
@@ -149,52 +151,94 @@ export function VisitLoggedCard({
   onEdit,
 }: VisitLoggedCardProps) {
   const patientFirstName = justSaved.patientName.trim().split(/\s+/)[0] || 'patient';
-  // One solid button at a time: what is owed, else the note, else the bill. Everything else is outlined.
-  const primary: 'payment' | 'note' | 'bill' | null =
+
+  // Primary hero action: what is owed > clinical note > bill
+  const primaryHero: 'payment' | 'note' | 'bill' | null =
     paymentDue > 0 ? 'payment' : clinicalDocsEnabled ? 'note' : canBill ? 'bill' : null;
-  const solid = 'bg-[var(--teal)] text-white hover:opacity-95';
-  const outline = 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]';
 
   return (
-    <SectionCard title="Visit logged">
-      {/* Summary / Receipt Card */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 shadow-2xs space-y-4">
+      {/* 1. Celebratory Header */}
+      <div className="flex items-center justify-between pb-0.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--teal-light)] text-[var(--teal-strong)] text-sm font-bold shadow-2xs">
+            ✓
+          </div>
+          <h2 className="font-display text-lg font-bold text-[var(--ink)] tracking-tight">
+            Visit logged
+          </h2>
+        </div>
+        <span className="font-num text-xs font-medium text-[var(--muted)]">
+          {new Date(`${justSaved.visitDate}T00:00:00`).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          })}
+        </span>
+      </div>
+
+      {/* 2. Recessed Summary Receipt Card */}
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3.5 sm:p-4 space-y-3 shadow-2xs">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-display text-base font-semibold text-[var(--ink)]">
-                {justSaved.patientName}
-              </h3>
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={onEdit}
-                  className="inline-flex min-h-11 sm:min-h-0 sm:py-0.5 items-center gap-1 px-1.5 text-xs font-medium text-[var(--teal)] hover:underline focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/30 rounded"
-                  aria-label="Edit visit"
-                >
-                  <PencilIcon />
-                  <span>Edit</span>
-                </button>
-              )}
-            </div>
+            <h3 className="font-display text-base font-bold text-[var(--ink)]">
+              {justSaved.patientName}
+            </h3>
             {justSaved.mrno && (
-              <p className="text-xs text-[var(--muted)]">Patient ID {justSaved.mrno}</p>
+              <p className="text-xs text-[var(--muted)] font-num mt-0.5">
+                Patient ID {justSaved.mrno}
+              </p>
             )}
           </div>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)] bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] rounded-lg transition shadow-2xs shrink-0"
+              aria-label="Edit visit"
+            >
+              <PencilIcon />
+              <span>Edit</span>
+            </button>
+          )}
+        </div>
+
+        {/* Package / Payment Pill with Session Progress Dots */}
+        <div>
           {paymentDue > 0 ? (
-            <span className="inline-flex items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--rust)]">
+            <span className="inline-flex items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] shadow-2xs">
               Payment due · {formatINR(paymentDue)}
               {receivedPaise > 0 ? ` (paid ${formatINR(receivedPaise)})` : ''}
             </span>
           ) : justSaved.alreadyCollected || receivedPaise > 0 ? (
             <span
-              className="inline-flex items-center rounded-full border border-[var(--teal)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)]"
+              className="inline-flex items-center rounded-full border border-[var(--teal)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)] shadow-2xs"
               data-testid="collected-line"
             >
               ✓ {formatINR(receivedPaise > 0 ? receivedPaise : justSaved.billPaise)} collected{justSaved.alreadyCollected && justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
             </span>
+          ) : justSaved.isPackage && justSaved.packageSessionNumber && justSaved.packageTotalSessions ? (
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)] shadow-2xs">
+              {justSaved.packageTotalSessions <= 8 && (
+                <span className="flex items-center gap-1" aria-hidden="true">
+                  {Array.from({ length: justSaved.packageTotalSessions }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        i < justSaved.packageSessionNumber!
+                          ? 'bg-[var(--teal-strong)]'
+                          : 'bg-[var(--border)]'
+                      }`}
+                    />
+                  ))}
+                </span>
+              )}
+              <span>
+                Package session ({justSaved.packageSessionNumber} of {justSaved.packageTotalSessions}) · ₹0
+              </span>
+            </span>
           ) : (
-            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
+            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] shadow-2xs">
               {justSaved.billPaise === 0
                 ? justSaved.isPackage
                   ? 'Package session · ₹0'
@@ -204,116 +248,159 @@ export function VisitLoggedCard({
           )}
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-3 text-xs sm:grid-cols-3">
+        {/* Details row: Service, Date, Therapist */}
+        <div className="border-t border-[var(--border)] pt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
           <div>
-            <span className="block text-[var(--muted)]">Service</span>
-            <span className="font-medium text-[var(--ink)]">{justSaved.serviceLabel}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] block">
+              Service
+            </span>
+            <span className="font-semibold text-[var(--ink)] mt-0.5 block">{justSaved.serviceLabel}</span>
           </div>
           <div>
-            <span className="block text-[var(--muted)]">Date</span>
-            <span className="font-medium text-[var(--ink)]">{formatDateDMY(justSaved.visitDate)}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] block">
+              Date
+            </span>
+            <span className="font-semibold text-[var(--ink)] mt-0.5 block">{formatDateDMY(justSaved.visitDate)}</span>
           </div>
           {therapistName && (
             <div>
-              <span className="block text-[var(--muted)]">Therapist</span>
-              <span className="font-medium text-[var(--ink)]">{therapistName}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] block">
+                Therapist
+              </span>
+              <span className="font-semibold text-[var(--ink)] mt-0.5 block">{therapistName}</span>
             </div>
           )}
         </div>
       </div>
 
       {justSaved.paymentError && (
-        <div className="mt-3">
+        <div className="mt-2">
           <ErrorNote
             message={`The visit was saved, but the payment was not recorded: ${justSaved.paymentError} Use Take payment to record it.`}
           />
         </div>
       )}
 
-      {paymentDue > 0 && (
-        <div className="mt-3">
+      {/* 3. Actions for {patientFirstName}: Primary Hero CTA + Compact Secondary Tile Grid */}
+      <div className="space-y-2.5 pt-1">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+          Actions for {patientFirstName}
+        </h4>
+
+        {/* Primary Hero Button */}
+        {primaryHero === 'payment' && (
           <button
             type="button"
-            className="w-full inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:opacity-95 transition-colors"
+            className="w-full inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--teal)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-95 transition-colors shadow-xs"
             onClick={onTakePayment}
           >
             Take payment · {formatINR(paymentDue)}
           </button>
-        </div>
-      )}
+        )}
 
-      {/* Patient-specific actions */}
-      <div className="mt-5 space-y-2.5">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-          Actions for {patientFirstName}
-        </h4>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          {clinicalDocsEnabled && (
+        {primaryHero === 'note' && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: justSaved.patientId }}
+            search={{ visitId: justSaved.visitId }}
+            className="w-full inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--teal)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-95 transition-colors shadow-xs"
+            data-testid="clinical-note-link"
+          >
+            <NoteIcon />
+            <span>Add clinical note</span>
+          </Link>
+        )}
+
+        {primaryHero === 'bill' && (
+          <button
+            type="button"
+            className="w-full inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--teal)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-95 transition-colors shadow-xs"
+            onClick={onGiveBill}
+          >
+            <ReceiptIcon />
+            <span>Give bill</span>
+          </button>
+        )}
+
+        {/* Compact Secondary Action Tiles (Kills the 6-button ladder!) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
+          {/* If Note was NOT the primary hero, show it in the grid */}
+          {primaryHero !== 'note' && clinicalDocsEnabled && (
             <Link
               to="/patients/$patientId/notes/new"
               params={{ patientId: justSaved.patientId }}
               search={{ visitId: justSaved.visitId }}
-              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${primary === 'note' ? solid : outline}`}
+              className="py-2.5 px-2 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)] transition flex flex-col items-center justify-center gap-1 shadow-2xs min-h-[4.25rem]"
+              data-testid="clinical-note-link"
             >
-              <NoteIcon />
-              <span>Add clinical note</span>
+              <span className="text-[var(--teal-strong)]"><NoteIcon /></span>
+              <span className="text-[11px] sm:text-xs font-semibold">Add clinical note</span>
             </Link>
           )}
 
-          {canBill && (
+          {/* Give bill (when not the primary hero) */}
+          {primaryHero !== 'bill' && canBill && (
             <button
               type="button"
-              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${primary === 'bill' ? solid : outline}`}
+              className="py-2.5 px-2 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)] transition flex flex-col items-center justify-center gap-1 shadow-2xs min-h-[4.25rem]"
               onClick={onGiveBill}
+              aria-label="Give bill"
             >
-              <ReceiptIcon />
-              <span>Give bill</span>
+              <span className="text-[var(--teal-strong)]"><ReceiptIcon /></span>
+              <span className="text-[11px] sm:text-xs font-semibold">Give bill</span>
             </button>
           )}
 
+          {/* Request review */}
           {enablePatientComms && (
             <button
               type="button"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-50 transition-colors"
               disabled={feedbackRequested}
               onClick={onRequestFeedback}
-              title="Ask this patient for feedback"
+              aria-label={feedbackRequested ? 'Review requested ✓' : 'Request review'}
+              className="py-2.5 px-2 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)] disabled:opacity-50 transition flex flex-col items-center justify-center gap-1 shadow-2xs min-h-[4.25rem]"
             >
-              <StarIcon />
-              <span>{feedbackRequested ? 'Review requested ✓' : 'Request review'}</span>
+              <span className="text-[var(--teal-strong)]"><StarIcon /></span>
+              <span className="text-[11px] sm:text-xs font-semibold text-center truncate w-full">
+                {feedbackRequested ? 'Review requested ✓' : 'Request review'}
+              </span>
             </button>
           )}
 
+          {/* Another visit for patient */}
           <button
             type="button"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
             onClick={onNewVisitSamePatient}
+            aria-label={`Another visit for ${patientFirstName}`}
+            className="py-2.5 px-2 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)] transition flex flex-col items-center justify-center gap-1 shadow-2xs min-h-[4.25rem]"
           >
-            <UserPlusIcon />
-            <span>Another visit for {patientFirstName}</span>
+            <span className="text-[var(--teal-strong)]"><UserPlusIcon /></span>
+            <span className="text-[11px] sm:text-xs font-semibold text-center truncate w-full">
+              Another visit for {patientFirstName}
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Next steps / Exit area */}
-      <div className="mt-6 space-y-2.5 border-t border-[var(--border)] pt-5">
+      {/* 4. Bottom Exit / Next Patient Row (Clean Split Footer) */}
+      <div className="pt-3 border-t border-[var(--border)] grid grid-cols-12 gap-2 sm:gap-2.5">
         <button
           type="button"
-          className="w-full inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--teal)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--teal)] hover:bg-[var(--paper)] transition-colors"
-          onClick={onNewVisitNextPatient}
-        >
-          <NextPatientIcon />
-          <span>Log visit for next patient</span>
-        </button>
-
-        <button
-          type="button"
-          className="w-full inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
           onClick={onDone}
+          className="col-span-4 min-h-11 py-2.5 px-3 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)] text-xs sm:text-sm font-semibold transition flex items-center justify-center"
         >
           Done
         </button>
+        <button
+          type="button"
+          aria-label="Log visit for next patient"
+          onClick={onNewVisitNextPatient}
+          className="col-span-8 min-h-11 py-2.5 px-3 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--teal)] text-[var(--teal-strong)] text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
+        >
+          <NextPatientIcon />
+          <span className="truncate">Log visit for next patient</span>
+        </button>
       </div>
-    </SectionCard>
+    </section>
   );
 }

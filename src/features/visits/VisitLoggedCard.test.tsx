@@ -226,4 +226,26 @@ describe('VisitLoggedCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
     expect(onEdit).toHaveBeenCalled();
   });
+
+  it('renders package progress with session number and total sessions', () => {
+    renderCard({
+      justSaved: {
+        visitId: 'v-pkg',
+        patientId: 'p-1',
+        patientName: 'Ram Kumar',
+        patientPhone: '9876543210',
+        serviceLabel: 'Manual Therapy 3d',
+        isPackage: true,
+        packageSessionNumber: 2,
+        packageTotalSessions: 3,
+        alreadyCollected: false,
+        therapistId: 't-1',
+        billPaise: 0,
+        visitDate: '2026-10-28',
+        mrno: 'A26-0024',
+      },
+    });
+
+    expect(screen.getByText('Package session (2 of 3) · ₹0')).toBeInTheDocument();
+  });
 });
