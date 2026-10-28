@@ -30,6 +30,7 @@ import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetail
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { BookedStrip } from '@/components/schedule/BookedStrip';
+import { useShowMore, ShowMoreFooter } from '@/components/ShowMore';
 import { ReviewsPanel, type BookFollowUp } from '@/features/followUp/ReviewsPanel';
 import { useFollowUpData } from '@/features/followUp/useFollowUpData';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
@@ -418,6 +419,38 @@ export function WorkspacePage() {
     }
   }
   const [bookingFollowUp, setBookingFollowUp] = useState<BookFollowUp | null>(null);
+  // The Follow up card stays short on a busy clinic: 5 rows to start (10 on request, remembered on this device), and the
+  // whole card can be folded away.
+  const [followPageSize, setFollowPageSizeState] = useState<5 | 10>(() => {
+    try {
+      return localStorage.getItem('workspace.followUpPageSize') === '10' ? 10 : 5;
+    } catch {
+      return 5;
+    }
+  });
+  function setFollowPageSize(size: 5 | 10) {
+    setFollowPageSizeState(size);
+    try {
+      localStorage.setItem('workspace.followUpPageSize', String(size));
+    } catch {
+      /* not remembered */
+    }
+  }
+  const [followOpen, setFollowOpenState] = useState(() => {
+    try {
+      return localStorage.getItem('workspace.followUpOpen') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  function setFollowOpen(open: boolean) {
+    setFollowOpenState(open);
+    try {
+      localStorage.setItem('workspace.followUpOpen', String(open));
+    } catch {
+      /* not remembered */
+    }
+  }
 
   // Staff (therapist) tier sees only their own visits in the today-scoped
   // stats and Seen today (one shared query drives both); admin sees the
@@ -455,6 +488,7 @@ export function WorkspacePage() {
     // Stable sort: attention rows first, otherwise the service's own order.
     return [...scopedPackages].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
   }, [scopedPackages, pkgStatusFilter]);
+  const packageList = useShowMore(filteredPackages, `${pkgStatusFilter}|${pkgMineOnly}`, followPageSize);
 
   const now = new Date();
   const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -1069,7 +1103,33 @@ export function WorkspacePage() {
         </SectionCard>
       )}
 
-      <SectionCard title="Follow up">
+      <SectionCard
+        title="Follow up"
+        action={
+          <button
+            type="button"
+            aria-expanded={followOpen}
+            className="min-h-8 text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={() => setFollowOpen(!followOpen)}
+          >
+            {followOpen ? 'Hide ▴' : 'Show ▾'}
+          </button>
+        }
+      >
+        {!followOpen && (
+          <p className="text-sm text-[var(--muted)]">
+            {[
+              followUp.due.length ? `${followUp.due.length} review${followUp.due.length === 1 ? '' : 's'} due` : null,
+              followUp.missed.length ? `${followUp.missed.length} missed` : null,
+              followUp.noShows.length ? `${followUp.noShows.length} no-show${followUp.noShows.length === 1 ? '' : 's'}` : null,
+              attentionCount ? `${attentionCount} package${attentionCount === 1 ? '' : 's'} need attention` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Nothing needs following up.'}
+          </p>
+        )}
+        {followOpen && (
+          <>
         <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Follow up">
           {(
             [
@@ -1090,10 +1150,25 @@ export function WorkspacePage() {
               {tab.label}
             </button>
           ))}
+          <span className="ml-auto flex items-center gap-1 text-xs text-[var(--muted)]" role="group" aria-label="Rows to show">
+            Rows
+            {([5, 10] as const).map((size) => (
+              <button
+                key={size}
+                type="button"
+                aria-pressed={followPageSize === size}
+                onClick={() => setFollowPageSize(size)}
+                className={`min-h-7 rounded-full px-2 text-xs font-medium ${followPageSize === size ? 'bg-[var(--teal-light)] text-[var(--teal)]' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
+              >
+                {size}
+              </button>
+            ))}
+          </span>
         </div>
         {followTab === 'reviews' ? (
           <ReviewsPanel
             data={followUp}
+            pageSize={followPageSize}
             clinicName={clinic.name}
             canMessage={Boolean(clinic.enablePatientComms)}
             therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
@@ -1150,7 +1225,7 @@ export function WorkspacePage() {
           <>
             {/* Below tab: pill cards on phone; table from iPad portrait up. */}
             <div className="tab:hidden space-y-2">
-              {filteredPackages.map((p) => (
+              {packageList.visible.map((p) => (
                 <div
                   key={p.packageGroupId}
                   className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
@@ -1235,7 +1310,7 @@ export function WorkspacePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {filteredPackages.map((p) => (
+                  {packageList.visible.map((p) => (
                     <tr key={p.packageGroupId}>
                       <td className={td}>
                         <span className="font-display font-medium">{p.patientName}</span>{' '}
@@ -1297,6 +1372,9 @@ export function WorkspacePage() {
                 </tbody>
               </table>
             </div>
+            <ShowMoreFooter list={packageList} noun="packages" />
+          </>
+        )}
           </>
         )}
           </>

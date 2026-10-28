@@ -8,6 +8,7 @@ import type { UUID } from '@/domain/types';
 import { notify } from '@/lib/notify';
 import { toFriendlyMessage } from '@/lib/errors';
 import { bookingService, patientService } from '@/services';
+import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
 import type { FollowUpData } from './useFollowUpData';
 
 type Filter = 'due' | 'missed' | 'no_shows';
@@ -38,12 +39,15 @@ export type BookFollowUp = { patientId: UUID; therapistId: UUID | null; date: st
  */
 export function ReviewsPanel({
   data,
+  pageSize = 5,
   clinicName,
   canMessage,
   therapistNameFor,
   onBook,
 }: {
   data: FollowUpData;
+  /** Rows shown before "Show more". */
+  pageSize?: number;
   clinicName: string;
   /** The clinic has patient messaging on. */
   canMessage: boolean;
@@ -172,7 +176,12 @@ export function ReviewsPanel({
     missed: 'No missed reviews.',
     no_shows: 'No recent no-shows to rebook.',
   };
-  const list = filter === 'due' ? data.due.map((r) => reviewRow(r, 'due')) : filter === 'missed' ? data.missed.map((r) => reviewRow(r, 'missed')) : data.noShows.map(noShowRow);
+  // One list per filter, each starting at one page; changing the filter starts the next list back at the first page.
+  const activeRows: readonly (FollowUpRow | NoShowRow)[] = filter === 'due' ? data.due : filter === 'missed' ? data.missed : data.noShows;
+  const paged = useShowMore(activeRows, filter, pageSize);
+  const list = paged.visible.map((row) =>
+    filter === 'no_shows' ? noShowRow(row as NoShowRow) : reviewRow(row as FollowUpRow, filter === 'missed' ? 'missed' : 'due')
+  );
 
   return (
     <div>
@@ -195,7 +204,10 @@ export function ReviewsPanel({
       {list.length === 0 ? (
         <p className="py-5 text-center text-sm text-[var(--muted)]">{empty[filter]}</p>
       ) : (
-        <ul className="divide-y divide-[var(--border)]">{list}</ul>
+        <>
+          <ul className="divide-y divide-[var(--border)]">{list}</ul>
+          <ShowMoreFooter list={paged} noun={filter === 'no_shows' ? 'no-shows' : 'patients'} />
+        </>
       )}
     </div>
   );

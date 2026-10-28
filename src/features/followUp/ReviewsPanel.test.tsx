@@ -107,6 +107,26 @@ describe('ReviewsPanel', () => {
     expect(screen.getByText(/Ask them back for a review/)).toBeInTheDocument();
   });
 
+  it('shows one page of rows with Show more / Show all, and starts a changed filter back at the first page', () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({ patient: patient({ id: `d${i}`, name: `Due ${i}` }), dueOn: today, daysFromDue: 0 }));
+    setup({
+      pageSize: 5,
+      data: { due: many, missed: Array.from({ length: 6 }, (_, i) => ({ patient: patient({ id: `m${i}`, name: `Missed ${i}` }), dueOn: '2026-10-01', daysFromDue: -20 })), noShows: [] },
+    });
+    expect(screen.getAllByRole('button', { name: 'Book' })).toHaveLength(5);
+    expect(screen.getByText('Showing 5 of 7 patients')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+    expect(screen.getAllByRole('button', { name: 'Book' })).toHaveLength(7);
+    fireEvent.click(screen.getByRole('button', { name: /Missed/ }));
+    expect(screen.getAllByRole('button', { name: 'Book' })).toHaveLength(5);
+    expect(screen.getByText('Showing 5 of 6 patients')).toBeInTheDocument();
+  });
+
+  it('shows no footer when the list fits one page', () => {
+    setup();
+    expect(screen.queryByText(/Showing/)).toBeNull();
+  });
+
   it('hides Message when the clinic has patient messaging off', () => {
     setup({ canMessage: false });
     expect(screen.queryByRole('button', { name: 'Message patient' })).toBeNull();
