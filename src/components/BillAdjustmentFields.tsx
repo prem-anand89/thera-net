@@ -37,10 +37,17 @@ export interface BillAdjustmentFieldsProps {
    * suppresses the standalone price and total boxes.
    */
   hideSummaryBoxes?: boolean;
+  /** True when the visit includes a multi-session package in the cart */
+  hasPackageInCart?: boolean;
 }
 
-const PERCENT_PRESETS = ['10', '15', '20'];
-const REASON_PRESETS = ['Loyalty', 'Package / Bulk', 'Staff / Family'] as const;
+const DISCOUNT_PERCENT_PRESETS = [5, 10, 15, 20];
+const DISCOUNT_AMOUNT_PRESETS = [100, 200, 500];
+const EXTRA_AMOUNT_PRESETS = [150, 300, 500];
+const EXTRA_PERCENT_PRESETS = [5, 10, 15, 20];
+
+const DISCOUNT_REASONS = ['Package / Bulk', 'Loyalty', 'Staff / Family', 'Courtesy'] as const;
+const EXTRA_REASONS = ['Consumables / Tape', 'Home Visit', 'Extended Session', 'Equipment'] as const;
 
 export function BillAdjustmentFields({
   catalogPricePaise,
@@ -58,6 +65,7 @@ export function BillAdjustmentFields({
   hideUnadjustedPrice = false,
   hideTotalWhenPlain = false,
   hideSummaryBoxes = false,
+  hasPackageInCart = false,
   disabled,
 }: BillAdjustmentFieldsProps) {
   const numericValue = Number(value);
@@ -72,7 +80,9 @@ export function BillAdjustmentFields({
   const hasAdjustment = mode !== 'none';
   const [expanded, setExpanded] = useState(hasAdjustment);
 
-  const isPresetReason = (REASON_PRESETS as readonly string[]).includes(reason);
+  const isPresetReason = (
+    [...DISCOUNT_REASONS, ...EXTRA_REASONS] as readonly string[]
+  ).includes(reason);
   const [customReasonActive, setCustomReasonActive] = useState(Boolean(reason && !isPresetReason));
 
   useEffect(() => {
@@ -95,7 +105,67 @@ export function BillAdjustmentFields({
     onReasonChange('');
   }
 
-  const effectiveType = mode === 'extra' ? 'extra' : 'discount';
+  const effectiveType: 'discount' | 'extra' = mode === 'extra' ? 'extra' : 'discount';
+  const activeReasons = effectiveType === 'extra' ? EXTRA_REASONS : DISCOUNT_REASONS;
+
+  function handleModeSwitch(newMode: 'discount' | 'extra') {
+    onModeChange(newMode);
+    if (newMode === 'extra') {
+      if (valueType === 'percent' && (!value || value === '10' || value === '5' || value === '15' || value === '20')) {
+        onValueTypeChange('amount');
+        onValueChange('200');
+      }
+      if (!reason || (DISCOUNT_REASONS as readonly string[]).includes(reason)) {
+        onReasonChange('Consumables / Tape');
+      }
+    } else {
+      if (valueType === 'amount' && (!value || value === '200' || value === '150' || value === '300')) {
+        onValueTypeChange('percent');
+        onValueChange('10');
+      }
+      if (!reason || (EXTRA_REASONS as readonly string[]).includes(reason)) {
+        onReasonChange(hasPackageInCart ? 'Package / Bulk' : 'Loyalty');
+      }
+    }
+  }
+
+  // Smart round-off preset when subtotal has an odd rupee remainder
+  const subtotalRupees = Math.floor(catalogPricePaise / 100);
+  const remainder500 = subtotalRupees % 500;
+  let roundOffPreset: { value: number; label: string; type: BillAdjustmentValueType } | null = null;
+  if (
+    effectiveType === 'discount' &&
+    valueType === 'amount' &&
+    remainder500 > 0 &&
+    subtotalRupees >= 500 &&
+    !DISCOUNT_AMOUNT_PRESETS.includes(remainder500)
+  ) {
+    const target = subtotalRupees - remainder500;
+    roundOffPreset = {
+      value: remainder500,
+      label: `Round to ₹${target.toLocaleString('en-IN')}`,
+      type: 'amount',
+    };
+  }
+
+  // Active presets based on mode and unit
+  const activePresets: Array<{ value: number; label: string; type: BillAdjustmentValueType }> =
+    effectiveType === 'extra'
+      ? valueType === 'amount'
+        ? EXTRA_AMOUNT_PRESETS.map((p) => ({ value: p, label: `+₹${p}`, type: 'amount' as const }))
+        : EXTRA_PERCENT_PRESETS.map((p) => ({ value: p, label: `+${p}%`, type: 'percent' as const }))
+      : valueType === 'percent'
+      ? DISCOUNT_PERCENT_PRESETS.map((p) => ({ value: p, label: `${p}%`, type: 'percent' as const }))
+      : [
+          ...DISCOUNT_AMOUNT_PRESETS.map((p) => ({ value: p, label: `₹${p}`, type: 'amount' as const })),
+          ...(roundOffPreset ? [roundOffPreset] : []),
+        ];
+
+  // Live computed deduction badge
+  const liveDeltaPaise =
+    valueType === 'percent' && numericValue > 0 && catalogPricePaise > 0
+      ? Math.round((catalogPricePaise * numericValue) / 100)
+      : 0;
 
   return (
     <fieldset disabled={disabled} className="m-0 min-w-0 space-y-3 border-0 p-0">
@@ -119,16 +189,16 @@ export function BillAdjustmentFields({
         </div>
       ) : (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-2.5 space-y-2.5 shadow-2xs">
-          {/* Main Controls Row: Type Toggle + Joined Pill [ ₹ | % | 10 ] + % Presets + Remove */}
+          {/* ROW 1: Mode Switch + Fused Input [ 10 | % | ₹ ] + Smart Presets + Live Delta + Close Button */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Left: Type Toggle (Discount vs Extra) */}
+            {/* Mode Toggle (Discount vs Extra) */}
             <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs font-medium shrink-0">
               <button
                 type="button"
                 disabled={continuationSession && catalogPricePaise === 0}
-                onClick={() => onModeChange('discount')}
+                onClick={() => handleModeSwitch('discount')}
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                  mode === 'discount'
+                  effectiveType === 'discount'
                     ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 } ${continuationSession && catalogPricePaise === 0 ? 'cursor-not-allowed opacity-50' : ''}`}
@@ -137,9 +207,9 @@ export function BillAdjustmentFields({
               </button>
               <button
                 type="button"
-                onClick={() => onModeChange('extra')}
+                onClick={() => handleModeSwitch('extra')}
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                  mode === 'extra'
+                  effectiveType === 'extra'
                     ? 'bg-[var(--amber-light)] font-semibold text-[var(--amber)]'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
@@ -148,102 +218,166 @@ export function BillAdjustmentFields({
               </button>
             </div>
 
-            {/* Fused Joined Pill: [ ₹ | % | 10 ] */}
-            <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-2xs focus-within:border-[var(--teal)] shrink-0">
-              <button
-                type="button"
-                onClick={() => onValueTypeChange('amount')}
-                className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                  valueType === 'amount'
-                    ? 'bg-[var(--ink)] font-semibold text-white'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-                title="Amount in Rupees"
-              >
-                ₹
-              </button>
-              <button
-                type="button"
-                onClick={() => onValueTypeChange('percent')}
-                className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                  valueType === 'percent'
-                    ? 'bg-[var(--ink)] font-semibold text-white'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-                title="Percentage"
-              >
-                %
-              </button>
-              <div className="mx-1 h-3.5 w-px bg-[var(--border)] shrink-0" />
+            {/* Fused Compact Input + Unit Switcher [ 10 | % | ₹ ] */}
+            <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-2xs focus-within:border-[var(--teal)] shrink-0 overflow-hidden">
               <input
-                type="number"
-                min={0}
-                max={valueType === 'percent' && effectiveType === 'discount' ? 100 : undefined}
-                step={valueType === 'amount' ? '0.01' : '1'}
+                type="text"
+                inputMode="numeric"
                 value={value}
                 onChange={(e) => {
+                  const sanitized = e.target.value.replace(/[^0-9.]/g, '');
                   if (mode === 'none') {
-                    onModeChange('discount');
+                    onModeChange(effectiveType);
+                    if (!reason) {
+                      onReasonChange(
+                        effectiveType === 'extra'
+                          ? 'Consumables / Tape'
+                          : hasPackageInCart
+                          ? 'Package / Bulk'
+                          : 'Loyalty'
+                      );
+                    }
                   }
-                  onValueChange(e.target.value);
+                  onValueChange(sanitized);
                 }}
                 placeholder="0"
-                className="w-16 bg-transparent px-1.5 py-0.5 text-right text-xs font-num text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none tabular-nums"
+                className="w-12 bg-transparent px-1.5 py-0.5 text-center text-xs font-bold font-num text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none tabular-nums"
               />
+              <div className="flex items-center h-full bg-[var(--paper)] border-l border-[var(--border)] p-0.5 text-[11px] font-semibold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mode === 'none') {
+                      onModeChange(effectiveType);
+                      if (!reason) {
+                        onReasonChange(
+                          effectiveType === 'extra'
+                            ? 'Consumables / Tape'
+                            : hasPackageInCart
+                            ? 'Package / Bulk'
+                            : 'Loyalty'
+                        );
+                      }
+                    }
+                    onValueTypeChange('percent');
+                  }}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    valueType === 'percent'
+                      ? 'bg-[var(--teal-strong)] font-semibold text-white shadow-2xs'
+                      : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                  }`}
+                  title="Percentage"
+                >
+                  %
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mode === 'none') {
+                      onModeChange(effectiveType);
+                      if (!reason) {
+                        onReasonChange(
+                          effectiveType === 'extra'
+                            ? 'Consumables / Tape'
+                            : hasPackageInCart
+                            ? 'Package / Bulk'
+                            : 'Loyalty'
+                        );
+                      }
+                    }
+                    onValueTypeChange('amount');
+                  }}
+                  className={`rounded px-1.5 py-0.5 transition-colors ${
+                    valueType === 'amount'
+                      ? 'bg-[var(--teal-strong)] font-semibold text-white shadow-2xs'
+                      : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                  }`}
+                  title="Amount in Rupees"
+                >
+                  ₹
+                </button>
+              </div>
             </div>
 
-            {/* Fast 1-Tap % Presets */}
-            <div className="flex items-center gap-1 shrink-0">
-              {PERCENT_PRESETS.map((pct) => {
-                const isActive = valueType === 'percent' && value === pct && mode !== 'none';
+            {/* Smart 1-Tap Preset Pills (Context-Aware Pill Geometry) */}
+            <div className="flex flex-wrap items-center gap-1 shrink-0">
+              {activePresets.map((preset) => {
+                const isSelected =
+                  valueType === preset.type &&
+                  numericValue === preset.value &&
+                  mode !== 'none';
                 return (
                   <button
-                    key={pct}
+                    key={preset.label}
                     type="button"
                     onClick={() => {
                       if (mode === 'none') {
-                        onModeChange('discount');
+                        onModeChange(effectiveType);
+                        if (!reason) {
+                          onReasonChange(
+                            effectiveType === 'extra'
+                              ? 'Consumables / Tape'
+                              : hasPackageInCart
+                              ? 'Package / Bulk'
+                              : 'Loyalty'
+                          );
+                        }
                       }
-                      onValueTypeChange('percent');
-                      onValueChange(pct);
+                      onValueTypeChange(preset.type);
+                      onValueChange(String(preset.value));
                     }}
-                    className={`rounded-md border px-2 py-1 text-[11px] font-medium font-num transition-colors shadow-2xs ${
-                      isActive
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium font-num transition-colors shadow-2xs tabular-nums ${
+                      isSelected
                         ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                         : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
                     }`}
                   >
-                    {pct}%
+                    {preset.label}
                   </button>
                 );
               })}
             </div>
 
-            {/* Right: Remove / Reset to None (no duplicate preview math inside box) */}
+            {/* Live Computed Delta Badge (Instant feedback when % is selected) */}
+            {liveDeltaPaise > 0 && (
+              <span
+                className={`font-num text-xs font-semibold tabular-nums ml-0.5 shrink-0 ${
+                  effectiveType === 'extra' ? 'text-[var(--amber)]' : 'text-[var(--teal-strong)]'
+                }`}
+              >
+                {effectiveType === 'extra' ? '+' : '−'}
+                {formatINR(liveDeltaPaise)}
+              </span>
+            )}
+
+            {/* Remove / Close Button */}
             <button
               type="button"
               onClick={handleRemove}
               title="Remove adjustment"
               aria-label="Remove adjustment"
-              className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)] transition-colors text-xs font-semibold"
+              className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)] transition-colors text-xs font-semibold shrink-0"
             >
               ✕
             </button>
           </div>
 
-          {/* Reason Row: 1-Tap Quick-Pick Chips + Compact Inline Input */}
+          {/* ROW 2: Context-Aware Reason Chips (Matching Pill Geometry) */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[var(--border)]/60">
             <span className="text-[11px] font-medium text-[var(--muted)] mr-1 shrink-0">
-              Reason{summary ? ' *' : ''}:
+              Reason{summary || mode !== 'none' ? ' *' : ''}:
             </span>
-            {REASON_PRESETS.map((preset) => {
-              const isSelected = reason === preset;
+            {activeReasons.map((preset) => {
+              const isSelected = !customReasonActive && reason === preset;
               return (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => {
                     setCustomReasonActive(false);
+                    if (mode === 'none') {
+                      onModeChange(effectiveType);
+                    }
                     onReasonChange(isSelected ? '' : preset);
                   }}
                   className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors shadow-2xs ${
@@ -252,7 +386,8 @@ export function BillAdjustmentFields({
                       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
                   }`}
                 >
-                  {isSelected ? '✓ ' : ''}{preset}
+                  {isSelected ? '✓ ' : ''}
+                  {preset}
                 </button>
               );
             })}

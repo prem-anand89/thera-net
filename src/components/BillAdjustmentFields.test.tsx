@@ -94,20 +94,30 @@ describe('BillAdjustmentFields', () => {
     expect(screen.getByRole('button', { name: '+ Discount / Extra' })).toBeInTheDocument();
   });
 
-  it('clicking a % preset chip updates value and sets valueType to percent', () => {
+  it('clicking a % preset chip updates value when percent is active', () => {
     const onValueChange = vi.fn();
-    const onValueTypeChange = vi.fn();
+    renderFields({
+      mode: 'discount',
+      valueType: 'percent',
+      value: '',
+      onValueChange,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '10%' }));
+    expect(onValueChange).toHaveBeenCalledWith('10');
+  });
+
+  it('switches to rupee amount presets when amount is active', () => {
+    const onValueChange = vi.fn();
     renderFields({
       mode: 'discount',
       valueType: 'amount',
       value: '',
       onValueChange,
-      onValueTypeChange,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '10%' }));
-    expect(onValueTypeChange).toHaveBeenCalledWith('percent');
-    expect(onValueChange).toHaveBeenCalledWith('10');
+    fireEvent.click(screen.getByRole('button', { name: '₹100' }));
+    expect(onValueChange).toHaveBeenCalledWith('100');
   });
 
   it('shows one total box when nothing is adjusted, and the price box once it differs (New Visit)', () => {
@@ -171,5 +181,58 @@ describe('BillAdjustmentFields', () => {
     // Setting adjustment to discount changes the signature, making it dirty
     const dirtySig = newVisitSignature({ ...formInput, adjustmentMode: 'discount' });
     expect(isNewVisitDirty({ justSaved: false, touched: true, signature: dirtySig, baseline: baselineSig })).toBe(true);
+  });
+
+  it('renders smart round-off chip when subtotal is an odd rupee amount', () => {
+    const onValueChange = vi.fn();
+    renderFields({
+      catalogPricePaise: 540000, // ₹5,400
+      mode: 'discount',
+      valueType: 'amount',
+      value: '',
+      onValueChange,
+    });
+
+    const roundOffButton = screen.getByRole('button', { name: 'Round to ₹5,000' });
+    expect(roundOffButton).toBeInTheDocument();
+
+    fireEvent.click(roundOffButton);
+    expect(onValueChange).toHaveBeenCalledWith('400');
+  });
+
+  it('adapts presets and reasons when switching to Extra mode', () => {
+    const onModeChange = vi.fn();
+    const onReasonChange = vi.fn();
+    const onValueTypeChange = vi.fn();
+    const onValueChange = vi.fn();
+
+    renderFields({
+      mode: 'discount',
+      valueType: 'percent',
+      value: '10',
+      reason: 'Loyalty',
+      onModeChange,
+      onReasonChange,
+      onValueTypeChange,
+      onValueChange,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Extra' }));
+    expect(onModeChange).toHaveBeenCalledWith('extra');
+    expect(onValueTypeChange).toHaveBeenCalledWith('amount');
+    expect(onValueChange).toHaveBeenCalledWith('200');
+    expect(onReasonChange).toHaveBeenCalledWith('Consumables / Tape');
+  });
+
+  it('shows live computed delta badge next to % presets', () => {
+    renderFields({
+      catalogPricePaise: 540000, // ₹5,400
+      mode: 'discount',
+      valueType: 'percent',
+      value: '10', // 10% = ₹540
+      reason: 'Loyalty',
+    });
+
+    expect(screen.getByText('−₹540')).toBeInTheDocument();
   });
 });

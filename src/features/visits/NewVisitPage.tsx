@@ -920,6 +920,13 @@ export function NewVisitPage() {
     [allTreatments, treatments]
   );
 
+  const hasPackageInCart = useMemo(() => {
+    return rows.some((r) => {
+      const cat = catalogItems.find((c) => c.id === r.serviceCatalogId);
+      return Boolean(cat && cat.sessionCount > 1);
+    });
+  }, [rows, catalogItems]);
+
   const footerSummaryLine = useMemo(() => {
     if (servicesChosen === 0) return null;
     const activeRows = rows.filter((r) => Boolean(r.serviceCatalogId || r.continuation));
@@ -2172,6 +2179,7 @@ export function NewVisitPage() {
                     onValueTypeChange={setAdjustmentValueType}
                     onValueChange={setAdjustmentValue}
                     onReasonChange={setAdjustmentReason}
+                    hasPackageInCart={hasPackageInCart}
                   />
                 </div>
               </div>
