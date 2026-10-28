@@ -1815,6 +1815,10 @@ delete (an update setting `deleted = true`) follows the delete rule: trigger `vi
 (`guard_visit_soft_delete()`, since `20261024100000`) refuses it with 42501 unless the caller is an
 admin or the visit's own therapist (the therapist before the update), or there is no signed-in user.
 
+Triggers:
+- `visits_enforce_package_limit` (`enforce_package_session_limit()`): ensures a package cannot exceed its total session limit. Since `20261028210000`, excludes the row itself (`id != new.id`) so upserts (`INSERT ... ON CONFLICT DO UPDATE`) when editing an existing visit session never falsely count the row being updated.
+- `visits_enforce_plan` (`enforce_clinic_plan_on_visit_insert()`): checks monthly visit quotas per clinic plan; also excludes `id != new.id` so editing existing visits does not count against new-visit quotas.
+
 #### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
 
 Migration `20261023100000_visit_items_and_credits.sql`, Dexie `version(26)`. Both hang off a visit
@@ -3764,6 +3768,10 @@ visit's own therapist (`visits_update`); delete admin or own therapist (`visits_
 delete (an update setting `deleted = true`) follows the delete rule: trigger `visits_guard_soft_delete`
 (`guard_visit_soft_delete()`, since `20261024100000`) refuses it with 42501 unless the caller is an
 admin or the visit's own therapist (the therapist before the update), or there is no signed-in user.
+
+Triggers:
+- `visits_enforce_package_limit` (`enforce_package_session_limit()`): ensures a package cannot exceed its total session limit. Since `20261028210000`, excludes the row itself (`id != new.id`) so upserts (`INSERT ... ON CONFLICT DO UPDATE`) when editing an existing visit session never falsely count the row being updated.
+- `visits_enforce_plan` (`enforce_clinic_plan_on_visit_insert()`): checks monthly visit quotas per clinic plan; also excludes `id != new.id` so editing existing visits does not count against new-visit quotas.
 
 #### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
 

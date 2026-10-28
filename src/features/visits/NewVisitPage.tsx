@@ -23,6 +23,7 @@ import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
+import { syncEngine } from '@/sync/engine';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { findSimilarPatients } from '@/domain/similarPatients';
 import { SimilarPatients } from '@/components/SimilarPatients';
@@ -113,13 +114,19 @@ function SegmentedToggle<T extends string>({
   options,
   value,
   onChange,
+  className = '',
 }: {
   options: { value: T; label: ReactNode; disabled?: boolean }[];
   value: T;
   onChange: (v: T) => void;
+  className?: string;
 }) {
   return (
-    <div className="flex w-full rounded-md border border-[var(--border)] p-0.5 text-xs sm:w-auto sm:inline-flex">
+    <div
+      className={`flex rounded-md border border-[var(--border)] p-0.5 text-xs ${
+        className || 'w-full sm:w-auto sm:inline-flex'
+      }`}
+    >
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -1323,10 +1330,15 @@ export function NewVisitPage() {
             visitId={justSaved.visitId}
             onClose={async () => {
               setEditingVisit(false);
+              syncEngine.schedule(0);
               const updated = await repos.visits.get(justSaved.visitId);
               if (updated && !updated.deleted) {
-                const items = await repos.visitItems.listByVisitIds([justSaved.visitId]);
+                const [items, payments] = await Promise.all([
+                  repos.visitItems.listByVisitIds([justSaved.visitId]),
+                  repos.payments.listByVisit(justSaved.visitId),
+                ]);
                 const label = items.map((i) => i.serviceName).filter(Boolean).join(' + ') || justSaved.serviceLabel;
+                const paidPaise = payments.reduce((sum, p) => sum + p.amountPaise, 0);
                 setJustSaved((prev) =>
                   prev
                     ? {
@@ -1335,9 +1347,10 @@ export function NewVisitPage() {
                         billPaise: updated.actualBillPaise,
                         visitDate: updated.visitDate,
                         therapistId: updated.therapistId,
-                        // The bill may have changed since it was collected: what is owed now comes from the
-                        // payments on record, not from the "collected on the form" flag.
-                        alreadyCollected: false,
+                        isPackage: Boolean(updated.packageGroupId && updated.sessionIndex),
+                        packageSessionNumber: updated.sessionIndex ?? undefined,
+                        packageTotalSessions: updated.packageTotal ?? undefined,
+                        alreadyCollected: paidPaise >= updated.actualBillPaise && updated.actualBillPaise > 0,
                       }
                     : null
                 );
@@ -1848,10 +1861,11 @@ export function NewVisitPage() {
       {/* 3. This visit interactive inputs */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-base font-semibold text-[var(--ink)]">This visit</h2>
+          <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
           <SegmentedToggle
             value={location}
             onChange={setLocation}
+            className="inline-flex shrink-0 w-auto"
             options={[
               { value: 'clinic', label: 'Clinic' },
               { value: 'home', label: 'Home visit' },

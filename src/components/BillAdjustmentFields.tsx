@@ -155,8 +155,8 @@ export function BillAdjustmentFields({
         ? EXTRA_AMOUNT_PRESETS.map((p) => ({ value: p, label: `+₹${p}`, type: 'amount' as const }))
         : EXTRA_PERCENT_PRESETS.map((p) => ({ value: p, label: `+${p}%`, type: 'percent' as const }))
       : valueType === 'percent'
-      ? DISCOUNT_PERCENT_PRESETS.map((p) => ({ value: p, label: `${p}%`, type: 'percent' as const }))
-      : [
+        ? DISCOUNT_PERCENT_PRESETS.map((p) => ({ value: p, label: `${p}%`, type: 'percent' as const }))
+        : [
           ...DISCOUNT_AMOUNT_PRESETS.map((p) => ({ value: p, label: `₹${p}`, type: 'amount' as const })),
           ...(roundOffPreset ? [roundOffPreset] : []),
         ];
@@ -197,22 +197,20 @@ export function BillAdjustmentFields({
                 type="button"
                 disabled={continuationSession && catalogPricePaise === 0}
                 onClick={() => handleModeSwitch('discount')}
-                className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                  effectiveType === 'discount'
+                className={`rounded-md px-2.5 py-1 text-xs transition-colors ${effectiveType === 'discount'
                     ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                } ${continuationSession && catalogPricePaise === 0 ? 'cursor-not-allowed opacity-50' : ''}`}
+                  } ${continuationSession && catalogPricePaise === 0 ? 'cursor-not-allowed opacity-50' : ''}`}
               >
                 Discount
               </button>
               <button
                 type="button"
                 onClick={() => handleModeSwitch('extra')}
-                className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                  effectiveType === 'extra'
+                className={`rounded-md px-2.5 py-1 text-xs transition-colors ${effectiveType === 'extra'
                     ? 'bg-[var(--amber-light)] font-semibold text-[var(--amber)]'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
+                  }`}
               >
                 Extra
               </button>
@@ -233,8 +231,8 @@ export function BillAdjustmentFields({
                         effectiveType === 'extra'
                           ? 'Consumables / Tape'
                           : hasPackageInCart
-                          ? 'Package / Bulk'
-                          : 'Loyalty'
+                            ? 'Package / Bulk'
+                            : 'Loyalty'
                       );
                     }
                   }
@@ -254,18 +252,17 @@ export function BillAdjustmentFields({
                           effectiveType === 'extra'
                             ? 'Consumables / Tape'
                             : hasPackageInCart
-                            ? 'Package / Bulk'
-                            : 'Loyalty'
+                              ? 'Package / Bulk'
+                              : 'Loyalty'
                         );
                       }
                     }
                     onValueTypeChange('percent');
                   }}
-                  className={`rounded px-1.5 py-0.5 transition-colors ${
-                    valueType === 'percent'
+                  className={`rounded px-1.5 py-0.5 transition-colors ${valueType === 'percent'
                       ? 'bg-[var(--teal-strong)] font-semibold text-white shadow-2xs'
                       : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                  }`}
+                    }`}
                   title="Percentage"
                 >
                   %
@@ -280,18 +277,17 @@ export function BillAdjustmentFields({
                           effectiveType === 'extra'
                             ? 'Consumables / Tape'
                             : hasPackageInCart
-                            ? 'Package / Bulk'
-                            : 'Loyalty'
+                              ? 'Package / Bulk'
+                              : 'Loyalty'
                         );
                       }
                     }
                     onValueTypeChange('amount');
                   }}
-                  className={`rounded px-1.5 py-0.5 transition-colors ${
-                    valueType === 'amount'
+                  className={`rounded px-1.5 py-0.5 transition-colors ${valueType === 'amount'
                       ? 'bg-[var(--teal-strong)] font-semibold text-white shadow-2xs'
                       : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                  }`}
+                    }`}
                   title="Amount in Rupees"
                 >
                   ₹
@@ -318,19 +314,18 @@ export function BillAdjustmentFields({
                             effectiveType === 'extra'
                               ? 'Consumables / Tape'
                               : hasPackageInCart
-                              ? 'Package / Bulk'
-                              : 'Loyalty'
+                                ? 'Package / Bulk'
+                                : 'Loyalty'
                           );
                         }
                       }
                       onValueTypeChange(preset.type);
                       onValueChange(String(preset.value));
                     }}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium font-num transition-colors shadow-2xs tabular-nums ${
-                      isSelected
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium font-num transition-colors shadow-2xs tabular-nums ${isSelected
                         ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                         : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
-                    }`}
+                      }`}
                   >
                     {preset.label}
                   </button>
@@ -341,9 +336,8 @@ export function BillAdjustmentFields({
             {/* Live Computed Delta Badge (Instant feedback when % is selected) */}
             {liveDeltaPaise > 0 && (
               <span
-                className={`font-num text-xs font-semibold tabular-nums ml-0.5 shrink-0 ${
-                  effectiveType === 'extra' ? 'text-[var(--amber)]' : 'text-[var(--teal-strong)]'
-                }`}
+                className={`font-num text-xs font-semibold tabular-nums ml-0.5 shrink-0 ${effectiveType === 'extra' ? 'text-[var(--amber)]' : 'text-[var(--teal-strong)]'
+                  }`}
               >
                 {effectiveType === 'extra' ? '+' : '−'}
                 {formatINR(liveDeltaPaise)}
@@ -380,11 +374,10 @@ export function BillAdjustmentFields({
                     }
                     onReasonChange(isSelected ? '' : preset);
                   }}
-                  className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors shadow-2xs ${
-                    isSelected
+                  className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors shadow-2xs ${isSelected
                       ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
-                  }`}
+                    }`}
                 >
                   {isSelected ? '✓ ' : ''}
                   {preset}
@@ -442,9 +435,8 @@ export function BillAdjustmentFields({
       {/* Standalone Total Callout for views like EditVisitModal where hideSummaryBoxes is false */}
       {!hideSummaryBoxes && (
         <div
-          className={`rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)] ${
-            hideTotalWhenPlain && !summary ? 'hidden' : ''
-          }`}
+          className={`rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-2.5 text-sm text-[var(--teal-strong)] ${hideTotalWhenPlain && !summary ? 'hidden' : ''
+            }`}
         >
           <span className="font-num font-medium">
             {totalLabel}: {formatINR(billPaise)}

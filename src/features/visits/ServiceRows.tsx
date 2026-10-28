@@ -228,11 +228,10 @@ export function ServiceRows({
     }));
     const services = catalog.map((i) => ({
       value: `svc:${i.id}`,
-      label: `${i.name} — ${formatINR(i.basePricePaise)}${
-        i.sessionCount > 1
+      label: `${i.name} — ${formatINR(i.basePricePaise)}${i.sessionCount > 1
           ? ` (${i.sessionCount} sessions, ${formatINR(effectivePricePerSession(i))}/session)`
           : ''
-      }`,
+        }`,
       title: i.name,
       subtitle:
         i.sessionCount > 1
@@ -358,9 +357,8 @@ export function ServiceRows({
               if (changing === row.key || !named) e.stopPropagation();
               setChanging(null);
             }}
-            className={`rounded-xl border bg-[var(--surface)] p-3 sm:p-3.5 shadow-2xs transition-all ${
-              error ? 'border-[var(--rust)]' : 'border-[var(--border)]'
-            }`}
+            className={`rounded-xl border bg-[var(--surface)] p-3 sm:p-3.5 shadow-2xs transition-all ${error ? 'border-[var(--rust)]' : 'border-[var(--border)]'
+              }`}
           >
             {picking ? (
               <div className="flex items-center gap-2">

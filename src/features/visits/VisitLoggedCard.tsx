@@ -236,11 +236,10 @@ export function VisitLoggedCard({
                   {Array.from({ length: justSaved.packageTotalSessions }).map((_, i) => (
                     <span
                       key={i}
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        i < justSaved.packageSessionNumber!
+                      className={`h-1.5 w-1.5 rounded-full ${i < justSaved.packageSessionNumber!
                           ? 'bg-[var(--teal-strong)]'
                           : 'bg-[var(--border)]'
-                      }`}
+                        }`}
                     />
                   ))}
                 </span>
