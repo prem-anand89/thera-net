@@ -56,7 +56,7 @@ describe('VisitLoggedCard', () => {
     expect(screen.getByText('Eeshaan Sharma')).toBeInTheDocument();
     expect(screen.getByText('Patient ID 1042')).toBeInTheDocument();
     expect(screen.getByText('Physiotherapy Assessment')).toBeInTheDocument();
-    expect(screen.getByText('25/10/26')).toBeInTheDocument();
+    expect(screen.getByText('25 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText('Dr. Anand')).toBeInTheDocument();
 
     const collectedLine = screen.getByTestId('collected-line');
@@ -247,5 +247,26 @@ describe('VisitLoggedCard', () => {
     });
 
     expect(screen.getByText('Package session (2 of 3) · ₹0')).toBeInTheDocument();
+  });
+
+  it('formats repeated service names cleanly as count (e.g. Manual Therapy (×2))', () => {
+    renderCard({
+      justSaved: {
+        visitId: 'v-repeat',
+        patientId: 'p-1',
+        patientName: 'Aaron',
+        patientPhone: null,
+        serviceLabel: 'Manual Therapy + Manual Therapy',
+        isPackage: false,
+        alreadyCollected: true,
+        therapistId: 't-1',
+        billPaise: 130000,
+        visitDate: '2026-10-28',
+        mrno: '2345',
+      },
+      therapistName: 'Prem Anand',
+    });
+
+    expect(screen.getByText('Manual Therapy (×2)')).toBeInTheDocument();
   });
 });

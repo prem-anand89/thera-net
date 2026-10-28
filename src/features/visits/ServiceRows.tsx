@@ -405,9 +405,11 @@ export function ServiceRows({
                     <span className="text-sm font-semibold text-[var(--ink)] group-hover:text-[var(--teal)] transition-colors">
                       {name}
                     </span>
-                    <span className="text-xs text-[var(--muted)] group-hover:text-[var(--teal)] underline decoration-dotted transition-colors">
-                      Change
-                    </span>
+                    {!row.continuation && (
+                      <span className="text-xs text-[var(--muted)] group-hover:text-[var(--teal)] underline decoration-dotted transition-colors">
+                        Change
+                      </span>
+                    )}
                   </div>
                 </button>
                 <span className="shrink-0 font-num text-sm font-semibold text-[var(--ink)]">

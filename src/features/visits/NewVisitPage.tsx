@@ -912,10 +912,19 @@ export function NewVisitPage() {
   const footerSummaryLine = useMemo(() => {
     if (servicesChosen === 0) return null;
     const activeRows = rows.filter((r) => Boolean(r.serviceCatalogId || r.continuation));
+    const hasMultiple = activeRows.length > 1;
+    const hasContinuation = activeRows.some((r) => r.continuation);
     const serviceNames = activeRows.map((r) => {
       const cat = catalogItems.find((c) => c.id === r.serviceCatalogId);
       const rawName = r.continuation?.serviceName ?? cat?.name ?? 'Service';
-      return rawName.replace(/\s+Therapy/i, '').trim() || rawName;
+      const cleanName = rawName.replace(/\s+Therapy/i, '').trim() || rawName;
+      if (r.continuation) {
+        return `${cleanName} Pkg ₹0`;
+      }
+      if (hasMultiple && hasContinuation && cat) {
+        return `${cleanName} ${formatINR(cat.pricePaise)}`;
+      }
+      return cleanName;
     });
     const servicesTitle = serviceNames.join(' + ') || 'Service';
 

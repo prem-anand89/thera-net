@@ -188,7 +188,7 @@ export function BillAdjustmentFields({
           </button>
         </div>
       ) : (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-2.5 space-y-2.5 shadow-2xs">
+        <div className="relative rounded-xl border border-[var(--border)] bg-[var(--paper)] p-2.5 pr-9 sm:pr-9 space-y-2.5 shadow-2xs">
           {/* ROW 1: Mode Switch + Fused Input [ 10 | % | ₹ ] + Smart Presets + Live Delta + Close Button */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Mode Toggle (Discount vs Extra) */}
@@ -350,13 +350,13 @@ export function BillAdjustmentFields({
               </span>
             )}
 
-            {/* Remove / Close Button */}
+            {/* Remove / Close Button - Anchored top-right corner on mobile and desktop */}
             <button
               type="button"
               onClick={handleRemove}
               title="Remove adjustment"
               aria-label="Remove adjustment"
-              className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)] transition-colors text-xs font-semibold shrink-0"
+              className="absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)] transition-colors text-xs font-semibold shrink-0"
             >
               ✕
             </button>

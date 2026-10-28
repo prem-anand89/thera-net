@@ -1,8 +1,20 @@
 import { Link } from '@tanstack/react-router';
-import { formatDateDMY } from '@/domain/fiscalYear';
 import { formatINR } from '@/domain/money';
 import { ErrorNote } from '@/components/ui';
 import type { UUID } from '@/domain/types';
+
+/** Deduplicate service names appearing multiple times (e.g. Manual Therapy + Manual Therapy -> Manual Therapy (×2)) */
+export function formatServiceCounts(rawLabel: string): string {
+  if (!rawLabel.includes('+')) return rawLabel;
+  const parts = rawLabel.split('+').map((s) => s.trim()).filter(Boolean);
+  const counts = new Map<string, number>();
+  for (const p of parts) {
+    counts.set(p, (counts.get(p) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([name, count]) => (count > 1 ? `${name} (×${count})` : name))
+    .join(' + ');
+}
 
 export interface SavedVisitInfo {
   visitId: UUID;
@@ -168,7 +180,7 @@ export function VisitLoggedCard({
             Visit logged
           </h2>
         </div>
-        <span className="font-num text-xs font-medium text-[var(--muted)]">
+        <span className="font-sans text-xs font-medium text-[var(--muted)] tabular-nums">
           {new Date(`${justSaved.visitDate}T00:00:00`).toLocaleDateString('en-IN', {
             day: 'numeric',
             month: 'short',
@@ -185,7 +197,7 @@ export function VisitLoggedCard({
               {justSaved.patientName}
             </h3>
             {justSaved.mrno && (
-              <p className="text-xs text-[var(--muted)] font-num mt-0.5">
+              <p className="text-xs text-[var(--muted)] tabular-nums mt-0.5">
                 Patient ID {justSaved.mrno}
               </p>
             )}
@@ -248,19 +260,15 @@ export function VisitLoggedCard({
           )}
         </div>
 
-        {/* Details row: Service, Date, Therapist */}
-        <div className="border-t border-[var(--border)] pt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+        {/* Details row: Service (left) & Therapist (right) side-by-side */}
+        <div className="border-t border-[var(--border)] pt-3 grid grid-cols-2 gap-3 text-xs">
           <div>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] block">
               Service
             </span>
-            <span className="font-semibold text-[var(--ink)] mt-0.5 block">{justSaved.serviceLabel}</span>
-          </div>
-          <div>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] block">
-              Date
+            <span className="font-semibold text-[var(--ink)] mt-0.5 block">
+              {formatServiceCounts(justSaved.serviceLabel)}
             </span>
-            <span className="font-semibold text-[var(--ink)] mt-0.5 block">{formatDateDMY(justSaved.visitDate)}</span>
           </div>
           {therapistName && (
             <div>
@@ -322,8 +330,8 @@ export function VisitLoggedCard({
           </button>
         )}
 
-        {/* Compact Secondary Action Tiles (Kills the 6-button ladder!) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
+        {/* Compact Secondary Action Tiles (Balanced 3-Col Grid!) */}
+        <div className="grid grid-cols-3 gap-2">
           {/* If Note was NOT the primary hero, show it in the grid */}
           {primaryHero !== 'note' && clinicalDocsEnabled && (
             <Link
@@ -334,7 +342,7 @@ export function VisitLoggedCard({
               data-testid="clinical-note-link"
             >
               <span className="text-[var(--teal-strong)]"><NoteIcon /></span>
-              <span className="text-[11px] sm:text-xs font-semibold">Add clinical note</span>
+              <span className="text-[11px] sm:text-xs font-semibold">Add note</span>
             </Link>
           )}
 
@@ -362,7 +370,7 @@ export function VisitLoggedCard({
             >
               <span className="text-[var(--teal-strong)]"><StarIcon /></span>
               <span className="text-[11px] sm:text-xs font-semibold text-center truncate w-full">
-                {feedbackRequested ? 'Review requested ✓' : 'Request review'}
+                {feedbackRequested ? 'Requested ✓' : 'Ask review'}
               </span>
             </button>
           )}
@@ -376,7 +384,7 @@ export function VisitLoggedCard({
           >
             <span className="text-[var(--teal-strong)]"><UserPlusIcon /></span>
             <span className="text-[11px] sm:text-xs font-semibold text-center truncate w-full">
-              Another visit for {patientFirstName}
+              Another visit
             </span>
           </button>
         </div>
