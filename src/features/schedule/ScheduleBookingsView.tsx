@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
+import { BookedStrip } from '@/components/schedule/BookedStrip';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
 import { ConfirmDialog, Panel } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
@@ -533,11 +534,6 @@ export function ScheduleBookingsView({
     return () => clearTimeout(timer);
   }, [undo]);
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
-  useEffect(() => {
-    if (!confirmed) return;
-    const timer = setTimeout(() => setConfirmed(null), 15_000);
-    return () => clearTimeout(timer);
-  }, [confirmed]);
 
   const selectedAppointment = selectedId ? scopedAppointments.find((a) => a.id === selectedId) ?? null : null;
   const seriesLabel = useMemo(() => {
@@ -1229,51 +1225,12 @@ export function ScheduleBookingsView({
       )}
 
       {confirmed && (
-        <div role="status" className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
-          <p className="text-sm text-[var(--ink)]">
-            <strong>{confirmed.patientName}</strong>{' '}
-            {confirmed.kind === 'rescheduled' ? 'moved to' : confirmed.sessions ? `— ${confirmed.sessions} sessions booked, first on` : 'booked for'}{' '}
-            {new Date(confirmed.scheduledAt).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.
-          </p>
-          <div className="flex items-center gap-2">
-            {confirmed.patientPhone && (
-              <button
-                type="button"
-                className="min-h-9 text-xs font-medium text-[var(--teal)]"
-                onClick={() =>
-                  bookingService.messagePatient(confirmed.kind, {
-                    patientName: confirmed.patientName,
-                    patientPhone: confirmed.patientPhone,
-                    clinicName: clinic.name,
-                    scheduledAt: confirmed.scheduledAt,
-                    therapistName: rosterById.get(confirmed.therapistId)?.name,
-                    sessions: confirmed.sessions,
-                  })
-                }
-              >
-                Message patient
-              </button>
-            )}
-            {rosterById.get(confirmed.therapistId)?.phone && (
-              <button
-                type="button"
-                className="min-h-9 text-xs font-medium text-[var(--teal)]"
-                onClick={() =>
-                  bookingService.messageTherapist(confirmed.kind, {
-                    therapistName: rosterById.get(confirmed.therapistId)!.name,
-                    therapistPhone: rosterById.get(confirmed.therapistId)!.phone,
-                    patientName: confirmed.patientName,
-                    scheduledAt: confirmed.scheduledAt,
-                    sessions: confirmed.sessions,
-                  })
-                }
-              >
-                Message therapist
-              </button>
-            )}
-            <button type="button" className="text-xs font-medium text-[var(--muted)]" onClick={() => setConfirmed(null)}>Dismiss</button>
-          </div>
-        </div>
+        <BookedStrip
+          booked={confirmed}
+          clinicName={clinic.name}
+          therapist={rosterById.get(confirmed.therapistId)}
+          onDismiss={() => setConfirmed(null)}
+        />
       )}
 
       <AppointmentDetailsPanel

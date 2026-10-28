@@ -28,7 +28,8 @@ import { patientFlags } from '@/domain/patientFlags';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
-import { BookSlotSheet } from '@/components/BookSlotSheet';
+import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
+import { BookedStrip } from '@/components/schedule/BookedStrip';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -371,6 +372,8 @@ export function WorkspacePage() {
   );
   const pendingRequestCount = pendingRequests.length;
   const [confirmingRequest, setConfirmingRequest] = useState<AppointmentRequest | null>(null);
+  // After a booking, a strip offers the one-tap WhatsApp to the patient (booking never messages anyone itself).
+  const [booked, setBooked] = useState<BookedSlot | null>(null);
   const [decliningRequest, setDecliningRequest] = useState<AppointmentRequest | null>(null);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -734,6 +737,7 @@ export function WorkspacePage() {
         appointments={workspaceAppointments ?? []}
         lockTherapist={!canManageBookings}
         prefilledTherapistId={!canManageBookings ? scope.myTherapistId : undefined}
+        onBooked={setBooked}
       />
       <BookSlotSheet
         isOpen={confirmingRequest !== null}
@@ -750,6 +754,7 @@ export function WorkspacePage() {
         requestId={confirmingRequest?.id}
         requestNotes={confirmingRequest?.notes ?? undefined}
         requestPreferredTimeText={confirmingRequest?.preferredTimeText ?? undefined}
+        onBooked={setBooked}
       />
       <ConfirmDialog
         open={decliningRequest !== null}
@@ -771,7 +776,16 @@ export function WorkspacePage() {
         onClose={() => setReschedulingAppointment(null)}
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
+        onBooked={setBooked}
       />
+      {booked && (
+        <BookedStrip
+          booked={booked}
+          clinicName={clinic.name}
+          therapist={workspaceTherapists?.find((t) => t.id === booked.therapistId)}
+          onDismiss={() => setBooked(null)}
+        />
+      )}
       {canEditSettings && <SetupProgressBar clinicId={clinic.id} />}
       <NotificationNudge />
       <header className="space-y-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm sm:space-y-3 sm:p-4">

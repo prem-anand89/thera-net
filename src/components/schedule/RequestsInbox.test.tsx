@@ -45,6 +45,23 @@ describe('RequestsInbox', () => {
     expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
   });
 
+  it('rows: shows the full day, time and therapist without truncating, plus the reason and the phone', () => {
+    render(
+      <RequestsInbox
+        variant="rows"
+        requests={[request({ notes: 'Right shoulder pain for 2 weeks', preferredTherapistId: 't1' })]}
+        therapistNameFor={() => 'Prem Anand'}
+        onConfirm={vi.fn()}
+        onDecline={vi.fn()}
+        onSeeAll={vi.fn()}
+      />
+    );
+    const when = screen.getByText(/Fri, 2 Oct, 10:30 AM, with Prem Anand/);
+    expect(when.className).not.toContain('truncate');
+    expect(screen.getByText('Right shoulder pain for 2 weeks')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '9820000002' })).toHaveAttribute('href', 'tel:9820000002');
+  });
+
   it('rail: shows a limited list and a See all link', () => {
     const onSeeAll = vi.fn();
     render(

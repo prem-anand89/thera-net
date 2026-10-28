@@ -114,25 +114,26 @@ export function RequestsInbox({
         {shown.map((request) => {
           const therapist = therapistNameFor(request.preferredTherapistId);
           return (
-            <li key={request.id} className="flex items-center gap-3 px-5 py-2.5">
+            <li key={request.id} className="flex items-start gap-3 px-5 py-2.5">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-display text-sm font-medium text-[var(--ink)]">
                   {request.name}
                   <span className="ml-2 text-xs font-normal text-[var(--muted)]">{timeAgo(request.createdAt)}</span>
                 </span>
-                <span className="block truncate text-xs text-[var(--muted)]">
+                {/* Wraps instead of truncating: the day, time and therapist are what staff confirm against. */}
+                <span className="block text-xs text-[var(--muted)]">
                   {requestWants(request)}
                   {therapist ? `, with ${therapist}` : ''}
-                  {', '}
-                  <a href={`tel:${request.phone}`} className="text-[var(--teal)] hover:underline">
-                    {request.phone}
-                  </a>
                 </span>
+                {request.notes && <span className="line-clamp-2 block text-xs text-[var(--ink)]">{request.notes}</span>}
+                <a href={`tel:${request.phone}`} className="inline-block py-0.5 text-xs text-[var(--teal)] hover:underline">
+                  {request.phone}
+                </a>
               </span>
               <button type="button" className="shrink-0 rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => onConfirm(request)}>
                 Confirm
               </button>
-              <button type="button" className="shrink-0 px-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => onDecline(request)}>
+              <button type="button" className="shrink-0 px-1 py-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => onDecline(request)}>
                 Decline
               </button>
             </li>
