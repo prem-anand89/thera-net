@@ -400,7 +400,6 @@ export function WorkspacePage() {
   // card is just Packages, as before. The tab the person last chose is remembered on this device; until then it opens
   // on Reviews when something is due and on Packages otherwise.
   const followUp = useFollowUpData(clinic.id, scope.isClinicWideView ? undefined : scope.myTherapistId ?? '00000000-0000-0000-0000-000000000000');
-  const hasReviews = followUp.due.length + followUp.missed.length + followUp.noShows.length > 0;
   const [chosenFollowTab, setChosenFollowTab] = useState<'reviews' | 'packages' | null>(() => {
     try {
       const saved = localStorage.getItem('workspace.followUpTab');
@@ -409,7 +408,7 @@ export function WorkspacePage() {
       return null;
     }
   });
-  const followTab: 'reviews' | 'packages' = !hasReviews ? 'packages' : chosenFollowTab ?? (followUp.due.length > 0 ? 'reviews' : 'packages');
+  const followTab: 'reviews' | 'packages' = chosenFollowTab ?? (followUp.due.length > 0 ? 'reviews' : 'packages');
   function chooseFollowTab(tab: 'reviews' | 'packages') {
     setChosenFollowTab(tab);
     try {
@@ -1070,31 +1069,29 @@ export function WorkspacePage() {
         </SectionCard>
       )}
 
-      <SectionCard title={hasReviews ? 'Follow up' : 'Packages'}>
-        {hasReviews && (
-          <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Follow up">
-            {(
-              [
-                { key: 'reviews', label: `Reviews (${followUp.due.length})` },
-                { key: 'packages', label: `Packages (${scopedPackages.length})` },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={followTab === tab.key}
-                onClick={() => chooseFollowTab(tab.key)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                  followTab === tab.key ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {hasReviews && followTab === 'reviews' ? (
+      <SectionCard title="Follow up">
+        <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Follow up">
+          {(
+            [
+              { key: 'reviews', label: `Reviews (${followUp.due.length})` },
+              { key: 'packages', label: `Packages (${scopedPackages.length})` },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={followTab === tab.key}
+              onClick={() => chooseFollowTab(tab.key)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                followTab === tab.key ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {followTab === 'reviews' ? (
           <ReviewsPanel
             data={followUp}
             clinicName={clinic.name}

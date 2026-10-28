@@ -168,7 +168,7 @@ export function ReviewsPanel({
   };
 
   const empty: Record<Filter, string> = {
-    due: 'No reviews due.',
+    due: 'No reviews due. After a visit, tap "Ask them back for a review?" on the Visit logged screen, or set one from a patient\'s profile.',
     missed: 'No missed reviews.',
     no_shows: 'No recent no-shows to rebook.',
   };

@@ -101,6 +101,12 @@ describe('ReviewsPanel', () => {
     for (const button of screen.getAllByRole('button', { name: 'Message patient' })) expect(button).toBeDisabled();
   });
 
+  it('says how to set a review when none exist, instead of showing nothing', () => {
+    setup({ data: { due: [], missed: [], noShows: [] } });
+    expect(screen.getByText(/No reviews due\./)).toBeInTheDocument();
+    expect(screen.getByText(/Ask them back for a review/)).toBeInTheDocument();
+  });
+
   it('hides Message when the clinic has patient messaging off', () => {
     setup({ canMessage: false });
     expect(screen.queryByRole('button', { name: 'Message patient' })).toBeNull();

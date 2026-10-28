@@ -63,7 +63,7 @@ vertical space, as two tabs, each showing its own count so nothing hides behind 
 
 - The default tab is *Reviews* when anything is due today or overdue, else *Packages*; the choice is remembered per device
   (same pattern as the Appointments | Visits tab).
-- A clinic with no follow-ups set sees no tab strip: the card is just Packages, exactly as today.
+- The tab strip is always shown (so the feature can be found); with no reviews the Reviews tab says how to set one. (Changed after the owner could not find the card when no follow-up existed yet.)
 - Visible to admin / front desk (everyone's) and to a therapist (their own `follow_up_therapist_id`; "Mine only" as on Packages).
 
 **Reviews tab** has three chips:

@@ -1070,15 +1070,29 @@ export function ScheduleBookingsView({
             )}
 
             {mode === 'day' && waitlistMatches.length > 0 && dismissedWaitlistBannerDate !== date && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
+                {/* Names who asked for this day and says which day it is (it used to say "today" on any day). */}
                 <span>
-                  <strong>{waitlistMatches.length} on the waitlist</strong> could fit today.
+                  <strong>
+                    {waitlistMatches.length === 1
+                      ? waitlistMatches[0].name
+                      : `${waitlistMatches.length} requests`}
+                  </strong>{' '}
+                  asked for{' '}
+                  {date === today ? 'today' : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {waitlistMatches.length === 1 && waitlistMatches[0].preferredTimeText ? ` (${waitlistMatches[0].preferredTimeText})` : ''} — there is free time.
                 </span>
                 <span className="flex items-center gap-3">
-                  <button type="button" className="text-xs font-medium underline" onClick={() => setSchedule({ view: 'requests' })}>
-                    See requests
-                  </button>
-                  <button type="button" className="text-xs font-medium text-[var(--teal-strong)]/70 hover:text-[var(--teal-strong)]" onClick={() => setDismissedWaitlistBannerDate(date)}>
+                  {waitlistMatches.length === 1 ? (
+                    <button type="button" className="min-h-8 text-xs font-semibold underline" onClick={() => confirmRequest(waitlistMatches[0])}>
+                      Confirm
+                    </button>
+                  ) : (
+                    <button type="button" className="min-h-8 text-xs font-semibold underline" onClick={() => setSchedule({ view: 'requests' })}>
+                      See requests
+                    </button>
+                  )}
+                  <button type="button" className="min-h-8 text-xs font-medium text-[var(--teal-strong)]/70 hover:text-[var(--teal-strong)]" onClick={() => setDismissedWaitlistBannerDate(date)}>
                     Dismiss
                   </button>
                 </span>
@@ -1218,6 +1232,7 @@ export function ScheduleBookingsView({
                     summaryFor={summaryFor}
                     workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
+                    ghosts={requestGhosts}
                   />
                 )}
               </div>
