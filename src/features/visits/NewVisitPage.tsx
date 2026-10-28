@@ -1236,6 +1236,9 @@ export function NewVisitPage() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        // Not on the "Visit logged" screen (the form is still in state, so it would save the visit a second time),
+        // and not while a dialog (Edit visit, Edit patient, Take payment…) is open on top of the form.
+        if (justSaved || document.querySelector('[role="dialog"], dialog[open]')) return;
         if (!busy && !savingRef.current && servicesChosen > 0) {
           e.preventDefault();
           void saveRef.current();
@@ -1244,7 +1247,7 @@ export function NewVisitPage() {
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [busy, servicesChosen]);
+  }, [busy, servicesChosen, justSaved]);
 
   if (justSaved) {
     // Still owed on this visit (0 without billing access or when settled).

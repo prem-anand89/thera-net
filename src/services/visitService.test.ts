@@ -634,6 +634,46 @@ describe('visitService: lines and shares', () => {
     expect(shareOf(v.id, 'th-prem')).toBe(rs(500));
   });
 
+  describe('editing a package session (Edit visit from the saved screen)', () => {
+    const last = { packageGroupId: 'grp-1', sessionIndex: 3, packageTotal: 3 };
+
+    it('adding a service to the final session keeps the same visit, package and session number', async () => {
+      const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: last }] });
+      expect(v.actualBillPaise).toBe(0);
+      const out = await svc.updateLines(v.id, [
+        { serviceCatalogId: 'svc-physio3', packageContinuation: last },
+        { serviceCatalogId: 'svc-taping' },
+      ]);
+      // Same row id (the sync upserts it, it is not a new visit), still session 3 of 3 in the same package.
+      expect(out.visit.id).toBe(v.id);
+      expect([out.visit.packageGroupId, out.visit.sessionIndex, out.visit.packageTotal]).toEqual(['grp-1', 3, 3]);
+      expect(out.visit.actualBillPaise).toBe(rs(500));
+      const pkg = liveItems(v.id).find((i) => i.isPackageLine)!;
+      expect(pkg.pricePaise).toBe(0);
+      expect(liveItems(v.id)).toHaveLength(2);
+      expect(shareOf(v.id, 'th-prem')).toBe(rs(500));
+    });
+
+    it('removing the added service again returns the session to ₹0 and keeps the package', async () => {
+      const v = await svc.create({
+        ...base,
+        lines: [{ serviceCatalogId: 'svc-physio3', packageContinuation: last }, { serviceCatalogId: 'svc-taping' }],
+      });
+      const out = await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3', packageContinuation: last }]);
+      expect(out.visit.actualBillPaise).toBe(0);
+      expect([out.visit.packageGroupId, out.visit.sessionIndex]).toEqual(['grp-1', 3]);
+      expect(liveItems(v.id)).toHaveLength(1);
+    });
+
+    it('adding a service to the purchase session keeps its package group', async () => {
+      const v = await svc.create({ ...base, lines: [{ serviceCatalogId: 'svc-physio3' }] });
+      const out = await svc.updateLines(v.id, [{ serviceCatalogId: 'svc-physio3' }, { serviceCatalogId: 'svc-taping' }]);
+      expect(out.visit.packageGroupId).toBe(v.packageGroupId);
+      expect(out.visit.sessionIndex).toBe(1);
+      expect(out.visit.actualBillPaise).toBe(v.actualBillPaise + rs(500));
+    });
+  });
+
   describe('sharing a package session with a helper', () => {
     const cont = { packageGroupId: 'grp-1', sessionIndex: 2, packageTotal: 3 };
 
