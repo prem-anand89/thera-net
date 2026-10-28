@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
 import { clinicCanShowUpiQr, clinicUpiPayeeName, buildUpiPayUri } from '@/domain/upiPay';
@@ -9,6 +10,7 @@ import { feedbackService } from '@/services';
 import { KebabMenu, menuItem, menuItemDestructive } from '@/components/ui';
 import type { VisitCardData } from './types';
 import { isFullyPartnerCollected } from '@/domain/paymentMethods';
+import { FollowUpDialog } from '@/features/followUp/FollowUpDialog';
 
 /** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
  *  Delete. Note lives on the status cell as + Note so it is not listed
@@ -49,15 +51,8 @@ export function RowActionsMenu({
   // without its `request.googleReviewEligible` rating gate.
   const canAskGoogleReview = Boolean(data.googleReviewUrl);
 
-  const hasMenu =
-    data.canRepeat ||
-    canIssueInvoice ||
-    showReminder ||
-    canAskGoogleReview ||
-    (data.canEdit && onEdit) ||
-    (data.canSplit && onSplit) ||
-    data.canDelete;
-  if (!hasMenu) return null;
+  const [followUpOpen, setFollowUpOpen] = useState(false);
+  // Anyone in the clinic can set a follow-up (it never touches billing), so the menu is never empty.
 
   const handleAskGoogleReview = () => {
     void feedbackService.askForGoogleReview(
@@ -90,6 +85,7 @@ export function RowActionsMenu({
   };
 
   return (
+    <>
     <KebabMenu>
       {(close) => (
         <>
@@ -139,6 +135,16 @@ export function RowActionsMenu({
               Ask for Google review
             </button>
           )}
+          <button
+            type="button"
+            className={menuItem}
+            onClick={() => {
+              close();
+              setFollowUpOpen(true);
+            }}
+          >
+            Set follow-up
+          </button>
           {data.canEdit && onEdit && (
             <button
               type="button"
@@ -178,5 +184,7 @@ export function RowActionsMenu({
         </>
       )}
     </KebabMenu>
+    <FollowUpDialog open={followUpOpen} patientId={data.patientId} onClose={() => setFollowUpOpen(false)} />
+    </>
   );
 }

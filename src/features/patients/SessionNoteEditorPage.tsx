@@ -1,3 +1,4 @@
+import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
 import { repos } from '@/services';
@@ -45,6 +46,7 @@ export function SessionNoteEditorPage() {
           ← {patient?.name ?? 'Patient'}
         </Link>
         <h1 className="screen-title">Session Note</h1>
+        {patient && <PatientFollowUpLine patient={patient} />}
       </header>
 
       <SessionNoteEditorBody

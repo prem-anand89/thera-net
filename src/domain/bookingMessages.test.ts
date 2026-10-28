@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { patientMessage, requestDeclinedMessage, shortPatientName, therapistDayListMessage, therapistMessage } from './bookingMessages';
+import { followUpMessage, patientMessage, requestDeclinedMessage, shortPatientName, therapistDayListMessage, therapistMessage } from './bookingMessages';
 import { localDateTime } from './schedule';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -53,5 +53,24 @@ describe('requestDeclinedMessage', () => {
     expect(requestDeclinedMessage({ patientName: 'Kavin', clinicName: 'BM', requestedFor: '' })).toBe(
       "Hi Kavin, thank you for your request at BM. We couldn't fit that time. Reply here and we'll find another time that suits you."
     );
+  });
+});
+
+describe('followUpMessage', () => {
+  const input = { patientName: 'Kavin', clinicName: 'BM Physio', therapistName: 'Dr Asha', date: '2026-10-30' };
+
+  it('asks a patient with a review due what time suits', () => {
+    const text = followUpMessage('due', input);
+    expect(text).toMatch(/^Hi Kavin, Dr Asha would like to see you for a review around Fri, 30 Oct at BM Physio\./);
+    expect(text).toContain('What time suits you?');
+  });
+
+  it('asks a missed one whether they still plan to come, and a no-show whether to rebook', () => {
+    expect(followUpMessage('missed', input)).toContain('still planning to come in');
+    expect(followUpMessage('no_show', input)).toContain('we missed you at BM Physio on Fri, 30 Oct');
+  });
+
+  it('copes with no therapist named', () => {
+    expect(followUpMessage('due', { ...input, therapistName: null })).toContain('Hi Kavin, we would like to see you');
   });
 });

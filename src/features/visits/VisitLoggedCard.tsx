@@ -42,6 +42,8 @@ export interface VisitLoggedCardProps {
   /** Payments on record for this visit (live), so the badge stays true after the bill is edited. */
   receivedPaise?: number;
   canBill: boolean;
+  /** Extra row between the receipt and the actions (the follow-up picker); the card itself stays free of data hooks. */
+  followUpSlot?: React.ReactNode;
   clinicalDocsEnabled?: boolean;
   enablePatientComms?: boolean;
   feedbackRequested: boolean;
@@ -151,6 +153,7 @@ export function VisitLoggedCard({
   paymentDue,
   receivedPaise = 0,
   canBill,
+  followUpSlot,
   clinicalDocsEnabled,
   enablePatientComms,
   feedbackRequested,
@@ -295,6 +298,8 @@ export function VisitLoggedCard({
           />
         </div>
       )}
+
+      {followUpSlot}
 
       {/* 3. Actions for {patientFirstName}: Primary Hero CTA + Compact Secondary Tile Grid */}
       <div className="space-y-2.5 pt-1">

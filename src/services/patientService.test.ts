@@ -232,3 +232,37 @@ describe('patientService.create walk-in IDs from the server', () => {
     expect(patient.mrno).toBe(`W${yy}-0002`);
   });
 });
+
+describe('patientService.setFollowUp', () => {
+  it('sets the target date, note and therapist, stamped with the day it was set', async () => {
+    const fake = makeFakeRepos();
+    seedPatient(fake.patients);
+    const svc = createPatientService(fake.repos);
+    const out = await svc.setFollowUp('pat-1', { on: '2026-10-30', note: '  reassess knee ', therapistId: 'th-1' }, '2026-10-28');
+    expect(out).toMatchObject({ followUpOn: '2026-10-30', followUpNote: 'reassess knee', followUpTherapistId: 'th-1', followUpSetOn: '2026-10-28' });
+    expect(fake.patients.get('pat-1')?.followUpOn).toBe('2026-10-30');
+    // the rest of the patient is untouched
+    expect(out.name).toBe('Anita Rao');
+  });
+
+  it('changing the date re-stamps the day it was set; null dismisses it', async () => {
+    const fake = makeFakeRepos();
+    seedPatient(fake.patients);
+    const svc = createPatientService(fake.repos);
+    await svc.setFollowUp('pat-1', { on: '2026-10-30' }, '2026-10-28');
+    const moved = await svc.setFollowUp('pat-1', { on: '2026-11-05' }, '2026-10-31');
+    expect(moved.followUpSetOn).toBe('2026-10-31');
+    const cleared = await svc.setFollowUp('pat-1', null);
+    expect(cleared).toMatchObject({ followUpOn: null, followUpNote: null, followUpTherapistId: null, followUpSetOn: null });
+  });
+
+  it('refuses a past or malformed date, an over-long note and an unknown patient', async () => {
+    const fake = makeFakeRepos();
+    seedPatient(fake.patients);
+    const svc = createPatientService(fake.repos);
+    await expect(svc.setFollowUp('pat-1', { on: '2026-10-27' }, '2026-10-28')).rejects.toThrow(/today or a later date/);
+    await expect(svc.setFollowUp('pat-1', { on: 'soon' }, '2026-10-28')).rejects.toThrow(/Pick a date/);
+    await expect(svc.setFollowUp('pat-1', { on: '2026-10-30', note: 'x'.repeat(201) }, '2026-10-28')).rejects.toThrow(/under 200/);
+    await expect(svc.setFollowUp('nope', { on: '2026-10-30' }, '2026-10-28')).rejects.toThrow(/not found/);
+  });
+});

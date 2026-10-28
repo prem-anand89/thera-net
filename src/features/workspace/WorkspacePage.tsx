@@ -30,6 +30,8 @@ import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetail
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { BookedStrip } from '@/components/schedule/BookedStrip';
+import { ReviewsPanel, type BookFollowUp } from '@/features/followUp/ReviewsPanel';
+import { useFollowUpData } from '@/features/followUp/useFollowUpData';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -394,6 +396,29 @@ export function WorkspacePage() {
   // Role plays no part here: only whether this login has a `therapists` row
   // to scope to.
   const [pkgMineOnly, setPkgMineOnly] = useState(true);
+  // "Follow up" card: Reviews (follow-ups due, missed, no-shows) and Packages share one card. With no reviews the
+  // card is just Packages, as before. The tab the person last chose is remembered on this device; until then it opens
+  // on Reviews when something is due and on Packages otherwise.
+  const followUp = useFollowUpData(clinic.id, scope.isClinicWideView ? undefined : scope.myTherapistId ?? '00000000-0000-0000-0000-000000000000');
+  const hasReviews = followUp.due.length + followUp.missed.length + followUp.noShows.length > 0;
+  const [chosenFollowTab, setChosenFollowTab] = useState<'reviews' | 'packages' | null>(() => {
+    try {
+      const saved = localStorage.getItem('workspace.followUpTab');
+      return saved === 'reviews' || saved === 'packages' ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const followTab: 'reviews' | 'packages' = !hasReviews ? 'packages' : chosenFollowTab ?? (followUp.due.length > 0 ? 'reviews' : 'packages');
+  function chooseFollowTab(tab: 'reviews' | 'packages') {
+    setChosenFollowTab(tab);
+    try {
+      localStorage.setItem('workspace.followUpTab', tab);
+    } catch {
+      /* not remembered */
+    }
+  }
+  const [bookingFollowUp, setBookingFollowUp] = useState<BookFollowUp | null>(null);
 
   // Staff (therapist) tier sees only their own visits in the today-scoped
   // stats and Seen today (one shared query drives both); admin sees the
@@ -789,6 +814,15 @@ export function WorkspacePage() {
         onBooked={setBooked}
       />
       {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
+      <BookSlotSheet
+        isOpen={bookingFollowUp !== null}
+        onClose={() => setBookingFollowUp(null)}
+        appointments={workspaceAppointments ?? []}
+        prefilledPatientId={bookingFollowUp?.patientId}
+        prefilledTherapistId={bookingFollowUp?.therapistId ?? undefined}
+        prefilledDate={bookingFollowUp?.date}
+        onBooked={setBooked}
+      />
       {booked && (
         <BookedStrip
           booked={booked}
@@ -1036,7 +1070,40 @@ export function WorkspacePage() {
         </SectionCard>
       )}
 
-      <SectionCard title="Packages">
+      <SectionCard title={hasReviews ? 'Follow up' : 'Packages'}>
+        {hasReviews && (
+          <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Follow up">
+            {(
+              [
+                { key: 'reviews', label: `Reviews (${followUp.due.length})` },
+                { key: 'packages', label: `Packages (${scopedPackages.length})` },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={followTab === tab.key}
+                onClick={() => chooseFollowTab(tab.key)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  followTab === tab.key ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {hasReviews && followTab === 'reviews' ? (
+          <ReviewsPanel
+            data={followUp}
+            clinicName={clinic.name}
+            canMessage={Boolean(clinic.enablePatientComms)}
+            therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
+            onBook={setBookingFollowUp}
+          />
+        ) : (
+          <>
         <p className="mb-3 text-xs text-[var(--muted)]">
           Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone
           quiet.
@@ -1233,6 +1300,8 @@ export function WorkspacePage() {
                 </tbody>
               </table>
             </div>
+          </>
+        )}
           </>
         )}
       </SectionCard>

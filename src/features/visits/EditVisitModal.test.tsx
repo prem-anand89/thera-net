@@ -28,6 +28,8 @@ vi.mock('@/app/useSession', () => ({
 vi.mock('./confirmDeleteVisit', () => ({
   confirmAndDeleteVisit: (...a: unknown[]) => confirmAndDeleteVisitMock(...a),
 }));
+// The follow-up line has its own tests and reads other tables; this file is about editing the visit.
+vi.mock('@/features/followUp/PatientFollowUpLine', () => ({ PatientFollowUpLine: () => null }));
 vi.mock('@/components/RevenueShareEditorLoader', () => ({
   RevenueShareEditorLoader: () => <div>share editor open</div>,
 }));

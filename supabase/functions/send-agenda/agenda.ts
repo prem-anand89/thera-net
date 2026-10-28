@@ -14,6 +14,15 @@ export interface AgendaInput {
   forDate: string;
   timeZone: string;
   appointments: AgendaAppointment[];
+  /** Reviews this therapist asked patients to come back for that fall due by `forDate`; listed under the appointments. */
+  followUps?: AgendaFollowUp[];
+}
+
+export interface AgendaFollowUp {
+  patientName: string;
+  /** YYYY-MM-DD */
+  dueOn: string;
+  note: string | null;
 }
 
 export function escapeHtml(value: string): string {
@@ -57,20 +66,43 @@ export function buildAgendaIcs(input: AgendaInput, now: Date = new Date()): stri
 
 export function buildAgendaEmail(input: AgendaInput): { subject: string; html: string; text: string } {
   const n = input.appointments.length;
+  const followUps = input.followUps ?? [];
+  const k = followUps.length;
   const heading = dayHeading(input.forDate);
-  const subject = `Tomorrow: ${n} appointment${n === 1 ? '' : 's'}, ${heading}`;
+  const reviewsPhrase = `${k} follow-up${k === 1 ? '' : 's'} due`;
+  const subject =
+    n === 0
+      ? `Follow-ups due: ${k}, ${heading}`
+      : `Tomorrow: ${n} appointment${n === 1 ? '' : 's'}, ${heading}${k ? ` · ${reviewsPhrase}` : ''}`;
   const rows = input.appointments.map((a) => ({
     time: `${clock(a.startsAt, input.timeZone)} – ${clock(new Date(new Date(a.startsAt).getTime() + a.durationMinutes * 60_000).toISOString(), input.timeZone)}`,
     name: a.patientName,
     length: `${a.durationMinutes} min`,
   }));
-  const html = `
-    <h2 style="margin:0 0 4px">Tomorrow, ${escapeHtml(heading)}</h2>
-    <p style="margin:0 0 16px;color:#555">${n} appointment${n === 1 ? '' : 's'} for ${escapeHtml(input.therapistName)}</p>
+  const dueLabel = (ymd: string) => (ymd < input.forDate ? `was due ${dayHeading(ymd)}` : `due ${dayHeading(ymd)}`);
+  const appointmentsHtml = n
+    ? `<p style="margin:0 0 16px;color:#555">${n} appointment${n === 1 ? '' : 's'} for ${escapeHtml(input.therapistName)}</p>
     <table style="border-collapse:collapse;font-size:15px">
       ${rows.map((r) => `<tr><td style="padding:6px 16px 6px 0;white-space:nowrap;color:#555">${escapeHtml(r.time)}</td><td style="padding:6px 16px 6px 0"><strong>${escapeHtml(r.name)}</strong></td><td style="padding:6px 0;color:#555">${escapeHtml(r.length)}</td></tr>`).join('')}
-    </table>
-    <p style="color:#666;font-size:12px;margin-top:20px">${escapeHtml(input.clinicName)} · via Thera.Net. The attached file adds all of these to your calendar.</p>`;
-  const text = [`Tomorrow, ${heading}`, `${n} appointment${n === 1 ? '' : 's'} for ${input.therapistName}`, '', ...rows.map((r) => `${r.time}  ${r.name}  (${r.length})`)].join('\n');
+    </table>`
+    : `<p style="margin:0 0 16px;color:#555">No appointments for ${escapeHtml(input.therapistName)}.</p>`;
+  const followUpsHtml = k
+    ? `<h3 style="margin:20px 0 6px">Follow-ups due (${k})</h3>
+    <p style="margin:0 0 8px;color:#555">Patients you asked to come back. Message them from Workspace → Follow up.</p>
+    <table style="border-collapse:collapse;font-size:15px">
+      ${followUps.map((f) => `<tr><td style="padding:6px 16px 6px 0"><strong>${escapeHtml(f.patientName)}</strong></td><td style="padding:6px 16px 6px 0;color:#555;white-space:nowrap">${escapeHtml(dueLabel(f.dueOn))}</td><td style="padding:6px 0;color:#555">${escapeHtml(f.note ?? '')}</td></tr>`).join('')}
+    </table>`
+    : '';
+  const html = `
+    <h2 style="margin:0 0 4px">Tomorrow, ${escapeHtml(heading)}</h2>
+    ${appointmentsHtml}${followUpsHtml}
+    <p style="color:#666;font-size:12px;margin-top:20px">${escapeHtml(input.clinicName)} · via Thera.Net.${n ? ' The attached file adds the appointments to your calendar.' : ''}</p>`;
+  const text = [
+    `Tomorrow, ${heading}`,
+    n ? `${n} appointment${n === 1 ? '' : 's'} for ${input.therapistName}` : `No appointments for ${input.therapistName}`,
+    '',
+    ...rows.map((r) => `${r.time}  ${r.name}  (${r.length})`),
+    ...(k ? ['', `Follow-ups due (${k})`, ...followUps.map((f) => `${f.patientName}  ${dueLabel(f.dueOn)}${f.note ? `  ${f.note}` : ''}`)] : []),
+  ].join('\n');
   return { subject, html, text };
 }

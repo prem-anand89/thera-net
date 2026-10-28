@@ -1,3 +1,4 @@
+import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
 import { useUnsavedWorkProbe } from '@/lib/unsavedWork';
 import { askConfirm } from '@/lib/notify';
 import { toLocalDateStr } from '@/domain/schedule';
@@ -914,6 +915,7 @@ export function NoteEditorPage() {
           </Link>
         )}
         <h1 className="screen-title">Clinical Note</h1>
+        {patient && <PatientFollowUpLine patient={patient} />}
       </header>
 
       <div className="screen-body">

@@ -1,3 +1,4 @@
+import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, dashboardService } from '@/services';
@@ -512,6 +513,7 @@ export function EditVisitModal({
             <p className="text-xs text-[var(--muted)]">
               {patient?.name ?? '—'}{patient?.mrno ? ` · Patient ID ${patient.mrno}` : ''}
             </p>
+            {patient && <PatientFollowUpLine patient={patient} />}
           </div>
           <button
             className="modal-close"

@@ -1,11 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
-import { addDaysYmd, DEFAULT_CLINIC_TIMEZONE, localDate, zonedDayRange, zonedParts } from '../_shared/zoned.ts';
+import { addDaysYmd, DEFAULT_CLINIC_TIMEZONE, localDate, zonedDayRange, zonedMidnight, zonedParts } from '../_shared/zoned.ts';
 import { hookAllowed } from '../_shared/hookAuth.ts';
 import { buildAgendaEmail, buildAgendaIcs, type AgendaAppointment } from './agenda.ts';
+import { agendaFollowUps, AGENDA_OVERDUE_DAYS, type AgendaFollowUpPatient } from '../_shared/followUps.ts';
 
 /**
  * Daily agenda: called every 15 minutes by pg_cron. For each clinic whose local hour is its agenda hour (8 pm by
- * default) it emails every therapist ONE list of tomorrow's appointments, with a calendar file. agenda_log has a
+ * default) it emails every therapist ONE list of tomorrow's appointments, with a calendar file, plus the follow-up
+ * reviews they asked patients to come back for that fall due by tomorrow (up to a week overdue). agenda_log has a
  * row per therapist per day, so repeat runs inside the hour send nothing, and a failed send is retried next run.
  *
  * verify_jwt is off like the other trigger-style functions here; the x-hook-secret header (_shared/hookAuth.ts) is
@@ -82,11 +84,58 @@ Deno.serve(async (request) => {
         .order('scheduled_at', { ascending: true }),
     ]);
 
+    // Reviews therapists asked patients to come back for, due by tomorrow (up to a week overdue), not yet fulfilled.
+    const { data: candidateRows } = await admin
+      .from('patients')
+      .select('id, name, phone, follow_up_on, follow_up_set_on, follow_up_note, follow_up_therapist_id')
+      .eq('clinic_id', clinic.id)
+      .is('deleted_at', null)
+      .not('follow_up_on', 'is', null)
+      .not('follow_up_therapist_id', 'is', null)
+      .lte('follow_up_on', forDate)
+      .gte('follow_up_on', addDaysYmd(forDate, -AGENDA_OVERDUE_DAYS));
+    const candidates = (candidateRows ?? []).map((p) => ({
+      id: p.id as string,
+      name: p.name as string,
+      phone: (p.phone as string | null) ?? null,
+      followUpOn: p.follow_up_on as string,
+      followUpSetOn: (p.follow_up_set_on as string | null) ?? null,
+      followUpNote: (p.follow_up_note as string | null) ?? null,
+      followUpTherapistId: p.follow_up_therapist_id as string,
+    }));
+    let dueFollowUps: AgendaFollowUpPatient[] = [];
+    if (candidates.length) {
+      const earliestSet = candidates.map((c) => c.followUpSetOn ?? c.followUpOn).sort()[0];
+      const [{ data: laterVisits }, { data: laterAppointments }] = await Promise.all([
+        admin.from('visits').select('patient_id, visit_date').eq('clinic_id', clinic.id).eq('deleted', false)
+          .in('patient_id', candidates.map((c) => c.id)).gt('visit_date', earliestSet),
+        admin.from('appointments').select('patient_id, patient_phone, scheduled_at, status').eq('clinic_id', clinic.id)
+          .in('status', ['confirmed', 'rescheduled', 'arrived'])
+          .gte('scheduled_at', zonedMidnight(addDaysYmd(earliestSet, 1), tz).toISOString()),
+      ]);
+      dueFollowUps = agendaFollowUps({
+        patients: candidates,
+        visits: (laterVisits ?? []).map((v) => ({ patientId: v.patient_id as string, visitDate: v.visit_date as string })),
+        appointments: (laterAppointments ?? []).map((a) => ({
+          patientId: (a.patient_id as string | null) ?? null,
+          patientPhone: (a.patient_phone as string) ?? '',
+          scheduledAtMs: new Date(a.scheduled_at as string).getTime(),
+          status: a.status as string,
+        })),
+        forDate,
+        dayStartMs: (ymd) => zonedMidnight(ymd, tz).getTime(),
+      });
+    }
+
     for (const therapist of therapists ?? []) {
       const mine: AgendaAppointment[] = (appointments ?? [])
         .filter((a) => a.therapist_id === therapist.id)
         .map((a) => ({ id: a.id, patientName: a.patient_name, startsAt: a.scheduled_at, durationMinutes: a.duration_minutes ?? 30 }));
-      if (mine.length === 0) continue;
+      const myFollowUps = dueFollowUps
+        .filter((f) => f.followUpTherapistId === therapist.id)
+        .map((f) => ({ patientName: f.name, dueOn: f.followUpOn, note: f.followUpNote }));
+      // Nothing booked and nothing to chase: no email.
+      if (mine.length === 0 && myFollowUps.length === 0) continue;
 
       // Claim the day first: a second run in the same hour finds the row and skips. A failed send releases it.
       const claim = await admin.from('agenda_log').insert({ therapist_id: therapist.id, for_date: forDate, clinic_id: clinic.id });
@@ -103,7 +152,7 @@ Deno.serve(async (request) => {
         const { data: userData } = await admin.auth.admin.getUserById(therapist.user_id);
         const to = userData?.user?.email;
         if (!to) throw new Error('therapist login has no email');
-        const input = { therapistName: therapist.name, clinicName: clinic.name, forDate, timeZone: tz, appointments: mine };
+        const input = { therapistName: therapist.name, clinicName: clinic.name, forDate, timeZone: tz, appointments: mine, followUps: myFollowUps };
         const email = buildAgendaEmail(input);
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -114,7 +163,7 @@ Deno.serve(async (request) => {
             subject: email.subject,
             htmlContent: email.html,
             textContent: email.text,
-            attachment: [{ content: base64Utf8(buildAgendaIcs(input, now)), name: 'tomorrow.ics' }],
+            ...(mine.length ? { attachment: [{ content: base64Utf8(buildAgendaIcs(input, now)), name: 'tomorrow.ics' }] } : {}),
           }),
         });
         if (!response.ok) throw new Error(`Brevo ${response.status}: ${(await response.text()).slice(0, 200)}`);

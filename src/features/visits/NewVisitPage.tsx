@@ -84,6 +84,7 @@ import {
 import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, repeatWouldOverwrite, shouldFoldTreatments, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { PickerMenu } from './PickerMenu';
+import { FollowUpQuickRow } from '@/features/followUp/FollowUpQuickRow';
 import { therapistColor } from '@/components/schedule/scheduleColors';
 import { patientDue } from '@/domain/patientDue';
 import { formatINR } from '@/domain/money';
@@ -1278,6 +1279,7 @@ export function NewVisitPage() {
           therapistName={therapistName}
           paymentDue={paymentDue}
           canBill={showBill}
+          followUpSlot={<FollowUpQuickRow patientId={justSaved.patientId} therapistId={justSaved.therapistId} />}
           clinicalDocsEnabled={Boolean(clinic.clinicalDocsEnabled)}
           enablePatientComms={Boolean(clinic.enablePatientComms)}
           feedbackRequested={feedbackRequested}

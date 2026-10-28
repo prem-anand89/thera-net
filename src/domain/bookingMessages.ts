@@ -55,6 +55,33 @@ export function requestDeclinedMessage(input: { patientName: string; clinicName:
   return `Hi ${input.patientName}, thank you for your request${asked} at ${input.clinicName}. We couldn't fit that time. Reply here and we'll find another time that suits you.`;
 }
 
+/** The day (no time) a follow-up falls on, e.g. "Fri, 30 Oct". */
+function dayLabel(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+export type FollowUpMessageKind = 'due' | 'missed' | 'no_show';
+
+/**
+ * The WhatsApp a front-desk person sends to bring a patient back: a review the therapist asked for ("due"), one that
+ * was never rebooked after the reminders stopped ("missed"), or an appointment they did not come to ("no_show").
+ * Always asks which time suits, so the reply leads straight to booking.
+ */
+export function followUpMessage(
+  kind: FollowUpMessageKind,
+  input: { patientName: string; clinicName: string; therapistName?: string | null; date: string }
+): string {
+  const who = input.therapistName ? input.therapistName : 'we';
+  switch (kind) {
+    case 'due':
+      return `Hi ${input.patientName}, ${who} would like to see you for a review around ${dayLabel(input.date)} at ${input.clinicName}. What time suits you?`;
+    case 'missed':
+      return `Hi ${input.patientName}, we had planned a review with ${input.therapistName ?? 'you'} at ${input.clinicName}. Are you still planning to come in? Reply with a day that suits you.`;
+    case 'no_show':
+      return `Hi ${input.patientName}, we missed you at ${input.clinicName} on ${dayLabel(input.date)}. Would you like to rebook? Reply with a day that suits you.`;
+  }
+}
+
 export type TherapistMessageKind = 'booked' | 'rescheduled' | 'cancelled';
 
 export function therapistMessage(

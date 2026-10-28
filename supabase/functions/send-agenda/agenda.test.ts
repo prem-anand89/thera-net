@@ -44,3 +44,34 @@ Deno.test('semicolons and commas in a patient name are escaped in the calendar f
   const ics = buildAgendaIcs({ ...input, appointments: [{ ...input.appointments[0], patientName: 'Rao; Anil, Jr' }] }, new Date('2026-10-21T14:30:00Z'));
   assertStringIncludes(ics, 'SUMMARY:Appointment: Rao\\; Anil\\, Jr');
 });
+
+Deno.test('follow-ups are listed under the appointments and counted in the subject', () => {
+  const withFollowUps = {
+    ...input,
+    followUps: [
+      { patientName: 'Kavin <P>', dueOn: '2026-10-22', note: 'reassess knee' },
+      { patientName: 'Meera', dueOn: '2026-10-19', note: null },
+    ],
+  };
+  const { subject, html, text } = buildAgendaEmail(withFollowUps);
+  assertEquals(subject, 'Tomorrow: 2 appointments, Thu, 22 Oct · 2 follow-ups due');
+  assertStringIncludes(html, 'Follow-ups due (2)');
+  assertStringIncludes(html, 'Kavin &lt;P&gt;');
+  assertStringIncludes(html, 'due Thu, 22 Oct');
+  assertStringIncludes(html, 'was due Mon, 19 Oct');
+  assertStringIncludes(text, 'Meera  was due Mon, 19 Oct');
+  assertStringIncludes(text, 'reassess knee');
+});
+
+Deno.test('a therapist with follow-ups but no appointments still gets an email, without a calendar claim', () => {
+  const only = { ...input, appointments: [], followUps: [{ patientName: 'Kavin', dueOn: '2026-10-22', note: null }] };
+  const { subject, html } = buildAgendaEmail(only);
+  assertEquals(subject, 'Follow-ups due: 1, Thu, 22 Oct');
+  assertStringIncludes(html, 'No appointments for Kiran Balla');
+  assertEquals(html.includes('attached file'), false);
+});
+
+Deno.test('with no follow-ups the email is exactly as before', () => {
+  assertEquals(buildAgendaEmail(input).subject, 'Tomorrow: 2 appointments, Thu, 22 Oct');
+  assertEquals(buildAgendaEmail(input).html.includes('Follow-ups'), false);
+});

@@ -1,3 +1,4 @@
+import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
 import { askConfirm } from '@/lib/notify';
 import { useMemo, useState, useCallback } from 'react';
 import { BackLink } from '@/components/BackLink';
@@ -567,6 +568,7 @@ export function PatientProfilePage() {
                 </span>
               )}
             </div>
+            <PatientFollowUpLine patient={patient} />
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {billingSummary.outstandingBalance > 0 && (
                 <span className="rounded-full bg-[var(--rust-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--rust)]">

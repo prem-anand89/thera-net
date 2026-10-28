@@ -2,6 +2,7 @@ import type { Patient, MrnoSource, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 import { formatWalkInMrno, maxWalkInSeq } from '@/domain/walkInMrno';
+import { toLocalDateStr } from '@/domain/schedule';
 
 export interface NewPatientInput {
   clinicId: UUID;
@@ -160,6 +161,38 @@ export function createPatientService(repos: Repos) {
             : patient.referringSourceDetail,
         updatedAt: new Date().toISOString(),
       };
+      await repos.patients.put(updated);
+      return updated;
+    },
+
+    /**
+     * Sets, changes or (with null) dismisses the patient's follow-up review. A target date, not a held slot; one
+     * per patient. Allowed for any clinic member and on any patient, and never touches billing. `setOn` (today) is
+     * what a later visit or appointment is measured against to know it was fulfilled (domain/followUp.ts).
+     */
+    async setFollowUp(
+      id: UUID,
+      input: { on: string; note?: string | null; therapistId?: UUID | null } | null,
+      today: string = toLocalDateStr(new Date())
+    ): Promise<Patient> {
+      const patient = await repos.patients.get(id);
+      if (!patient) throw new Error('Patient not found');
+      let fields: Pick<Patient, 'followUpOn' | 'followUpNote' | 'followUpTherapistId' | 'followUpSetOn'>;
+      if (!input) {
+        fields = { followUpOn: null, followUpNote: null, followUpTherapistId: null, followUpSetOn: null };
+      } else {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(input.on)) throw new Error('Pick a date for the follow-up.');
+        if (input.on < today) throw new Error('Pick today or a later date for the follow-up.');
+        const note = input.note?.trim() || null;
+        if (note && note.length > 200) throw new Error('Keep the follow-up note under 200 characters.');
+        fields = {
+          followUpOn: input.on,
+          followUpNote: note,
+          followUpTherapistId: input.therapistId ?? null,
+          followUpSetOn: today,
+        };
+      }
+      const updated: Patient = { ...patient, ...fields, updatedAt: new Date().toISOString() };
       await repos.patients.put(updated);
       return updated;
     },

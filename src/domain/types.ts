@@ -513,6 +513,15 @@ export interface Patient {
    *  booking confirmations, reminders). Optional: older cached rows lack the
    *  key and default to false (messaging allowed). */
   doNotMessage?: boolean;
+  /** A review the patient was asked to come back for: a target date, not a held slot. One active follow-up per
+   *  patient; clearing the four fields dismisses it. Whether it was fulfilled is derived (`domain/followUp.ts`),
+   *  never stored. Optional: older cached rows lack the keys. */
+  followUpOn?: string | null;
+  followUpNote?: string | null;
+  /** Who should see them again; defaults to the therapist of the latest visit. */
+  followUpTherapistId?: UUID | null;
+  /** The day it was set: a visit or appointment strictly after this day fulfils it. */
+  followUpSetOn?: string | null;
   updatedAt: string;
 }
 
