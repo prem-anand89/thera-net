@@ -188,6 +188,22 @@ describe('VisitLoggedCard', () => {
     expect(screen.getByText('Billing handled separately')).toBeInTheDocument();
   });
 
+  it('sizes the action tiles to how many there are, so none sits alone on a second row', () => {
+    const grid = () => screen.getByRole('button', { name: 'Another visit for Eeshaan' }).parentElement!;
+    // note is the hero (docs on, nothing owed): bill + review + another visit = 3
+    renderCard();
+    expect(grid().className).toContain('grid-cols-3');
+    cleanup();
+    // without the review request: bill + another visit = 2
+    renderCard({ enablePatientComms: false });
+    expect(grid().className).toContain('grid-cols-2');
+    cleanup();
+    // payment hero: note + bill + review + another = 4 -> two by two on a phone
+    renderCard({ paymentDue: 50000 });
+    expect(grid().className).toContain('grid-cols-2');
+    expect(grid().className).toContain('sm:grid-cols-4');
+  });
+
   it('calls onEdit when the Edit button is clicked', () => {
     const onEdit = vi.fn();
     renderCard({ onEdit });

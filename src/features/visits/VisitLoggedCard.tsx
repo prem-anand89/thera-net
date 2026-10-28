@@ -168,6 +168,14 @@ export function VisitLoggedCard({
   const primaryHero: 'payment' | 'note' | 'bill' | null =
     paymentDue > 0 ? 'payment' : clinicalDocsEnabled ? 'note' : canBill ? 'bill' : null;
 
+  const tileCount =
+    (primaryHero !== 'note' && clinicalDocsEnabled ? 1 : 0) +
+    (primaryHero !== 'bill' && canBill ? 1 : 0) +
+    (enablePatientComms ? 1 : 0) +
+    1;
+  const tileColumns =
+    tileCount === 4 ? 'grid-cols-2 sm:grid-cols-4' : tileCount === 3 ? 'grid-cols-3' : tileCount === 2 ? 'grid-cols-2' : 'grid-cols-1';
+
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 shadow-2xs space-y-4">
       {/* 1. Celebratory Header */}
@@ -206,7 +214,7 @@ export function VisitLoggedCard({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)] bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] rounded-lg transition shadow-2xs shrink-0"
+              className="inline-flex min-h-11 items-center gap-1 px-3 text-xs font-medium text-[var(--teal-strong)] bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] rounded-lg transition shadow-2xs shrink-0 sm:min-h-0 sm:px-2.5 sm:py-1"
               aria-label="Edit visit"
             >
               <PencilIcon />
@@ -329,8 +337,8 @@ export function VisitLoggedCard({
           </button>
         )}
 
-        {/* Compact Secondary Action Tiles (Balanced 3-Col Grid!) */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* Secondary action tiles: columns follow how many there are, so no tile sits alone on a second row. */}
+        <div className={`grid gap-2 ${tileColumns}`}>
           {/* If Note was NOT the primary hero, show it in the grid */}
           {primaryHero !== 'note' && clinicalDocsEnabled && (
             <Link

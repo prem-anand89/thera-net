@@ -81,7 +81,7 @@ import {
   type DraftLine,
   type OpenPackage,
 } from './ServiceRows';
-import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, shouldFoldTreatments, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, CHOOSE_A_SERVICE, lastFinishedPackage, repeatWouldOverwrite, shouldFoldTreatments, visibleTreatmentOptions, draftLinesToVisitLines, lastPackageShare, rowsForNewPatient } from './draftVisit';
 import { RevenueShareSummary } from './RevenueShareSummary';
 import { PickerMenu } from './PickerMenu';
 import { therapistColor } from '@/components/schedule/scheduleColors';
@@ -397,6 +397,7 @@ export function NewVisitPage() {
     enableBeforeUnload: () => isDirtyRef.current,
   });
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [repeatConfirmOpen, setRepeatConfirmOpen] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [takingPayment, setTakingPayment] = useState(false);
   const [editingVisit, setEditingVisit] = useState(false);
@@ -1410,7 +1411,25 @@ export function NewVisitPage() {
     });
   };
 
+  // Repeat visit fills a blank form straight away; when it would replace something already entered, it asks first.
   const repeatLastVisit = () => {
+    if (!lastVisit) return;
+    if (
+      repeatWouldOverwrite({
+        servicesChosen,
+        treatmentCount: treatmentIds.length,
+        notes,
+        condition,
+        defaultCondition: patient?.primaryCondition,
+      })
+    ) {
+      setRepeatConfirmOpen(true);
+      return;
+    }
+    applyLastVisit();
+  };
+
+  const applyLastVisit = () => {
     if (!lastVisit) return;
     if (lastVisit.therapistId && therapists?.some((t) => t.id === lastVisit.therapistId)) {
       setTherapistId(lastVisit.therapistId);
@@ -1541,7 +1560,7 @@ export function NewVisitPage() {
                       className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
                       onClick={renewFinishedPackage}
                     >
-                      + Renew {finishedPackage.total}d pkg
+                      + Renew package
                     </button>
                   </div>
                   <div className="mt-0.5 text-xs text-[var(--muted)]">
@@ -2216,7 +2235,9 @@ export function NewVisitPage() {
               </div>
             ) : billPaise === 0 && servicesChosen > 0 ? (
               <p className="text-xs text-[var(--muted)]">
-                📦 Package session — no payment needed for this session.
+                {rows.some((r) => r.continuation)
+                  ? 'Package session — nothing to pay for this session.'
+                  : 'No charge for this visit.'}
               </p>
             ) : !canCollectPayment && billPaise > 0 ? (
               <p className="text-xs text-[var(--muted)]">
@@ -2383,6 +2404,18 @@ export function NewVisitPage() {
         onClose={() => setStartNoteOpen(false)}
       />
 
+      <ConfirmDialog
+        open={repeatConfirmOpen}
+        title="Replace what you've entered?"
+        message="Repeat visit will replace the services, treatments, notes and condition on this form with the ones from the last visit."
+        confirmLabel="Replace"
+        cancelLabel="Keep mine"
+        onConfirm={() => {
+          setRepeatConfirmOpen(false);
+          applyLastVisit();
+        }}
+        onCancel={() => setRepeatConfirmOpen(false)}
+      />
       <ConfirmDialog
         open={blocker.status === 'blocked' || discardOpen}
         title="Discard this visit?"

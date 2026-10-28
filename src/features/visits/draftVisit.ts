@@ -193,3 +193,20 @@ export function lastFinishedPackage(
   }
   return best;
 }
+
+/**
+ * Whether "Repeat visit" would replace something the person typed or picked: a service, treatments, notes, or a
+ * condition other than the one the page filled in by itself (the patient's own). The therapist and date are
+ * defaults, so they never count. When this is false the repeat just fills the form without asking.
+ */
+export function repeatWouldOverwrite(input: {
+  servicesChosen: number;
+  treatmentCount: number;
+  notes: string;
+  condition: string;
+  defaultCondition?: string | null;
+}): boolean {
+  if (input.servicesChosen > 0 || input.treatmentCount > 0 || input.notes.trim()) return true;
+  const typed = input.condition.trim();
+  return typed !== '' && typed.toLowerCase() !== (input.defaultCondition ?? '').trim().toLowerCase();
+}

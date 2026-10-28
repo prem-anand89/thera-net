@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason, shouldFoldTreatments, visibleTreatmentOptions, lastFinishedPackage } from './draftVisit';
+import { adjustmentSurvives, canChangePatient, draftLinesToVisitLines, initialRowsForPatient, lastPackageShare, PACKAGE_NOT_OPEN, rowsForNewPatient, therapistReason, shouldFoldTreatments, visibleTreatmentOptions, lastFinishedPackage, repeatWouldOverwrite } from './draftVisit';
 import { continuationLine, type DraftLine, type OpenPackage } from './ServiceRows';
 import type { Visit, VisitItem } from '@/domain/types';
 
@@ -208,5 +208,25 @@ describe('lastFinishedPackage', () => {
   it('picks the one that finished most recently', () => {
     const visits = [v('a', 2, '2026-08-01', 'x'), v('a', 2, '2026-08-05', 'x'), v('b', 2, '2026-09-01', 'y'), v('b', 2, '2026-09-09', 'y')];
     expect(lastFinishedPackage(visits)?.serviceCatalogId).toBe('y');
+  });
+});
+
+describe('repeatWouldOverwrite', () => {
+  const empty = { servicesChosen: 0, treatmentCount: 0, notes: '', condition: '', defaultCondition: null };
+
+  it('is false for a blank form, so Repeat visit fills it without asking', () => {
+    expect(repeatWouldOverwrite(empty)).toBe(false);
+    expect(repeatWouldOverwrite({ ...empty, notes: '   ' })).toBe(false);
+  });
+
+  it('is true once a service, treatment or note is in', () => {
+    expect(repeatWouldOverwrite({ ...empty, servicesChosen: 1 })).toBe(true);
+    expect(repeatWouldOverwrite({ ...empty, treatmentCount: 2 })).toBe(true);
+    expect(repeatWouldOverwrite({ ...empty, notes: 'Left knee' })).toBe(true);
+  });
+
+  it("ignores the patient's own condition that the page filled in, but not one the person typed", () => {
+    expect(repeatWouldOverwrite({ ...empty, condition: 'Neck Pain', defaultCondition: 'neck pain' })).toBe(false);
+    expect(repeatWouldOverwrite({ ...empty, condition: 'Shoulder', defaultCondition: 'Neck Pain' })).toBe(true);
   });
 });
