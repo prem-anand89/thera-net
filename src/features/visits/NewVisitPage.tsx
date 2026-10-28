@@ -1202,12 +1202,15 @@ export function NewVisitPage() {
   }
 
   // Global keyboard shortcut: Cmd+Enter or Ctrl+Enter saves the visit
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         if (!busy && !savingRef.current && servicesChosen > 0) {
           e.preventDefault();
-          void save();
+          void saveRef.current();
         }
       }
     }
