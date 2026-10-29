@@ -395,7 +395,8 @@ export type WeekMultiTherapist = {
   canBookFor: (therapistId: string) => boolean;
   workingForTherapist: (therapistId: string, date: string) => Interval[];
   /** Therapists free and working at the tapped time, so the booking sheet offers only them. */
-  onBookFree: (input: { date: string; time: string; freeTherapistIds: string[] }) => void;
+  /** `lengthMinutes` is the longest stretch (up to the slot length) at least one of them is free for. */
+  onBookFree: (input: { date: string; time: string; freeTherapistIds: string[]; lengthMinutes: number }) => void;
 };
 
 const MAX_WEEK_LANES = 3;
@@ -479,7 +480,7 @@ export function WeekTimeGrid({
           const start = minutesOfDay(a.scheduledAt);
           return start < minutes + length && start + appointmentMinutes(a, slotMinutes) > minutes;
         });
-      const freeTherapistIds = (minutes: number, length = stepMinutes) =>
+      const freeTherapistIds = (minutes: number, length = slotMinutes) =>
         bookable
           .filter((t) => withinWorking(multi.workingForTherapist(t.id, day), minutes, length) && !clashes(t.id, minutes, length))
           .map((t) => t.id);
@@ -490,7 +491,18 @@ export function WeekTimeGrid({
         onBook: bookable.length
           ? (time: string) => {
               const [h, m] = time.split(':').map(Number);
-              multi.onBookFree({ date: day, time, freeTherapistIds: freeTherapistIds(h * 60 + m) });
+              const minutes = h * 60 + m;
+              // Therapists free for the whole slot if any; otherwise the longest stretch (in steps) anyone is free for, so the
+              // booking sheet opens on a length that fits instead of with an overlap warning.
+              let offer = { ids: [] as string[], length: slotMinutes };
+              for (let length = slotMinutes; length >= stepMinutes; length -= stepMinutes) {
+                const ids = freeTherapistIds(minutes, length);
+                if (ids.length) {
+                  offer = { ids, length };
+                  break;
+                }
+              }
+              multi.onBookFree({ date: day, time, freeTherapistIds: offer.ids, lengthMinutes: offer.length });
             }
           : undefined,
         multi: {

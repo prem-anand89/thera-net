@@ -38,6 +38,7 @@ import {
   startStepMinutes,
   clockTextMinutes,
   requestedSlotTime,
+  firstAvailableSlot,
 } from '@/domain/schedule';
 import type { Appointment, AppointmentRequest, UUID, WorkingHours } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -107,6 +108,8 @@ type SheetState = {
   therapistId?: UUID;
   /** Offer only these therapists (free at the tapped time in the multi-therapist week). */
   onlyTherapistIds?: UUID[];
+  /** Open with this length selected (the stretch they are free for) instead of the default slot length. */
+  lengthMinutes?: number;
   requestId?: UUID;
   patientName?: string;
   patientPhone?: string;
@@ -579,13 +582,44 @@ export function ScheduleBookingsView({
   }
 
   function confirmRequest(request: AppointmentRequest) {
+    const wantedDate = request.preferredDate && request.preferredDate >= today ? request.preferredDate : null;
+    let openOn = wantedDate ?? date;
+    let time = requestedSlotTime(request, allAppointments ?? [], today, slotMinutes) ?? undefined;
+    let therapistId: UUID | undefined = request.preferredTherapistId ?? undefined;
+    // No usable day or time (a flexible request, or one whose day has passed): open the sheet on the earliest free slot in
+    // the patient's morning / afternoon / evening wish, so staff see the resolved day and time before confirming, instead
+    // of whatever day happens to be on screen. A request that named a day only looks within that day.
+    if (!time) {
+      const candidates = request.preferredTherapistId
+        ? [request.preferredTherapistId]
+        : roster.filter((t) => t.active !== false && canBookFor(t.id)).map((t) => t.id);
+      const found = firstAvailableSlot({
+        appointments: allAppointments ?? [],
+        therapistIds: candidates,
+        fromDate: wantedDate ?? today,
+        days: wantedDate ? 1 : 30,
+        hours,
+        slotMinutes,
+        stepMinutes,
+        lengthMinutes: slotMinutes,
+        now: new Date(),
+        isClosed: (day) => closedFor(day).closed,
+        workingFor,
+        timeOfDay: request.preferredTimeOfDay,
+      });
+      if (found) {
+        openOn = found.date;
+        time = found.time;
+        therapistId = therapistId ?? (found.therapistId as UUID);
+      }
+    }
     openBooking({
-      date: request.preferredDate && request.preferredDate >= today ? request.preferredDate : date,
-      time: requestedSlotTime(request, allAppointments ?? [], today, slotMinutes) ?? undefined,
+      date: openOn,
+      time,
       requestId: request.id,
       patientName: request.name,
       patientPhone: request.phone,
-      therapistId: request.preferredTherapistId ?? undefined,
+      therapistId,
       requestNotes: request.notes ?? undefined,
       requestPreferredTimeText: request.preferredTimeText ?? undefined,
     });
@@ -1154,8 +1188,8 @@ export function ScheduleBookingsView({
                         therapists: weekGridTherapists,
                         canBookFor,
                         workingForTherapist: (therapistId, day) => workingFor(therapistId, day),
-                        onBookFree: ({ date: day, time, freeTherapistIds }) =>
-                          openBooking({ date: day, time, onlyTherapistIds: freeTherapistIds as UUID[] }),
+                        onBookFree: ({ date: day, time, freeTherapistIds, lengthMinutes }) =>
+                          openBooking({ date: day, time, onlyTherapistIds: freeTherapistIds as UUID[], lengthMinutes }),
                       }}
                     />
                   )
@@ -1315,6 +1349,7 @@ export function ScheduleBookingsView({
         appointments={allAppointments ?? []}
         prefilledDate={sheet?.date}
         prefilledTime={sheet?.time}
+        prefilledLengthMinutes={sheet?.lengthMinutes}
         prefilledTherapistId={sheet?.therapistId}
         onlyTherapistIds={sheet?.onlyTherapistIds}
         prefilledPatientName={sheet?.patientName}

@@ -680,6 +680,15 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
                 <option value={15}>15 minutes</option>
                 <option value={30}>30 minutes</option>
               </select>
+              {!form.startStepMinutes && (form.slotDurationMinutes ?? 30) >= 60 && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-[var(--amber)]" data-testid="start-step-hint">
+                  With {form.slotDurationMinutes}-minute appointments, times start on the hour, so a break or an appointment that ends at :30 leaves
+                  half an hour nobody can book.
+                  <button type="button" className="font-medium text-[var(--teal)] underline" onClick={() => set({ startStepMinutes: 30 })}>
+                    Use 30 minutes
+                  </button>
+                </p>
+              )}
             </Field>
 
             <div>

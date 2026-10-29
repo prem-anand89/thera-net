@@ -61,6 +61,8 @@ type BookSlotSheetProps = {
   appointments?: Appointment[];
   prefilledDate?: string;
   prefilledTime?: string;
+  /** Open with this length selected instead of the clinic's default slot length. */
+  prefilledLengthMinutes?: number;
   prefilledTherapistId?: UUID;
   prefilledPatientName?: string;
   prefilledPatientPhone?: string;
@@ -93,6 +95,7 @@ export function BookSlotSheet({
   appointments = [],
   prefilledDate,
   prefilledTime,
+  prefilledLengthMinutes,
   prefilledTherapistId,
   prefilledPatientName,
   prefilledPatientPhone,
@@ -160,6 +163,14 @@ export function BookSlotSheet({
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
+  const services = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  // Optional visit type: a service that has a session length, so picking it sets the appointment length. Nothing else is
+  // stored (appointments carry no service); services with no length set are not listed.
+  const visitTypes = useMemo(
+    () => (services ?? []).filter((service) => service.active && service.durationMinutes).sort((a, b) => a.name.localeCompare(b.name)),
+    [services]
+  );
+  const [visitTypeId, setVisitTypeId] = useState('');
   const { lastVisitOn } = usePatientDirectory(clinic.id, true);
   // A new patient typed in may already be on file: ask before booking them as someone new.
   const similar = useMemo(
@@ -190,8 +201,16 @@ export function BookSlotSheet({
   );
   const quickDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
   const lengthOptions = useMemo(
-    () => [...new Set([...LENGTH_OPTIONS, slotMinutes, rescheduleAppointment ? appointmentMinutes(rescheduleAppointment, slotMinutes) : slotMinutes])].sort((a, b) => a - b),
-    [slotMinutes, rescheduleAppointment]
+    () =>
+      [
+        ...new Set([
+          ...LENGTH_OPTIONS,
+          slotMinutes,
+          rescheduleAppointment ? appointmentMinutes(rescheduleAppointment, slotMinutes) : slotMinutes,
+          ...visitTypes.map((service) => service.durationMinutes!),
+        ]),
+      ].sort((a, b) => a - b),
+    [slotMinutes, rescheduleAppointment, visitTypes]
   );
 
   useEffect(() => {
@@ -209,7 +228,8 @@ export function BookSlotSheet({
       const date = prefilledDate ?? today;
       setSelectedDate(date);
       setSelectedTime(prefilledTime ? prefilledTime.slice(0, 5) : null);
-      setLengthMinutes(slotMinutes);
+      setLengthMinutes(prefilledLengthMinutes ?? slotMinutes);
+      setVisitTypeId('');
       setTherapistId(prefilledTherapistId ?? '');
       setTherapistTouched(Boolean(prefilledTherapistId));
       setShowLater(date < today || date > addDays(today, 6));
@@ -227,7 +247,7 @@ export function BookSlotSheet({
     setRowOverrides({});
     setBusy(false);
     setError(null);
-  }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, today, slotMinutes]);
+  }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, prefilledLengthMinutes, today, slotMinutes]);
 
   // Solo clinics and therapist logins shouldn't have to pick themselves.
   useEffect(() => {
@@ -670,6 +690,30 @@ export function BookSlotSheet({
                   </button>
                 ))}
               </div>
+            )}
+            {visitTypes.length > 0 && !isReschedule && (
+              <label className="mb-2 block text-xs font-medium text-[var(--muted)]">
+                Visit type (sets the length)
+                <select
+                  className="mt-1 block min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]"
+                  value={visitTypeId}
+                  onChange={(e) => {
+                    const chosen = visitTypes.find((service) => service.id === e.target.value);
+                    setVisitTypeId(e.target.value);
+                    if (chosen?.durationMinutes) {
+                      setLengthMinutes(chosen.durationMinutes);
+                      setSelectedTime(null);
+                    }
+                  }}
+                >
+                  <option value="">Not set</option>
+                  {visitTypes.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name} · {lengthLabel(service.durationMinutes!)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Length">
               {lengthOptions.map((minutes) => (

@@ -20,6 +20,7 @@ const data = {
     { id: 'p2', name: 'Noor', phone: null },
   ],
   closed: [] as { closedDate: string; label: string | null }[],
+  catalog: [] as { id: string; name: string; active: boolean; durationMinutes?: number | null }[],
   clinic: {} as Record<string, unknown>,
 };
 const confirmBookingSlot = vi.fn(async () => 'new-id');
@@ -47,6 +48,7 @@ vi.mock('@/services', () => ({
     patients: { list: () => data.patients },
     visits: { list: () => [] },
     clinicClosedDates: { listByClinic: () => data.closed },
+    catalog: { list: () => data.catalog },
   },
   bookingService: {
     confirmBookingSlot: (...args: unknown[]) => confirmBookingSlot(...(args as [])),
@@ -102,6 +104,36 @@ describe('BookSlotSheet', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+  });
+
+  it('opens on the length it was given (the stretch the therapist is free for), not the default slot length', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" prefilledLengthMinutes={45} />);
+    expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('has no visit type picker unless a service has a session length', () => {
+    data.catalog = [{ id: 's1', name: 'Consultation', active: true }];
+    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    expect(screen.queryByLabelText(/Visit type/)).toBeNull();
+  });
+
+  it('choosing a visit type sets the length from the service; inactive services are not listed', () => {
+    data.catalog = [
+      { id: 's1', name: 'Assessment', active: true, durationMinutes: 45 },
+      { id: 's2', name: 'Follow-up', active: true, durationMinutes: 20 },
+      { id: 's3', name: 'Old service', active: false, durationMinutes: 90 },
+    ];
+    try {
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      const picker = screen.getByLabelText(/Visit type/);
+      expect(within(picker).queryByRole('option', { name: /Old service/ })).toBeNull();
+      fireEvent.change(picker, { target: { value: 's2' } });
+      expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '20m' })).toHaveAttribute('aria-checked', 'true');
+      fireEvent.change(picker, { target: { value: 's1' } });
+      expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
+    } finally {
+      data.catalog = [];
+    }
   });
 
   it('defaults the therapist to the logged-in therapist', () => {

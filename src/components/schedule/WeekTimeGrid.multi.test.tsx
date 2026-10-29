@@ -169,6 +169,32 @@ describe('WeekTimeGrid with several therapists', () => {
     const two = therapists.slice(0, 2);
     const { container } = render(<WeekTimeGrid {...props({ appointments: [appointment({ therapistId: 't1' })] }, { therapists: two, onBookFree })} />);
     fireEvent.click(container.querySelector('button[aria-label^="Book"][aria-label*="10:00 AM"]')!);
-    expect(onBookFree).toHaveBeenCalledWith({ date: DAY, time: '10:00', freeTherapistIds: ['t2'] });
+    expect(onBookFree).toHaveBeenCalledWith({ date: DAY, time: '10:00', freeTherapistIds: ['t2'], lengthMinutes: 30 });
+  });
+
+  it('with 60-minute appointments, tapping time only half free opens on the length that fits, not on an overlap', () => {
+    const onBookFree = vi.fn();
+    const two = therapists.slice(0, 2);
+    // Both therapists are booked from 10:30, so at 10:00 only 30 minutes is free for each.
+    const booked = [
+      appointment({ id: 'b1', therapistId: 't1', scheduledAt: localDateTime(DAY, '10:30').toISOString(), durationMinutes: 60 }),
+      appointment({ id: 'b2', therapistId: 't2', scheduledAt: localDateTime(DAY, '10:30').toISOString(), durationMinutes: 60 }),
+    ];
+    const { container } = render(
+      <WeekTimeGrid {...props({ appointments: booked, slotMinutes: 60, stepMinutes: 30 }, { therapists: two, onBookFree })} />
+    );
+    fireEvent.click(container.querySelector('button[aria-label^="Book"][aria-label*="10:00 AM"]')!);
+    expect(onBookFree).toHaveBeenCalledWith({ date: DAY, time: '10:00', freeTherapistIds: ['t1', 't2'], lengthMinutes: 30 });
+  });
+
+  it('prefers the whole slot: a therapist free for 60 minutes is offered at 60', () => {
+    const onBookFree = vi.fn();
+    const two = therapists.slice(0, 2);
+    const booked = [appointment({ id: 'b1', therapistId: 't1', scheduledAt: localDateTime(DAY, '10:30').toISOString(), durationMinutes: 30 })];
+    const { container } = render(
+      <WeekTimeGrid {...props({ appointments: booked, slotMinutes: 60, stepMinutes: 30 }, { therapists: two, onBookFree })} />
+    );
+    fireEvent.click(container.querySelector('button[aria-label^="Book"][aria-label*="10:00 AM"]')!);
+    expect(onBookFree).toHaveBeenCalledWith({ date: DAY, time: '10:00', freeTherapistIds: ['t2'], lengthMinutes: 60 });
   });
 });

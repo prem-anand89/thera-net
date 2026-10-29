@@ -461,12 +461,18 @@ export function firstAvailableSlot(input: {
   ignoreAppointmentId?: string;
   /** Working intervals per therapist and date; omit to use booking hours. */
   workingFor?: (therapistId: string, date: string) => Interval[];
+  /** Start times are offered every this many minutes; defaults to `slotMinutes`. */
+  stepMinutes?: number;
+  /** Only start times in this part of the day (a patient's morning / afternoon / evening wish); 'any' or omitted = all. */
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'any' | null;
 }): { date: string; time: string; therapistId: string } | null {
-  const slots = generateScheduleSlots(input.slotMinutes, input.hours.startHour, input.hours.endHour);
+  const slots = generateScheduleSlots(input.stepMinutes ?? input.slotMinutes, input.hours.startHour, input.hours.endHour);
+  const partOfDay = (minutes: number) => (minutes < 12 * 60 ? 'morning' : minutes < 17 * 60 ? 'afternoon' : 'evening');
   for (let offset = 0; offset < input.days; offset += 1) {
     const date = addDays(input.fromDate, offset);
     if (input.isClosed(date)) continue;
     for (const slot of slots) {
+      if (input.timeOfDay && input.timeOfDay !== 'any' && partOfDay(slot.minutes) !== input.timeOfDay) continue;
       if (slot.minutes + input.lengthMinutes > input.hours.endHour * 60) continue;
       if (localDateTime(date, slot.time).getTime() < input.now.getTime()) continue;
       for (const therapistId of input.therapistIds) {

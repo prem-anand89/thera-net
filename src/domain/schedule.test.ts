@@ -733,3 +733,32 @@ describe('requestedSlotTime', () => {
     expect(requestedSlotTime(request, others, '2026-10-28', 30)).toBe('10:00');
   });
 });
+
+describe('firstAvailableSlot with a step and a time of day', () => {
+  const base = {
+    appointments: [] as Appointment[],
+    therapistIds: ['t1'],
+    fromDate: '2026-10-30',
+    days: 3,
+    hours: { startHour: 9, endHour: 18 },
+    slotMinutes: 60,
+    lengthMinutes: 60,
+    now: new Date('2026-10-30T07:00:00'),
+    isClosed: () => false,
+  };
+
+  it('offers start times every step, so a half-hour start after a 60-minute booking is found', () => {
+    const booked = [appt({ therapistId: 't1', scheduledAt: at('2026-10-30', '09:00'), durationMinutes: 90 })];
+    // hourly starts: 9:00 taken, 10:00 overlaps the 90-minute booking, so the first hourly start is 11:00;
+    // every 30 minutes the first free start is 10:30
+    expect(firstAvailableSlot({ ...base, appointments: booked })?.time).toBe('11:00');
+    expect(firstAvailableSlot({ ...base, appointments: booked, stepMinutes: 30 })?.time).toBe('10:30');
+  });
+
+  it("keeps to the patient's part of the day, moving to the next day when it is full", () => {
+    expect(firstAvailableSlot({ ...base, timeOfDay: 'afternoon' })?.time).toBe('12:00');
+    expect(firstAvailableSlot({ ...base, timeOfDay: 'evening' })?.time).toBe('17:00');
+    expect(firstAvailableSlot({ ...base, timeOfDay: 'evening', now: new Date('2026-10-30T17:30:00') })).toMatchObject({ date: '2026-10-31', time: '17:00' });
+    expect(firstAvailableSlot({ ...base, timeOfDay: 'any' })?.time).toBe('09:00');
+  });
+});
