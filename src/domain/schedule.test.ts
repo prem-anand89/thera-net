@@ -260,11 +260,8 @@ describe('visit from an appointment', () => {
 });
 
 describe('start times every N minutes', () => {
-  it('uses the clinic start step, else the slot length, else 30', () => {
-    expect(startStepMinutes({ slotDurationMinutes: 60, startStepMinutes: 15 })).toBe(15);
-    expect(startStepMinutes({ slotDurationMinutes: 60, startStepMinutes: null })).toBe(60);
-    expect(startStepMinutes({ slotDurationMinutes: 45 })).toBe(45);
-    expect(startStepMinutes({})).toBe(30);
+  it('is always 15 minutes, whatever the appointment length', () => {
+    expect(startStepMinutes()).toBe(15);
   });
 
   it('aligns gap starts to the start step, not the appointment length', () => {

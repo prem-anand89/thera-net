@@ -181,8 +181,8 @@ export function ScheduleBookingsView({
   const isTherapist = scope.role === 'therapist';
   const myTherapistId = scope.myTherapistId;
   const slotMinutes = clinic.slotDurationMinutes || 30;
-  // Staff start times (Settings → "Start times every"); the slot length stays the default length.
-  const stepMinutes = startStepMinutes(clinic);
+  // Staff start times come every 15 minutes; the slot length stays the default length.
+  const stepMinutes = startStepMinutes();
   const hours = useMemo(
     () => ({ startHour: clinic.bookingStartHour ?? 9, endHour: clinic.bookingEndHour ?? 17, operating: clinic.operatingHours ?? null }),
     [clinic.bookingStartHour, clinic.bookingEndHour, clinic.operatingHours]

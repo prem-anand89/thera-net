@@ -162,8 +162,8 @@ describe('BookSlotSheet', () => {
     expect(slot('10:30 AM')).toBeEnabled();
   });
 
-  it('offers start times every "Start times every" minutes, with 15 minutes as a length', () => {
-    data.clinic = { slotDurationMinutes: 60, startStepMinutes: 15 };
+  it('offers start times every 15 minutes whatever the appointment length, with 15 minutes as a length', () => {
+    data.clinic = { slotDurationMinutes: 60 };
     try {
       render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
       expect(slot('10:15 AM')).toBeEnabled();
@@ -400,8 +400,8 @@ describe('BookSlotSheet', () => {
       expect(screen.queryByRole('button', { name: '6:00 AM' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '8:30 AM' })).not.toBeInTheDocument();
 
-      // Only the 2 break slots (10:00 AM, 10:30 AM) within clinic hours are outside therapist hours
-      const outsideBtn = screen.getByRole('button', { name: /Outside hours \(2\)/ });
+      // Starts every 15 minutes: the break (10:00 to 10:45) plus 9:45 and 11:45, whose 30 minutes run past the therapist's hours
+      const outsideBtn = screen.getByRole('button', { name: /Outside hours \(6\)/ });
       fireEvent.click(outsideBtn);
       expect(slot('10:00 AM')).toBeEnabled();
       expect(slot('10:30 AM')).toBeEnabled();

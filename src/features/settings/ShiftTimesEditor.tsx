@@ -50,11 +50,11 @@ export function ShiftTimesEditor({ draft, onChange }: { draft: ShiftDraft; onCha
 
       {draft.mode === 'continuous' ? (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 items-end gap-3 [&_input]:min-w-0">
             <TimeField label="Start time" value={draft.start} onChange={(start) => patch({ start })} />
             <TimeField label="End time" value={draft.end} onChange={(end) => patch({ end })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 items-end gap-3 [&_input]:min-w-0">
             <Field label="Lunch (minutes, 0 for none)">
               <input
                 type="number"
@@ -70,12 +70,12 @@ export function ShiftTimesEditor({ draft, onChange }: { draft: ShiftDraft; onCha
       ) : (
         <>
           <p className="text-xs font-medium text-[var(--ink)]">Session 1</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 items-end gap-3 [&_input]:min-w-0">
             <TimeField label="Session 1 starts" value={draft.s1Start} onChange={(s1Start) => patch({ s1Start })} />
             <TimeField label="Session 1 ends" value={draft.s1End} onChange={(s1End) => patch({ s1End })} />
           </div>
           <p className="text-xs font-medium text-[var(--ink)]">Session 2</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 items-end gap-3 [&_input]:min-w-0">
             <TimeField label="Session 2 starts" value={draft.s2Start} onChange={(s2Start) => patch({ s2Start })} />
             <TimeField label="Session 2 ends" value={draft.s2End} onChange={(s2End) => patch({ s2End })} />
           </div>

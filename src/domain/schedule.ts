@@ -67,12 +67,12 @@ export function generateScheduleSlots(
   return slots;
 }
 
-/**
- * How often staff can start an appointment: the clinic's "Start times every"
- * (15 or 30), else its slot length. Public booking always uses the slot length.
- */
-export function startStepMinutes(clinic: { slotDurationMinutes?: number | null; startStepMinutes?: number | null }): number {
-  return clinic.startStepMinutes || clinic.slotDurationMinutes || 30;
+/** Staff start times come every 15 minutes: they fit a 30, 45 or 60 minute session alike. Public booking uses the slot length. */
+export const START_STEP_MINUTES = 15;
+
+/** How often staff can start an appointment (always 15 minutes; the old per-clinic setting is no longer read). */
+export function startStepMinutes(): number {
+  return START_STEP_MINUTES;
 }
 
 export function appointmentStartsOnDate(appointment: Appointment, date: string): boolean {

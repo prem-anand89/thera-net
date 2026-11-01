@@ -112,8 +112,8 @@ export function BookSlotSheet({
   const clinic = useClinic();
   const { myTherapistId } = useWorkspaceScope();
   const slotMinutes = clinic.slotDurationMinutes || 30;
-  // Start times follow the clinic's "Start times every"; the slot length stays the default length.
-  const stepMinutes = startStepMinutes(clinic);
+  // Staff start times come every 15 minutes; the slot length stays the default length.
+  const stepMinutes = startStepMinutes();
   const startHour = clinic.bookingStartHour ?? 9;
   const endHour = clinic.bookingEndHour ?? 17;
   // The clinic's hours with its real open intervals (a clinic that closes at midday), not just the outer envelope.

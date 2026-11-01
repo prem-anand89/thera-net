@@ -47,14 +47,14 @@ describe('OperatingHoursEditor', () => {
     render(<OperatingHoursEditor operatingHours={null} startHour={9} endHour={17} closedWeekdays={[0]} onChange={vi.fn()} />);
     expect(screen.getByLabelText('Open starts')).toHaveValue('09:00');
     expect(screen.getByLabelText('Open ends')).toHaveValue('17:00');
-    expect(screen.getByRole('checkbox', { name: /Closed in the middle of the day/ })).not.toBeChecked();
-    expect(screen.queryByLabelText('Open again starts')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Continuous' })).toBeChecked();
+    expect(screen.queryByLabelText('Session 2 starts')).toBeNull();
   });
 
-  it('ticking the closure cuts the day in two, stores the hours and keeps the envelope', () => {
+  it('choosing Split cuts the day in two, stores the hours and keeps the envelope', () => {
     const onChange = vi.fn();
     render(<OperatingHoursEditor operatingHours={null} startHour={9} endHour={20} closedWeekdays={[0]} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('checkbox', { name: /Closed in the middle of the day/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Split' }));
     const [change, problem] = onChange.mock.calls[0];
     expect(problem).toBeNull();
     expect(change.bookingStartHour).toBe(9);
@@ -65,7 +65,7 @@ describe('OperatingHoursEditor', () => {
   it('shows stored split hours with the closed stretch spelled out', () => {
     const hours = { '1': [[540, 780], [960, 1200]], '2': [[540, 780], [960, 1200]], '3': [[540, 780], [960, 1200]] } as never;
     render(<OperatingHoursEditor operatingHours={hours} startHour={9} endHour={20} closedWeekdays={[0, 4, 5, 6]} onChange={vi.fn()} />);
-    expect(screen.getByLabelText('Open again starts')).toHaveValue('16:00');
+    expect(screen.getByLabelText('Session 2 starts')).toHaveValue('16:00');
     expect(screen.getByText(/Closed 1:00 PM – 4:00 PM/)).toBeInTheDocument();
   });
 
@@ -73,17 +73,47 @@ describe('OperatingHoursEditor', () => {
     const onChange = vi.fn();
     const hours = { '1': [[540, 780], [960, 1200]] } as never;
     render(<OperatingHoursEditor operatingHours={hours} startHour={9} endHour={20} closedWeekdays={[0, 2, 3, 4, 5, 6]} onChange={onChange} />);
-    fireEvent.change(screen.getByLabelText('Open again starts'), { target: { value: '12:00' } });
+    fireEvent.change(screen.getByLabelText('Session 2 starts'), { target: { value: '12:00' } });
     expect(onChange.mock.calls[0][1]).toMatch(/second session must start after the first one ends/);
+  });
+
+  it('choosing Continuous again joins the two sessions from first start to last end', () => {
+    const onChange = vi.fn();
+    const hours = { '1': [[540, 780], [960, 1200]] } as never;
+    render(<OperatingHoursEditor operatingHours={hours} startHour={9} endHour={20} closedWeekdays={[0, 2, 3, 4, 5, 6]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Continuous' }));
+    // One whole-hour block is the plain two-hour setting: nothing stored beyond the hours.
+    expect(onChange.mock.calls[0][0]).toEqual({ operatingHours: null, bookingStartHour: 9, bookingEndHour: 20 });
+  });
+
+  it('the day bar names the opening and closing times and the break by itself', () => {
+    const hours = { '1': [[540, 780], [840, 1080]] } as never;
+    render(<OperatingHoursEditor operatingHours={hours} startHour={9} endHour={18} closedWeekdays={[0, 2, 3, 4, 5, 6]} onChange={vi.fn()} />);
+    const bar = screen.getByTestId('day-bar');
+    expect(bar).toHaveAccessibleName(/9:00 AM – 1:00 PM, 2:00 PM – 6:00 PM\. Closed 1:00 PM – 2:00 PM/);
+    expect(bar).toHaveTextContent('9 AM–1 PM');
+    expect(bar).toHaveTextContent('1 PM–2 PM');
+    expect(bar).toHaveTextContent('2 PM–6 PM');
+    expect(bar).toHaveTextContent('1h');
+  });
+
+  it("Copy to all days gives every open day that day's hours", () => {
+    const onChange = vi.fn();
+    const hours = { '1': [[540, 780], [960, 1200]], '2': [[540, 1020]] } as never;
+    render(<OperatingHoursEditor operatingHours={hours} startHour={9} endHour={20} closedWeekdays={[0, 3, 4, 5, 6]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: "Copy Monday's hours to every open day" }));
+    const stored = onChange.mock.calls[0][0].operatingHours;
+    expect(stored['1']).toEqual([[540, 780], [960, 1200]]);
+    expect(stored['2']).toEqual([[540, 780], [960, 1200]]);
   });
 
   it('customise per day lists each open weekday, and goes back to one pattern', () => {
     render(<OperatingHoursEditor operatingHours={null} startHour={9} endHour={17} closedWeekdays={[0, 3, 4, 5, 6]} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Customise per day' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Different each day' }));
     expect(screen.getByText('Monday')).toBeInTheDocument();
     expect(screen.getByText('Tuesday')).toBeInTheDocument();
     expect(screen.queryByText('Wednesday')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Use the same hours every day' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Same every day' }));
     expect(screen.queryByText('Monday')).toBeNull();
   });
 });

@@ -294,7 +294,7 @@ export function ResourceDayGrid({
   appointments: Appointment[];
   hours: GridHours;
   slotMinutes: number;
-  /** Free time is offered every this many minutes (the clinic's "Start times every"); defaults to slotMinutes. */
+  /** Free time is offered every this many minutes (always 15 from the schedule); defaults to slotMinutes. */
   stepMinutes?: number;
   closed: ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
@@ -449,7 +449,7 @@ export function WeekTimeGrid({
   appointments: Appointment[];
   hours: GridHours;
   slotMinutes: number;
-  /** Free time is offered every this many minutes (the clinic's "Start times every"); defaults to slotMinutes. */
+  /** Free time is offered every this many minutes (always 15 from the schedule); defaults to slotMinutes. */
   stepMinutes?: number;
   closedFor: (date: string) => ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
