@@ -34,6 +34,13 @@
   --text-caption--line-height: 1.3;
 }
 
+/* A mouse-and-monitor screen reads small text from further away than a phone does: captions step up to 11px. */
+@media (min-width: 62.5rem) {
+  :root {
+    --text-caption: 11px;
+  }
+}
+
 /*
  * Design tokens. Neutrals (paper/surface/ink/muted/border) are true neutral
  * gray — only the accents carry hue. Teal is the one primary action color
