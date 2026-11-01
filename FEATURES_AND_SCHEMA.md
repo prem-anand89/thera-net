@@ -2728,6 +2728,7 @@ clinic_plans (
   status                text NOT NULL DEFAULT 'active', CHECK in ('active', 'past_due', 'read_only')
   max_members           int NOT NULL       -- tunable per clinic, seeded from tier
   visit_cap_per_month   int                -- NULL = unlimited
+  max_roster_therapists int                -- team members on the schedule with no login the plan includes (besides the owner); NULL = unlimited. Migration 20261101100000_plan_limits_roster_cap.sql
   updated_at            timestamptz NOT NULL DEFAULT now()
 )
 ```
@@ -2766,8 +2767,28 @@ default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
 returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
 when unknown) and `visitsThisMonth` (computed from local Dexie visits via
 `repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
-pure tier → feature map (`tierIncludes()`) the hook's `can()` reads, plus
-`currentMonthRange()` — both unit-tested.
+pure tier → feature map (`tierIncludes()`: invoicing, revenueSplit,
+advancedModules, notePrinting) the hook's `can()` reads, plus `currentMonthRange()`
+— both unit-tested. **What a tier includes in numbers** is `TIER_LIMITS` (seats,
+visits a month, team members without a login: Lite 1 / 50 / 1, Solo 1 / 200 / 1,
+Clinic 5 / unlimited / 3, Clinic+ 10 / unlimited / 10), with `nextTierWithMore()` and
+`tierLimitsSummary()` for upgrade wording (there is no yes/no "team" flag). These are
+*defaults for a tier*: enforcement always reads the clinic's own `clinic_plans`
+row (one live Clinic+ clinic has 100 seats). The SQL function
+`plan_tier_defaults(tier)` returns the same numbers and `planLimits.parity.test.ts`
+keeps the two equal; new clinics are seeded from it, and a manual upgrade copies
+from it (snippet in the migration). **Team members without a login**
+(`clinic_plans.max_roster_therapists`, `domain/roster.ts`): an active therapist row
+with no `user_id` counts; adding one or switching one back on past the limit is
+refused in the app first (`rosterAddBlocked`: the Team add form, Reactivate and the
+edit form) and by the trigger `enforce_roster_cap` as a backstop (it leaves the row
+itself out of the count because the sync upserts, so plain edits are never refused).
+Nothing is deactivated automatically and visits are never blocked; a clinic over
+its limit sees a "choose who stays active" banner in Settings → Team. The client
+reads `maxRosterTherapists` as null (no limit) until the column exists. Lite hides
+"Print" and the session-log / insurer-packet links instead of showing a "Solo+"
+teaser (the print pages keep `LockedSectionNotice` for typed URLs). The upgrade
+mail (`buildUpgradeMailto`) includes the clinic id, plan and usage.
 
 No UI reads this yet — Phase 1 only builds the read path. Enforcement
 (Phase 2) and the Settings `plan` section (Phase 3) are what consume it.
@@ -4687,6 +4708,7 @@ clinic_plans (
   status                text NOT NULL DEFAULT 'active', CHECK in ('active', 'past_due', 'read_only')
   max_members           int NOT NULL       -- tunable per clinic, seeded from tier
   visit_cap_per_month   int                -- NULL = unlimited
+  max_roster_therapists int                -- team members on the schedule with no login the plan includes (besides the owner); NULL = unlimited. Migration 20261101100000_plan_limits_roster_cap.sql
   updated_at            timestamptz NOT NULL DEFAULT now()
 )
 ```
@@ -4725,8 +4747,28 @@ default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
 returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
 when unknown) and `visitsThisMonth` (computed from local Dexie visits via
 `repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
-pure tier → feature map (`tierIncludes()`) the hook's `can()` reads, plus
-`currentMonthRange()` — both unit-tested.
+pure tier → feature map (`tierIncludes()`: invoicing, revenueSplit,
+advancedModules, notePrinting) the hook's `can()` reads, plus `currentMonthRange()`
+— both unit-tested. **What a tier includes in numbers** is `TIER_LIMITS` (seats,
+visits a month, team members without a login: Lite 1 / 50 / 1, Solo 1 / 200 / 1,
+Clinic 5 / unlimited / 3, Clinic+ 10 / unlimited / 10), with `nextTierWithMore()` and
+`tierLimitsSummary()` for upgrade wording (there is no yes/no "team" flag). These are
+*defaults for a tier*: enforcement always reads the clinic's own `clinic_plans`
+row (one live Clinic+ clinic has 100 seats). The SQL function
+`plan_tier_defaults(tier)` returns the same numbers and `planLimits.parity.test.ts`
+keeps the two equal; new clinics are seeded from it, and a manual upgrade copies
+from it (snippet in the migration). **Team members without a login**
+(`clinic_plans.max_roster_therapists`, `domain/roster.ts`): an active therapist row
+with no `user_id` counts; adding one or switching one back on past the limit is
+refused in the app first (`rosterAddBlocked`: the Team add form, Reactivate and the
+edit form) and by the trigger `enforce_roster_cap` as a backstop (it leaves the row
+itself out of the count because the sync upserts, so plain edits are never refused).
+Nothing is deactivated automatically and visits are never blocked; a clinic over
+its limit sees a "choose who stays active" banner in Settings → Team. The client
+reads `maxRosterTherapists` as null (no limit) until the column exists. Lite hides
+"Print" and the session-log / insurer-packet links instead of showing a "Solo+"
+teaser (the print pages keep `LockedSectionNotice` for typed URLs). The upgrade
+mail (`buildUpgradeMailto`) includes the clinic id, plan and usage.
 
 No UI reads this yet — Phase 1 only builds the read path. Enforcement
 (Phase 2) and the Settings `plan` section (Phase 3) are what consume it.

@@ -15,7 +15,10 @@ export function VisitCapNotice() {
   const status = visitCapStatus(visitsThisMonth, visitCapPerMonth);
   if (status === 'ok' || visitCapPerMonth == null) return null;
 
-  const href = upgradeMailto(clinic.name, PLAN_TIER_LABELS[tier]);
+  const href = upgradeMailto(clinic.name, PLAN_TIER_LABELS[tier], {
+    clinicId: clinic.id,
+    usage: `${visitsThisMonth} of ${visitCapPerMonth} visits this month`,
+  });
   const reached = status === 'reached';
   return (
     <div

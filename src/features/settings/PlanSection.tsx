@@ -1,6 +1,9 @@
 import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
-import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { PLAN_TIER_LABELS, minimumTierFor, tierLimitsSummary, type PlanFeature } from '@/domain/plans';
+import { rosterUsed } from '@/domain/roster';
+import { repos } from '@/services';
 import { SectionCard, Pill, StatTile } from '@/components/ui';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 
@@ -20,15 +23,16 @@ export function PlanSection() {
     status,
     maxMembers,
     visitCapPerMonth,
+    maxRosterTherapists,
     seatsUsed,
     visitsThisMonth,
     loading,
     enforcementEnabled,
   } = entitlements;
+  const roster = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const statusTone = status === 'active' ? 'green' : status === 'read_only' ? 'amber' : 'slate';
   const features: { key: PlanFeature; label: string }[] = [
     { key: 'invoicing', label: 'Billing & invoicing' },
-    { key: 'team', label: 'Multiple team logins' },
     { key: 'revenueSplit', label: 'Hospital revenue split & attribution audit' },
     { key: 'advancedModules', label: 'Advanced assessment modules' },
     { key: 'notePrinting', label: 'Print / PDF of notes' },
@@ -58,10 +62,21 @@ export function PlanSection() {
         <div className="mt-3">
           <VisitCapNotice />
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-2">
+        {!loading && <p className="mt-1 text-xs text-[var(--muted)]">{tierLimitsSummary(tier)}</p>}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-3">
           <StatTile
             label="Seats"
             value={seatsUsed == null ? `— / ${maxMembers}` : `${seatsUsed} / ${maxMembers}`}
+          />
+          <StatTile
+            label="Team without login"
+            value={
+              roster === undefined
+                ? '—'
+                : maxRosterTherapists == null
+                  ? `${rosterUsed(roster)}`
+                  : `${rosterUsed(roster)} / ${maxRosterTherapists}`
+            }
           />
           <StatTile
             label="Visits this month"

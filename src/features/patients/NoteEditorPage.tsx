@@ -888,16 +888,6 @@ export function NoteEditorPage() {
         >
           ← {patient?.name ?? 'Patient'}
         </Link>
-        {existingNote && !canPrintNotes && (
-          <span
-            className="btn-secondary"
-            title="Printing and PDF export of notes is included in Solo and above."
-            aria-disabled="true"
-            style={{ marginBottom: 8, marginLeft: 8, display: 'inline-block', opacity: 0.6, cursor: 'not-allowed' }}
-          >
-            Print · Solo+
-          </span>
-        )}
         {existingNote && canPrintNotes && (
           <Link
             to="/patients/$patientId/notes/$noteId/print"

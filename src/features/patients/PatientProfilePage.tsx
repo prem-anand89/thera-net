@@ -768,14 +768,6 @@ export function PatientProfilePage() {
                       Write session notes
                     </Link>
                   )}
-                  {hasSessionNotes && sessionNotesEnrollmentId && !canPrintNotes && (
-                    <span
-                      className="text-xs font-medium text-[var(--muted)]"
-                      title="The printable session log and insurer packet are included in Solo and above."
-                    >
-                      Session log &amp; insurer packet · Solo+
-                    </span>
-                  )}
                   {hasSessionNotes && sessionNotesEnrollmentId && canPrintNotes && (
                     <>
                       <Link

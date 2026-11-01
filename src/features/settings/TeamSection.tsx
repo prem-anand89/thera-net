@@ -9,7 +9,8 @@ import { colorClashes, nextUnusedColor, therapistColor } from '@/components/sche
 import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
-import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
+import { PLAN_TIER_LABELS, TIER_LIMITS, loginsLabel, nextTierWithMore } from '@/domain/plans';
+import { rosterAddBlocked, rosterLimitMessage, rosterOverLimit, rosterUsed } from '@/domain/roster';
 import { getSupabase, publicTherapistPhotoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { formatDateDM } from '@/domain/fiscalYear';
@@ -151,6 +152,8 @@ export type TeamMemberCardProps = {
   assignments: TherapistShiftAssignment[];
   templates: ShiftTemplate[];
   clinic: Clinic;
+  /** Team members with no login the plan includes; null = no limit. Switching one back on is refused past it. */
+  rosterLimit?: number | null;
 };
 
 export function TeamMemberCard({
@@ -168,6 +171,7 @@ export function TeamMemberCard({
   assignments,
   templates,
   clinic,
+  rosterLimit = null,
 }: TeamMemberCardProps) {
   const { member, therapist } = person;
   const displayName = member?.displayName || therapist?.name || member?.email || 'Unknown';
@@ -250,6 +254,12 @@ export function TeamMemberCard({
       const shouldBeBookable = !isNowFrontDesk && bookableDraft;
 
       if (therapist) {
+        // Switching a team member without a login back on needs room in the plan. Refuse here, in plain words, so a
+        // write the server would reject never gets stuck in the sync queue.
+        if (therapist.active === false && !therapist.userId && shouldBeBookable && rosterAddBlocked(clinicRoster ?? [], rosterLimit, therapist.id)) {
+          setError(rosterLimitMessage(rosterLimit!));
+          return;
+        }
         await repos.therapists.put({
           ...therapist,
           name: nameDraft.trim() || therapist.name,
@@ -733,11 +743,20 @@ function AddTeamMemberForm({
   clinicId,
   onAdded,
   loginsLocked = false,
+  loginsHint = '',
+  rosterLocked = false,
+  rosterHint = '',
 }: {
   clinicId: string;
   onAdded: () => void;
   /** The plan's login seats are used up: only roster (no-login) therapists can still be added. */
   loginsLocked?: boolean;
+  /** "Clinic includes 5 logins." style tail for the logins-used-up note. */
+  loginsHint?: string;
+  /** The plan's team-members-without-a-login are used up: adding one without a login is refused. */
+  rosterLocked?: boolean;
+  /** Plain message shown when `rosterLocked` (names the limit and the upgrade). */
+  rosterHint?: string;
 }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -763,6 +782,7 @@ function AddTeamMemberForm({
     if (needsLogin && !email.trim()) return setError('Email is required for login');
     const effectiveBookable = role === 'front_desk' ? false : bookable;
     if (!needsLogin && !effectiveBookable) return setError('Must either need a login or be bookable');
+    if (!needsLogin && rosterLocked) return setError(rosterHint);
 
     setBusy(true);
     setError(null);
@@ -864,7 +884,12 @@ function AddTeamMemberForm({
         </label>
         {loginsLocked && (
           <p className="-mt-1 ml-6 text-xs text-[var(--muted)]">
-            Your plan's logins are all in use; more are included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above. Logins already set up keep working, and you can still add a therapist to the schedule without a login.
+            Your plan's logins are all in use{loginsHint ? `; ${loginsHint}` : ''}. Logins already set up keep working{rosterLocked ? '.' : ', and you can still add a therapist to the schedule without a login.'}
+          </p>
+        )}
+        {!needsLogin && rosterLocked && (
+          <p role="status" className="-mt-1 ml-6 text-xs text-[var(--amber)]" data-testid="roster-locked">
+            {rosterHint}
           </p>
         )}
         {role !== 'front_desk' && (
@@ -883,7 +908,7 @@ function AddTeamMemberForm({
         <button
           type="submit"
           className={btnPrimary}
-          disabled={busy || (!needsLogin && (role === 'front_desk' || !bookable))}
+          disabled={busy || (!needsLogin && (role === 'front_desk' || !bookable || rosterLocked))}
         >
           {busy ? 'Adding…' : 'Add member'}
         </button>
@@ -984,6 +1009,19 @@ export function Therapists() {
     members !== null &&
     members.length >= entitlements.maxMembers;
 
+  // Team members without a login: the plan's own limit (null = none, including while it is unknown), checked here
+  // first so the server's trigger is only a backstop.
+  const rosterLimit = entitlements.enforcementEnabled && !entitlements.loading ? entitlements.maxRosterTherapists : null;
+  const rosterAtLimit = rosterAddBlocked(rawTherapists ?? [], rosterLimit);
+  const rosterOver = rosterOverLimit(rawTherapists ?? [], rosterLimit);
+  const nextForSeats = nextTierWithMore(entitlements.tier, 'seats');
+  const nextForRoster = nextTierWithMore(entitlements.tier, 'rosterWithoutLogin');
+  const loginsHint = nextForSeats ? `${PLAN_TIER_LABELS[nextForSeats]} includes ${loginsLabel(TIER_LIMITS[nextForSeats].seats)}` : '';
+  const rosterHint =
+    rosterLimit === null
+      ? ''
+      : `${rosterLimitMessage(rosterLimit)}${nextForRoster ? ` ${PLAN_TIER_LABELS[nextForRoster]} includes ${TIER_LIMITS[nextForRoster].rosterWithoutLogin}.` : ''}`;
+
   async function startDeleteTherapist(t: Therapist) {
     setRosterError(null);
     try {
@@ -1035,6 +1073,10 @@ export function Therapists() {
 
   async function handleToggleActive(t: Therapist) {
     setRosterError(null);
+    if (t.active === false && !t.userId && rosterAddBlocked(rawTherapists ?? [], rosterLimit, t.id)) {
+      setRosterError(rosterHint);
+      return;
+    }
     try {
       await repos.therapists.put({
         ...t,
@@ -1145,6 +1187,12 @@ export function Therapists() {
 
   return (
     <SectionCard id="settings-card-team-therapists" title="Team Directory">
+      {rosterOver && rosterLimit !== null && (
+        <p role="alert" className="mb-4 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-sm text-[var(--amber)]" data-testid="roster-over-limit">
+          Your plan includes {rosterLimit} team member{rosterLimit === 1 ? '' : 's'} without a login; {rosterUsed(rawTherapists ?? [])} are active. Choose who stays active
+          {nextForRoster ? `, or upgrade to ${PLAN_TIER_LABELS[nextForRoster]} (${TIER_LIMITS[nextForRoster].rosterWithoutLogin})` : ''}. Visits and existing staff keep working.
+        </p>
+      )}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
         <div className="flex flex-wrap gap-2">
           {(['all', 'bookable', 'staff', 'invited', 'inactive', 'unlinked'] as const).map((f) => (
@@ -1209,6 +1257,7 @@ export function Therapists() {
                 if (p.therapist) void requestToggleActive(p.therapist);
               }}
               assignments={therapistAssignments}
+              rosterLimit={rosterLimit}
               templates={templates ?? []}
               clinic={clinic}
             />
@@ -1228,6 +1277,9 @@ export function Therapists() {
             key={atSeatCap ? 'roster-only' : 'full'}
             clinicId={clinic.id}
             loginsLocked={Boolean(atSeatCap)}
+            loginsHint={loginsHint}
+            rosterLocked={rosterAtLimit}
+            rosterHint={rosterHint}
             onAdded={() => void refetchMembers()}
           />
         </div>

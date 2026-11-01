@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { visitCapStatus, tierIncludes, PLAN_TIER_LABELS, currentMonthRange, minimumTierFor, type PlanFeature } from './plans';
+import { visitCapStatus, tierIncludes, PLAN_TIER_LABELS, currentMonthRange, minimumTierFor, nextTierWithMore, tierLimitsSummary, TIER_LIMITS, type PlanFeature } from './plans';
 import type { PlanTier } from './types';
 
 const TIERS: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
-const FEATURES: PlanFeature[] = ['invoicing', 'team', 'revenueSplit', 'advancedModules', 'notePrinting'];
+const FEATURES: PlanFeature[] = ['invoicing', 'revenueSplit', 'advancedModules', 'notePrinting'];
 
 describe('tierIncludes', () => {
   it('every tier × feature cell is defined (no accidental undefined)', () => {
@@ -20,20 +20,17 @@ describe('tierIncludes', () => {
     }
   });
 
-  it('solo gets invoicing and note printing but not team/revenueSplit/advancedModules', () => {
+  it('solo gets invoicing and note printing but not revenueSplit/advancedModules', () => {
     expect(tierIncludes('solo', 'invoicing')).toBe(true);
     expect(tierIncludes('solo', 'notePrinting')).toBe(true);
-    expect(tierIncludes('solo', 'team')).toBe(false);
     expect(tierIncludes('solo', 'revenueSplit')).toBe(false);
     expect(tierIncludes('solo', 'advancedModules')).toBe(false);
   });
 
-  it('clinic and clinic_plus both get everything', () => {
-    for (const tier of ['clinic', 'clinic_plus'] as const) {
-      for (const feature of FEATURES) {
-        expect(tierIncludes(tier, feature)).toBe(true);
-      }
-    }
+  it('clinic adds the revenue split; only clinic_plus has advanced modules', () => {
+    expect(tierIncludes('clinic', 'revenueSplit')).toBe(true);
+    expect(tierIncludes('clinic', 'advancedModules')).toBe(false);
+    for (const feature of FEATURES) expect(tierIncludes('clinic_plus', feature)).toBe(true);
   });
 });
 
@@ -54,10 +51,9 @@ describe('minimumTierFor', () => {
     expect(minimumTierFor('invoicing')).toBe('solo');
   });
 
-  it('team/revenueSplit/advancedModules are included from Clinic', () => {
-    expect(minimumTierFor('team')).toBe('clinic');
+  it('revenueSplit is included from Clinic, advancedModules from Clinic+', () => {
     expect(minimumTierFor('revenueSplit')).toBe('clinic');
-    expect(minimumTierFor('advancedModules')).toBe('clinic');
+    expect(minimumTierFor('advancedModules')).toBe('clinic_plus');
   });
 });
 
@@ -85,5 +81,32 @@ describe('visitCapStatus', () => {
     expect(visitCapStatus(49, 50)).toBe('near');
     expect(visitCapStatus(50, 50)).toBe('reached');
     expect(visitCapStatus(61, 50)).toBe('reached');
+  });
+});
+
+describe('TIER_LIMITS and its helpers', () => {
+  it('summarises a tier from the numbers', () => {
+    expect(tierLimitsSummary('lite')).toBe('1 login · 50 visits a month · 1 team member without a login');
+    expect(tierLimitsSummary('clinic')).toBe('5 logins · unlimited visits · 3 team members without a login');
+  });
+
+  it('finds the next tier that includes more of something', () => {
+    expect(nextTierWithMore('lite', 'seats')).toBe('clinic'); // Solo has the same 1 login
+    expect(nextTierWithMore('lite', 'visitsPerMonth')).toBe('solo');
+    expect(nextTierWithMore('solo', 'visitsPerMonth')).toBe('clinic'); // unlimited
+    expect(nextTierWithMore('clinic', 'seats')).toBe('clinic_plus');
+    expect(nextTierWithMore('clinic', 'visitsPerMonth')).toBeNull(); // already unlimited
+    expect(nextTierWithMore('clinic_plus', 'seats')).toBeNull();
+  });
+
+  it('never has fewer of anything on a higher tier', () => {
+    const order: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
+    for (let i = 1; i < order.length; i++) {
+      const lower = TIER_LIMITS[order[i - 1]];
+      const higher = TIER_LIMITS[order[i]];
+      expect(higher.seats).toBeGreaterThanOrEqual(lower.seats);
+      expect(higher.rosterWithoutLogin).toBeGreaterThanOrEqual(lower.rosterWithoutLogin);
+      expect(higher.visitsPerMonth === null || (lower.visitsPerMonth !== null && higher.visitsPerMonth >= lower.visitsPerMonth)).toBe(true);
+    }
   });
 });

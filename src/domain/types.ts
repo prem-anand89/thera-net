@@ -1068,6 +1068,9 @@ export interface ClinicPlan {
   maxMembers: number;
   /** null = unlimited */
   visitCapPerMonth: number | null;
+  /** Team members on the schedule with no login of their own that the plan includes (besides the owner). null =
+   *  unlimited, or the column does not exist yet (the app then applies no client limit; the server is the authority). */
+  maxRosterTherapists?: number | null;
   updatedAt: string;
 }
 

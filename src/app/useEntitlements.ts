@@ -37,6 +37,13 @@ export interface Entitlements {
   maxMembers: number;
   /** null = unlimited */
   visitCapPerMonth: number | null;
+  /**
+   * Team members with no login the plan includes (besides the owner). null = no client limit: unlimited, not
+   * loaded yet, or the column has not been added to the database. Deliberately NOT fail-closed like `maxMembers`: a
+   * limit of 1 here would lock live Clinic+ clinics out of adding staff until the migration is applied; the server
+   * trigger is the authority.
+   */
+  maxRosterTherapists: number | null;
   /** Active clinic_members count. null while unknown (offline, or not yet fetched). */
   seatsUsed: number | null;
   /** Non-deleted visits logged this calendar month, from local Dexie — available offline. */
@@ -163,6 +170,7 @@ export function useEntitlements(clinicId: string): Entitlements {
     status: resolved?.status ?? DEFAULT_PLAN.status,
     maxMembers: resolved?.maxMembers ?? DEFAULT_PLAN.maxMembers,
     visitCapPerMonth: resolved ? resolved.visitCapPerMonth : DEFAULT_PLAN.visitCapPerMonth,
+    maxRosterTherapists: resolved?.maxRosterTherapists ?? null,
     seatsUsed,
     visitsThisMonth,
     enforcementEnabled,
