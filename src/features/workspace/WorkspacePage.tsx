@@ -91,7 +91,7 @@ import {
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 type InvoicingTarget = IssueInvoiceTarget;
 
-/** A changed hasPartner/clinicSplitPct/taxPct/tdsBasis/clinicType (stamped as
+/** A changed hasPartner/clinicSplitPct/taxPct/tdsBasis (stamped as
  *  clinic.lastSplitChangeAt by SettingsPage) silently moves every
  *  not-yet-invoiced visit's split and, downstream, a therapist's Net figure
  *  — with nothing on Workspace explaining why. Surfaced for 14 days after

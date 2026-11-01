@@ -93,8 +93,8 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
     package attribution." "Edit split" appears only when the caller passes `onEdit` (New Visit does not: an unsaved visit
     has no stored shares to edit; the editor is for saved visits, see below).
     When a package continuation is run by someone other than the package's biller (therapist split on), New Visit adds one muted line: "₹1,000 of Dr A's package moves to Dr B for this session." (`packageMoveNote` in `NewVisitPage.tsx`, from `packageSessionShares`).
-    Assistant tagging and the share line are hidden for a solo clinic (`clinicType` 'individual') or one with a
-    single active therapist; with the split off only the share line is hidden. Changing the visit's therapist
+    Assistant tagging and the share line are hidden for a clinic with a single active therapist (the old
+    Single / Multiple Therapists setting was removed from Settings; `clinicType` is no longer read); with the split off only the share line is hidden. Changing the visit's therapist
     untags that person as an assistant.
   - **Revenue share editor** (`src/components/RevenueShareEditor.tsx`, replaces the old one-assistant
     `SplitModal`; opened by "Edit split"/"Split revenue" on a saved visit in Ledger, Workspace and the visit
@@ -1571,14 +1571,14 @@ bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
 fy_start_month              int NOT NULL (default 4 = April)
-clinic_type                 text (NULLABLE) — 'individual' | 'multiple'
+clinic_type                 text (NULLABLE) — 'individual' | 'multiple'. LEGACY: no longer read or edited anywhere (the Settings "Therapist Setup" select was removed); kept for old rows
 has_partner                 boolean NOT NULL
 billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner
 enable_therapist_split      boolean (NULLABLE)
 own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
 last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              admin changes hasPartner/bmSplitPct/taxPct/
-                             tdsBasis/clinicType; Workspace shows a 14-day
+                             tdsBasis; Workspace shows a 14-day
                              "your split changed on X" banner off this
 billing_enabled              boolean NOT NULL — legacy: no longer read or editable (billing is always on); server invoice checks still read it (all true)
 partner_collects             boolean NOT NULL DEFAULT false — the partner collects patients' payments (only with has_partner)
@@ -3575,14 +3575,14 @@ bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
 fy_start_month              int NOT NULL (default 4 = April)
-clinic_type                 text (NULLABLE) — 'individual' | 'multiple'
+clinic_type                 text (NULLABLE) — 'individual' | 'multiple'. LEGACY: no longer read or edited anywhere (the Settings "Therapist Setup" select was removed); kept for old rows
 has_partner                 boolean NOT NULL
 billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner
 enable_therapist_split      boolean (NULLABLE)
 own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
 last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              admin changes hasPartner/bmSplitPct/taxPct/
-                             tdsBasis/clinicType; Workspace shows a 14-day
+                             tdsBasis; Workspace shows a 14-day
                              "your split changed on X" banner off this
 billing_enabled              boolean NOT NULL — legacy: no longer read or editable (billing is always on); server invoice checks still read it (all true)
 partner_collects             boolean NOT NULL DEFAULT false — the partner collects patients' payments (only with has_partner)
@@ -5818,7 +5818,7 @@ A top-level page doesn't repeat its name as a big heading when a visible nav ite
   class is enough.
 
 ### 5. Revenue-Split Change Visibility (Workspace)
-A `hasPartner`/`bmSplitPct`/`taxPct`/`tdsBasis`/`clinicType` edit in Settings
+A `hasPartner`/`bmSplitPct`/`taxPct`/`tdsBasis` edit in Settings
 already recomputes every not-yet-invoiced visit's split
 (`recomputeUninvoicedSplits`) — but that recompute was previously invisible
 to anyone but the admin who made it, so a therapist's Net figure could move

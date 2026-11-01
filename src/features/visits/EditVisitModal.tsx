@@ -270,7 +270,7 @@ export function EditVisitModal({
   const frozen = visit.invoiceId !== null;
   const hasLines = items.length > 0;
   const activeTherapists = (therapists ?? []).filter((t) => t.active);
-  const showAssistant = clinic.clinicType !== 'individual' && activeTherapists.length > 1;
+  const showAssistant = activeTherapists.length > 1;
   const canEditShares =
     clinicBillingConfig(clinic).therapistSplit && activeTherapists.length > 1 && visit.actualBillPaise > 0;
   const ownPackages: OpenPackage[] = items

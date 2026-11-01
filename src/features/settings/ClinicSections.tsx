@@ -3,7 +3,6 @@ import { COUNTRY_CODES } from '@/domain/countryCodes';
 import { clinicCountryCode, clinicTimezone, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
 import { PhoneField } from '@/components/PhoneField';
 import { useEffect, useMemo, useState } from 'react';
-import { visitService } from '@/services';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { type Clinic, type PaymentMethod } from '@/domain/types';
 import { paymentMethodLabel, paymentMethodOptions, partnerName } from '@/domain/paymentMethods';
@@ -23,13 +22,11 @@ type ProfileFields = Pick<
   | 'email'
   | 'walkInMrnoPrefix'
   | 'logoPath'
-  | 'clinicType'
   | 'hasPartner'
   | 'partnerHospitalName'
   | 'partnerHospitalLogoPath'
   | 'signaturePath'
 
-  | 'lastSplitChangeAt'
 >;
 
 export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -42,7 +39,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
         email: c.email,
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
-        clinicType: c.clinicType,
         hasPartner: c.hasPartner,
         partnerHospitalName: c.partnerHospitalName,
         partnerHospitalLogoPath: c.partnerHospitalLogoPath,
@@ -57,7 +53,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
   const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
   const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
-  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
   async function uploadLogo(file: File) {
     setError(null);
@@ -108,22 +103,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
   }
 
   async function saveProfile() {
-    setRecomputeMsg(null);
-    const splitAffected = form.clinicType !== clinic.clinicType;
-    const ok = await save();
-    if (ok && splitAffected) {
-      await saveFieldNow({ lastSplitChangeAt: new Date().toISOString() });
-      try {
-        const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
-        setRecomputeMsg(
-          updated > 0
-            ? `Applied the updated split to ${updated} already-logged, not-yet-invoiced visit${updated === 1 ? '' : 's'}.`
-            : null
-        );
-      } catch (e) {
-        setError(toFriendlyMessage(e));
-      }
-    }
+    await save();
   }
 
   return (
@@ -165,9 +145,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                 <div className="flex-1 space-y-3 w-full">
                   <div className="flex flex-wrap items-baseline gap-3">
                     <h3 className="text-xl font-semibold text-[var(--ink)]">{form.name || 'Your Clinic Name'}</h3>
-                    <span className="rounded-full bg-[var(--surface)] border border-[var(--border)] px-2.5 py-0.5 text-hint font-medium text-[var(--muted)]">
-                      {form.clinicType === 'individual' ? 'Single Therapist' : 'Multiple Therapists'}
-                    </span>
                   </div>
                   
                   {form.address && (
@@ -260,17 +237,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                           onChange={(e) => set({ name: e.target.value })} 
                           placeholder="Your Clinic Name" 
                         />
-                      </div>
-                      <div className="w-40">
-                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Therapist Setup</label>
-                        <select 
-                          className={inputCls} 
-                          value={form.clinicType ?? 'multiple'} 
-                          onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
-                        >
-                          <option value="individual">Single Therapist</option>
-                          <option value="multiple">Multiple Therapists</option>
-                        </select>
                       </div>
                     </div>
                     
@@ -401,7 +367,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                 </div>
               </div>
 
-              {recomputeMsg && <p className="mt-4 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
             </fieldset>
           )}
 

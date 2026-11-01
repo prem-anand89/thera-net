@@ -16,8 +16,9 @@ const updateBilling = vi.fn();
 const updateLines = vi.fn();
 const confirmAndDeleteVisitMock = vi.fn();
 
+const clinicRef: { current: Record<string, unknown> } = { current: { id: 'c1', clinicType: 'group', enableTherapistSplit: true } };
 vi.mock('@/app/clinicContext', () => ({
-  useClinic: () => ({ id: 'c1', clinicType: 'group', enableTherapistSplit: true }),
+  useClinic: () => clinicRef.current,
 }));
 vi.mock('@/app/usePermissions', () => ({
   usePermissions: () => ({ isAdmin: true, role: 'admin', canViewClinicalNotes: true, canBill: true }),
@@ -114,7 +115,10 @@ beforeEach(() => {
   askConfirmMock.mockReset().mockResolvedValue(true);
   updateLines.mockReset().mockResolvedValue({ sharesOutdated: false });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  clinicRef.current = { id: 'c1', clinicType: 'group', enableTherapistSplit: true };
+});
 
 const items = [line('a1', 'Assessment', 100000, null, 0), line('b2', 'Dry needling', 30000, 's', 1)];
 
@@ -131,6 +135,12 @@ describe('EditVisitModal', () => {
     expect(screen.getByText("Does not change the patient's bill.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit split' }));
     expect(screen.getByText('share editor open')).toBeInTheDocument();
+  });
+
+  it('offers "Done by" / Share with 2+ active therapists even if the clinic was once marked individual', () => {
+    clinicRef.current = { id: 'c1', clinicType: 'individual', enableTherapistSplit: true };
+    setup({}, items);
+    expect(screen.getAllByText('Done by:').length).toBeGreaterThan(0);
   });
 
   it('an uninvoiced visit with services saves them through updateLines', async () => {

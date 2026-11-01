@@ -45,7 +45,7 @@ export interface Clinic {
   /** Whether the internal therapist revenue-split feature is available. */
   enableTherapistSplit?: boolean;
   /** When a field feeding clinicBillingConfig()/computeVisitSplit() (hasPartner,
-   *  clinicSplitPct, taxPct, tdsBasis, clinicType) was last changed — lets
+   *  clinicSplitPct, taxPct, tdsBasis) was last changed — lets
    *  Workspace tell a therapist "your split changed on X" instead of their
    *  Net figure silently moving with no explanation. Null until the first
    *  such change after this field shipped. */

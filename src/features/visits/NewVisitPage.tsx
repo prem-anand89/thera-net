@@ -817,8 +817,8 @@ export function NewVisitPage() {
   }, [patient, therapistId, myTherapistId]);
 
   const activeTherapists = useMemo(() => (therapists ?? []).filter((t) => t.active), [therapists]);
-  // A solo practitioner (or a clinic with one active therapist) has nobody to assist.
-  const showAssistant = clinic.clinicType !== 'individual' && activeTherapists.length > 1;
+  // A clinic with one active therapist has nobody to assist.
+  const showAssistant = activeTherapists.length > 1;
   const splitEnabled = clinic.enableTherapistSplit !== false;
   const therapistsById = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t])),
