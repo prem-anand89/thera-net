@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SETTINGS_CARDS, matchSettingsCards, parseSettingsSearch } from './sections';
+import { SETTINGS_CARDS, SETTINGS_TAB_META, matchSettingsCards, parseSettingsSearch } from './sections';
 
 describe('parseSettingsSearch', () => {
   it('accepts the six current tabs', () => {
@@ -30,6 +30,22 @@ describe('parseSettingsSearch', () => {
     expect(parseSettingsSearch({ tab: 'nope' })).toEqual({});
     expect(parseSettingsSearch({ tab: 'billing', catalogView: 'packages' })).toEqual({ tab: 'billing' });
     expect(parseSettingsSearch({})).toEqual({});
+  });
+});
+
+describe('Schedule & Booking tab', () => {
+  it('holds the clinic hours and closures card next to the booking page', () => {
+    const owner = (id: string) => SETTINGS_CARDS.find((c) => c.id === id)?.tab;
+    expect(owner('settings-card-booking-hours')).toBe('booking');
+    expect(owner('settings-card-booking-online')).toBe('booking');
+    // everything else in General stays put, and Payments stays reachable on every plan
+    expect(owner('settings-card-payments')).toBe('general');
+    expect(SETTINGS_TAB_META.booking.label).toBe('Schedule & Booking');
+  });
+
+  it('finds the hours card by what people type', () => {
+    expect(matchSettingsCards('holiday').map((c) => c.id)).toContain('settings-card-booking-hours');
+    expect(matchSettingsCards('appointment duration').map((c) => c.tab)).toEqual(['booking']);
   });
 });
 

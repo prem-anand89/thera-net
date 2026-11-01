@@ -940,7 +940,7 @@ export function WorkspacePage() {
           </h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
             Today’s visits and packages aren’t showing because this login isn’t linked to a
-            therapist record yet. Ask your admin to set it from Settings → Team → Linked login.
+            therapist record yet. Ask your admin to open you under Settings → Team and add your email to invite you.
           </p>
         </section>
       )}

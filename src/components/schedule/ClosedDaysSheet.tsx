@@ -102,7 +102,7 @@ export function ClosedDaysSheet({
         <p className="mt-3 text-xs text-[var(--muted)]">
           Closed every week on the same day? Set that in{' '}
           <Link to="/settings" search={{ tab: 'booking' }} className="text-[var(--teal)] hover:underline">
-            Settings → Booking
+            Settings → Schedule &amp; Booking
           </Link>
           .
         </p>

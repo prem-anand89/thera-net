@@ -455,7 +455,6 @@ export function SettingsPage() {
           {activeTab === 'general' && (
             <>
               <ClinicProfileSection onDirtyChange={setProfileDirty} />
-              <ClinicHoursSection onDirtyChange={setClinicHoursDirty} />
               <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
               <ClinicalDocsSection onDirtyChange={setClinicalDocsDirty} />
               <PaymentsSection onDirtyChange={setPaymentsDirty} />
@@ -466,7 +465,7 @@ export function SettingsPage() {
               {unlinkedCount > 0 && (
                 <div className="rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
                   {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login.
-                  Set Linked login so their Workspace isn’t empty.
+                  Open them below and add their email to invite them, so their Workspace isn’t empty.
                 </div>
               )}
               <Therapists />
@@ -475,7 +474,12 @@ export function SettingsPage() {
             </>
           )}
           {activeTab === 'services' && <CatalogSection view={catalogView} onViewChange={setCatalogView} />}
-          {activeTab === 'booking' && <PatientCommsSection onDirtyChange={setPatientCommsDirty} />}
+          {activeTab === 'booking' && (
+            <>
+              <ClinicHoursSection onDirtyChange={setClinicHoursDirty} />
+              <PatientCommsSection onDirtyChange={setPatientCommsDirty} />
+            </>
+          )}
           {activeTab === 'billing' && (
             <>
               {canSeeBilling ? (
