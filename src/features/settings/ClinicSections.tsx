@@ -8,6 +8,8 @@ import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { type Clinic, type PaymentMethod } from '@/domain/types';
 import { paymentMethodLabel, paymentMethodOptions, partnerName } from '@/domain/paymentMethods';
 import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
+import { OpenDaysStrip } from './OpenDaysStrip';
+import { withOpenDays } from '@/domain/operatingHours';
 import { LetterheadPreview } from './LetterheadPreview';
 import { clampBufferHours } from './shiftUtils';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -619,7 +621,20 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
         <fieldset disabled={!editing} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
+              <p className="mb-1 text-xs font-medium text-[var(--muted)]">
+                Open days
+                <InfoTip text="The days the clinic is open every week. Holidays and one-off closures are set on the Schedule." />
+              </p>
+              <OpenDaysStrip closedWeekdays={form.closedWeekdays ?? []} disabled={!editing} onChange={(closedWeekdays) =>
+                  set({ closedWeekdays, ...(form.operatingHours ? { operatingHours: withOpenDays(form.operatingHours, closedWeekdays) } : {}) })
+                }
+              />
+            </div>
+
+            <div className="sm:col-span-2">
               <OperatingHoursEditor
+                editing={editing}
+                bufferHours={form.staffBookingBufferHours ?? 3}
                 operatingHours={form.operatingHours}
                 startHour={form.bookingStartHour ?? 9}
                 endHour={form.bookingEndHour ?? 17}
@@ -630,6 +645,10 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
                 }}
               />
             </div>
+
+            <p className="sm:col-span-2 border-t border-[var(--border)] pt-4 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Appointments
+            </p>
 
             <Field
               label={
@@ -651,73 +670,32 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
               </select>
             </Field>
 
-            <div>
-              <label htmlFor="staff-booking-buffer" className="mb-1 block text-xs font-medium text-[var(--muted)]">
-                Staff booking buffer (hours)
-              </label>
-              <input
+            <Field
+              label="Staff can book outside opening hours"
+              htmlFor="staff-booking-buffer"
+              hint="For early or late appointments that staff add. Patients booking online only see opening hours."
+            >
+              <select
                 id="staff-booking-buffer"
-                type="number"
-                min={0}
-                max={12}
-                step={1}
-                inputMode="numeric"
                 className={inputCls}
                 value={form.staffBookingBufferHours ?? 3}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  if (Number.isNaN(val)) return;
-                  set({ staffBookingBufferHours: clampBufferHours(val) });
-                }}
-              />
-              <span className="mt-1 block text-[11px] text-[var(--muted)]">
-                Staff can book up to this many hours before opening and after closing. 0 = clinic hours only. Patients on the public page are still limited to clinic hours.
-              </span>
-            </div>
-
-            <div className="sm:col-span-2">
-              <Field
-                label={
-                  <>
-                    Weekly closed days
-                    <InfoTip text="Select the regular recurring days of the week when the clinic is closed." />
-                  </>
-                }
+                onChange={(e) => set({ staffBookingBufferHours: clampBufferHours(Number(e.target.value)) })}
               >
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => {
-                    const isClosed = form.closedWeekdays?.includes(idx);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        disabled={!editing}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                          isClosed
-                            ? 'bg-[var(--rust)] border-[var(--rust)] text-white shadow-sm'
-                            : 'bg-white border-[var(--border)] text-[var(--ink)] hover:border-[var(--rust)]'
-                        } ${!editing ? 'cursor-default opacity-85' : 'cursor-pointer'}`}
-                        onClick={() => {
-                          const current = form.closedWeekdays || [];
-                          if (isClosed) {
-                            set({ closedWeekdays: current.filter((d) => d !== idx) });
-                          } else {
-                            set({ closedWeekdays: [...current, idx].sort() });
-                          }
-                        }}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-            </div>
+                {[...new Set([0, 1, 2, 3, 4, 5, 6, form.staffBookingBufferHours ?? 3])]
+                  .sort((x, y) => x - y)
+                  .map((hours) => (
+                    <option key={hours} value={hours}>
+                      {hours === 0 ? 'No, opening hours only' : `Up to ${hours} hour${hours === 1 ? '' : 's'} before opening and after closing`}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+
           </div>
         </fieldset>
         <p className="mt-3 text-xs text-[var(--muted)]">
-          Holidays, one-off closures, and individual therapist shift overrides are managed directly on the{' '}
-          <span className="font-medium text-[var(--ink)]">Schedule</span> calendar.
+          Holidays, one-off closures and a therapist's own hours are set on the{' '}
+          <span className="font-medium text-[var(--ink)]">Schedule</span>.
         </p>
         {editing && (
           <SectionSaveBar

@@ -1,4 +1,4 @@
-import { Field, inputCls } from '@/components/ui';
+import { Field, inputCls, Segmented } from '@/components/ui';
 import { draftBadge, SPLIT_MIN_GAP_MINUTES, switchMode, type ShiftDraft, type ShiftMode } from './shiftDraft';
 import { minutesToTimeInput, timeInputToMinutes } from './shiftUtils';
 
@@ -26,23 +26,7 @@ export function ShiftTimesEditor({ draft, onChange }: { draft: ShiftDraft; onCha
   return (
     <div className="space-y-3" data-testid="shift-times-editor">
       <div className="flex items-center justify-between gap-2">
-        <div role="radiogroup" aria-label="Shift type" className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
-          {MODES.map((mode) => (
-            <button
-              key={mode.value}
-              type="button"
-              role="radio"
-              aria-checked={draft.mode === mode.value}
-              title={mode.hint}
-              onClick={() => onChange(switchMode(draft, mode.value))}
-              className={`min-h-8 rounded-md px-3 text-xs font-medium ${
-                draft.mode === mode.value ? 'bg-[var(--surface)] text-[var(--teal-strong)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'
-              }`}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
+        <Segmented label="Shift type" options={MODES} value={draft.mode} onChange={(mode) => onChange(switchMode(draft, mode))} />
         <span className="text-xs font-medium text-[var(--teal)]" data-testid="shift-badge">
           {draftBadge(draft)}
         </span>

@@ -42,7 +42,7 @@ export function shiftsFromIntervals(day: unknown): Shifts | null {
   return null;
 }
 
-const sameShifts = (a: Shifts, b: Shifts) =>
+export const sameShifts = (a: Shifts, b: Shifts) =>
   a.s1[0] === b.s1[0] && a.s1[1] === b.s1[1] && (a.s2 === null ? b.s2 === null : b.s2 !== null && a.s2[0] === b.s2[0] && a.s2[1] === b.s2[1]);
 
 /**
@@ -55,15 +55,66 @@ export function shiftsFromOperating(
   fallback: { startHour: number; endHour: number }
 ): { uniform: Shifts | null; perDay: Record<number, Shifts> } {
   const block: Shifts = { s1: [fallback.startHour * 60, fallback.endHour * 60], s2: null };
-  const perDay: Record<number, Shifts> = {};
+  const stored = new Map<number, Shifts | null>();
   for (const day of openWeekdays) {
-    const stored = hours && typeof hours === 'object' ? shiftsFromIntervals((hours as Record<string, unknown>)[String(day)]) : null;
-    perDay[day] = stored ?? block;
+    stored.set(day, hours && typeof hours === 'object' ? shiftsFromIntervals((hours as Record<string, unknown>)[String(day)]) : null);
   }
+  // A day with nothing stored (one just reopened) shows the hours of the first day that has some, not the bare envelope.
+  const fallbackDay = openWeekdays.map((d) => stored.get(d)).find((s): s is Shifts => Boolean(s)) ?? block;
+  const perDay: Record<number, Shifts> = {};
+  for (const day of openWeekdays) perDay[day] = stored.get(day) ?? fallbackDay;
   const days = openWeekdays.length > 0 ? openWeekdays : [1];
   const first = perDay[days[0]] ?? block;
   const uniform = openWeekdays.every((d) => sameShifts(perDay[d], first)) ? first : null;
   return { uniform, perDay };
+}
+
+/** Open weekdays that share exactly the same hours, in the order given (the editor shows one card per group). */
+export function groupDays(perDay: Record<number, Shifts>, openWeekdays: readonly number[]): { days: number[]; shifts: Shifts }[] {
+  const groups: { days: number[]; shifts: Shifts }[] = [];
+  for (const day of openWeekdays) {
+    const shifts = perDay[day];
+    if (!shifts) continue;
+    const group = groups.find((g) => sameShifts(g.shifts, shifts));
+    if (group) group.days.push(day);
+    else groups.push({ days: [day], shifts });
+  }
+  return groups;
+}
+
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON_FIRST = [1, 2, 3, 4, 5, 6, 0];
+
+/** "Mon–Fri, Sun": runs of consecutive weekdays (Monday first) joined, the rest listed. */
+export function daysLabel(days: readonly number[]): string {
+  const at = MON_FIRST.filter((d) => days.includes(d)).map((d) => MON_FIRST.indexOf(d));
+  const parts: string[] = [];
+  for (let i = 0; i < at.length; ) {
+    let j = i;
+    while (j + 1 < at.length && at[j + 1] === at[j] + 1) j++;
+    const first = SHORT_DAYS[MON_FIRST[at[i]]];
+    const last = SHORT_DAYS[MON_FIRST[at[j]]];
+    parts.push(j - i >= 2 ? `${first}–${last}` : at.slice(i, j + 1).map((k) => SHORT_DAYS[MON_FIRST[k]]).join(', '));
+    i = j + 1;
+  }
+  return parts.join(', ');
+}
+
+/**
+ * Stored hours after the open days change: a reopened day with no hours gets the first open day's, so it is never
+ * saved open but empty (which would hide it from online booking). Null stays null (one plain block for every day).
+ */
+export function withOpenDays(hours: WorkingHours | null | undefined, closedWeekdays: readonly number[]): WorkingHours | null {
+  if (!hours) return null;
+  const open = [1, 2, 3, 4, 5, 6, 0].filter((d) => !closedWeekdays.includes(d));
+  const has = (d: number) => shiftsFromIntervals((hours as Record<string, unknown>)[String(d)]) !== null;
+  const source = open.find(has);
+  if (source === undefined) return hours;
+  const next: WorkingHours = { ...hours };
+  for (const day of open) {
+    if (!has(day)) next[String(day) as keyof WorkingHours] = (hours as Record<string, [number, number][]>)[String(source)];
+  }
+  return next;
 }
 
 /** The outer envelope of stored hours (earliest start rounded down, latest end rounded up, in whole hours). */

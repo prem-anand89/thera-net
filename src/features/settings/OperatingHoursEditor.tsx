@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
-import { Field } from '@/components/ui';
+import { Field, InfoTip, Segmented } from '@/components/ui';
 import {
   closedGapLabel,
+  daysLabel,
   describeShifts,
   envelopeOf,
+  groupDays,
+  intervalsOf,
   operatingFromDays,
   operatingFromShifts,
   shiftsFromOperating,
   shiftsProblem,
+  sameShifts,
   splitSession,
   type Shifts,
 } from '@/domain/operatingHours';
@@ -93,102 +97,163 @@ const KINDS = [
   { value: 'split', label: 'Split', hint: 'Closed for lunch, or between a morning and an evening session' },
 ] as const;
 
-/** "9 AM" or "1:30 PM": short enough to sit under a stretch of the day bar. */
-function compactClock(minutes: number): string {
+/** "9 AM" or "12 PM": a ruler label. */
+function hourTick(minutes: number): string {
   const h24 = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  return `${h12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h24 < 12 ? 'AM' : 'PM'}`;
+  return `${h12} ${h24 < 12 ? 'AM' : 'PM'}`;
+}
+
+/** The stretch of the day every bar is drawn on: opening to closing for the whole week, widened by the staff-only hours. */
+export type BarRange = { lo: number; hi: number; openFrom: number; openTo: number };
+
+export function barRange(groups: readonly { shifts: Shifts }[], bufferHours: number): BarRange | null {
+  if (groups.length === 0) return null;
+  const openFrom = Math.floor(Math.min(...groups.map((g) => g.shifts.s1[0])) / 60) * 60;
+  const openTo = Math.ceil(Math.max(...groups.map((g) => (g.shifts.s2 ?? g.shifts.s1)[1])) / 60) * 60;
+  const buffer = Math.max(0, Math.round(bufferHours)) * 60;
+  return { lo: Math.max(0, openFrom - buffer), hi: Math.min(1440, openTo + buffer), openFrom, openTo };
 }
 
 /**
- * The day drawn to scale, labelled by itself: each open stretch is a teal block carrying its length, a break is a
- * hatched block carrying its length, and the times sit under each stretch ("9 AM–1 PM", "1 PM–2 PM"). Reading the bar
- * alone gives the opening time, the closing time and the break.
+ * Ruler marks from the start of the bar to its end, at most about six, in steps of 1 to 4 hours (a step that divides
+ * the stretch evenly when one does). The end is always marked; a mark too close before it is dropped.
  */
-function DayBar({ shifts }: { shifts: Shifts }) {
-  const start = shifts.s1[0];
-  const end = shifts.s2 ? shifts.s2[1] : shifts.s1[1];
-  if (end <= start) return null;
-  const parts: { open: boolean; from: number; to: number }[] = [{ open: true, from: shifts.s1[0], to: shifts.s1[1] }];
-  if (shifts.s2) {
-    parts.push({ open: false, from: shifts.s1[1], to: shifts.s2[0] }, { open: true, from: shifts.s2[0], to: shifts.s2[1] });
-  }
-  const grow = (part: { from: number; to: number }) => ({ flex: `${Math.max(part.to - part.from, 1)} 1 0%` });
+export function rulerTicks(lo: number, hi: number): number[] {
+  const hours = (hi - lo) / 60;
+  if (hours <= 0) return [lo];
+  const fits = [1, 2, 3, 4].filter((s) => hours / s <= 6);
+  const step = (fits.find((s) => hours % s === 0) ?? fits[0] ?? Math.ceil(hours / 6)) * 60;
+  const ticks: number[] = [];
+  for (let t = lo; t < hi; t += step) ticks.push(t);
+  if (ticks.length > 1 && hi - ticks[ticks.length - 1] < step * 0.6) ticks.pop();
+  ticks.push(hi);
+  return ticks;
+}
+
+/**
+ * The day as a timeline with no text on the bar: it spans the clinic's opening hours plus the time staff may book
+ * outside them (light teal at each end), the open sessions in teal, a closure hatched in amber. An hour ruler sits
+ * underneath, from its start to its end (`rulerTicks`). All cards share one range so they line up.
+ */
+function DayBar({ shifts, range }: { shifts: Shifts; range: BarRange }) {
+  const { lo, hi } = range;
+  if (hi <= lo) return null;
+  const at = (minutes: number) => ((minutes - lo) / (hi - lo)) * 100;
+  const span = (from: number, to: number) => ({ left: `${at(from)}%`, width: `${at(to) - at(from)}%` });
+  const ticks = rulerTicks(lo, hi);
   return (
     <div data-testid="day-bar" role="img" aria-label={`${describeShifts(shifts)}${closedGapLabel(shifts) ? `. ${closedGapLabel(shifts)}` : ''}`}>
-      <div className="flex h-8 gap-0.5">
-        {parts.map((part, i) => (
-          <div
-            key={i}
+      <div className="relative h-3 overflow-hidden rounded-full bg-[var(--paper)] ring-1 ring-inset ring-[var(--border)]">
+        {range.openFrom > lo && <span data-part="staff" className="absolute inset-y-0 bg-[var(--teal-light)]" style={span(lo, range.openFrom)} />}
+        {range.openTo < hi && <span data-part="staff" className="absolute inset-y-0 bg-[var(--teal-light)]" style={span(range.openTo, hi)} />}
+        {shifts.s2 && (
+          <span
+            data-part="closed"
+            className="absolute inset-y-0"
             style={{
-              ...grow(part),
-              ...(part.open ? {} : { backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 4px, var(--border) 4px 6px)' }),
+              ...span(shifts.s1[1], shifts.s2[0]),
+              backgroundImage: 'repeating-linear-gradient(135deg, var(--amber) 0 1.5px, transparent 1.5px 5px)',
+              opacity: 0.6,
             }}
-            className={`flex min-w-0 items-center justify-center overflow-hidden text-[11px] font-medium ${
-              part.open
-                ? `bg-[var(--teal)] text-white ${i === 0 ? 'rounded-l-md' : ''} ${i === parts.length - 1 ? 'rounded-r-md' : ''}`
-                : 'border-y border-dashed border-[var(--amber)] text-[var(--amber)]'
-            }`}
-          >
-            <span className="truncate px-1">{formatDuration(part.to - part.from)}</span>
-          </div>
+          />
+        )}
+        {[shifts.s1, ...(shifts.s2 ? [shifts.s2] : [])].map(([from, to]) => (
+          <span key={from} data-part="open" className="absolute inset-y-0 rounded-full bg-[var(--teal)]" style={span(from, to)} />
         ))}
       </div>
-      <div className="mt-1 flex gap-0.5 text-[10px] text-[var(--muted)]">
-        {parts.map((part, i) => (
-          <div key={i} style={grow(part)} className={`min-w-0 text-center whitespace-nowrap ${part.open ? 'truncate' : 'text-[var(--amber)]'}`}>
-            {compactClock(part.from)}–{compactClock(part.to)}
-          </div>
-        ))}
+      <div className="relative mt-1 h-3.5 text-[10px] leading-none text-[var(--muted)]">
+        {ticks.map((t) => {
+          const pct = at(t);
+          return (
+            <span
+              key={t}
+              className="absolute whitespace-nowrap"
+              style={{ left: `${pct}%`, transform: pct < 6 ? 'none' : pct > 94 ? 'translateX(-100%)' : 'translateX(-50%)' }}
+            >
+              {hourTick(t)}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ShiftsFields({ shifts, onChange, idPrefix }: { shifts: Shifts; onChange: (next: Shifts) => void; idPrefix: string }) {
+/** What the colours on the day bar mean; shown once under the cards. */
+function BarLegend({ staff, closed }: { staff: boolean; closed: boolean }) {
+  const swatch = 'inline-block h-2 w-3.5 rounded-sm align-middle';
+  return (
+    <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]" data-testid="bar-legend">
+      <span>
+        <span className={`${swatch} bg-[var(--teal)]`} /> Open
+      </span>
+      {closed && (
+        <span>
+          <span className={swatch} style={{ backgroundImage: 'repeating-linear-gradient(135deg, var(--amber) 0 1.5px, transparent 1.5px 5px)' }} /> Closed
+        </span>
+      )}
+      {staff && (
+        <span>
+          <span className={`${swatch} bg-[var(--teal-light)] ring-1 ring-inset ring-[var(--border)]`} /> Staff can book
+        </span>
+      )}
+    </p>
+  );
+}
+
+function ShiftsFields({
+  shifts,
+  onChange,
+  idPrefix,
+  range,
+}: {
+  shifts: Shifts;
+  onChange: (next: Shifts) => void;
+  idPrefix: string;
+  range: BarRange | null;
+}) {
   const kind = shifts.s2 ? 'split' : 'continuous';
   const choose = (next: (typeof KINDS)[number]['value']) => {
-    if (next === kind) return;
     // Continuous to Split cuts the day in two for you to adjust; back to Continuous joins it from first start to last end.
     onChange(next === 'split' ? splitSession(shifts.s1) : { s1: [shifts.s1[0], shifts.s2 ? shifts.s2[1] : shifts.s1[1]], s2: null });
   };
   const closed = closedGapLabel(shifts);
+  const problem = shiftsProblem(shifts);
+  const openMinutes = intervalsOf(shifts).reduce((sum, [from, to]) => sum + Math.max(0, to - from), 0);
   return (
     <div className="space-y-2.5">
-      <div role="radiogroup" aria-label="Hours type" className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
-        {KINDS.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            role="radio"
-            aria-checked={kind === item.value}
-            title={item.hint}
-            onClick={() => choose(item.value)}
-            className={`min-h-9 rounded-md px-3 text-xs font-medium ${
-              kind === item.value ? 'bg-[var(--surface)] text-[var(--teal-strong)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Segmented label="Hours type" options={KINDS} value={kind} onChange={choose} />
       <SessionRow label={shifts.s2 ? 'Session 1' : 'Open'} idPrefix={`${idPrefix}-s1`} value={shifts.s1} onChange={(s1) => onChange({ ...shifts, s1 })} />
       {shifts.s2 && <SessionRow label="Session 2" idPrefix={`${idPrefix}-s2`} value={shifts.s2} onChange={(s2) => onChange({ ...shifts, s2 })} />}
-      <DayBar shifts={shifts} />
-      {closed && shifts.s2 && (
-        <p className="text-xs font-medium text-[var(--amber)]">
-          {closed} · {formatDuration(shifts.s2[0] - shifts.s1[1])} break
+      {range && <DayBar shifts={shifts} range={range} />}
+      {problem ? (
+        <p className="text-xs font-medium text-[var(--rust)]" role="alert">
+          {problem}
+        </p>
+      ) : (
+        <p className="text-xs text-[var(--muted)]" data-testid="hours-summary">
+          {formatDuration(openMinutes)} open
+          {closed && shifts.s2 && (
+            <span className="font-medium text-[var(--amber)]">
+              {' · '}
+              {closed} ({formatDuration(shifts.s2[0] - shifts.s1[1])})
+            </span>
+          )}
         </p>
       )}
     </div>
   );
 }
 
+const SHORT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 /**
- * Settings → Schedule & Booking → Hours & closures: when the clinic is open. One session a day, or a second after a
- * closure in the middle of the day (a lunch break, or morning and evening sessions); the same every open day, or
- * customised per day. Saves through `onChange` as the stored hours plus the envelope hours that go with them.
+ * Settings → Schedule & Booking → Hours & closures: when the clinic is open. The days that share the most common hours
+ * are the "Usual hours" card. Any day that differs sits on a "Different hours" card whose day tiles really toggle: tap
+ * a day to give it these hours, tap it again to send it back to the usual hours. "+ Add different hours for some days"
+ * starts a card copied from the usual hours; set its times, then pick its days. One or two sessions a day
+ * (Continuous | Split). Every card's day bar uses the same range: opening to closing plus the staff-only hours.
  */
 export function OperatingHoursEditor({
   operatingHours,
@@ -196,89 +261,154 @@ export function OperatingHoursEditor({
   endHour,
   closedWeekdays,
   onChange,
+  editing = true,
+  bufferHours = 0,
 }: {
   operatingHours: WorkingHours | null | undefined;
   startHour: number;
   endHour: number;
   closedWeekdays: readonly number[];
   onChange: (change: OperatingHoursChange, problem: string | null) => void;
+  /** False while the section is read-only: hides the add / remove / cancel actions. */
+  editing?: boolean;
+  /** Hours staff may book before opening and after closing; widens the day bar. */
+  bufferHours?: number;
 }) {
   const openWeekdays = useMemo(() => WEEK_ORDER.filter((d) => !closedWeekdays.includes(d)), [closedWeekdays]);
   const read = useMemo(
     () => shiftsFromOperating(operatingHours, openWeekdays, { startHour, endHour }),
     [operatingHours, openWeekdays, startHour, endHour]
   );
-  const [perDayMode, setPerDayMode] = useState(read.uniform === null);
+  const groups = useMemo(() => groupDays(read.perDay, openWeekdays), [read.perDay, openWeekdays]);
+  // The usual hours: the set most days share (the earliest such set on a tie).
+  const usual = groups.reduce<(typeof groups)[number] | undefined>((best, g) => (!best || g.days.length > best.days.length ? g : best), undefined);
+  const exceptions = groups.filter((g) => g !== usual);
+  // A new set of hours no day uses yet; it becomes a card of its own when a day is picked for it.
+  const [draft, setDraft] = useState<Shifts | null>(null);
+  const range = barRange(draft ? [...groups, { shifts: draft }] : groups, bufferHours);
 
-  function emit(uniform: Shifts | null, perDay: Record<number, Shifts>) {
+  /** Stores a whole week's hours: one pattern when every open day matches, otherwise per day. */
+  function commit(perDay: Record<number, Shifts>) {
+    const first = perDay[openWeekdays[0]];
+    const same = first !== undefined && openWeekdays.every((d) => perDay[d] && sameShifts(perDay[d], first));
+    const uniform = same ? first : null;
     const change = changeFor(uniform, perDay, openWeekdays);
     if (change) onChange(change, operatingProblem(uniform, perDay, openWeekdays));
   }
 
-  const shared: Shifts = read.uniform ?? read.perDay[openWeekdays[0]] ?? { s1: [startHour * 60, endHour * 60], s2: null };
+  const assign = (days: readonly number[], shifts: Shifts) => {
+    const next = { ...read.perDay };
+    for (const d of days) next[d] = shifts;
+    commit(next);
+  };
+
+  const several = openWeekdays.length > 1;
+  const usualShifts: Shifts = usual?.shifts ?? { s1: [startHour * 60, endHour * 60], s2: null };
+  const anyClosure = groups.some((g) => g.shifts.s2) || Boolean(draft?.s2);
+
+  // Small square letter tiles that toggle: lit = this card's day. Each carries its full name for screen readers.
+  const dayTiles = (current: readonly number[], onToggle: (day: number, on: boolean) => void, label: string, disabled = false) => (
+    <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
+      {openWeekdays.map((day) => {
+        const on = current.includes(day);
+        return (
+          <button
+            key={day}
+            type="button"
+            aria-pressed={on}
+            aria-label={SHORT_DAY[day]}
+            title={SHORT_DAY[day]}
+            disabled={disabled}
+            onClick={() => onToggle(day, on)}
+            className={`size-9 rounded-md border text-xs font-semibold disabled:opacity-50 ${
+              on ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--teal)]'
+            }`}
+          >
+            {SHORT_DAY[day][0]}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const card = 'space-y-2.5 rounded-lg border border-[var(--border)] p-2.5';
+  const draftMatches = draft !== null && groups.some((g) => sameShifts(g.shifts, draft));
 
   return (
     <Field
-      htmlFor={perDayMode ? `oh-${openWeekdays[0]}-s1-start` : 'oh-s1-start'}
+      htmlFor={`oh-g${usual?.days[0] ?? 1}-s1-start`}
       label={
         <>
-          Clinic operating hours
-          <span className="ml-1 text-[11px] font-normal text-[var(--muted)]">when patients can be booked</span>
+          Opening hours
+          <InfoTip text="Patients can only book inside these hours. Use Split if the clinic closes in the middle of the day." />
         </>
       }
     >
       <div className="space-y-3" data-testid="operating-hours-editor">
-        {openWeekdays.length > 1 && (
-          <div role="radiogroup" aria-label="Hours by day" className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
-            {[
-              { perDay: false, label: 'Same every day' },
-              { perDay: true, label: 'Different each day' },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                role="radio"
-                aria-checked={perDayMode === item.perDay}
-                onClick={() => {
-                  if (perDayMode === item.perDay) return;
-                  setPerDayMode(item.perDay);
-                  // Back to one pattern for every open day: the first open day's hours.
-                  if (!item.perDay) emit(shared, read.perDay);
-                }}
-                className={`min-h-9 rounded-md px-3 text-xs font-medium ${
-                  perDayMode === item.perDay ? 'bg-[var(--surface)] text-[var(--teal-strong)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+        {usual && (
+          <div role="group" aria-label={`Hours for ${daysLabel(usual.days)}`} className={exceptions.length || draft ? card : 'space-y-2.5'}>
+            {(exceptions.length > 0 || draft) && (
+              <p className="text-xs font-semibold text-[var(--ink)]">
+                Usual hours <span className="font-normal text-[var(--muted)]">· {daysLabel(usual.days)}</span>
+              </p>
+            )}
+            <ShiftsFields shifts={usual.shifts} idPrefix={`oh-g${usual.days[0]}`} range={range} onChange={(next) => assign(usual.days, next)} />
           </div>
         )}
-        {!perDayMode ? (
-          <ShiftsFields shifts={shared} idPrefix="oh" onChange={(next) => emit(next, read.perDay)} />
-        ) : (
-          <div className="space-y-3">
-            {openWeekdays.map((day) => (
-              <div key={day} className="rounded-lg border border-[var(--border)] p-2.5">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-[var(--ink)]">{WEEKDAY_NAMES[day]}</p>
-                  <button
-                    type="button"
-                    aria-label={`Copy ${WEEKDAY_NAMES[day]}'s hours to every open day`}
-                    className="min-h-8 rounded-md px-2 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                    onClick={() => emit(null, Object.fromEntries(openWeekdays.map((d) => [d, read.perDay[day]])))}
-                  >
-                    Copy to all days
-                  </button>
-                </div>
-                <ShiftsFields
-                  shifts={read.perDay[day]}
-                  idPrefix={`oh-${day}`}
-                  onChange={(next) => emit(null, { ...read.perDay, [day]: next })}
-                />
-              </div>
-            ))}
+        {exceptions.map((group) => (
+          <div key={group.days[0]} role="group" aria-label={`Hours for ${daysLabel(group.days)}`} className={card}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-[var(--ink)]">
+                Different hours <span className="font-normal text-[var(--muted)]">· {daysLabel(group.days)}</span>
+              </p>
+              {editing && (
+                <button
+                  type="button"
+                  className="min-h-8 rounded-md px-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                  onClick={() => assign(group.days, usualShifts)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {dayTiles(
+              group.days,
+              (day, on) => assign([day], on ? usualShifts : group.shifts),
+              `Days with these hours (${daysLabel(group.days)})`
+            )}
+            <ShiftsFields shifts={group.shifts} idPrefix={`oh-g${group.days[0]}`} range={range} onChange={(next) => assign(group.days, next)} />
           </div>
+        ))}
+        {editing && draft && (
+          <div role="group" aria-label="New hours" className="space-y-2.5 rounded-lg border border-dashed border-[var(--teal)] p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-[var(--ink)]">Different hours</p>
+              <button type="button" className="min-h-8 rounded-md px-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]" onClick={() => setDraft(null)}>
+                Cancel
+              </button>
+            </div>
+            <ShiftsFields shifts={draft} idPrefix="oh-new" range={range} onChange={setDraft} />
+            <p className="text-xs text-[var(--muted)]">{draftMatches ? 'Change the times above, then pick the days that use them.' : 'Which days use these hours?'}</p>
+            {dayTiles(
+              [],
+              (day) => {
+                assign([day], draft);
+                setDraft(null);
+              },
+              'Days with the new hours',
+              draftMatches
+            )}
+          </div>
+        )}
+        {range && (range.lo < range.openFrom || anyClosure) && <BarLegend staff={range.lo < range.openFrom} closed={anyClosure} />}
+        {editing && several && !draft && (
+          <button
+            type="button"
+            className="min-h-9 rounded-lg border border-dashed border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+            onClick={() => setDraft(usualShifts)}
+          >
+            + Add different hours for some days
+          </button>
         )}
       </div>
     </Field>

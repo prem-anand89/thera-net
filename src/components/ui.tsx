@@ -684,6 +684,42 @@ export function MultiToggle({
   );
 }
 
+/**
+ * A small two-to-four option switch in one rounded bar (Continuous | Split). Radio semantics; each option can carry a
+ * hint shown on hover. For one choice that is always set, unlike SingleToggle, which can be cleared.
+ */
+export function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { value: T; label: string; hint?: string }[];
+  value: T;
+  onChange: (next: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          title={option.hint}
+          onClick={() => option.value !== value && onChange(option.value)}
+          className={`min-h-9 rounded-md px-3 text-xs font-medium ${
+            value === option.value ? 'bg-[var(--surface)] text-[var(--teal-strong)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Toggle-chip single-select: value is the one selected option value, or
  *  '' for none. Clicking the already-selected chip clears it back to ''
  *  rather than locking once picked, matching the "not assessed"

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   closedGapLabel,
+  daysLabel,
   describeShifts,
   envelopeOf,
+  groupDays,
+  withOpenDays,
   operatingFromDays,
   operatingFromShifts,
   shiftsFromIntervals,
@@ -36,9 +39,10 @@ describe('operatingFromShifts / shiftsFromOperating', () => {
     expect(shiftsFromOperating(hours, [1, 2], { startHour: 9, endHour: 17 }).uniform).toEqual(split);
   });
 
-  it('a day with no entry reads as the clinic block', () => {
+  it('a day with no entry reads as the first stored day, and with nothing stored at all as the clinic block', () => {
     const hours = operatingFromDays({ 1: split }, [1]);
-    expect(shiftsFromOperating(hours, [1, 2], { startHour: 9, endHour: 17 }).perDay[2]).toEqual({ s1: [540, 1020], s2: null });
+    expect(shiftsFromOperating(hours, [1, 2], { startHour: 9, endHour: 17 }).perDay[2]).toEqual(split);
+    expect(shiftsFromOperating(null, [1, 2], { startHour: 9, endHour: 17 }).perDay[2]).toEqual({ s1: [540, 1020], s2: null });
   });
 });
 
@@ -94,5 +98,52 @@ describe('splitSession', () => {
 
   it('leaves a very short day as one session', () => {
     expect(splitSession([540, 560])).toEqual({ s1: [540, 560], s2: null });
+  });
+});
+
+describe('groupDays', () => {
+  const a: Shifts = { s1: [540, 780], s2: [960, 1200] };
+  const b: Shifts = { s1: [540, 780], s2: null };
+
+  it('puts open days with identical hours together, in the order given', () => {
+    const groups = groupDays({ 1: a, 2: a, 3: b, 4: a }, [1, 2, 3, 4]);
+    expect(groups).toEqual([
+      { days: [1, 2, 4], shifts: a },
+      { days: [3], shifts: b },
+    ]);
+  });
+
+  it('one group when every day matches, none when there are no open days', () => {
+    expect(groupDays({ 1: a, 2: a }, [1, 2])).toHaveLength(1);
+    expect(groupDays({}, [])).toEqual([]);
+  });
+});
+
+describe('daysLabel', () => {
+  it('joins runs of three or more consecutive days and lists the rest', () => {
+    expect(daysLabel([1, 2, 3, 4, 5])).toBe('Mon–Fri');
+    expect(daysLabel([1, 2, 3, 5, 6, 0])).toBe('Mon–Wed, Fri–Sun');
+    expect(daysLabel([1, 2])).toBe('Mon, Tue');
+    expect(daysLabel([6])).toBe('Sat');
+    expect(daysLabel([0, 1, 2])).toBe('Mon, Tue, Sun');
+  });
+});
+
+describe('withOpenDays', () => {
+  const split = [[540, 780], [960, 1200]];
+  it('gives a reopened day the first open day’s hours, so it is never saved open but empty', () => {
+    const next = withOpenDays({ '1': split, '2': [[540, 1020]] } as never, [0, 3, 4, 5]);
+    expect(next?.['6']).toEqual(split);
+    expect(next?.['2']).toEqual([[540, 1020]]);
+  });
+  it('null stays null', () => {
+    expect(withOpenDays(null, [0])).toBeNull();
+  });
+});
+
+describe('shiftsFromOperating with a day that has nothing stored', () => {
+  it('shows the first stored day’s hours for it, not the bare envelope', () => {
+    const read = shiftsFromOperating({ '1': [[540, 780], [960, 1200]] } as never, [1, 6], { startHour: 9, endHour: 20 });
+    expect(read.perDay[6]).toEqual({ s1: [540, 780], s2: [960, 1200] });
   });
 });
