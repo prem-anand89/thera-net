@@ -7,7 +7,6 @@ import type { TdsBasis } from '@/domain/split';
 import { btnSecondary, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
 import { toFriendlyMessage } from '@/lib/errors';
-import { isValidUpiVpa } from '@/domain/upiPay';
 import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton, BoolToggle } from './settingsShared';
 
 type BillingFields = Pick<
@@ -17,14 +16,10 @@ type BillingFields = Pick<
   | 'fyStartMonth'
   | 'invoicingAccess'
   | 'invoicePolicy'
-  | 'upiVpa'
-  | 'upiPayeeName'
-  | 'upiQrPath'
-  | 'upiQrEnabled'
 >;
 
 export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
+  const { form, set, save, cancel, dirty, saved, busy, error } =
     useClinicSectionForm<BillingFields>(
       (c) => ({
         invoicePrefix: c.invoicePrefix,
@@ -32,10 +27,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         fyStartMonth: c.fyStartMonth,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
         invoicePolicy: c.invoicePolicy ?? 'on_request',
-        upiVpa: c.upiVpa ?? '',
-        upiPayeeName: c.upiPayeeName ?? '',
-        upiQrPath: c.upiQrPath ?? null,
-        upiQrEnabled: c.upiQrEnabled ?? false,
       }),
       onDirtyChange
     );
@@ -43,44 +34,15 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
   useEffect(() => {
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
-  const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
-
-  async function uploadUpiQr(file: File) {
-    setError(null);
-    const supabase = getSupabase();
-    if (!supabase || !navigator.onLine) {
-      setError('QR upload needs a connection.');
-      return;
-    }
-    const path = `${clinic.id}/upi-qr-${Date.now()}.${file.name.split('.').pop()}`;
-    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
-    if (uploadError) {
-      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
-      return;
-    }
-    await saveFieldNow({ upiQrPath: path } as Partial<BillingFields>);
-  }
-
-
-
   async function saveBilling() {
-    const vpa = (form.upiVpa ?? '').trim();
-    if (form.upiQrEnabled && vpa && !isValidUpiVpa(vpa)) {
-      setError('Enter a valid UPI ID (e.g. clinic@okaxis) or turn UPI QR off.');
-      return;
-    }
-    if (form.upiQrEnabled && !vpa && !form.upiQrPath) {
-      setError('Add a UPI ID or upload a QR image before turning UPI QR on.');
-      return;
-    }
     await save();
   }
 
   return (
     <SectionCard
       id="settings-card-billing-invoicing"
-      title="Modules & invoicing"
-      action={editing ? undefined : <SetOnceEditButton label="Edit modules & invoicing" onClick={() => setEditing(true)} />}
+      title="Billing & invoicing"
+      action={editing ? undefined : <SetOnceEditButton label="Edit billing & invoicing" onClick={() => setEditing(true)} />}
     >
       <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -156,74 +118,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
             </select>
           </Field>
       </div>
-
-      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">
-        UPI collection
-      </h3>
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        One clinic UPI for the front desk. When collection method is UPI, staff can show a QR the
-        patient scans. A UPI ID builds a QR with the visit amount and Patient ID in the note; an
-        uploaded image is the fallback.
-      </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              Show UPI QR at collection
-              <InfoTip text="When on, New visit and Take payment show a Scan to pay sheet if the method is UPI." />
-            </>
-          }
-        >
-          <BoolToggle
-            value={form.upiQrEnabled ?? false}
-            onChange={(v) => set({ upiQrEnabled: v })}
-          />
-        </Field>
-        {form.upiQrEnabled && (
-          <>
-            <Field label="UPI ID (VPA)">
-              <input
-                className={inputCls}
-                placeholder="clinic@okaxis"
-                value={form.upiVpa ?? ''}
-                onChange={(e) => set({ upiVpa: e.target.value })}
-                autoComplete="off"
-              />
-            </Field>
-            <Field
-              label={
-                <>
-                  Payee name
-                  <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
-                </>
-              }
-            >
-              <input
-                className={inputCls}
-                placeholder={clinic.name}
-                value={form.upiPayeeName ?? ''}
-                onChange={(e) => set({ upiPayeeName: e.target.value })}
-              />
-            </Field>
-            <Field label="QR image (optional)">
-              <input
-                type="file"
-                accept="image/*"
-                className={inputCls}
-                onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
-              />
-              {qrPreviewUrl && (
-                <img
-                  src={qrPreviewUrl}
-                  alt="Uploaded clinic UPI QR"
-                  className="mt-2 h-24 w-24 object-contain"
-                />
-              )}
-            </Field>
-          </>
-        )}
-      </div>
-
 
       </fieldset>
       {editing && (

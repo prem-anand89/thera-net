@@ -52,6 +52,8 @@ describe('Schedule & Booking tab', () => {
 describe('matchSettingsCards', () => {
   it('finds the exact card that owns a setting', () => {
     expect(matchSettingsCards('gst').map((c) => c.id)).toEqual(['settings-card-billing-invoicing']);
+    expect(matchSettingsCards('upi').map((c) => c.id)).toEqual(['settings-card-payments']);
+    expect(matchSettingsCards('vpa').map((c) => c.id)).toEqual(['settings-card-payments']);
     expect(matchSettingsCards('whatsapp').map((c) => c.id)).toEqual(['settings-card-booking-online']);
     expect(matchSettingsCards('backup').map((c) => c.id)).toEqual(['settings-card-account-backup']);
   });

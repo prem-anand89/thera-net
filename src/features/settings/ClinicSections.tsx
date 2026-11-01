@@ -12,6 +12,7 @@ import { withOpenDays } from '@/domain/operatingHours';
 import { LetterheadPreview } from './LetterheadPreview';
 import { clampBufferHours } from './shiftUtils';
 import { toFriendlyMessage } from '@/lib/errors';
+import { isValidUpiVpa } from '@/domain/upiPay';
 import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton, BoolToggle } from './settingsShared';
 
 type ProfileFields = Pick<
@@ -633,6 +634,7 @@ export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: 
               <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
             </Field>
           </div>
+
         </fieldset>
         {editing && (
           <SectionSaveBar
@@ -652,18 +654,55 @@ export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: 
   );
 }
 
-type PaymentsFields = Pick<Clinic, 'defaultPaymentMethod'>;
+type PaymentsFields = Pick<Clinic, 'defaultPaymentMethod' | 'upiVpa' | 'upiPayeeName' | 'upiQrPath' | 'upiQrEnabled'>;
 
 /**
  * What payment screens start with. Who collects patient payments, for a clinic with a partner, is set in
  * Billing → Partner & split; here it only locks the default to "Collected by {partner}" when the partner collects.
- * On General (not Billing) so every plan reaches it.
+ * Also the clinic's UPI collection (ID, payee name, QR image): New visit and Take payment show a Scan to pay sheet from
+ * it, and Lite can collect by UPI, so it lives on General (not Billing) where every plan reaches it.
  */
 export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { clinic, form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<PaymentsFields>(
-    (c) => ({ defaultPaymentMethod: c.defaultPaymentMethod ?? null }),
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } = useClinicSectionForm<PaymentsFields>(
+    (c) => ({
+      defaultPaymentMethod: c.defaultPaymentMethod ?? null,
+      upiVpa: c.upiVpa ?? '',
+      upiPayeeName: c.upiPayeeName ?? '',
+      upiQrPath: c.upiQrPath ?? null,
+      upiQrEnabled: c.upiQrEnabled ?? false,
+    }),
     onDirtyChange
   );
+  const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
+
+  async function uploadUpiQr(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('QR upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/upi-qr-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ upiQrPath: path } as Partial<PaymentsFields>);
+  }
+
+  async function savePayments() {
+    const vpa = (form.upiVpa ?? '').trim();
+    if (form.upiQrEnabled && vpa && !isValidUpiVpa(vpa)) {
+      setError('Enter a valid UPI ID (e.g. clinic@okaxis) or turn UPI QR off.');
+      return;
+    }
+    if (form.upiQrEnabled && !vpa && !form.upiQrPath) {
+      setError('Add a UPI ID or upload a QR image before turning UPI QR on.');
+      return;
+    }
+    await save();
+  }
   const [editing, setEditing] = useState(false);
   useEffect(() => {
     if (editing && saved && !dirty) setEditing(false);
@@ -716,13 +755,68 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
               )}
             </Field>
           </div>
+
+          <h3 className="mt-6 mb-1 text-sm font-semibold text-[var(--ink)]">UPI collection</h3>
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            One clinic UPI for the front desk. When the payment method is UPI, staff can show a QR the patient scans. A UPI ID
+            builds a QR with the visit amount and Patient ID in the note; an uploaded image is the fallback.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label={
+                <>
+                  Show UPI QR at collection
+                  <InfoTip text="When on, New visit and Take payment show a Scan to pay sheet if the method is UPI." />
+                </>
+              }
+            >
+              <BoolToggle value={form.upiQrEnabled ?? false} onChange={(v) => set({ upiQrEnabled: v })} />
+            </Field>
+            {form.upiQrEnabled && (
+              <>
+                <Field label="UPI ID (VPA)">
+                  <input
+                    className={inputCls}
+                    placeholder="clinic@okaxis"
+                    value={form.upiVpa ?? ''}
+                    onChange={(e) => set({ upiVpa: e.target.value })}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field
+                  label={
+                    <>
+                      Payee name
+                      <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
+                    </>
+                  }
+                >
+                  <input
+                    className={inputCls}
+                    placeholder={clinic.name}
+                    value={form.upiPayeeName ?? ''}
+                    onChange={(e) => set({ upiPayeeName: e.target.value })}
+                  />
+                </Field>
+                <Field label="QR image (optional)">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className={inputCls}
+                    onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
+                  />
+                  {qrPreviewUrl && <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />}
+                </Field>
+              </>
+            )}
+          </div>
         </fieldset>
         {editing && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
             busy={busy}
-            onSave={() => void save()}
+            onSave={() => void savePayments()}
             onCancel={() => {
               cancel();
               setEditing(false);

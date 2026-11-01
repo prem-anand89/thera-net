@@ -705,11 +705,11 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 
 | Tab | Contains |
 |---|---|
-| `general` | Clinic profile (no partner fields), region, clinical notes, Payments (default payment method; on General so every plan reaches it; when the partner collects, the default is locked to "Collected by {partner}" with a pointer to Billing → Partner & split) |
+| `general` | Clinic profile (no partner fields), region, clinical notes, Payments (default payment method and UPI collection — ID, payee name, QR; on General so every plan reaches it; when the partner collects, the default is locked to "Collected by {partner}" with a pointer to Billing → Partner & split) |
 | `team` | Therapists, invites, logins |
 | `services` | Catalog (`catalogView` = packages / treatments / referrals) |
 | `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), online booking page, WhatsApp, feedback |
-| `billing` | Billing & invoicing (locked below the invoicing tier), **Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. |
+| `billing` | Billing & invoicing (card title was "Modules & invoicing"; invoice prefix, GST, fiscal year, who can issue, bill policy; locked below the invoicing tier), **Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. |
 | `account` | Plan, historical data import, backup, danger zone |
 
 Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` / `referrals` → services with that view. Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
@@ -1592,7 +1592,7 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
                              Dexie prefs (useVisitColumnPrefs); no client code
                              reads/writes this column today
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
-upi_qr_enabled               boolean (NULLABLE)
+upi_qr_enabled               boolean (NULLABLE) — all four UPI fields are set in Settings → General → Payments ("UPI collection": show-QR switch, UPI ID, payee name, QR image), so every plan reaches them, Lite included; Billing & invoicing no longer holds them
 signature_path               text (NULLABLE)
 slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
@@ -3596,7 +3596,7 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
                              Dexie prefs (useVisitColumnPrefs); no client code
                              reads/writes this column today
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
-upi_qr_enabled               boolean (NULLABLE)
+upi_qr_enabled               boolean (NULLABLE) — all four UPI fields are set in Settings → General → Payments ("UPI collection": show-QR switch, UPI ID, payee name, QR image), so every plan reaches them, Lite included; Billing & invoicing no longer holds them
 signature_path               text (NULLABLE)
 slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
