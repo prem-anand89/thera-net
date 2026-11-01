@@ -70,10 +70,6 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       setError('Clinic name is required');
       return;
     }
-    if (!form.address.trim()) {
-      setError('Clinic address is required for invoices');
-      return;
-    }
 
     setBusy(true);
     setError(null);
@@ -259,16 +255,16 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       <Field label="Phone" htmlFor="clinic-phone">
         <PhoneField id="clinic-phone" value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} />
       </Field>
-      <Field label="Address *">
+      <Field label="Address">
         <input
           type="text"
           className={inputCls}
-          placeholder="Street, city — shown on invoices"
+          placeholder="Street, city"
           value={form.address}
-          required
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
         />
       </Field>
+      <p className="-mt-2 text-xs text-[var(--muted)]">Printed on bills and receipts. Add it now or later in Settings.</p>
       <ErrorNote message={error} />
       <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
         {busy ? 'Creating clinic…' : variant === 'page' ? 'Continue' : 'Create clinic'}

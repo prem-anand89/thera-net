@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSetupSteps,
+  therapistSignals,
   completedStepsKey,
   isSetupNudgeVisible,
   lastBackupMetaKey,
@@ -120,5 +121,47 @@ describe('parseCompletedSteps', () => {
     expect(parseCompletedSteps('["a","b",3]')).toEqual(new Set(['a', 'b']));
     expect(parseCompletedSteps('not json')).toEqual(new Set());
     expect(parseCompletedSteps(undefined)).toEqual(new Set());
+  });
+});
+
+describe('a one-login plan (seat limited)', () => {
+  const steps = buildSetupSteps(true, true);
+
+  it('keeps the same step ids, so stored ticks still match', () => {
+    expect(steps.map((s) => s.id)).toEqual(buildSetupSteps(false, true).map((s) => s.id));
+  });
+
+  it('makes "Invite your team" optional, so setup can reach 100% without it', () => {
+    expect(steps.find((s) => s.id === 'invite-team')?.group).toBe('optional');
+    expect(buildSetupSteps(false, true).find((s) => s.id === 'invite-team')?.group).toBe('essentials');
+    const done = { ...established, teamInvited: false };
+    const p = summarizeSetup(steps, done, new Set(['wait-synced', 'clinical-notes']));
+    expect(p.allDone).toBe(true);
+  });
+
+  it('counts the owner linked, whatever colleagues without a login there are', () => {
+    const roster = [{ userId: 'me' }, { userId: null }];
+    expect(therapistSignals(roster, 'me', true)).toEqual({ therapistsLinked: true, unlinkedTherapistCount: 0 });
+    // the same roster on a plan with several logins still wants every row linked
+    expect(therapistSignals(roster, 'me', false)).toEqual({ therapistsLinked: false, unlinkedTherapistCount: 1 });
+  });
+
+  it('is not linked until the owner is on the roster', () => {
+    expect(therapistSignals([{ userId: null }], 'me', true).therapistsLinked).toBe(false);
+    expect(therapistSignals([], 'me', true).therapistsLinked).toBe(false);
+    expect(therapistSignals([{ userId: 'me' }], undefined, true).therapistsLinked).toBe(false);
+  });
+});
+
+describe('the clinic profile step without invoicing', () => {
+  it('is optional on a plan that cannot invoice (the address matters once bills can be issued), essential otherwise', () => {
+    expect(buildSetupSteps(false, false).find((s) => s.id === 'clinic-profile')?.group).toBe('optional');
+    expect(buildSetupSteps(false, true).find((s) => s.id === 'clinic-profile')?.group).toBe('essentials');
+  });
+
+  it('lets a Lite clinic with no address finish setup', () => {
+    const lite = buildSetupSteps(true, false);
+    const s = { ...established, clinicProfileSet: false };
+    expect(summarizeSetup(lite, s, new Set(['wait-synced', 'clinical-notes'])).allDone).toBe(true);
   });
 });

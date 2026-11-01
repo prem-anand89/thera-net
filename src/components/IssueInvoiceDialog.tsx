@@ -17,6 +17,7 @@ import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { INVOICE_PAYMENT_MODES } from '@/domain/paymentMethods';
 import { usePermissions } from '@/app/usePermissions';
+import { ClinicAddressPrompt } from '@/components/ClinicAddressPrompt';
 import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { formatINR } from '@/domain/money';
@@ -136,7 +137,10 @@ export function IssueInvoiceDialog({
   }, [visitNote, patientNotes]);
 
   // Front desk has no notes on the device; the server hands over just the referral block instead.
-  const { canViewClinicalNotes } = usePermissions();
+  const { canViewClinicalNotes, isAdmin } = usePermissions();
+  // The address is optional at sign-up but prints on every bill: prompt for it here instead of failing later.
+  const clinicRow = useLiveQuery(() => repos.clinics.get(clinicId), [clinicId]);
+  const addressMissing = clinicRow !== undefined && !clinicRow.address?.trim();
   const [serverReferral, setServerReferral] = useState<CoreAssessmentPayload['referral'] | null>(null);
   useEffect(() => {
     if (canViewClinicalNotes) return;
@@ -418,6 +422,7 @@ export function IssueInvoiceDialog({
               {target.patientLabel} — {target.serviceLabel}
               {target.isPackage && ', all sessions of this package'}
             </p>
+            {addressMissing && <ClinicAddressPrompt clinicId={clinicId} canEdit={isAdmin} />}
             <Field label="Payment mode">
               <select
                 className={inputCls}
@@ -478,7 +483,9 @@ export function IssueInvoiceDialog({
               <button
                 type="button"
                 className={btnPrimary}
-                disabled={busy}
+                // An admin can fix a missing address on the spot, so it holds up the bill; anyone else cannot, so it
+                // does not (they see who to ask).
+                disabled={busy || (addressMissing && isAdmin)}
                 onClick={() => void goToReview()}
               >
                 {busy ? 'Loading…' : 'Review invoice'}

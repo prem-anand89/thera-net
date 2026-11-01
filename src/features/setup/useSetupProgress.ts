@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { repos } from '@/services';
 import { useEntitlements } from '@/app/useEntitlements';
+import { useSession } from '@/app/useSession';
 import {
   buildSetupSteps,
   completedStepsKey,
@@ -9,6 +10,7 @@ import {
   lastBackupMetaKey,
   parseCompletedSteps,
   setupDismissedKey,
+  therapistSignals,
   summarizeSetup,
   type SetupProgress,
   type SetupSignals,
@@ -28,6 +30,7 @@ export interface SetupState extends SetupProgress {
  */
 export function useSetupProgress(clinicId: string): SetupState | undefined {
   const entitlements = useEntitlements(clinicId);
+  const { session } = useSession();
   const clinic = useLiveQuery(() => repos.clinics.get(clinicId), [clinicId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinicId, true), [clinicId]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinicId), [clinicId]);
@@ -58,23 +61,21 @@ export function useSetupProgress(clinicId: string): SetupState | undefined {
     return undefined;
   }
 
-  const unlinked = therapists.filter((t) => !t.userId).length;
+  const seatLimited = entitlements.enforcementEnabled && entitlements.maxMembers <= 1;
+  const { therapistsLinked, unlinkedTherapistCount } = therapistSignals(therapists, session?.user?.id, seatLimited);
   const signals: SetupSignals = {
     clinicProfileSet: Boolean(clinic?.address?.trim()),
     servicesPriced: catalog.length > 0,
     // A clinic_members row exists from the moment an invite is issued, so more
     // than one seat means someone besides the creating admin is on the team.
     teamInvited: (entitlements.seatsUsed ?? 0) > 1,
-    therapistsLinked: therapists.length > 0 && unlinked === 0,
+    therapistsLinked,
     visitLogged: hasVisits,
     backedUp: metaRows.backup !== '',
-    unlinkedTherapistCount: unlinked,
+    unlinkedTherapistCount,
     catalogEmpty: catalog.length === 0,
   };
-  const steps = buildSetupSteps(
-    entitlements.enforcementEnabled && entitlements.maxMembers <= 1,
-    entitlements.can('invoicing')
-  );
+  const steps = buildSetupSteps(seatLimited, entitlements.can('invoicing'));
   const completed = parseCompletedSteps(metaRows.completed);
   const progress = summarizeSetup(steps, signals, completed);
 

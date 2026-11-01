@@ -59,7 +59,9 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
   return [
     {
       id: 'clinic-profile',
-      group: 'essentials',
+      // The address is optional at sign-up. It only has to be there once bills can be issued (Solo and above); on a plan
+      // without invoicing the step is a nudge that never holds up "setup complete".
+      group: canInvoice ? 'essentials' : 'optional',
       title: 'Set up your clinic profile',
       why: 'Name and address print on every invoice.',
       link: { kind: 'settings', tab: 'general' },
@@ -77,7 +79,8 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
     },
     {
       id: 'invite-team',
-      group: 'essentials',
+      // A one-login plan cannot invite anyone, so this is optional there: setup can reach 100% without it.
+      group: seatLimited ? 'optional' : 'essentials',
       title: 'Invite your team',
       why: seatLimited
         ? 'Your plan has one login for now. Invite teammates after upgrading.'
@@ -152,6 +155,23 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       why: 'Open My account in the menu, then Notifications, to get push alerts on this device.',
     },
   ];
+}
+
+/**
+ * The therapist-related signals. On a plan with one login (`seatLimited`) colleagues are team members without a
+ * login by design, so only the owner's own row has to be linked and unlinked colleagues are never a reason to nudge.
+ * Elsewhere every roster row should be linked to a login.
+ */
+export function therapistSignals(
+  therapists: readonly { userId?: string | null }[],
+  userId: string | undefined,
+  seatLimited: boolean
+): { therapistsLinked: boolean; unlinkedTherapistCount: number } {
+  if (seatLimited) {
+    return { therapistsLinked: Boolean(userId) && therapists.some((t) => t.userId === userId), unlinkedTherapistCount: 0 };
+  }
+  const unlinked = therapists.filter((t) => !t.userId).length;
+  return { therapistsLinked: therapists.length > 0 && unlinked === 0, unlinkedTherapistCount: unlinked };
 }
 
 export type SetupStatus = 'done' | 'next' | 'pending';

@@ -5,7 +5,10 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
-vi.mock('@/app/usePermissions', () => ({ usePermissions: () => ({ canViewClinicalNotes: true }) }));
+const perms = { isAdmin: true };
+vi.mock('@/app/usePermissions', () => ({ usePermissions: () => ({ canViewClinicalNotes: true, isAdmin: perms.isAdmin }) }));
+const clinicRow = { current: { id: 'c1', address: '12 MG Road' } as { id: string; address: string | null } };
+const putClinic = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }));
@@ -18,6 +21,7 @@ const previewLineItems = vi.fn(async () => ({ lineItems: [], totalPaise: 50000 }
 vi.mock('@/services', () => ({
   repos: {
     visits: { get: () => undefined },
+    clinics: { get: () => clinicRow.current, put: (...a: unknown[]) => putClinic(...a) },
     consultationNotes: { getByVisitId: () => undefined, listByPatient: () => [] },
     treatmentCatalog: { list: () => [] },
   },
@@ -96,5 +100,39 @@ describe('IssueInvoiceDialog with several visits', () => {
     expect(issueForVisits).toHaveBeenCalledWith(['v1', 'v2', 'v3'], 'UPI', null);
     expect(issueForVisit).not.toHaveBeenCalled();
     expect(collectInvoiceNow).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('IssueInvoiceDialog missing clinic address', () => {
+  afterEach(() => {
+    cleanup();
+    clinicRow.current = { id: 'c1', address: '12 MG Road' };
+    perms.isAdmin = true;
+    putClinic.mockReset();
+  });
+  const open = () => render(<IssueInvoiceDialog clinicId="c1" target={target} onClose={() => {}} returnTo="/ledger" />);
+
+  it('shows nothing when the clinic has an address', async () => {
+    open();
+    expect(await screen.findByRole('button', { name: 'Review invoice' })).toBeEnabled();
+    expect(screen.queryByTestId('address-missing')).toBeNull();
+  });
+
+  it('an admin is asked for the address in place, and cannot review until it is saved', async () => {
+    clinicRow.current = { id: 'c1', address: null };
+    open();
+    expect(await screen.findByTestId('address-missing')).toHaveTextContent(/prints on every bill/);
+    expect(screen.getByRole('button', { name: 'Review invoice' })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Clinic address'), '12 MG Road, Pune');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(putClinic).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1', address: '12 MG Road, Pune' }));
+  });
+
+  it('someone who cannot edit the clinic is told who to ask, and is not held up', async () => {
+    clinicRow.current = { id: 'c1', address: '  ' };
+    perms.isAdmin = false;
+    open();
+    expect(await screen.findByTestId('address-missing')).toHaveTextContent(/Ask an admin/);
+    expect(screen.getByRole('button', { name: 'Review invoice' })).toBeEnabled();
   });
 });

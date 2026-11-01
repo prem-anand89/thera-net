@@ -9,6 +9,10 @@ import { repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import { useClinicRole } from '@/app/useClinicRole';
+import { PhoneField } from '@/components/PhoneField';
+import { useEntitlements } from '@/app/useEntitlements';
+import { PLAN_TIER_LABELS, TIER_LIMITS, loginsLabel, nextTierWithMore } from '@/domain/plans';
+import { rosterAddBlocked, rosterLimitMessage } from '@/domain/roster';
 
 export function OnboardingTeamStep({
   onContinue,
@@ -21,9 +25,22 @@ export function OnboardingTeamStep({
   const { displayName } = useClinicRole(clinic.id);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const selfRow = therapists?.find((t) => t.userId === userId);
+  const entitlements = useEntitlements(clinic.id);
+  // One login on this plan: nobody else can be invited, so the invite form would only fail. Offer a colleague without
+  // a login instead (the plan includes some), and say what more logins need.
+  const seatLimited = entitlements.enforcementEnabled && !entitlements.loading && entitlements.maxMembers <= 1;
+  const rosterLimit = entitlements.enforcementEnabled && !entitlements.loading ? entitlements.maxRosterTherapists : null;
+  const nextForSeats = nextTierWithMore(entitlements.tier, 'seats');
 
   const [iTreat, setITreat] = useState(true);
   const [rosterName, setRosterName] = useState('');
+  // What prints on invoices, asked here so the creator is not sent to a second "How you appear on bills" form.
+  const [registrationNo, setRegistrationNo] = useState('');
+  const [phone, setPhone] = useState('');
+  const [colleagueName, setColleagueName] = useState('');
+  const [colleagueBusy, setColleagueBusy] = useState(false);
+  const [colleagueError, setColleagueError] = useState<string | null>(null);
+  const [addedColleagues, setAddedColleagues] = useState<string[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
@@ -38,6 +55,8 @@ export function OnboardingTeamStep({
     if (selfRow) {
       setITreat(true);
       setRosterName(selfRow.name);
+      setRegistrationNo(selfRow.registrationNo ?? '');
+      setPhone(selfRow.phone ?? '');
     } else if (displayName) {
       setRosterName(displayName);
     }
@@ -53,6 +72,10 @@ export function OnboardingTeamStep({
         name,
         userId,
         active: true,
+        registrationNo: registrationNo.trim() || null,
+        phone: phone.trim() || null,
+        // Confirmed here, so the first visit to Workspace is not intercepted by the "How you appear on bills" page.
+        profileConfirmedAt: now,
         updatedAt: now,
       });
     } else {
@@ -63,10 +86,45 @@ export function OnboardingTeamStep({
         name,
         userId,
         active: true,
+        registrationNo: registrationNo.trim() || null,
+        phone: phone.trim() || null,
+        profileConfirmedAt: now,
         // A new therapist starts with a color nobody else uses.
         color: nextUnusedColor(existing.filter((t) => t.active !== false).map((t) => therapistColor(t.id, t.color))),
         updatedAt: now,
       });
+    }
+  }
+
+  async function addColleague() {
+    const name = colleagueName.trim();
+    if (!name) {
+      setColleagueError('Type their name.');
+      return;
+    }
+    if (rosterAddBlocked(therapists ?? [], rosterLimit)) {
+      setColleagueError(rosterLimit === null ? '' : rosterLimitMessage(rosterLimit));
+      return;
+    }
+    setColleagueBusy(true);
+    setColleagueError(null);
+    try {
+      const existing = await repos.therapists.list(clinic.id, true);
+      await repos.therapists.put({
+        id: crypto.randomUUID(),
+        clinicId: clinic.id,
+        name,
+        active: true,
+        userId: null,
+        color: nextUnusedColor(existing.filter((t) => t.active !== false).map((t) => therapistColor(t.id, t.color))),
+        updatedAt: new Date().toISOString(),
+      });
+      setAddedColleagues((list) => [...list, name]);
+      setColleagueName('');
+    } catch (e) {
+      setColleagueError(toFriendlyMessage(e));
+    } finally {
+      setColleagueBusy(false);
     }
   }
 
@@ -128,8 +186,9 @@ export function OnboardingTeamStep({
       <div>
         <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Your team</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Invite colleagues now or from Settings later. If you treat patients, add yourself to the service roster
-          with this login.
+          {seatLimited
+            ? 'Your plan has one login. If you treat patients, add yourself to the roster; you can add a colleague without a login too.'
+            : 'Invite colleagues now or from Settings later. If you treat patients, add yourself to the service roster with this login.'}
         </p>
       </div>
 
@@ -149,7 +208,7 @@ export function OnboardingTeamStep({
           </label>
           {iTreat ? (
             <>
-              <Field label="Your name on the roster">
+              <Field label="Name on invoices">
                 <input
                   className={inputCls}
                   value={rosterName}
@@ -157,9 +216,20 @@ export function OnboardingTeamStep({
                   placeholder="As patients should see it"
                 />
               </Field>
+              <Field label="Registration / council no. (optional)">
+                <input
+                  className={inputCls}
+                  value={registrationNo}
+                  onChange={(e) => setRegistrationNo(e.target.value)}
+                  placeholder="Insurers check this on invoices"
+                />
+              </Field>
+              <Field label="Phone (optional)" htmlFor="onboarding-phone">
+                <PhoneField id="onboarding-phone" value={phone} onChange={setPhone} />
+              </Field>
               <p className="text-xs text-[var(--muted)]">
                 {selfRow
-                  ? 'Linked to your login. You can refine invoice details on the next screens.'
+                  ? 'Linked to your login. You can change these anytime in Settings → Team.'
                   : 'We will add you to the roster and link this login when you continue.'}
               </p>
             </>
@@ -171,6 +241,54 @@ export function OnboardingTeamStep({
           <ErrorNote message={linkError} />
         </section>
 
+        {entitlements.loading ? null : seatLimited ? (
+        <section aria-labelledby="onboarding-colleague" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-5 sm:p-6">
+          <h2 id="onboarding-colleague" className="font-display text-base font-semibold text-[var(--ink)]">
+            Add a colleague without a login
+          </h2>
+          {addedColleagues.length > 0 && (
+            <ul className="flex flex-wrap gap-2" aria-label="Colleagues added">
+              {addedColleagues.map((name) => (
+                <li key={name} className="rounded-full bg-[var(--moss-light)] px-3 py-1 text-xs font-medium text-[var(--moss-strong)]">
+                  {name} · added
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-[var(--muted)]">
+            {rosterLimit !== null
+              ? `Your plan includes ${rosterLimit} team member${rosterLimit === 1 ? '' : 's'} on the schedule without a login of their own. `
+              : ''}
+            They appear in the schedule and on visits; they cannot sign in.
+          </p>
+          <Field label="Name">
+            <input
+              className={inputCls}
+              value={colleagueName}
+              onChange={(e) => setColleagueName(e.target.value)}
+              placeholder="Dr. …"
+              disabled={rosterAddBlocked(therapists ?? [], rosterLimit)}
+            />
+          </Field>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={colleagueBusy || rosterAddBlocked(therapists ?? [], rosterLimit)}
+            onClick={() => void addColleague()}
+          >
+            {colleagueBusy ? 'Adding…' : 'Add colleague'}
+          </button>
+          {rosterAddBlocked(therapists ?? [], rosterLimit) && rosterLimit !== null && (
+            <p className="text-xs text-[var(--muted)]">{rosterLimitMessage(rosterLimit)}</p>
+          )}
+          <ErrorNote message={colleagueError} />
+          <p className="text-xs text-[var(--muted)]">
+            {nextForSeats
+              ? `Colleagues who sign in with their own login come with the ${PLAN_TIER_LABELS[nextForSeats]} plan (${loginsLabel(TIER_LIMITS[nextForSeats].seats)}).`
+              : 'More logins are available on request.'}
+          </p>
+        </section>
+        ) : (
         <section aria-labelledby="onboarding-invite" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-5 sm:p-6">
           <h2 id="onboarding-invite" className="font-display text-base font-semibold text-[var(--ink)]">
             Invite a therapist
@@ -210,6 +328,7 @@ export function OnboardingTeamStep({
           {inviteSuccess && <p className="text-xs text-[var(--moss-strong)]">{inviteSuccess}</p>}
           <ErrorNote message={inviteError} />
         </section>
+        )}
       </div>
 
       <button type="button" className={`${btnPrimary} w-full tab:w-auto`} disabled={continueBusy} onClick={() => void handleContinue()}>
