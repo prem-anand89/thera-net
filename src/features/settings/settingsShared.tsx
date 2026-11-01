@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
@@ -25,6 +25,14 @@ export const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
  * patch API, so a naive "write the whole form" save would silently revert
  * whatever another section saved in between.
  */
+/** How long "Saved ✓" stays after a save before the bar hides. */
+export const SAVED_NOTE_MS = 2000;
+
+/** Field-by-field equality for a card's form (the same JSON comparison the dirty check has always used). */
+function sameFields(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function useClinicSectionForm<F extends Partial<Clinic>>(
   pick: (clinic: Clinic) => F,
   onDirtyChange: (dirty: boolean) => void
@@ -33,27 +41,24 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
   const initial = useMemo(() => pick(clinic), [clinic]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm] = useState<F>(initial);
   const [saved, setSaved] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Hydrate once per mount, not on every `initial` change. `clinic` (from
-  // useClinic()) is a new object reference on any write to the clinics row
-  // — another admin saving a different section, or this section's own save
-  // landing back via the sync pull — and without this guard the effect
-  // below would silently overwrite whatever the user is mid-typing here.
-  // Not needed for the post-save case: `initial` catching up to match the
-  // just-saved `form` already makes `dirty` false via the comparison below,
-  // with no need to reassign `form` itself. Each section unmounts on tab
-  // switch (SettingsPage's `activeKey === 'x' &&` rendering), so returning
-  // to this tab later re-mounts fresh and re-hydrates correctly.
-  const [loaded, setLoaded] = useState(false);
 
+  // Every field is editable straight away (no Edit button), so a card has to tell apart "the person changed this"
+  // from "the saved values changed underneath" (a sync pull, another admin, another card's save landing back via
+  // `useClinic()`, which hands out a new object on any write to the clinic row). The rule: when the saved values
+  // change, a card with no unsaved edits takes the new values; a card with edits keeps them. Without this an
+  // untouched card would show Save on its own after a sync, and pressing it would write the older values back.
+  const lastInitial = useRef(initial);
   useEffect(() => {
-    if (loaded) return;
-    setForm(initial);
-    setLoaded(true);
-  }, [initial, loaded]);
+    const previous = lastInitial.current;
+    lastInitial.current = initial;
+    if (sameFields(previous, initial)) return;
+    setForm((current) => (sameFields(current, previous) ? initial : current));
+  }, [initial]);
 
-  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]);
+  const dirty = useMemo(() => !sameFields(form, initial), [form, initial]);
   // Cleanup clears the flag on unmount too — switching tabs away from a
   // dirty section (after confirming the discard) unmounts it, and without
   // this the rail's dot would keep showing dirty for a section that no
@@ -63,8 +68,16 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
     return () => onDirtyChange(false);
   }, [dirty, onDirtyChange]);
 
+  // "Saved ✓" stays on screen briefly after a save, then the bar goes away with nothing left to save.
+  useEffect(() => {
+    if (!justSaved) return;
+    const timer = setTimeout(() => setJustSaved(false), SAVED_NOTE_MS);
+    return () => clearTimeout(timer);
+  }, [justSaved]);
+
   function set(patch: Partial<F>) {
     setSaved(false);
+    setJustSaved(false);
     setForm((f) => ({ ...f, ...patch }));
   }
 
@@ -76,6 +89,7 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
       if (!current) throw new Error('Clinic not found');
       await repos.clinics.put({ ...current, ...form, updatedAt: new Date().toISOString() });
       setSaved(true);
+      setJustSaved(true);
       return true;
     } catch (e) {
       setError(toFriendlyMessage(e));
@@ -100,7 +114,10 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
     setForm((f) => ({ ...f, ...patch }));
   }
 
-  return { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError };
+  /** The Save / Cancel bar shows only while there is something to save, a problem to read, or for a moment after saving. */
+  const showSaveBar = dirty || justSaved || error !== null;
+
+  return { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar };
 }
 
 export function SectionSaveBar({
@@ -166,22 +183,6 @@ export function LockedSectionNotice({
         Included in {PLAN_TIER_LABELS[minimumTierFor(feature)]} and above.
       </p>
     </div>
-  );
-}
-
-/** Opens a set-once card for editing. Reads and writes stay the same; this
- *  only unlocks the fields until the save goes through. */
-export function SetOnceEditButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button 
-      type="button" 
-      aria-label={label} 
-      className="flex items-center gap-1.5 min-h-[36px] rounded-lg bg-[var(--paper)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--border)] transition-colors border border-[var(--border)] shadow-sm" 
-      onClick={onClick}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-      Edit
-    </button>
   );
 }
 

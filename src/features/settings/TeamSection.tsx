@@ -1187,7 +1187,7 @@ export function Therapists() {
   }
 
   return (
-    <SectionCard id="settings-card-team-therapists" title="Team Directory">
+    <SectionCard id="settings-card-team-therapists" title="Team members">
       {rosterOver && rosterLimit !== null && (
         <p role="alert" className="mb-4 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-sm text-[var(--amber)]" data-testid="roster-over-limit">
           Your plan includes {rosterLimit} team member{rosterLimit === 1 ? '' : 's'} without a login; {rosterUsed(rawTherapists ?? [])} are active. Choose who stays active

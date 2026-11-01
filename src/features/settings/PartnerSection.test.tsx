@@ -76,7 +76,6 @@ describe('PartnerSection on a plan with the partner split', () => {
 
   it('turning partner mode on shows every partner setting, and saving re-applies the split', async () => {
     render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit partner & split' }));
     fireEvent.click(screen.getByRole('switch', { name: 'We work with a partner' }));
     expect(screen.getByLabelText('Partner name')).toBeInTheDocument();
     expect(screen.getByText('Who collects patient payments?')).toBeInTheDocument();
@@ -90,7 +89,6 @@ describe('PartnerSection on a plan with the partner split', () => {
   it('renaming the partner alone saves without re-applying the split', async () => {
     clinicRef.current = { ...base, hasPartner: true, partnerHospitalName: 'City Hospital' };
     render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit partner & split' }));
     fireEvent.change(screen.getByLabelText('Partner name'), { target: { value: 'City Hospital Group' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalled());

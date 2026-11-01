@@ -28,14 +28,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function startEditing() {
-  fireEvent.click(screen.getByRole('button', { name: 'Edit payments' }));
-}
-
 describe('UPI collection in General → Payments', () => {
   it('a Lite clinic can save a UPI ID and payee name', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    startEditing();
     fireEvent.click(screen.getByRole('button', { name: 'On' }));
     fireEvent.change(screen.getByPlaceholderText('clinic@okaxis'), { target: { value: 'physio@okaxis' } });
     fireEvent.change(screen.getByPlaceholderText('Physio Clinic'), { target: { value: 'Physio Clinic LLP' } });
@@ -46,7 +41,6 @@ describe('UPI collection in General → Payments', () => {
 
   it('refuses an invalid UPI ID and says why, without saving', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    startEditing();
     fireEvent.click(screen.getByRole('button', { name: 'On' }));
     fireEvent.change(screen.getByPlaceholderText('clinic@okaxis'), { target: { value: 'not a upi id' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -56,7 +50,6 @@ describe('UPI collection in General → Payments', () => {
 
   it('refuses turning the QR on with no UPI ID and no image', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    startEditing();
     fireEvent.click(screen.getByRole('button', { name: 'On' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText(/Add a UPI ID or upload a QR image/)).toBeInTheDocument();
@@ -65,7 +58,6 @@ describe('UPI collection in General → Payments', () => {
 
   it('saving the default payment method alone does not need any UPI details', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    startEditing();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'cash' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));

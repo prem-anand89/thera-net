@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { type Clinic, type UUID } from '@/domain/types';
 import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
-import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton, BoolToggle } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
 
 type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
 
@@ -21,7 +21,7 @@ const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  */
 export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const clinic = useClinic();
-  const { form, set, save, cancel, dirty, saved, busy, error } =
+  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } =
     useClinicSectionForm<PatientCommsFields>(
       (c) => ({
         enablePatientComms: c.enablePatientComms ?? false,
@@ -30,10 +30,6 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
       }),
       _onDirtyChange
     );
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   const [slugCopied, setSlugCopied] = useState(false);
   const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
   const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug as string);
@@ -53,11 +49,10 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
     <>
       <SectionCard
         id="settings-card-booking-online"
-        title="Booking page"
-        action={editing ? undefined : <SetOnceEditButton label="Edit booking page" onClick={() => setEditing(true)} />}
+        title="Online booking & patient feedback"
       >
-        <fieldset disabled={!editing} className="contents">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <fieldset disabled={busy} className="contents">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={
                 <>
@@ -127,7 +122,7 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
             )}
           </div>
         </fieldset>
-        {editing && (
+        {showSaveBar && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
@@ -135,7 +130,6 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
             onSave={() => void save()}
             onCancel={() => {
               cancel();
-              setEditing(false);
             }}
             error={slugInvalid ? 'Fix the booking link before saving.' : error}
             saveDisabled={slugInvalid}

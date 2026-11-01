@@ -2,7 +2,7 @@ import { OperatingHoursEditor } from './OperatingHoursEditor';
 import { COUNTRY_CODES } from '@/domain/countryCodes';
 import { clinicCountryCode, clinicTimezone, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
 import { PhoneField } from '@/components/PhoneField';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { type Clinic, type PaymentMethod } from '@/domain/types';
 import { paymentMethodLabel, paymentMethodOptions, partnerName } from '@/domain/paymentMethods';
@@ -13,7 +13,7 @@ import { LetterheadPreview } from './LetterheadPreview';
 import { clampBufferHours } from './shiftUtils';
 import { toFriendlyMessage } from '@/lib/errors';
 import { isValidUpiVpa } from '@/domain/upiPay';
-import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton, BoolToggle } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
 
 type ProfileFields = Pick<
   Clinic,
@@ -28,7 +28,7 @@ type ProfileFields = Pick<
 >;
 
 export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar } =
     useClinicSectionForm<ProfileFields>(
       (c) => ({
         name: c.name,
@@ -41,10 +41,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
       }),
       onDirtyChange
     );
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
   // Partner name and logo are edited in Billing → Partner & split; the letterhead preview shows the saved ones.
   const partnerLogoPreviewUrl = clinic.hasPartner ? publicLogoUrl(clinic.partnerHospitalLogoPath) : null;
@@ -96,80 +92,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
         <SectionCard
           id="settings-card-general-profile"
           title="Clinic profile"
-          action={
-            !editing && (
-              <button
-                type="button"
-                className="text-xs font-semibold text-[var(--teal)] hover:underline"
-                onClick={() => setEditing(true)}
-              >
-                Edit clinic profile
-              </button>
-            )
-          }
         >
-          {!editing ? (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row gap-6 items-start">
-                {logoPreviewUrl ? (
-                  <img 
-                    src={logoPreviewUrl} 
-                    alt="Clinic logo" 
-                    className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
-                  />
-                ) : (
-                  <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                  </div>
-                )}
-                <div className="flex-1 space-y-3 w-full">
-                  <div className="flex flex-wrap items-baseline gap-3">
-                    <h3 className="text-xl font-semibold text-[var(--ink)]">{form.name || 'Your Clinic Name'}</h3>
-                  </div>
-                  
-                  {form.address && (
-                    <div className="flex items-start gap-2 text-sm text-[var(--muted)]">
-                      <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                      <p className="whitespace-pre-line">{form.address}</p>
-                    </div>
-                  )}
-                  
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 pt-4 border-t border-[var(--border)] text-sm">
-                    {form.phone && (
-                      <div className="flex items-center gap-2 text-[var(--muted)]">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                        <span className="text-[var(--ink)] font-medium">{form.phone}</span>
-                      </div>
-                    )}
-                    {form.email && (
-                      <div className="flex items-center gap-2 text-[var(--muted)]">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                        <span className="text-[var(--ink)] font-medium">{form.email}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-[var(--muted)] ml-auto">
-                      <span>Patient ID Prefix:</span>
-                      <span className="font-mono text-xs font-semibold text-[var(--ink)] bg-[var(--paper)] border border-[var(--border)] px-1.5 py-0.5 rounded shadow-sm">{form.walkInMrnoPrefix || 'W'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {signaturePreviewUrl && (
-                <div className="pt-4 border-t border-[var(--border)]">
-                  {signaturePreviewUrl && (
-                    <div className="flex items-center gap-3">
-                      <img src={signaturePreviewUrl} className="h-10 w-20 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Signature" />
-                      <div>
-                        <div className="text-hint font-semibold text-[var(--muted)]">Authorized Signature</div>
-                        <div className="text-[var(--ink)] font-medium">Included on invoices</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
             <fieldset disabled={busy} className="contents">
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-6 items-start">
@@ -288,10 +211,8 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
               </div>
 
             </fieldset>
-          )}
 
-
-          {editing && (
+          {showSaveBar && (
             <SectionSaveBar
               dirty={dirty}
               saved={saved}
@@ -299,7 +220,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
               onSave={() => void saveProfile()}
               onCancel={() => {
                 cancel();
-                setEditing(false);
               }}
               error={error}
             />
@@ -338,27 +258,22 @@ const AGENDA_HOURS = [16, 17, 18, 19, 20, 21, 22];
 const hourLabel = (hour: number) => `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour < 12 ? 'am' : 'pm'}`;
 
 export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<ClinicRegionFields>(
+  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<ClinicRegionFields>(
     (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c), agendaEnabled: c.agendaEnabled !== false, agendaHour: c.agendaHour ?? 20 }),
     onDirtyChange
   );
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   const zones = useMemo(() => {
     const all = timezoneOptions();
     return form.timezone && !all.includes(form.timezone) ? [form.timezone, ...all] : all;
   }, [form.timezone]);
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionCard
         id="settings-card-region"
         title="Region and agenda"
-        action={editing ? undefined : <SetOnceEditButton label="Edit region" onClick={() => setEditing(true)} />}
       >
-        <fieldset disabled={!editing} className="contents">
+        <fieldset disabled={busy} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={
@@ -439,7 +354,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             </Field>
           )}
         </fieldset>
-        {editing && (
+        {showSaveBar && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
@@ -447,7 +362,6 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             onSave={() => void save()}
             onCancel={() => {
               cancel();
-              setEditing(false);
             }}
             error={error}
           />
@@ -468,7 +382,7 @@ type ClinicHoursFields = Pick<
 >;
 
 export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error, setError } =
+  const { form, set, save, cancel, dirty, saved, busy, error, setError, showSaveBar } =
     useClinicSectionForm<ClinicHoursFields>(
       (c) => ({
         bookingStartHour: c.bookingStartHour ?? 9,
@@ -482,12 +396,8 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
       }),
       onDirtyChange
     );
-  const [editing, setEditing] = useState(false);
   // What is wrong with the hours as typed (a second session that starts before the first ends, ...): Save refuses until it is fixed.
   const [hoursProblem, setHoursProblem] = useState<string | null>(null);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   async function saveHours() {
     if (hoursProblem) {
       setError(hoursProblem);
@@ -497,20 +407,19 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
   }
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionCard
         id="settings-card-booking-hours"
         title="Hours & closures"
-        action={editing ? undefined : <SetOnceEditButton label="Edit hours & closures" onClick={() => setEditing(true)} />}
       >
-        <fieldset disabled={!editing} className="contents">
+        <fieldset disabled={busy} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <p className="mb-1 text-xs font-medium text-[var(--muted)]">
                 Open days
                 <InfoTip text="The days the clinic is open every week. Holidays and one-off closures are set on the Schedule." />
               </p>
-              <OpenDaysStrip closedWeekdays={form.closedWeekdays ?? []} disabled={!editing} onChange={(closedWeekdays) =>
+              <OpenDaysStrip closedWeekdays={form.closedWeekdays ?? []} disabled={busy} onChange={(closedWeekdays) =>
                   set({ closedWeekdays, ...(form.operatingHours ? { operatingHours: withOpenDays(form.operatingHours, closedWeekdays) } : {}) })
                 }
               />
@@ -518,7 +427,6 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
 
             <div className="sm:col-span-2">
               <OperatingHoursEditor
-                editing={editing}
                 bufferHours={form.staffBookingBufferHours ?? 3}
                 operatingHours={form.operatingHours}
                 startHour={form.bookingStartHour ?? 9}
@@ -582,7 +490,7 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
           Holidays, one-off closures and a therapist's own hours are set on the{' '}
           <span className="font-medium text-[var(--ink)]">Schedule</span>.
         </p>
-        {editing && (
+        {showSaveBar && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
@@ -591,7 +499,6 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
             onCancel={() => {
               cancel();
               setHoursProblem(null);
-              setEditing(false);
             }}
             error={error}
           />
@@ -605,23 +512,18 @@ type ClinicalDocsFields = Pick<Clinic, 'clinicalDocsEnabled'>;
 
 /** Clinical notes on visits. Not billing-shaped: it lives on General so a plan without invoicing can still reach it. */
 export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<ClinicalDocsFields>(
+  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<ClinicalDocsFields>(
     (c) => ({ clinicalDocsEnabled: c.clinicalDocsEnabled ?? false }),
     onDirtyChange
   );
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionCard
         id="settings-card-clinical-docs"
         title="Clinical notes"
-        action={editing ? undefined : <SetOnceEditButton label="Edit clinical notes" onClick={() => setEditing(true)} />}
       >
-        <fieldset disabled={!editing} className="contents">
+        <fieldset disabled={busy} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={
@@ -636,7 +538,7 @@ export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: 
           </div>
 
         </fieldset>
-        {editing && (
+        {showSaveBar && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
@@ -644,7 +546,6 @@ export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             onSave={() => void save()}
             onCancel={() => {
               cancel();
-              setEditing(false);
             }}
             error={error}
           />
@@ -663,7 +564,7 @@ type PaymentsFields = Pick<Clinic, 'defaultPaymentMethod' | 'upiVpa' | 'upiPayee
  * it, and Lite can collect by UPI, so it lives on General (not Billing) where every plan reaches it.
  */
 export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } = useClinicSectionForm<PaymentsFields>(
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar } = useClinicSectionForm<PaymentsFields>(
     (c) => ({
       defaultPaymentMethod: c.defaultPaymentMethod ?? null,
       upiVpa: c.upiVpa ?? '',
@@ -703,23 +604,18 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
     }
     await save();
   }
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   const hasPartner = Boolean(clinic.hasPartner);
   const partnerCollects = hasPartner && Boolean(clinic.partnerCollects);
   const options = paymentMethodOptions(clinic);
   const name = partnerName(clinic);
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionCard
         id="settings-card-payments"
         title="Payments"
-        action={editing ? undefined : <SetOnceEditButton label="Edit payments" onClick={() => setEditing(true)} />}
       >
-        <fieldset disabled={!editing} className="contents">
+        <fieldset disabled={busy} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={
@@ -811,7 +707,7 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
             )}
           </div>
         </fieldset>
-        {editing && (
+        {showSaveBar && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
@@ -819,7 +715,6 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
             onSave={() => void savePayments()}
             onCancel={() => {
               cancel();
-              setEditing(false);
             }}
             error={error}
           />

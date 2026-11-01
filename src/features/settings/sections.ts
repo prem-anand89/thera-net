@@ -73,11 +73,11 @@ export interface SettingsCard {
 
 export const SETTINGS_CARDS: SettingsCard[] = [
   { id: 'settings-card-general-profile', title: 'Clinic profile', tab: 'general', keywords: ['clinic name', 'logo', 'address', 'phone', 'email', 'walk-in', 'mrno', 'prefix', 'modules', 'contact'] },
-  { id: 'settings-card-team-therapists', title: 'Therapists & team', tab: 'team', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
+  { id: 'settings-card-team-therapists', title: 'Team members', tab: 'team', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
   { id: 'settings-card-services-packages', title: 'Services & packages', tab: 'services', catalogView: 'packages', keywords: ['price', 'package', 'session', 'service', 'catalog', 'group'] },
   { id: 'settings-card-services-treatments', title: 'Treatments performed', tab: 'services', catalogView: 'treatments', keywords: ['treatment', 'manual therapy', 'exercise', 'taping', 'checklist'] },
   { id: 'settings-card-services-referrals', title: 'Referral sources', tab: 'services', catalogView: 'referrals', keywords: ['referral', 'referred by', 'source', 'doctor'] },
-  { id: 'settings-card-booking-online', title: 'Booking page', tab: 'booking', keywords: ['whatsapp', 'feedback', 'google review', 'booking page', 'booking link', 'slug', 'patient messages', 'review link'] },
+  { id: 'settings-card-booking-online', title: 'Online booking & patient feedback', tab: 'booking', keywords: ['whatsapp', 'feedback', 'google review', 'booking page', 'booking link', 'slug', 'patient messages', 'review link'] },
   { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'booking', keywords: ['booking hours', 'hours', 'closed day', 'weekly closed', 'holiday', 'closure', 'slot', 'appointment duration'] },
   { id: 'settings-card-clinical-docs', title: 'Clinical notes', tab: 'general', keywords: ['clinical', 'notes', 'documentation', 'soap', 'consultation', 'module'] },
   { id: 'settings-card-payments', title: 'Payments', tab: 'general', keywords: ['payment', 'default', 'cash', 'upi', 'qr', 'vpa', 'upi id', 'scan to pay', 'card', 'payment method'] },

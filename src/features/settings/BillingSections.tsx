@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { visitService } from '@/services';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
@@ -7,7 +7,7 @@ import type { TdsBasis } from '@/domain/split';
 import { btnSecondary, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
 import { toFriendlyMessage } from '@/lib/errors';
-import { useClinicSectionForm, SectionSaveBar, SetOnceEditButton, BoolToggle } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
 
 type BillingFields = Pick<
   Clinic,
@@ -19,7 +19,7 @@ type BillingFields = Pick<
 >;
 
 export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } =
+  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } =
     useClinicSectionForm<BillingFields>(
       (c) => ({
         invoicePrefix: c.invoicePrefix,
@@ -30,10 +30,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
       }),
       onDirtyChange
     );
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   async function saveBilling() {
     await save();
   }
@@ -42,10 +38,9 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
     <SectionCard
       id="settings-card-billing-invoicing"
       title="Billing & invoicing"
-      action={editing ? undefined : <SetOnceEditButton label="Edit billing & invoicing" onClick={() => setEditing(true)} />}
     >
-      <fieldset disabled={!editing} className="contents">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <fieldset disabled={busy} className="contents">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Invoice prefix">
           <input
             className={inputCls}
@@ -120,12 +115,12 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
       </div>
 
       </fieldset>
-      {editing && (
+      {dirty && (
         <p className="mt-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]">
           The invoice prefix, fiscal year and tax apply to invoices issued from now on. Invoices already issued keep their numbers and rates.
         </p>
       )}
-      {editing && (
+      {showSaveBar && (
       <SectionSaveBar
         dirty={dirty}
         saved={saved}
@@ -133,7 +128,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         onSave={() => void saveBilling()}
         onCancel={() => {
           cancel();
-          setEditing(false);
         }}
         error={error}
       />
@@ -181,7 +175,7 @@ export function partnerSplitChanged(
  * invoiced (invoiced visits keep the rates they were billed under).
  */
 export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dirty: boolean) => void; allowed: boolean }) {
-  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar } =
     useClinicSectionForm<PartnerFields>(
       (c) => ({
         hasPartner: c.hasPartner ?? false,
@@ -197,10 +191,6 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
       }),
       onDirtyChange
     );
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (editing && saved && !dirty) setEditing(false);
-  }, [editing, saved, dirty]);
   const labels = clinicShareLabels(form);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
   const partnerLogoUrl = publicLogoUrl(form.partnerHospitalLogoPath);
@@ -298,9 +288,8 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
     <SectionCard
       id="settings-card-billing-partner"
       title="Partner & split"
-      action={editing ? undefined : <SetOnceEditButton label="Edit partner & split" onClick={() => setEditing(true)} />}
     >
-      <fieldset disabled={!editing} className="contents">
+      <fieldset disabled={busy} className="contents">
         <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
           <span>
             <span className="block text-sm font-medium text-[var(--ink)]">We work with a partner</span>
@@ -433,7 +422,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
         </p>
         {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
       </fieldset>
-      {editing && (
+      {showSaveBar && (
         <SectionSaveBar
           dirty={dirty}
           saved={saved}
@@ -441,7 +430,6 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
           onSave={() => void savePartner()}
           onCancel={() => {
             cancel();
-            setEditing(false);
           }}
           error={error}
         />

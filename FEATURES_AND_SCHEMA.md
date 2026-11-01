@@ -8,7 +8,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 
 
 ### Recent Updates (October 2026 Settings Redesign)
-- **Settings Architecture**: Transitioned to a 6-tab system (`general`, `team`, `services`, `booking`, `billing`, `account`) with a side-rail navigation layout. Replaced edit modes with set-once cards for simplicity.
+- **Settings Architecture**: Transitioned to a 6-tab system (`general`, `team`, `services`, `booking`, `billing`, `account`) with a side-rail navigation layout. Cards have no Edit button: every field is editable on the first click, and a card's Save / Cancel bar appears only while it has unsaved changes (plus "Saved ✓" for 2 s after saving).
 - **Account Menu**: Personal settings (Profile, Password, Working Hours, Notifications) moved out of admin Settings into a global "Me" dropdown menu accessible by all roles.
 - **Booking & Hours Split**: Online booking configuration moved to `Settings -> Booking`. Clinic working hours and closed days moved to the Schedule tab.
 - **Workspace**: Added a notification setup reminder block.
@@ -699,7 +699,7 @@ Front desk's `visits_update` reach is the same as an admin's or the visit's own 
 
 ### 8. Settings & Configuration
 
-**File layout** (`src/features/settings/`): `SettingsPage.tsx` is only the shell (tabs, search, unsaved-changes guard); each area lives in its own file — `ClinicSections` (profile, region and agenda, hours), `BillingSections` (billing, partner), `BookingSections` (patient communications, public booking), `PlanSection`, `DataSections` (import, backup, danger zone) and `TeamSection` (team list, `TeamMemberCard`, add member, colors) — with the shared save mechanics (`useClinicSectionForm`, `SectionSaveBar`, `LockedSectionNotice`, `SetOnceEditButton`, `BoolToggle`, accent colors) in `settingsShared.tsx`. Older mentions of `SettingsPage.tsx` below refer to these files.
+**File layout** (`src/features/settings/`): `SettingsPage.tsx` is only the shell (tabs, search, unsaved-changes guard); each area lives in its own file — `ClinicSections` (profile, region and agenda, hours), `BillingSections` (billing, partner), `BookingSections` (patient communications, public booking), `PlanSection`, `DataSections` (import, backup, danger zone) and `TeamSection` (team list, `TeamMemberCard`, add member, colors) — with the shared save mechanics (`useClinicSectionForm`, `SectionSaveBar`, `LockedSectionNotice`, `BoolToggle`, accent colors) in `settingsShared.tsx`. **No Edit buttons (rule):** `useClinicSectionForm` returns `showSaveBar` (unsaved changes, an error, or `SAVED_NOTE_MS` = 2 s after a save) and cards render `SectionSaveBar` only then; fields are disabled only while saving (`<fieldset disabled={busy}>`). **Follow the saved values while untouched (rule):** whenever the saved clinic values change (a sync pull, another admin, another card's save), a card whose form still equals the previous saved values takes the new ones; a card with unsaved edits keeps them. So no card shows Save on its own, and Save never writes older values back. The Clinic profile card is the form itself (the read-only summary view is gone). Older mentions of `SettingsPage.tsx` below refer to these files.
 
 Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a fixed order (identity, then operations, then money, then system). The list lives once in `src/features/settings/sections.ts`; the router validates `?tab=` with its `parseSettingsSearch`.
 
