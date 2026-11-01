@@ -2777,7 +2777,21 @@ Clinic 5 / unlimited / 3, Clinic+ 10 / unlimited / 10), with `nextTierWithMore()
 row (one live Clinic+ clinic has 100 seats). The SQL function
 `plan_tier_defaults(tier)` returns the same numbers and `planLimits.parity.test.ts`
 keeps the two equal; new clinics are seeded from it, and a manual upgrade copies
-from it (snippet in the migration). **Team members without a login**
+from it (snippet in the migration). 
+
+| | Lite | Solo | Clinic | Clinic+ |
+|---|---|---|---|---|
+| Logins (seats) | 1 | 1 | 5 | 10 |
+| Visits a month | 50 | 200 | unlimited | unlimited |
+| Team members without a login | 1 | 1 | 3 | 10 |
+| Invoicing ("Give bill") | – | ✓ | ✓ | ✓ |
+| Note printing / PDF | – | ✓ | ✓ | ✓ |
+| Hospital revenue split & attribution audit | – | – | ✓ | ✓ |
+| Advanced assessment modules | – | – | – | ✓ |
+
+(Defaults per tier; `TIER_LIMITS` + `tierIncludes()` in `domain/plans.ts` are the source, `plan_tier_defaults()` mirrors the numbers. The client blocks at the visit cap; the server only at cap + 20.)
+
+**Team members without a login**
 (`clinic_plans.max_roster_therapists`, `domain/roster.ts`): an active therapist row
 with no `user_id` counts; adding one or switching one back on past the limit is
 refused in the app first (`rosterAddBlocked`: the Team add form, Reactivate and the
@@ -4757,7 +4771,21 @@ Clinic 5 / unlimited / 3, Clinic+ 10 / unlimited / 10), with `nextTierWithMore()
 row (one live Clinic+ clinic has 100 seats). The SQL function
 `plan_tier_defaults(tier)` returns the same numbers and `planLimits.parity.test.ts`
 keeps the two equal; new clinics are seeded from it, and a manual upgrade copies
-from it (snippet in the migration). **Team members without a login**
+from it (snippet in the migration). 
+
+| | Lite | Solo | Clinic | Clinic+ |
+|---|---|---|---|---|
+| Logins (seats) | 1 | 1 | 5 | 10 |
+| Visits a month | 50 | 200 | unlimited | unlimited |
+| Team members without a login | 1 | 1 | 3 | 10 |
+| Invoicing ("Give bill") | – | ✓ | ✓ | ✓ |
+| Note printing / PDF | – | ✓ | ✓ | ✓ |
+| Hospital revenue split & attribution audit | – | – | ✓ | ✓ |
+| Advanced assessment modules | – | – | – | ✓ |
+
+(Defaults per tier; `TIER_LIMITS` + `tierIncludes()` in `domain/plans.ts` are the source, `plan_tier_defaults()` mirrors the numbers. The client blocks at the visit cap; the server only at cap + 20.)
+
+**Team members without a login**
 (`clinic_plans.max_roster_therapists`, `domain/roster.ts`): an active therapist row
 with no `user_id` counts; adding one or switching one back on past the limit is
 refused in the app first (`rosterAddBlocked`: the Team add form, Reactivate and the

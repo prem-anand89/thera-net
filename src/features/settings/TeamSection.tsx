@@ -255,8 +255,9 @@ export function TeamMemberCard({
 
       if (therapist) {
         // Switching a team member without a login back on needs room in the plan. Refuse here, in plain words, so a
-        // write the server would reject never gets stuck in the sync queue.
-        if (therapist.active === false && !therapist.userId && shouldBeBookable && rosterAddBlocked(clinicRoster ?? [], rosterLimit, therapist.id)) {
+        // write the server would reject never gets stuck in the sync queue. (Adding an email invites them to a login of
+        // their own, so they stop counting as a team member without one and this check does not apply.)
+        if (therapist.active === false && !therapist.userId && !emailDraft.trim() && shouldBeBookable && rosterAddBlocked(clinicRoster ?? [], rosterLimit, therapist.id)) {
           setError(rosterLimitMessage(rosterLimit!));
           return;
         }

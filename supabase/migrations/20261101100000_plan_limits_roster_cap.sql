@@ -62,9 +62,14 @@ begin
     return new;
   end if;
   -- An edit of a row that was already active and unlinked changes nothing about the count. (The sync saves with an
-  -- upsert, so this trigger also fires for plain edits of an existing therapist; counting the row twice would refuse
-  -- renaming the only team member at the limit.)
+  -- upsert: Postgres fires BEFORE INSERT on the proposed row even when the id already exists, and only then the
+  -- UPDATE. So both paths must let an already-counted row through, otherwise renaming a team member would be refused
+  -- at the limit, and in a clinic that is OVER its limit, for instance after moving to a smaller plan, every edit of
+  -- either member would be refused and stick in the sync queue.)
   if tg_op = 'UPDATE' and old.active and old.user_id is null then
+    return new;
+  end if;
+  if tg_op = 'INSERT' and exists (select 1 from therapists where id = new.id and active and user_id is null) then
     return new;
   end if;
 
