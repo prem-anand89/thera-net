@@ -12,6 +12,8 @@ let therapists: Therapist[];
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (query: () => unknown) => query() }));
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1' }) }));
+const plan = { maxMembers: 5, enforcementEnabled: true, loading: false };
+vi.mock('@/app/useEntitlements', () => ({ useEntitlements: () => plan }));
 const createShiftTemplate = vi.fn();
 const updateShiftTemplate = vi.fn();
 const deleteShiftTemplate = vi.fn();
@@ -272,5 +274,83 @@ describe('ShiftTemplatesSection', () => {
         removedAt: expect.any(String),
       }));
     });
+  });
+});
+
+describe('ShiftTemplatesSection dual-mode editor', () => {
+  const open = () => {
+    templates = [];
+    render(<ShiftTemplatesSection />);
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add shift template/i }));
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. Morning Shift/i), { target: { value: 'Evening split' } });
+  };
+
+  it('a continuous shift shows its working time and saves its lunch', () => {
+    open();
+    expect(screen.getByTestId('shift-badge')).toHaveTextContent('7h working');
+    fireEvent.click(screen.getByRole('button', { name: /create shift template/i }));
+    expect(createShiftTemplate).toHaveBeenCalledWith({
+      clinicId: 'c1', name: 'Evening split', startMinute: 540, endMinute: 1020, breakDurationMinutes: 60, defaultBreakStartMinute: 780,
+    });
+  });
+
+  it('Split saves session 1 start, session 2 end, and the gap as the break', () => {
+    open();
+    fireEvent.click(screen.getByRole('radio', { name: 'Split' }));
+    fireEvent.change(screen.getByLabelText('Session 1 starts'), { target: { value: '08:30' } });
+    fireEvent.change(screen.getByLabelText('Session 1 ends'), { target: { value: '13:00' } });
+    fireEvent.change(screen.getByLabelText('Session 2 starts'), { target: { value: '16:30' } });
+    fireEvent.change(screen.getByLabelText('Session 2 ends'), { target: { value: '20:30' } });
+    expect(screen.getByTestId('shift-badge')).toHaveTextContent('8h 30m working · 3h 30m gap');
+    fireEvent.click(screen.getByRole('button', { name: /create shift template/i }));
+    expect(createShiftTemplate).toHaveBeenCalledWith({
+      clinicId: 'c1', name: 'Evening split', startMinute: 510, endMinute: 1230, breakDurationMinutes: 210, defaultBreakStartMinute: 780,
+    });
+  });
+
+  it('Split refuses a gap under 2 hours and says where to go instead', () => {
+    open();
+    fireEvent.click(screen.getByRole('radio', { name: 'Split' }));
+    fireEvent.change(screen.getByLabelText('Session 1 ends'), { target: { value: '13:00' } });
+    fireEvent.change(screen.getByLabelText('Session 2 starts'), { target: { value: '14:00' } });
+    expect(screen.getAllByText('For breaks under 2 hours, use Continuous shift with a break.').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /create shift template/i })).toBeDisabled();
+  });
+
+  it('opens an existing split template in Split mode with its sessions', () => {
+    templates = [
+      { id: 't-split', clinicId: 'c1', name: 'Split Shift', startMinute: 540, endMinute: 1200, breakDurationMinutes: 180, defaultBreakStartMinute: 780, active: true, updatedAt: '' },
+    ];
+    render(<ShiftTemplatesSection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('radio', { name: 'Split' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByLabelText('Session 1 ends')).toHaveValue('13:00');
+    expect(screen.getByLabelText('Session 2 starts')).toHaveValue('16:00');
+  });
+
+  it('offers the three suggested shifts to a clinic with none, and adds them', async () => {
+    templates = [];
+    render(<ShiftTemplatesSection />);
+    expect(screen.getByText(/Morning: 8:30 AM – 1:00 PM & Evening: 4:30 PM – 8:30 PM/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add suggested shifts' }));
+    await vi.waitFor(() => expect(createShiftTemplate).toHaveBeenCalledTimes(3));
+    expect(createShiftTemplate.mock.calls.map((c) => (c[0] as { name: string }).name)).toEqual(['Morning', 'Evening', 'Split']);
+  });
+
+  it('does not offer them once the clinic has had any shift, even an inactive one', () => {
+    templates = [{ id: 'old', clinicId: 'c1', name: 'Old', startMinute: 540, endMinute: 780, breakDurationMinutes: 0, defaultBreakStartMinute: null, active: false, updatedAt: '' }];
+    render(<ShiftTemplatesSection />);
+    expect(screen.queryByRole('button', { name: 'Add suggested shifts' })).toBeNull();
+  });
+
+  it('does not offer them on a one-login plan', () => {
+    plan.maxMembers = 1;
+    try {
+      templates = [];
+      render(<ShiftTemplatesSection />);
+      expect(screen.queryByRole('button', { name: 'Add suggested shifts' })).toBeNull();
+    } finally {
+      plan.maxMembers = 5;
+    }
   });
 });

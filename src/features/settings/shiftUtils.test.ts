@@ -514,3 +514,21 @@ describe('shiftUtils', () => {
   });
 });
 
+
+describe('describeSchedule for a clinic that closes at midday', () => {
+  it('says "Clinic default hours" and lists the clinic sessions, not one long block across the closure', () => {
+    const therapist = { workingHours: null };
+    const clinic = {
+      bookingStartHour: 9,
+      bookingEndHour: 20,
+      closedWeekdays: [0],
+      operatingHours: Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [[540, 780], [960, 1200]]])) as never,
+    };
+    const plain = describeSchedule(therapist, [], [], { bookingStartHour: 9, bookingEndHour: 20, closedWeekdays: [0] });
+    const split = describeSchedule(therapist, [], [], clinic);
+    expect(split.headline).toBe('Clinic default hours');
+    expect(split.summary).not.toBe(plain.summary);
+    expect(split.summary).toContain('&');
+    expect(plain.summary).not.toContain('&');
+  });
+});

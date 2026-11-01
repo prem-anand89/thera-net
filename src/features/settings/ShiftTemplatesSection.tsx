@@ -4,18 +4,28 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { repos, bookingService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useEntitlements } from '@/app/useEntitlements';
 import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
+import { formatRange12h, formatShiftSummary, getTemplatePalette, templateUsage } from './shiftUtils';
+import { ShiftTimesEditor } from './ShiftTimesEditor';
 import {
-  formatRange12h,
-  formatShiftSummary,
-  getTemplatePalette,
-  minutesToTimeInput,
-  templateUsage,
-  timeInputToMinutes,
-  validateShiftTemplate,
-} from './shiftUtils';
+  DEFAULT_SHIFT_DRAFT,
+  STARTER_SHIFTS,
+  draftFromTemplate,
+  draftProblem,
+  fieldsFromDraft,
+  type ShiftDraft,
+} from './shiftDraft';
 import type { ShiftTemplate } from '@/domain/types';
+
+/** "8:00 AM – 4:30 PM · 30-min break", or "Morning: … & Evening: …" for a split. */
+function describeStarter(shift: (typeof STARTER_SHIFTS)[number]): string {
+  const info = formatShiftSummary({ ...shift.fields, id: '', clinicId: '', name: shift.name, active: true, updatedAt: '' });
+  return info.isSplit && info.splitDetails
+    ? info.splitDetails
+    : `${formatRange12h(shift.fields.startMinute, shift.fields.endMinute)} · ${shift.fields.breakDurationMinutes}-min break`;
+}
 
 function ShiftTemplateCard({
   template,
@@ -26,21 +36,12 @@ function ShiftTemplateCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(template.name);
-  const [start, setStart] = useState(minutesToTimeInput(template.startMinute));
-  const [end, setEnd] = useState(minutesToTimeInput(template.endMinute));
-  const [breakDuration, setBreakDuration] = useState(String(template.breakDurationMinutes));
-  const [breakStart, setBreakStart] = useState(
-    template.defaultBreakStartMinute !== null ? minutesToTimeInput(template.defaultBreakStartMinute) : ''
-  );
+  const [draft, setDraft] = useState<ShiftDraft>(() => draftFromTemplate(template));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const startMin = timeInputToMinutes(start);
-  const endMin = timeInputToMinutes(end);
-  const breakMin = Number(breakDuration) || 0;
-  const breakStartMin = breakStart ? timeInputToMinutes(breakStart) : null;
-
-  const validation = validateShiftTemplate(name, startMin, endMin, breakMin, breakStartMin);
+  const problem = draftProblem(name, draft);
+  const validation = { valid: problem === null, error: problem };
   const shiftInfo = formatShiftSummary(template);
   const palette = getTemplatePalette(template.id);
 
@@ -52,13 +53,11 @@ function ShiftTemplateCard({
     setSaving(true);
     setError(null);
     try {
+      const fields = fieldsFromDraft(draft);
       await bookingService.updateShiftTemplate({
         templateId: template.id,
         name: name.trim(),
-        startMinute: startMin,
-        endMinute: endMin,
-        breakDurationMinutes: breakMin,
-        defaultBreakStartMinute: breakStartMin,
+        ...fields,
         active: template.active,
       });
       setEditing(false);
@@ -117,18 +116,10 @@ function ShiftTemplateCard({
   }
 
   if (editing) {
-    const liveWorkingMinutes = Math.max(0, endMin - startMin - breakMin);
-    const liveWorkingHours = (liveWorkingMinutes / 60).toFixed(
-      liveWorkingMinutes % 60 === 0 ? 0 : 1
-    );
-
     return (
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3 shadow-xs">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-[var(--ink)]">Editing {template.name}</span>
-          <span className="text-xs text-[var(--teal)] font-medium">
-            Working time: {liveWorkingHours}h/shift
-          </span>
         </div>
 
         {usedByTherapistNames.length > 0 && (
@@ -142,40 +133,7 @@ function ShiftTemplateCard({
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Start Time">
-            <input type="time" className={inputCls} value={start} onChange={(e) => setStart(e.target.value)} />
-          </Field>
-          <Field label="End Time">
-            <input type="time" className={inputCls} value={end} onChange={(e) => setEnd(e.target.value)} />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Break Duration (minutes)">
-            <input
-              type="number"
-              min={0}
-              className={inputCls}
-              value={breakDuration}
-              onChange={(e) => setBreakDuration(e.target.value)}
-            />
-          </Field>
-          <Field label="Default Break Start">
-            <input
-              type="time"
-              className={inputCls}
-              value={breakStart}
-              onChange={(e) => setBreakStart(e.target.value)}
-            />
-          </Field>
-        </div>
-
-        {breakMin >= 120 && (
-          <p className="text-[11px] font-medium text-[var(--teal)]">
-            ✨ Break is &ge; 2h: This shift will be treated as a Split Shift schedule.
-          </p>
-        )}
+        <ShiftTimesEditor draft={draft} onChange={setDraft} />
 
         <ErrorNote message={error || (!validation.valid ? validation.error : null)} />
 
@@ -301,25 +259,14 @@ function ShiftTemplateAddForm({
   onClose: () => void;
 }) {
   const [name, setName] = useState('');
-  const [start, setStart] = useState('09:00');
-  const [end, setEnd] = useState('17:00');
-  const [breakDuration, setBreakDuration] = useState('60');
-  const [breakStart, setBreakStart] = useState('13:00');
+  const [draft, setDraft] = useState<ShiftDraft>(DEFAULT_SHIFT_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const startMin = timeInputToMinutes(start);
-  const endMin = timeInputToMinutes(end);
-  const breakMin = Number(breakDuration) || 0;
-  const breakStartMin = breakStart ? timeInputToMinutes(breakStart) : null;
-
-  const validation = validateShiftTemplate(name, startMin, endMin, breakMin, breakStartMin);
-  const liveWorkingMinutes = Math.max(0, endMin - startMin - breakMin);
-  const liveWorkingHours = (liveWorkingMinutes / 60).toFixed(
-    liveWorkingMinutes % 60 === 0 ? 0 : 1
-  );
+  const problem = draftProblem(name, draft);
+  const validation = { valid: problem === null, error: problem };
 
   async function add() {
     if (!validation.valid) {
@@ -329,17 +276,9 @@ function ShiftTemplateAddForm({
     setSaving(true);
     setError(null);
     try {
-      await bookingService.createShiftTemplate({
-        clinicId,
-        name: name.trim(),
-        startMinute: startMin,
-        endMinute: endMin,
-        breakDurationMinutes: breakMin,
-        defaultBreakStartMinute: breakStartMin,
-      });
+      await bookingService.createShiftTemplate({ clinicId, name: name.trim(), ...fieldsFromDraft(draft) });
       setName('');
-      setBreakDuration('0');
-      setBreakStart('');
+      setDraft(DEFAULT_SHIFT_DRAFT);
       onClose();
     } catch (err) {
       setError(toFriendlyMessage(err));
@@ -352,9 +291,6 @@ function ShiftTemplateAddForm({
     <div className="rounded-2xl border border-[var(--teal)]/40 bg-[var(--surface)] p-4 space-y-3 shadow-md animate-in fade-in duration-150">
       <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
         <h3 className="font-semibold text-sm text-[var(--ink)]">Add new shift template</h3>
-        <span className="text-xs text-[var(--teal)] font-medium">
-          Working time: {liveWorkingHours}h/shift
-        </span>
       </div>
 
       <Field label="Shift Name">
@@ -366,40 +302,7 @@ function ShiftTemplateAddForm({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Start Time">
-          <input type="time" className={inputCls} value={start} onChange={(e) => setStart(e.target.value)} />
-        </Field>
-        <Field label="End Time">
-          <input type="time" className={inputCls} value={end} onChange={(e) => setEnd(e.target.value)} />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Break Duration (minutes)">
-          <input
-            type="number"
-            min={0}
-            className={inputCls}
-            value={breakDuration}
-            onChange={(e) => setBreakDuration(e.target.value)}
-          />
-        </Field>
-        <Field label="Default Break Start">
-          <input
-            type="time"
-            className={inputCls}
-            value={breakStart}
-            onChange={(e) => setBreakStart(e.target.value)}
-          />
-        </Field>
-      </div>
-
-      {breakMin >= 120 && (
-        <p className="text-[11px] font-medium text-[var(--teal)]">
-          ✨ Break is &ge; 2h: This shift will be formatted as a Split Shift schedule.
-        </p>
-      )}
+      <ShiftTimesEditor draft={draft} onChange={setDraft} />
 
       <ErrorNote message={error || (!validation.valid ? validation.error : null)} />
 
@@ -431,8 +334,27 @@ export function ShiftTemplatesSection() {
   const assignments = useLiveQuery(() => repos.therapistShiftAssignments.listByClinic(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
 
+  const entitlements = useEntitlements(clinic.id);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [starterBusy, setStarterBusy] = useState(false);
+  const [starterError, setStarterError] = useState<string | null>(null);
+  // Shifts only help a clinic with a team to roster; a one-login plan is not offered the starter set.
+  const oneLogin = entitlements.enforcementEnabled && !entitlements.loading && entitlements.maxMembers <= 1;
+
+  async function addStarterShifts() {
+    setStarterBusy(true);
+    setStarterError(null);
+    try {
+      for (const shift of STARTER_SHIFTS) {
+        await bookingService.createShiftTemplate({ clinicId: clinic.id, name: shift.name, ...shift.fields });
+      }
+    } catch (err) {
+      setStarterError(toFriendlyMessage(err));
+    } finally {
+      setStarterBusy(false);
+    }
+  }
 
   const therapistMap = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -494,6 +416,22 @@ export function ShiftTemplatesSection() {
       {activeTemplates.length === 0 && !isAddOpen && (
         <div className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center text-xs text-[var(--muted)]">
           No shift templates created yet. Click &ldquo;+ Add shift template&rdquo; to build your first template.
+          {!oneLogin && (templates ?? []).length === 0 && (
+            <div className="mt-3 space-y-2">
+              <p>Or start from three common shifts you can change afterwards:</p>
+              <ul className="mx-auto w-fit text-left">
+                {STARTER_SHIFTS.map((shift) => (
+                  <li key={shift.name}>
+                    <strong className="text-[var(--ink)]">{shift.name}</strong> · {describeStarter(shift)}
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className={btnSecondary} disabled={starterBusy} onClick={() => void addStarterShifts()}>
+                {starterBusy ? 'Adding…' : 'Add suggested shifts'}
+              </button>
+              <ErrorNote message={starterError} />
+            </div>
+          )}
         </div>
       )}
 

@@ -630,7 +630,7 @@ export function describeSchedule(
   therapist: Pick<Therapist, 'workingHours'>,
   assignments: TherapistShiftAssignment[],
   templates: ShiftTemplate[],
-  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'>
+  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'> & Partial<Pick<Clinic, 'operatingHours'>>
 ): ScheduleDescription {
   const closedDays = new Set(clinic.closedWeekdays ?? []);
   const clinicStart = (clinic.bookingStartHour ?? 9) * 60;
@@ -649,7 +649,12 @@ export function describeSchedule(
     if (wh) {
       intervals = wh[String(d)] ?? [];
     } else if (!closedDays.has(d)) {
-      intervals = [[clinicStart, clinicEnd]];
+      // The clinic's own sessions that weekday (a clinic that closes at midday has two), else its one block.
+      const stored: unknown = (clinic.operatingHours as Record<string, unknown> | null | undefined)?.[String(d)];
+      const sessions = Array.isArray(stored)
+        ? stored.filter((p): p is [number, number] => Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number')
+        : [];
+      intervals = sessions.length > 0 ? sessions : [[clinicStart, clinicEnd]];
     }
 
     if (intervals.length === 0) continue;
