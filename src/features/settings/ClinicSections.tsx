@@ -587,7 +587,9 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
       (c) => ({
         bookingStartHour: c.bookingStartHour ?? 9,
         bookingEndHour: c.bookingEndHour ?? 17,
-        operatingHours: c.operatingHours ?? null,
+        // Only present once the clinic has set some (or the editor changes it): a clinic row saved before the
+        // operating_hours migration is applied must not start sending a column the database does not have yet.
+        ...(c.operatingHours ? { operatingHours: c.operatingHours } : {}),
         staffBookingBufferHours: c.staffBookingBufferHours ?? 3,
         closedWeekdays: c.closedWeekdays ?? [],
         slotDurationMinutes: c.slotDurationMinutes ?? 30,
