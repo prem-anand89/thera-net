@@ -22,9 +22,6 @@ type ProfileFields = Pick<
   | 'email'
   | 'walkInMrnoPrefix'
   | 'logoPath'
-  | 'hasPartner'
-  | 'partnerHospitalName'
-  | 'partnerHospitalLogoPath'
   | 'signaturePath'
 
 >;
@@ -39,9 +36,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
         email: c.email,
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
-        hasPartner: c.hasPartner,
-        partnerHospitalName: c.partnerHospitalName,
-        partnerHospitalLogoPath: c.partnerHospitalLogoPath,
         signaturePath: c.signaturePath,
       }),
       onDirtyChange
@@ -51,7 +45,8 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
-  const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
+  // Partner name and logo are edited in Billing → Partner & split; the letterhead preview shows the saved ones.
+  const partnerLogoPreviewUrl = clinic.hasPartner ? publicLogoUrl(clinic.partnerHospitalLogoPath) : null;
   const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
   async function uploadLogo(file: File) {
@@ -68,22 +63,6 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
       return;
     }
     await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
-  }
-
-  async function uploadPartnerLogo(file: File) {
-    setError(null);
-    const supabase = getSupabase();
-    if (!supabase || !navigator.onLine) {
-      setError('Logo upload needs a connection.');
-      return;
-    }
-    const path = `${clinic.id}/partner-logo-${Date.now()}.${file.name.split('.').pop()}`;
-    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
-    if (uploadError) {
-      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
-      return;
-    }
-    await saveFieldNow({ partnerHospitalLogoPath: path } as Partial<ProfileFields>);
   }
 
   async function uploadSignature(file: File) {
@@ -175,21 +154,10 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                 </div>
               </div>
 
-              {(clinic.hasPartner || signaturePreviewUrl) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-[var(--border)]">
-                  {clinic.hasPartner && clinic.partnerHospitalName && (
-                    <div className="flex items-center gap-3">
-                      {partnerLogoPreviewUrl && (
-                        <img src={partnerLogoPreviewUrl} className="h-10 w-10 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Partner Logo" />
-                      )}
-                      <div>
-                        <div className="text-hint font-semibold text-[var(--muted)]">Partner Organization</div>
-                        <div className="text-[var(--ink)] font-medium">{clinic.partnerHospitalName}</div>
-                      </div>
-                    </div>
-                  )}
+              {signaturePreviewUrl && (
+                <div className="pt-4 border-t border-[var(--border)]">
                   {signaturePreviewUrl && (
-                    <div className="flex items-center gap-3 md:border-l md:border-[var(--border)] md:pl-6">
+                    <div className="flex items-center gap-3">
                       <img src={signaturePreviewUrl} className="h-10 w-20 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Signature" />
                       <div>
                         <div className="text-hint font-semibold text-[var(--muted)]">Authorized Signature</div>
@@ -285,56 +253,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-[var(--border)]">
-                  {/* Partner Column */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <input 
-                        type="checkbox" 
-                        id="hasPartner" 
-                        checked={form.hasPartner ?? false} 
-                        onChange={(e) => set({ hasPartner: e.target.checked })} 
-                        className="rounded border-[var(--border)] text-[var(--teal)] focus:ring-[var(--teal)]" 
-                      />
-                      <label htmlFor="hasPartner" className="text-sm font-medium text-[var(--ink)]">Has Partner Organization</label>
-                    </div>
-                    {form.hasPartner && (
-                      <div className="flex flex-col sm:flex-row gap-4 items-start bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
-                        <div className="shrink-0 flex flex-col items-center gap-2">
-                          {partnerLogoPreviewUrl ? (
-                            <img 
-                              src={partnerLogoPreviewUrl} 
-                              alt="Partner logo" 
-                              className="h-14 w-14 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm" 
-                            />
-                          ) : (
-                            <div className="h-14 w-14 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-caption">
-                              None
-                            </div>
-                          )}
-                          <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
-                            Upload logo
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              className="hidden" 
-                              onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])} 
-                            />
-                          </label>
-                        </div>
-                        <div className="flex-1 w-full">
-                          <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Partner Name</label>
-                          <input 
-                            className={inputCls} 
-                            value={form.partnerHospitalName ?? ''} 
-                            onChange={(e) => set({ partnerHospitalName: e.target.value || null })} 
-                            placeholder="e.g. City Hospital" 
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
+                <div className="pt-6 border-t border-[var(--border)]">
                   {/* Signature Column */}
                   <div>
                     <label className="block text-label font-medium text-[var(--muted)] mb-2">Authorized Signature</label>
@@ -399,7 +318,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
             phone: form.phone,
             email: form.email,
             gstNo: clinic.gstNo,
-            partnerHospitalName: clinic.partnerHospitalName
+            partnerHospitalName: clinic.hasPartner ? clinic.partnerHospitalName : null
           }}
           logoUrl={logoPreviewUrl}
           partnerLogoUrl={partnerLogoPreviewUrl}
@@ -733,15 +652,16 @@ export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: 
   );
 }
 
-type PaymentsFields = Pick<Clinic, 'partnerCollects' | 'defaultPaymentMethod'>;
+type PaymentsFields = Pick<Clinic, 'defaultPaymentMethod'>;
 
 /**
- * What payment screens start with, and — for a clinic with a partner — who collects the patient's money.
+ * What payment screens start with. Who collects patient payments, for a clinic with a partner, is set in
+ * Billing → Partner & split; here it only locks the default to "Collected by {partner}" when the partner collects.
  * On General (not Billing) so every plan reaches it.
  */
 export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<PaymentsFields>(
-    (c) => ({ partnerCollects: c.partnerCollects ?? false, defaultPaymentMethod: c.defaultPaymentMethod ?? null }),
+    (c) => ({ defaultPaymentMethod: c.defaultPaymentMethod ?? null }),
     onDirtyChange
   );
   const [editing, setEditing] = useState(false);
@@ -749,7 +669,7 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
   const hasPartner = Boolean(clinic.hasPartner);
-  const partnerCollects = hasPartner && Boolean(form.partnerCollects);
+  const partnerCollects = hasPartner && Boolean(clinic.partnerCollects);
   const options = paymentMethodOptions(clinic);
   const name = partnerName(clinic);
 
@@ -762,23 +682,6 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
       >
         <fieldset disabled={!editing} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {hasPartner && (
-              <Field
-                label={
-                  <>
-                    Who collects patient payments?
-                    <InfoTip text="We do: patients pay the clinic and you settle the partner's share. The partner does: patients pay at the partner's counter and the partner settles with you. Either way you can change it on a single visit." />
-                  </>
-                }
-              >
-                <BoolToggle
-                  value={partnerCollects}
-                  onChange={(v) => set({ partnerCollects: v })}
-                  offLabel="We do"
-                  onLabel={`${name} does`}
-                />
-              </Field>
-            )}
             <Field
               label={
                 <>
@@ -806,6 +709,11 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
                   </>
                 )}
               </select>
+              {partnerCollects && (
+                <p className="mt-1 text-hint text-[var(--muted)]">
+                  {name} collects patient payments. Change that in Billing → Partner &amp; split.
+                </p>
+              )}
             </Field>
           </div>
         </fieldset>

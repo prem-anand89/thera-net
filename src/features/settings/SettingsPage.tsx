@@ -236,10 +236,9 @@ export function SettingsPage() {
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
-  // Partner is hidden (not locked) below the Clinic tier — a Lite/Solo
-  // clinic can't have a partner split under its plan, so offering it as an
-  // upsell would mislead. Billing stays visible but locked: hiding a paid
-  // feature is how you get zero upgrades.
+  // Partner & split shows on every plan: below the tier with `revenueSplit` its switch is disabled and names the plan
+  // that has it (and a clinic that still has partner mode on can turn it off). Billing stays visible but locked:
+  // hiding a paid feature is how you get zero upgrades.
   const canSeePartner = entitlements.can('revenueSplit');
   const canSeeBilling = entitlements.can('invoicing');
 
@@ -487,7 +486,7 @@ export function SettingsPage() {
               ) : (
                 <LockedSectionNotice feature="invoicing" sectionLabel="Billing & invoicing" />
               )}
-              {canSeePartner && <PartnerSection onDirtyChange={setPartnerDirty} />}
+              <PartnerSection onDirtyChange={setPartnerDirty} allowed={canSeePartner} />
             </>
           )}
           {activeTab === 'account' && (

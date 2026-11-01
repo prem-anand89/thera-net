@@ -705,11 +705,11 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 
 | Tab | Contains |
 |---|---|
-| `general` | Clinic profile, region, clinical notes, Payments (default payment method, and "who collects patient payments" for a clinic with a partner; here so every plan reaches it, since Billing and Partner are plan-gated) |
+| `general` | Clinic profile (no partner fields), region, clinical notes, Payments (default payment method; on General so every plan reaches it; when the partner collects, the default is locked to "Collected by {partner}" with a pointer to Billing → Partner & split) |
 | `team` | Therapists, invites, logins |
 | `services` | Catalog (`catalogView` = packages / treatments / referrals) |
 | `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), online booking page, WhatsApp, feedback |
-| `billing` | Billing & invoicing (locked below the invoicing tier), Partner & split (hidden without `revenueSplit`) |
+| `billing` | Billing & invoicing (locked below the invoicing tier), **Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. |
 | `account` | Plan, historical data import, backup, danger zone |
 
 Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` / `referrals` → services with that view. Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
