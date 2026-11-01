@@ -56,6 +56,7 @@ export function ClinicUtilisationCard() {
       clinicHours: {
         startHour: clinic.bookingStartHour ?? 9,
         endHour: clinic.bookingEndHour ?? 17,
+        operating: clinic.operatingHours ?? null,
       },
       closedWeekdays: clinic.closedWeekdays,
       closedDates,

@@ -1,6 +1,7 @@
 import { therapistUtilisation, visitInvolvement, type Utilisation, type UtilisationVisit } from './utilisation';
 import type { UtilisationBucket } from './utilisationPeriods';
 import type { WorkingHours } from './types';
+import type { ClinicHoursInput } from './schedule';
 
 export type ReportTherapist = {
   id: string;
@@ -59,7 +60,7 @@ export function clinicUtilisationReport(input: {
   buckets: UtilisationBucket[];
   therapists: ReportTherapist[];
   visits: ReportVisit[];
-  clinicHours: { startHour: number; endHour: number };
+  clinicHours: ClinicHoursInput;
   closedWeekdays?: number[];
   closedDates: { closedDate: string; label: string | null }[];
   slotMinutes: number;

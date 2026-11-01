@@ -78,6 +78,28 @@ describe('ResourceDayGrid', () => {
     expect(screen.getByRole('button', { name: /Booking request from Req a/ })).toHaveTextContent('Req a?');
   });
 
+  it("shades the clinic's midday closure in every column, even over a therapist whose own hours run through it", () => {
+    const { container } = render(
+      <ResourceDayGrid
+        {...baseProps({
+          hours: { startHour: 9, endHour: 18 },
+          workingFor: () => [{ start: 540, end: 1080 }], // both therapists work straight through
+          closuresFor: () => [{ start: 780, end: 960 }], // clinic closed 1-4 PM
+        })}
+      />
+    );
+    const bands = container.querySelectorAll('[data-clinic-closure]');
+    expect(bands).toHaveLength(2); // one per therapist column
+    expect(bands[0]).toHaveTextContent('Clinic closed');
+    // (13:00 - 9:00) hours after the grid starts
+    expect(bands[0]).toHaveStyle({ top: `${4 * 60 * PX_PER_MINUTE}px` });
+  });
+
+  it('draws no closure band on a clinic with no closure', () => {
+    const { container } = render(<ResourceDayGrid {...baseProps({ closuresFor: () => [] })} />);
+    expect(container.querySelectorAll('[data-clinic-closure]')).toHaveLength(0);
+  });
+
   it('sizes and positions a block by its start and length', () => {
     render(<ResourceDayGrid {...baseProps()} />);
     const block = screen.getByRole('button', { name: /Priya/ });

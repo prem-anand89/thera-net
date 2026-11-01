@@ -13,11 +13,21 @@ const toMinutes = (time: string) => {
   return h * 60 + m;
 };
 
-/** Clinic hours on every open weekday — the starting point for custom hours. */
-export function defaultWorkingHours(clinic: { startHour: number; endHour: number; closedWeekdays?: number[] }): WorkingHours {
+type ClinicHoursForSheet = { startHour: number; endHour: number; closedWeekdays?: number[]; operating?: WorkingHours | null };
+
+/**
+ * Clinic hours on every open weekday — the starting point for custom hours. A clinic that closes at midday starts the
+ * therapist on the same sessions (9–1 and 4–8), not on one long block across the closure.
+ */
+export function defaultWorkingHours(clinic: ClinicHoursForSheet): WorkingHours {
   const hours: WorkingHours = {};
   for (const day of WEEK_ORDER) {
-    if (!(clinic.closedWeekdays ?? []).includes(Number(day))) hours[day] = [[clinic.startHour * 60, clinic.endHour * 60]];
+    if ((clinic.closedWeekdays ?? []).includes(Number(day))) continue;
+    const stored: unknown = clinic.operating?.[day];
+    const sessions = Array.isArray(stored)
+      ? stored.filter((p): p is [number, number] => Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number')
+      : [];
+    hours[day] = sessions.length > 0 ? sessions.map(([start, end]) => [start, end] as [number, number]) : [[clinic.startHour * 60, clinic.endHour * 60]];
   }
   return hours;
 }
@@ -38,7 +48,7 @@ export function WorkingHoursSheet({
   open: boolean;
   therapistName: string;
   value: WorkingHours | null | undefined;
-  clinic: { startHour: number; endHour: number; closedWeekdays?: number[] };
+  clinic: ClinicHoursForSheet;
   onSave: (hours: WorkingHours | null) => Promise<void>;
   onClose: () => void;
 }) {

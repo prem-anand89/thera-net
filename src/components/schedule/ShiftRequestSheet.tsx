@@ -30,7 +30,7 @@ export function ShiftRequestSheet({
   clinicId: UUID;
   /** The therapist's hours in effect now — pre-fills the custom-hours fallback. */
   currentWorkingHours: WorkingHours | null;
-  clinic: { startHour: number; endHour: number; closedWeekdays?: number[] };
+  clinic: { startHour: number; endHour: number; closedWeekdays?: number[]; operating?: WorkingHours | null };
   onClose: () => void;
 }) {
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);

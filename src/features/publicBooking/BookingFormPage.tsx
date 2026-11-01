@@ -5,7 +5,7 @@ import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID, WorkingHours } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
+import { addDays, clinicIntervals, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
 import {
   CLINIC_TIMEZONE,
   clinicNow,
@@ -259,6 +259,8 @@ export function BookingFormPage() {
   const [slotDuration, setSlotDuration] = useState(30);
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
+  // A clinic that closes in the middle of the day: the real open intervals, so no time inside the closure is offered.
+  const [operatingHours, setOperatingHours] = useState<WorkingHours | null>(null);
   // The clinic's own time zone (from its settings); India until the clinic's info has loaded.
   const [timeZone, setTimeZone] = useState(CLINIC_TIMEZONE);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
@@ -299,7 +301,7 @@ export function BookingFormPage() {
   const clinicCurrent = useClinicNow(timeZone);
   const todayIso = clinicCurrent.dateIso;
   const currentMinuteOfDay = clinicCurrent.minutes + 15;
-  const clinicHours = useMemo(() => ({ startHour, endHour }), [startHour, endHour]);
+  const clinicHours = useMemo(() => ({ startHour, endHour, operating: operatingHours }), [startHour, endHour, operatingHours]);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -322,6 +324,7 @@ export function BookingFormPage() {
         setSlotDuration(info.slotDurationMinutes);
         setStartHour(info.bookingStartHour);
         setEndHour(info.bookingEndHour);
+        setOperatingHours(info.operatingHours ?? null);
         if (info.timezone) setTimeZone(info.timezone);
         setTherapists(therapistList);
         setAvailability(avail.a);
@@ -628,7 +631,15 @@ export function BookingFormPage() {
 
   // ── Layout ────────────────────────────────────────────────────────────────
   const stripDates = Array.from({ length: 14 }, (_, index) => addDays(todayIso, index));
-  const hoursLabel = `${generateScheduleSlots(60, startHour, startHour + 1)[0]?.label.replace(':00', '') ?? ''}–${generateScheduleSlots(60, endHour, endHour + 1)[0]?.label.replace(':00', '') ?? ''}`;
+  // "9 AM–8 PM", or for a clinic that closes at midday "9 AM–1 PM · 4 PM–8 PM" (the sessions of the day being picked, else today's).
+  const shortHour = (minutes: number) => {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    return `${hour % 12 || 12}${minute ? `:${String(minute).padStart(2, '0')}` : ''} ${hour >= 12 ? 'PM' : 'AM'}`;
+  };
+  const hoursLabel = clinicIntervals(clinicHours, preferredDate || todayIso)
+    .map((interval) => `${shortHour(interval.start)}–${shortHour(interval.end)}`)
+    .join(' · ');
 
   return (
     <div className="min-h-dvh bg-slate-50 text-[var(--ink)] antialiased">

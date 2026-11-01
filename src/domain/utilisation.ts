@@ -1,4 +1,4 @@
-import { addDays, isClosedDay, workingIntervals } from './schedule';
+import { addDays, isClosedDay, workingIntervals, type ClinicHoursInput } from './schedule';
 import type { Visit, VisitItem, WorkingHours } from './types';
 import { therapistMinutes, treatedTherapists } from './visitLines';
 
@@ -20,7 +20,7 @@ export type UtilisationInput = {
   /** Inclusive yyyy-mm-dd range. */
   from: string;
   to: string;
-  clinicHours: { startHour: number; endHour: number };
+  clinicHours: ClinicHoursInput;
   closedWeekdays?: number[];
   closedDates: { closedDate: string; label: string | null }[];
   /** Each logged visit counts as one slot of this length. */

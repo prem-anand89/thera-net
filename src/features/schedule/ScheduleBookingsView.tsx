@@ -39,6 +39,8 @@ import {
   clockTextMinutes,
   requestedSlotTime,
   firstAvailableSlot,
+  clinicIntervals,
+  clinicGaps,
 } from '@/domain/schedule';
 import type { Appointment, AppointmentRequest, UUID, WorkingHours } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -182,8 +184,8 @@ export function ScheduleBookingsView({
   // Staff start times (Settings → "Start times every"); the slot length stays the default length.
   const stepMinutes = startStepMinutes(clinic);
   const hours = useMemo(
-    () => ({ startHour: clinic.bookingStartHour ?? 9, endHour: clinic.bookingEndHour ?? 17 }),
-    [clinic.bookingStartHour, clinic.bookingEndHour]
+    () => ({ startHour: clinic.bookingStartHour ?? 9, endHour: clinic.bookingEndHour ?? 17, operating: clinic.operatingHours ?? null }),
+    [clinic.bookingStartHour, clinic.bookingEndHour, clinic.operatingHours]
   );
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -370,6 +372,8 @@ export function ScheduleBookingsView({
     [clinic.closedWeekdays, closedDates]
   );
   const closedToday = closedFor(date);
+  // The clinic's midday closure on a date, drawn on the grid even over a therapist whose own hours run through it.
+  const closuresFor = useCallback((day: string) => clinicGaps(clinicIntervals(hours, day)), [hours]);
   const dayNow = date === today ? now.minutes : null;
   const closures = useMemo(
     () => groupClosedRanges(closedDates ?? []).filter((range) => range.to >= today).slice(0, 8),
@@ -706,6 +710,7 @@ export function ScheduleBookingsView({
         length: target.duration,
         working: targetWorking,
         clinicHours: hours,
+        clinicWorking: clinicIntervals(hours, target.date),
       });
       const isOffHours = status !== 'ok';
 
@@ -1114,6 +1119,7 @@ export function ScheduleBookingsView({
                     workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
                     ghosts={requestGhosts}
+                    closuresFor={closuresFor}
                   />
                 ) : threeDayTherapist ? (
                   <MobileThreeDayGrid
@@ -1138,6 +1144,7 @@ export function ScheduleBookingsView({
                     }}
                     workingFor={(day) => workingFor(threeDayTherapist.id, day)}
                     drag={dragOptions}
+                    closuresFor={closuresFor}
                   />
                 ) : null}
               </div>
@@ -1165,6 +1172,7 @@ export function ScheduleBookingsView({
                       workingFor={(day) => workingFor(singleTherapist.id, day)}
                       drag={dragOptions}
                       ghosts={requestGhosts.filter((g) => g.therapistId === singleTherapist.id)}
+                      closuresFor={closuresFor}
                     />
                   ) : (
                     <WeekTimeGrid
@@ -1184,6 +1192,7 @@ export function ScheduleBookingsView({
                       onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
                       drag={dragOptions}
                       ghosts={requestGhosts.filter((g) => visibleRoster.some((t) => t.id === g.therapistId))}
+                      closuresFor={closuresFor}
                       multi={{
                         therapists: weekGridTherapists,
                         canBookFor,
@@ -1215,6 +1224,7 @@ export function ScheduleBookingsView({
                     workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
                     ghosts={requestGhosts}
+                    closuresFor={closuresFor}
                   />
                 )}
               </div>

@@ -25,7 +25,7 @@ type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'clinicalDocs' | 'pa
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
   profile: 'general',
-  clinicHours: 'general',
+  clinicHours: 'booking',
   clinicRegion: 'general',
   clinicalDocs: 'general',
   payments: 'general',

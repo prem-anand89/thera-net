@@ -62,6 +62,8 @@ export type GridColumn = {
   multi?: MultiLaneConfig;
   /** Pending booking requests drawn as quiet markers at their requested time. */
   ghosts?: RequestGhost[];
+  /** The clinic's closed stretches that day (a midday closure), shaded even over a therapist whose hours run through them. */
+  closures?: Interval[];
 };
 
 export type MoveTarget = { date: string; therapistId: string | null; start: number; duration: number };

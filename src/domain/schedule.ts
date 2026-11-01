@@ -366,10 +366,12 @@ export function isPublicSlotTaken(
   preferredTherapistId: string | null,
   /** Therapists with custom hours; others use the clinic's hours. */
   therapistHours: Record<string, WorkingHours> = {},
-  clinicHours?: { startHour: number; endHour: number }
+  clinicHours?: ClinicHoursInput
 ): boolean {
   const start = slotMinutes;
   const end = slotMinutes + lengthMinutes;
+  // The clinic closes in the middle of the day: no patient is offered a time that runs into the closure.
+  if (clinicHours?.operating && !withinWorking(clinicIntervals(clinicHours, date), start, lengthMinutes)) return true;
   const off = (therapistId: string | null) =>
     therapistId !== null &&
     clinicHours !== undefined &&
@@ -453,7 +455,7 @@ export function firstAvailableSlot(input: {
   therapistIds: string[];
   fromDate: string;
   days: number;
-  hours: { startHour: number; endHour: number };
+  hours: ClinicHoursInput;
   slotMinutes: number;
   lengthMinutes: number;
   now: Date;
@@ -471,7 +473,10 @@ export function firstAvailableSlot(input: {
   for (let offset = 0; offset < input.days; offset += 1) {
     const date = addDays(input.fromDate, offset);
     if (input.isClosed(date)) continue;
+    const clinicOpen = input.hours.operating ? clinicIntervals(input.hours, date) : null;
     for (const slot of slots) {
+      // Never offer a time that runs into the clinic's midday closure.
+      if (clinicOpen && closureOverlapping(clinicOpen, slot.minutes, input.lengthMinutes)) continue;
       if (input.timeOfDay && input.timeOfDay !== 'any' && partOfDay(slot.minutes) !== input.timeOfDay) continue;
       if (slot.minutes + input.lengthMinutes > input.hours.endHour * 60) continue;
       if (localDateTime(date, slot.time).getTime() < input.now.getTime()) continue;
@@ -493,17 +498,54 @@ export function firstAvailableSlot(input: {
 // ---------------------------------------------------------------------------
 
 /**
+ * The clinic's hours as the code passes them around: the outer envelope (`startHour`..`endHour`, what the grid spans)
+ * and, for a clinic that closes in the middle of the day (a lunch break), `operating`: the real open intervals per
+ * weekday, in the same shape as a therapist's `WorkingHours`. `operating` null / absent = one block, as before.
+ */
+export type ClinicHoursInput = { startHour: number; endHour: number; operating?: WorkingHours | null };
+
+/** The clinic's open intervals on a date: that weekday's entry in `operating`, else the one block start..end. */
+export function clinicIntervals(clinicHours: ClinicHoursInput, date: string): Interval[] {
+  const block = [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
+  const operating = clinicHours.operating;
+  if (!operating || typeof operating !== 'object') return block;
+  const day: unknown = (operating as Record<string, unknown>)[String(localDateTime(date, '00:00').getDay())];
+  if (!Array.isArray(day)) return block;
+  const parsed = day
+    .filter((pair): pair is [number, number] => Array.isArray(pair) && typeof pair[0] === 'number' && typeof pair[1] === 'number')
+    .map(([start, end]) => ({ start, end }))
+    .sort((a, b) => a.start - b.start);
+  return parsed.length > 0 ? parsed : block;
+}
+
+/** The closed stretches between a clinic's open intervals (a lunch break): [end of one, start of the next). */
+export function clinicGaps(intervals: Interval[]): Interval[] {
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  const gaps: Interval[] = [];
+  for (let i = 1; i < sorted.length; i += 1) {
+    if (sorted[i].start > sorted[i - 1].end) gaps.push({ start: sorted[i - 1].end, end: sorted[i].start });
+  }
+  return gaps;
+}
+
+/** The clinic closure ("Closed 1:00 PM – 4:00 PM") that [start, start + length) runs into, if any. */
+export function closureOverlapping(intervals: Interval[], start: number, length: number): Interval | null {
+  return clinicGaps(intervals).find((gap) => start < gap.end && start + length > gap.start) ?? null;
+}
+
+/**
  * A therapist's working intervals on a date (minutes after midnight). No
- * custom hours = the clinic's booking hours. A weekday missing from custom
+ * custom hours = the clinic's open intervals (one block, or the split hours
+ * when the clinic closes at midday). A weekday missing from custom
  * hours is a day off. Clinic closures are handled separately (isClosedDay).
  */
 export function workingIntervals(
   workingHours: WorkingHours | null | undefined,
   date: string,
-  clinicHours: { startHour: number; endHour: number }
+  clinicHours: ClinicHoursInput
 ): Interval[] {
-  if (!workingHours) return [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
-  if (typeof workingHours !== 'object') return [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
+  if (!workingHours) return clinicIntervals(clinicHours, date);
+  if (typeof workingHours !== 'object') return clinicIntervals(clinicHours, date);
   const weekday = String(localDateTime(date, '00:00').getDay()) as keyof WorkingHours;
   const day: unknown = workingHours[weekday];
   // Defensive: a malformed day (not an array of [start, end] pairs) reads as
@@ -544,16 +586,23 @@ export function slotHoursStatus({
   length,
   working,
   clinicHours,
+  clinicWorking,
 }: {
   minutes: number;
   length: number;
   working: Interval[];
   clinicHours: { startHour: number; endHour: number };
+  /** The clinic's open intervals that day (`clinicIntervals`). With a midday closure, a slot that runs into it is
+   *  outside clinic hours even when the therapist's own hours span the gap. Omit for a one-block clinic. */
+  clinicWorking?: Interval[];
 }): SlotHoursStatus {
   const clinicStart = clinicHours.startHour * 60;
   const clinicEnd = clinicHours.endHour * 60;
+  if (clinicWorking && closureOverlapping(clinicWorking, minutes, length)) return 'outside_clinic';
   if (withinWorking(working, minutes, length)) return 'ok';
-  const inClinic = minutes >= clinicStart && minutes + length <= clinicEnd;
+  const inClinic = clinicWorking
+    ? withinWorking(clinicWorking, minutes, length)
+    : minutes >= clinicStart && minutes + length <= clinicEnd;
   return inClinic ? 'outside_therapist' : 'outside_clinic';
 }
 

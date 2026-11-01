@@ -1,3 +1,4 @@
+import { OperatingHoursEditor } from './OperatingHoursEditor';
 import { COUNTRY_CODES } from '@/domain/countryCodes';
 import { clinicCountryCode, clinicTimezone, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
 import { PhoneField } from '@/components/PhoneField';
@@ -573,6 +574,7 @@ type ClinicHoursFields = Pick<
   Clinic,
   | 'bookingStartHour'
   | 'bookingEndHour'
+  | 'operatingHours'
   | 'staffBookingBufferHours'
   | 'closedWeekdays'
   | 'slotDurationMinutes'
@@ -580,11 +582,12 @@ type ClinicHoursFields = Pick<
 >;
 
 export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } =
+  const { form, set, save, cancel, dirty, saved, busy, error, setError } =
     useClinicSectionForm<ClinicHoursFields>(
       (c) => ({
         bookingStartHour: c.bookingStartHour ?? 9,
         bookingEndHour: c.bookingEndHour ?? 17,
+        operatingHours: c.operatingHours ?? null,
         staffBookingBufferHours: c.staffBookingBufferHours ?? 3,
         closedWeekdays: c.closedWeekdays ?? [],
         slotDurationMinutes: c.slotDurationMinutes ?? 30,
@@ -593,9 +596,18 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
       onDirtyChange
     );
   const [editing, setEditing] = useState(false);
+  // What is wrong with the hours as typed (a second session that starts before the first ends, ...): Save refuses until it is fixed.
+  const [hoursProblem, setHoursProblem] = useState<string | null>(null);
   useEffect(() => {
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
+  async function saveHours() {
+    if (hoursProblem) {
+      setError(hoursProblem);
+      return;
+    }
+    await save();
+  }
 
   return (
     <div className="mt-6">
@@ -606,40 +618,18 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
       >
         <fieldset disabled={!editing} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                <>
-                  Clinic operating hours
-                  <InfoTip text="The earliest and latest times your clinic is open for appointments and therapist shifts." />
-                </>
-              }
-            >
-              <div className="flex items-center gap-2">
-                <select
-                  className={inputCls}
-                  value={form.bookingStartHour ?? 9}
-                  onChange={(e) => set({ bookingStartHour: parseInt(e.target.value, 10) })}
-                >
-                  {Array.from({ length: 24 }).map((_, i) => (
-                    <option key={`start-${i}`} value={i}>
-                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-[var(--muted)]">to</span>
-                <select
-                  className={inputCls}
-                  value={form.bookingEndHour ?? 17}
-                  onChange={(e) => set({ bookingEndHour: parseInt(e.target.value, 10) })}
-                >
-                  {Array.from({ length: 24 }).map((_, i) => (
-                    <option key={`end-${i}`} value={i}>
-                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </Field>
+            <div className="sm:col-span-2">
+              <OperatingHoursEditor
+                operatingHours={form.operatingHours}
+                startHour={form.bookingStartHour ?? 9}
+                endHour={form.bookingEndHour ?? 17}
+                closedWeekdays={form.closedWeekdays ?? []}
+                onChange={(change, problem) => {
+                  setHoursProblem(problem);
+                  set(change);
+                }}
+              />
+            </div>
 
             <Field
               label={
@@ -764,9 +754,10 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
             dirty={dirty}
             saved={saved}
             busy={busy}
-            onSave={() => void save()}
+            onSave={() => void saveHours()}
             onCancel={() => {
               cancel();
+              setHoursProblem(null);
               setEditing(false);
             }}
             error={error}

@@ -64,6 +64,8 @@ type DayColumnProps = {
   multi?: MultiLaneConfig;
   /** Pending booking requests, drawn as quiet markers at their requested time. */
   ghosts?: RequestGhost[];
+  /** The clinic's closed stretches that day, shaded over the column. */
+  closures?: Interval[];
 };
 
 /** Grid block look from the shared status colour code (`appointmentFill`). */
@@ -105,6 +107,7 @@ export function DayColumn({
   rail = false,
   multi,
   ghosts,
+  closures,
 }: DayColumnProps) {
   const [columnElement, setColumnElement] = useState<HTMLDivElement | null>(null);
   const columnWidth = useElementWidth(phone || multi ? columnElement : null, 150);
@@ -216,6 +219,20 @@ export function DayColumn({
           data-break={range.kind === 'break' ? true : undefined}
         />
       ))}
+      {!closed.closed &&
+        closures?.map((range) => (
+          <div
+            key={`closure-${range.start}`}
+            className="pointer-events-none absolute inset-x-0 z-[1] border-y border-dashed border-[var(--slate)]/40 bg-[var(--paper)]/80"
+            style={{ top: (range.start - hours.startHour * 60) * pxPerMinute, height: (range.end - range.start) * pxPerMinute }}
+            aria-hidden
+            data-clinic-closure
+          >
+            {(range.end - range.start) * pxPerMinute >= 28 && (
+              <span className="block truncate px-1 pt-0.5 text-center text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">Clinic closed</span>
+            )}
+          </div>
+        ))}
       {closed.closed && (
         <div className="pointer-events-none absolute inset-x-1 top-1 z-[1] truncate rounded bg-[var(--surface)]/90 px-1.5 py-0.5 text-center text-[11px] font-medium text-[var(--slate)]">
           Closed{closed.label ? ` · ${closed.label}` : ''}

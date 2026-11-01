@@ -5,13 +5,14 @@ import {
   toLocalDateStr,
   withinWorking,
   workingIntervals,
+  type ClinicHoursInput,
 } from '@/domain/schedule';
 
 export function appointmentsOutsideHours(input: {
   appointments: Appointment[];
   therapistId: string;
   hours: WorkingHours | null;
-  clinicHours: { startHour: number; endHour: number };
+  clinicHours: ClinicHoursInput;
   slotMinutes: number;
   todayIso: string;
 }): Appointment[] {

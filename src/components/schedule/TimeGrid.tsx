@@ -244,6 +244,7 @@ export function GridFrame({
             isColleague={column.isColleague}
             multi={column.multi}
             ghosts={column.ghosts}
+            closures={column.closures}
           />
         ))}
       </div>
@@ -284,6 +285,7 @@ export function ResourceDayGrid({
   phone = false,
   pxPerMinute,
   ghosts,
+  closuresFor,
 }: {
   date: string;
   today: string;
@@ -313,6 +315,8 @@ export function ResourceDayGrid({
   pxPerMinute?: number;
   /** Pending booking requests; each is drawn in its therapist's column on this date. */
   ghosts?: RequestGhost[];
+  /** The clinic's closed stretches on a date (a midday closure), shaded in every column. */
+  closuresFor?: (date: string) => Interval[];
 }) {
   const columns: GridColumn[] = therapists.map((therapist) => {
     const isColleague = Boolean(therapist.id && !canBookFor(therapist.id));
@@ -325,6 +329,7 @@ export function ResourceDayGrid({
       date,
       closed,
       ghosts: therapist.id ? ghosts?.filter((g) => g.date === date && g.therapistId === therapist.id) : undefined,
+      closures: closuresFor?.(date),
       appointments: appointments.filter(
         (appointment) =>
           appointmentStartsOnDate(appointment, date) &&
@@ -436,6 +441,7 @@ export function WeekTimeGrid({
   isColleague = false,
   multi,
   ghosts,
+  closuresFor,
 }: {
   days: string[];
   today: string;
@@ -466,6 +472,8 @@ export function WeekTimeGrid({
   multi?: WeekMultiTherapist;
   /** Pending booking requests for the shown therapist(s); each is drawn on its date. */
   ghosts?: RequestGhost[];
+  /** The clinic's closed stretches on a date (a midday closure), shaded in every column. */
+  closuresFor?: (date: string) => Interval[];
 }) {
   const [overflowList, setOverflowList] = useState<{ title: string; appointments: Appointment[] } | null>(null);
   const columns: GridColumn[] = days.map((day) => {
@@ -527,6 +535,7 @@ export function WeekTimeGrid({
       closed: closedFor(day),
       appointments: dayAppointments,
       ghosts: ghosts?.filter((g) => g.date === day),
+      closures: closuresFor?.(day),
       header: (
         <button type="button" onClick={() => onOpenDay(day)} className="w-full text-left" aria-label={`Open ${day} in day view`}>
           <span className={`block text-[11px] uppercase ${day === today ? 'text-[var(--teal)]' : 'text-[var(--muted)]'}`}>

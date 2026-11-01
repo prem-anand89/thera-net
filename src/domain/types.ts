@@ -158,6 +158,9 @@ export interface Clinic {
   bookingSlug?: string | null;
   bookingStartHour?: number;
   bookingEndHour?: number;
+  /** The clinic's real open intervals per weekday when it closes in the middle of the day (a lunch break). null / absent =
+   *  one block from bookingStartHour to bookingEndHour. The start / end hours above are the outer envelope derived from this. */
+  operatingHours?: WorkingHours | null;
   staffBookingBufferHours?: number;
   closedWeekdays?: number[];
   /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */

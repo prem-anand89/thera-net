@@ -35,6 +35,8 @@ import {
   seriesProblem,
   WEEKDAY_NAMES,
   workingIntervals,
+  clinicIntervals,
+  closureOverlapping,
   clockTextMinutes,
   minutesToTime,
 } from '@/domain/schedule';
@@ -114,6 +116,8 @@ export function BookSlotSheet({
   const stepMinutes = startStepMinutes(clinic);
   const startHour = clinic.bookingStartHour ?? 9;
   const endHour = clinic.bookingEndHour ?? 17;
+  // The clinic's hours with its real open intervals (a clinic that closes at midday), not just the outer envelope.
+  const clinicHoursIn = { startHour, endHour, operating: clinic.operatingHours ?? null };
   const today = toLocalDateStr(new Date());
   const isReschedule = Boolean(rescheduleAppointment);
 
@@ -297,19 +301,20 @@ export function BookSlotSheet({
   const askedTimeTaken = askedMinutes !== null && occupied(minutesToTime(askedMinutes));
   const therapistRow = (therapists ?? []).find((t) => t.id === therapistId);
   const therapistName = therapistRow?.name;
-  const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, { startHour, endHour });
+  const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, clinicHoursIn);
+  const clinicOpenNow = clinicIntervals(clinicHoursIn, selectedDate);
   const bufferHours = clinic.staffBookingBufferHours ?? 3;
   const slotWindow = bookableWindow({
-    clinicHours: { startHour, endHour },
+    clinicHours: clinicHoursIn,
     bufferHours,
     working: workingNow,
   });
   const slots = generateScheduleSlots(stepMinutes, slotWindow.startHour, slotWindow.endHour);
   const workingSlots = slots.filter(
-    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'ok'
+    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: clinicHoursIn, clinicWorking: clinicOpenNow }) === 'ok'
   );
   const outsideSlots = slots.filter(
-    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) !== 'ok'
+    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: clinicHoursIn, clinicWorking: clinicOpenNow }) !== 'ok'
   );
   const isOutsideExpanded =
     showOffHours ||
@@ -349,14 +354,14 @@ export function BookSlotSheet({
       therapistIds: candidates as string[],
       fromDate: selectedDate < today ? today : selectedDate,
       days: 21,
-      hours: { startHour, endHour },
+      hours: clinicHoursIn,
       slotMinutes,
       lengthMinutes,
       now,
       isClosed: (date) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed,
       ignoreAppointmentId: rescheduleAppointment?.id,
       workingFor: (id, date) =>
-        workingIntervals((therapists ?? []).find((t) => t.id === id)?.workingHours, date, { startHour, endHour }),
+        workingIntervals((therapists ?? []).find((t) => t.id === id)?.workingHours, date, clinicHoursIn),
     });
     if (!found) return setError('No free time in 3 weeks for this length.');
     setError(null);
@@ -368,7 +373,7 @@ export function BookSlotSheet({
   }
 
   const isClosedDate = (date: string) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed;
-  const workingOn = (date: string) => workingIntervals(therapistRow?.workingHours, date, { startHour, endHour });
+  const workingOn = (date: string) => workingIntervals(therapistRow?.workingHours, date, clinicHoursIn);
   const plannedRows =
     repeat && selectedTime && therapistId
       ? seriesDates({ startDate: selectedDate, weekdays: repeatDays, count: repeatCount, isClosed: isClosedDate }).map((date) => {
@@ -391,7 +396,7 @@ export function BookSlotSheet({
       therapistIds: [therapistId],
       fromDate: date,
       days: 1,
-      hours: { startHour, endHour },
+      hours: clinicHoursIn,
       slotMinutes,
       lengthMinutes,
       now,
@@ -427,13 +432,17 @@ export function BookSlotSheet({
       minutes: scheduledMinutes,
       length: lengthMinutes,
       working: workingNow,
-      clinicHours: { startHour, endHour },
+      clinicHours: clinicHoursIn,
+      clinicWorking: clinicOpenNow,
     });
 
     if (hoursStatus !== 'ok') {
       const confirmMsg =
         hoursStatus === 'outside_clinic'
-          ? 'Outside clinic hours. Book anyway?'
+          ? (() => {
+              const closure = closureOverlapping(clinicOpenNow, scheduledMinutes, lengthMinutes);
+              return closure ? `The clinic is closed ${minutesLabel(closure.start)} – ${minutesLabel(closure.end)}. Book anyway?` : 'Outside clinic hours. Book anyway?';
+            })()
           : workingNow.length > 0
             ? `Outside ${therapistName ? `${therapistName}'s` : 'working'} hours (${workingNow.map((i) => `${minutesLabel(i.start)}–${minutesLabel(i.end)}`).join(', ')}). Book anyway?`
             : `${therapistName ? `${therapistName}` : 'This therapist'} isn't working this day. Book anyway?`;

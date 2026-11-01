@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, clockTextMinutes, requestedSlotTime, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, clinicGaps, clinicIntervals, closureOverlapping, clockTextMinutes, requestedSlotTime, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -760,5 +760,55 @@ describe('firstAvailableSlot with a step and a time of day', () => {
     expect(firstAvailableSlot({ ...base, timeOfDay: 'evening' })?.time).toBe('17:00');
     expect(firstAvailableSlot({ ...base, timeOfDay: 'evening', now: new Date('2026-10-30T17:30:00') })).toMatchObject({ date: '2026-10-31', time: '17:00' });
     expect(firstAvailableSlot({ ...base, timeOfDay: 'any' })?.time).toBe('09:00');
+  });
+});
+
+describe('clinic hours with a midday closure', () => {
+  const split = { startHour: 9, endHour: 20, operating: { '4': [[540, 780], [960, 1200]] } as import('./types').WorkingHours }; // Thursday 9-1, 4-8
+  const THURSDAY = '2026-10-01';
+  const FRIDAY = '2026-10-02';
+
+  it('reads the clinic open intervals for a weekday, or one block when there is nothing for it', () => {
+    expect(clinicIntervals(split, THURSDAY)).toEqual([{ start: 540, end: 780 }, { start: 960, end: 1200 }]);
+    expect(clinicIntervals(split, FRIDAY)).toEqual([{ start: 540, end: 1200 }]);
+    expect(clinicIntervals({ startHour: 9, endHour: 17 }, THURSDAY)).toEqual([{ start: 540, end: 1020 }]);
+  });
+
+  it('finds the closed stretch between sessions', () => {
+    expect(clinicGaps(clinicIntervals(split, THURSDAY))).toEqual([{ start: 780, end: 960 }]);
+    expect(clinicGaps([{ start: 540, end: 1020 }])).toEqual([]);
+    expect(closureOverlapping(clinicIntervals(split, THURSDAY), 750, 60)).toEqual({ start: 780, end: 960 });
+    expect(closureOverlapping(clinicIntervals(split, THURSDAY), 720, 60)).toBeNull(); // ends as it closes
+  });
+
+  it("a therapist with no hours of their own works the clinic's sessions, not the lunch break", () => {
+    expect(workingIntervals(null, THURSDAY, split)).toEqual([{ start: 540, end: 780 }, { start: 960, end: 1200 }]);
+    expect(workingIntervals(null, FRIDAY, split)).toEqual([{ start: 540, end: 1200 }]);
+  });
+
+  it('a therapist on their own hours across the gap is still outside clinic hours inside the closure', () => {
+    const own = [{ start: 540, end: 1200 }];
+    const clinicWorking = clinicIntervals(split, THURSDAY);
+    const base = { working: own, clinicHours: split, clinicWorking };
+    expect(slotHoursStatus({ minutes: 840, length: 30, ...base })).toBe('outside_clinic'); // 2 PM, closed
+    expect(slotHoursStatus({ minutes: 750, length: 60, ...base })).toBe('outside_clinic'); // 12:30 for 60 min runs into 1 PM
+    expect(slotHoursStatus({ minutes: 960, length: 30, ...base })).toBe('ok');
+    // a therapist who has no hours of their own and a time in the closure
+    expect(slotHoursStatus({ minutes: 840, length: 30, working: clinicWorking, clinicHours: split, clinicWorking })).toBe('outside_clinic');
+  });
+
+  it('a clinic with one block behaves as before', () => {
+    expect(slotHoursStatus({ minutes: 480, length: 30, working: [{ start: 540, end: 1020 }], clinicHours: { startHour: 9, endHour: 17 } })).toBe('outside_clinic');
+    expect(slotHoursStatus({ minutes: 600, length: 30, working: [{ start: 660, end: 1020 }], clinicHours: { startHour: 9, endHour: 17 } })).toBe('outside_therapist');
+  });
+
+  it('the public page offers no time that runs into the closure, but only for a clinic that set one', () => {
+    const taken = (slotMinutes: number, length: number, hours: Parameters<typeof isPublicSlotTaken>[7]) =>
+      isPublicSlotTaken(THURSDAY, slotMinutes, length, [], ['t1'], null, {}, hours);
+    expect(taken(840, 60, split)).toBe(true); // 2 PM, closed
+    expect(taken(750, 60, split)).toBe(true); // 12:30 + 60 crosses 1 PM
+    expect(taken(720, 60, split)).toBe(false); // 12:00-1:00 fits before it closes
+    expect(taken(960, 60, split)).toBe(false); // 4 PM
+    expect(taken(840, 60, { startHour: 9, endHour: 20 })).toBe(false); // no operating hours: unchanged
   });
 });

@@ -37,6 +37,7 @@ export function useTherapistUtilisation(
       const clinicHours = {
         startHour: clinic.bookingStartHour ?? 9,
         endHour: clinic.bookingEndHour ?? 17,
+        operating: clinic.operatingHours ?? null,
       };
       return new Map(
         therapists.map((t) => [

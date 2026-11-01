@@ -136,6 +136,21 @@ describe('BookSlotSheet', () => {
     }
   });
 
+  it('a clinic with a midday closure offers no time inside it in the main list, only under "Outside hours"', () => {
+    // Thursday 1 Oct: open 9-1 and 4-8; the therapist has no hours of their own
+    data.clinic = { bookingStartHour: 9, bookingEndHour: 20, operatingHours: { '4': [[540, 780], [960, 1200]] }, staffBookingBufferHours: 0 };
+    try {
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      expect(screen.getByRole('button', { name: '10:30 AM' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '4:30 PM' })).toBeEnabled();
+      expect(screen.queryByRole('button', { name: '2:00 PM' })).toBeNull(); // in the closure
+      fireEvent.click(screen.getByRole('button', { name: /Outside hours/ }));
+      expect(screen.getByRole('button', { name: '2:00 PM' })).toBeInTheDocument();
+    } finally {
+      data.clinic = {};
+    }
+  });
+
   it('defaults the therapist to the logged-in therapist', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} />);
     expect(screen.getByRole('radio', { name: /Dr Asha/ })).toHaveAttribute('aria-checked', 'true');

@@ -1,4 +1,4 @@
-import { addDays, workingIntervals } from './schedule';
+import { addDays, clinicIntervals, workingIntervals, type ClinicHoursInput } from './schedule';
 import type { WorkingHours } from './types';
 
 export const CLINIC_TIMEZONE = 'Asia/Kolkata';
@@ -43,7 +43,7 @@ export interface GetDayStatusOptions {
   bookableTherapists: { id: string; name?: string }[];
   preferredTherapistId?: string | null;
   therapistHours?: Record<string, WorkingHours> | null;
-  clinicHours: { startHour: number; endHour: number };
+  clinicHours: ClinicHoursInput;
   slotDurationMinutes?: number;
   bookingWindowDays?: number;
 }
@@ -105,7 +105,7 @@ export function getDayStatus(options: GetDayStatusOptions): PublicDayStatus {
       const hours = t.id ? therapistHours?.[t.id] : null;
       const intervals = hours
         ? workingIntervals(hours, dateIso, clinicHours)
-        : [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
+        : clinicIntervals(clinicHours, dateIso);
       for (const interval of intervals) {
         if (interval.end > maxLatestSlot) maxLatestSlot = interval.end;
       }

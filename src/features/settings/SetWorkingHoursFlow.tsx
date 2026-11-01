@@ -42,8 +42,9 @@ export function SetWorkingHoursFlow({
     () => ({
       startHour: clinic.bookingStartHour ?? 9,
       endHour: clinic.bookingEndHour ?? 17,
+      operating: clinic.operatingHours ?? null,
     }),
-    [clinic.bookingStartHour, clinic.bookingEndHour]
+    [clinic.bookingStartHour, clinic.bookingEndHour, clinic.operatingHours]
   );
   const slotMinutes = clinic.slotDurationMinutes || 30;
 
@@ -84,6 +85,7 @@ export function SetWorkingHoursFlow({
         clinic={{
           startHour: clinicHours.startHour,
           endHour: clinicHours.endHour,
+          operating: clinicHours.operating,
           closedWeekdays: clinic.closedWeekdays,
         }}
         onSave={handleSave}
