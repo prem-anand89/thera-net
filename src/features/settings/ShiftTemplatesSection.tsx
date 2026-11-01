@@ -119,7 +119,7 @@ function ShiftTemplateCard({
     return (
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3 shadow-xs">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-[var(--ink)]">Editing {template.name}</span>
+          <span className="text-xs font-semibold text-[var(--ink)]">Editing {template.name}</span>
         </div>
 
         {usedByTherapistNames.length > 0 && (
@@ -178,7 +178,7 @@ function ShiftTemplateCard({
             <h3 className="font-semibold text-sm text-[var(--ink)]">{template.name}</h3>
           </div>
           <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            className={`rounded-full px-2 py-0.5 text-caption font-medium ${
               usedByTherapistNames.length > 0
                 ? 'bg-[var(--teal-light)] text-[var(--teal)]'
                 : 'bg-[var(--paper)] text-[var(--muted)]'
@@ -192,7 +192,7 @@ function ShiftTemplateCard({
 
         {shiftInfo.isSplit && shiftInfo.splitDetails ? (
           <div className="space-y-0.5">
-            <span className="inline-block rounded bg-[var(--teal-light)]/40 px-1.5 py-0.2 text-[10px] font-bold text-[var(--teal)]">
+            <span className="inline-block rounded bg-[var(--teal-light)]/40 px-1.5 py-0.2 text-caption font-semibold text-[var(--teal)]">
               SPLIT SHIFT
             </span>
             <p className="text-xs text-[var(--muted)]">{shiftInfo.splitDetails}</p>
@@ -206,7 +206,7 @@ function ShiftTemplateCard({
         )}
 
         {usedByTherapistNames.length > 0 && (
-          <p className="text-[11px] text-[var(--muted)] truncate">
+          <p className="text-hint text-[var(--muted)] truncate">
             Staff: {usedByTherapistNames.join(', ')}
           </p>
         )}

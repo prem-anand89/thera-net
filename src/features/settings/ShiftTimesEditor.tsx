@@ -64,7 +64,7 @@ export function ShiftTimesEditor({ draft, onChange }: { draft: ShiftDraft; onCha
             <TimeField label="Session 2 ends" value={draft.s2End} onChange={(s2End) => patch({ s2End })} />
           </div>
           {gap > 0 && gap < SPLIT_MIN_GAP_MINUTES && (
-            <p className="text-[11px] text-[var(--amber)]">For breaks under 2 hours, use Continuous shift with a break.</p>
+            <p className="text-hint text-[var(--amber)]">For breaks under 2 hours, use Continuous shift with a break.</p>
           )}
         </>
       )}

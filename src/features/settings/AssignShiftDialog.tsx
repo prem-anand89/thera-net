@@ -453,7 +453,7 @@ export function AssignShiftDialog({
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl space-y-5">
         <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
           <div>
-            <h2 className="font-display text-lg font-bold text-[var(--ink)]">
+            <h2 className="font-display text-lg font-semibold text-[var(--ink)]">
               {isClinicDefault ? 'Set Clinic Default Hours' : 'Assign Shift'}
             </h2>
             <p className="text-xs text-[var(--muted)]">
@@ -473,7 +473,7 @@ export function AssignShiftDialog({
 
         {/* 1. Therapist Selection */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+          <label className="text-label font-medium text-[var(--muted)]">
             Team Members ({selectedTherapistIds.length} selected)
           </label>
           <div className="flex flex-wrap gap-1.5">
@@ -506,7 +506,7 @@ export function AssignShiftDialog({
                     <span className="font-semibold">{t.name}</span>
                   </div>
                   <span
-                    className={`text-[10px] ${
+                    className={`text-caption ${
                       isSelected ? 'text-white/80' : 'text-[var(--muted)]'
                     }`}
                   >
@@ -517,7 +517,7 @@ export function AssignShiftDialog({
             })}
           </div>
           {selectedTherapistIds.length === 0 && (
-            <p className="text-[11px] text-[var(--rust)]">Please select at least one therapist.</p>
+            <p className="text-hint text-[var(--rust)]">Please select at least one therapist.</p>
           )}
 
           {/* Current schedule context banner when 1 therapist is selected */}
@@ -532,7 +532,7 @@ export function AssignShiftDialog({
                   />
                   Current Schedule: {singleSelectedTherapist.name}
                 </span>
-                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
+                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--teal)]">
                   {selectedTherapistSchedule.summary}
                 </span>
               </div>
@@ -557,7 +557,7 @@ export function AssignShiftDialog({
 
               {/* Weekly active days summary */}
               {selectedTherapistSchedule.type === 'template' && (
-                <div className="space-y-0.5 text-[11px] pt-0.5">
+                <div className="space-y-0.5 text-hint pt-0.5">
                   <p className="text-[var(--muted)]">
                     Active working days:{' '}
                     <span className="font-medium text-[var(--ink)]">
@@ -583,7 +583,7 @@ export function AssignShiftDialog({
               )}
 
               {selectedTherapistSchedule.type === 'custom' && (
-                <p className="text-[11px] text-[var(--muted)]">
+                <p className="text-hint text-[var(--muted)]">
                   Currently on custom working hours ({formatWeekdays(selectedTherapistSchedule.weekdays)}). Selecting a shift template below will supersede custom hours on the chosen days.
                 </p>
               )}
@@ -596,7 +596,7 @@ export function AssignShiftDialog({
               <p className="font-medium text-[var(--ink)]">
                 Assigning shift to {selectedTherapistIds.length} team members:
               </p>
-              <ul className="space-y-0.5 text-[11px]">
+              <ul className="space-y-0.5 text-hint">
                 {pickedTherapists.map((t) => {
                   const sched = getTherapistScheduleInfo(
                     t.id,
@@ -613,7 +613,7 @@ export function AssignShiftDialog({
                   );
                 })}
               </ul>
-              <p className="text-[10.5px] text-[var(--muted)] pt-0.5">
+              <p className="text-caption text-[var(--muted)] pt-0.5">
                 The shift template and weekdays chosen below will be applied to all selected members.
               </p>
             </div>
@@ -622,7 +622,7 @@ export function AssignShiftDialog({
 
         {/* 2. Shift Pattern Dropdown */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+          <label className="text-label font-medium text-[var(--muted)]">
             Shift Schedule
           </label>
           <select
@@ -661,11 +661,11 @@ export function AssignShiftDialog({
         {!isClinicDefault && !isCustomHours && (
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+              <label className="text-label font-medium text-[var(--muted)]">
                 Active Weekdays
               </label>
               {/* Presets */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <div className="flex flex-wrap items-center gap-1.5 text-hint">
                 {initialWeekday !== null && initialWeekday !== undefined && selectedTherapistSchedule && selectedTherapistSchedule.weekdays.length > 0 && !selectedTherapistSchedule.weekdays.includes(initialWeekday) && (
                   <>
                     <button
@@ -776,16 +776,16 @@ export function AssignShiftDialog({
                     onClick={() => toggleWeekday(day)}
                     className={`flex flex-col items-center justify-center rounded-xl py-2 text-center transition min-h-[52px] ${buttonStyle}`}
                   >
-                    <span className="text-xs font-bold">{WEEKDAY_META[day]?.short}</span>
+                    <span className="text-xs font-semibold">{WEEKDAY_META[day]?.short}</span>
                     {badgeText && (
-                      <span className={`text-[9px] ${badgeClass}`}>{badgeText}</span>
+                      <span className={`text-caption ${badgeClass}`}>{badgeText}</span>
                     )}
                   </button>
                 );
               })}
             </div>
             {selectedWeekdays.length === 0 && (
-              <p className="text-[11px] text-[var(--rust)]">Please pick at least one working day.</p>
+              <p className="text-hint text-[var(--rust)]">Please pick at least one working day.</p>
             )}
           </div>
         )}

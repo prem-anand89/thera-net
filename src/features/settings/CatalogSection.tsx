@@ -56,7 +56,7 @@ function CatalogStats({ items }: { items: { label: string; value: string | numbe
       {items.map((s) => (
         <span
           key={s.label}
-          className="rounded-full border px-2.5 py-0.5 font-mono text-[11px]"
+          className="rounded-full border px-2.5 py-0.5 font-mono text-hint"
           style={
             s.warn
               ? {
@@ -84,7 +84,7 @@ function CatalogStats({ items }: { items: { label: string; value: string | numbe
 function InactivePill() {
   return (
     <span
-      className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+      className="inline-block self-start rounded-full px-2.5 py-0.5 text-caption font-semibold"
       style={{ background: 'var(--paper)', color: 'var(--muted)' }}
     >
       Inactive
@@ -110,8 +110,8 @@ function CatalogActionButton({
       type="button"
       className={
         tone === 'rust'
-          ? 'min-h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--rust)] hover:bg-[var(--rust-light)]'
-          : 'min-h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--teal)] hover:bg-[var(--teal-light)]'
+          ? 'min-h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-hint font-semibold text-[var(--rust)] hover:bg-[var(--rust-light)]'
+          : 'min-h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-hint font-semibold text-[var(--teal)] hover:bg-[var(--teal-light)]'
       }
       onClick={onClick}
     >
@@ -302,7 +302,7 @@ function InactiveServicesSection({
           <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
         </button>
         <h3 className="text-sm font-semibold text-[var(--ink)]">Inactive services</h3>
-        <span className="text-[11px] text-[var(--muted)]">
+        <span className="text-hint text-[var(--muted)]">
           {items.length} item{items.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -323,7 +323,7 @@ function SessionKindPill({ sessionCount }: { sessionCount: number }) {
   const isPackage = sessionCount > 1;
   return (
     <span
-      className="inline-block shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      className="inline-block shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold"
       style={
         isPackage
           ? { background: 'var(--teal-light)', color: 'var(--teal-strong)' }
@@ -440,7 +440,7 @@ function ServiceGroupPanel({
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold text-[var(--ink)]">{category}</h3>
-                <span className="text-[11px] text-[var(--muted)]">
+                <span className="text-hint text-[var(--muted)]">
                   {items.length} item{items.length === 1 ? '' : 's'}
                 </span>
                 <CatalogActionButton onClick={() => setEditingGroupName(true)}>Rename group</CatalogActionButton>
@@ -452,7 +452,7 @@ function ServiceGroupPanel({
         <div className="flex flex-wrap gap-1.5 sm:shrink-0">
           <button
             type="button"
-            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)] hover:bg-[var(--paper)]"
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-hint font-semibold text-[var(--ink)] hover:bg-[var(--paper)]"
             onClick={() => {
               setCollapsed(false);
               setAddKind('single');
@@ -462,7 +462,7 @@ function ServiceGroupPanel({
           </button>
           <button
             type="button"
-            className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-1 text-[11px] font-semibold text-[var(--teal-strong)] hover:opacity-90"
+            className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-1 text-hint font-semibold text-[var(--teal-strong)] hover:opacity-90"
             onClick={() => {
               setCollapsed(false);
               setAddKind('package');
@@ -689,7 +689,7 @@ function ServiceCatalogItemRow({
             onChange={(e) => setDuration(e.target.value)}
           />
         </Field>
-        <p className="text-[11px] text-[var(--muted)]">
+        <p className="text-hint text-[var(--muted)]">
           Use <strong>1</strong> for a single visit, <strong>2+</strong> for a package (one line item,
           sessions tracked on visits). New price applies to future visits only.
         </p>
@@ -741,7 +741,7 @@ function ServiceCatalogItemRow({
         <SessionKindPill sessionCount={item.sessionCount} />
         {!item.active && !showCategory && <InactivePill />}
         {!item.active && usageCount != null && usageCount > 0 && (
-          <span className="text-[11px] text-[var(--muted)]">
+          <span className="text-hint text-[var(--muted)]">
             Used on {usageCount} visit{usageCount === 1 ? '' : 's'} — can't delete
           </span>
         )}
@@ -1246,7 +1246,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
             value={detailDraft}
             onChange={(e) => setDetailDraft(e.target.value)}
           />
-          <p className="mt-1 text-[11px] text-[var(--muted)]">
+          <p className="mt-1 text-hint text-[var(--muted)]">
             Leave blank if patients only need to pick the source name — no follow-up field.
           </p>
         </Field>
@@ -1270,7 +1270,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
       <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
       {!item.active && <InactivePill />}
       {item.detailLabel ? (
-        <p className="text-[11.5px] text-[var(--muted)]">
+        <p className="text-hint text-[var(--muted)]">
           Detail field: <span className="text-[var(--ink)]">{item.detailLabel}</span>
         </p>
       ) : null}

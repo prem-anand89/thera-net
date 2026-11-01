@@ -47,7 +47,7 @@ function RolePill({ role }: { role: Exclude<ClinicRole, 'unknown'> }) {
   const { color, light } = ACCENT_VARS[ROLE_ACCENT[role]];
   return (
     <span
-      className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+      className="inline-block self-start rounded-full px-2.5 py-0.5 text-caption font-semibold"
       style={{ background: light, color }}
     >
       {CLINIC_ROLE_LABELS[role]}
@@ -72,7 +72,7 @@ function OnboardingBadge({ member }: { member: ClinicMember }) {
         : '';
   return (
     <span
-      className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+      className="inline-block self-start rounded-full px-2.5 py-0.5 text-caption font-semibold"
       style={{ background: light, color }}
     >
       {MEMBER_ONBOARDING_LABELS[member.status]}
@@ -345,28 +345,28 @@ export function TeamMemberCard({
         
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-            <h3 className="truncate text-base font-bold text-[var(--ink)] tracking-tight">{displayName}</h3>
+            <h3 className="truncate text-base font-semibold text-[var(--ink)] tracking-tight">{displayName}</h3>
             
             <div className="flex flex-wrap items-center gap-1.5">
               {member && <RolePill role={role} />}
               {member && member.status !== 'active' && <OnboardingBadge member={member} />}
               {member?.lastActiveAt && toLocalDateStr(new Date(member.lastActiveAt)) === toLocalDateStr(new Date()) && (
-                <span className="inline-block rounded-full bg-[var(--moss-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--moss)]">
+                <span className="inline-block rounded-full bg-[var(--moss-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--moss)]">
                   Active today
                 </span>
               )}
               {isBookable && (
-                <span className="inline-block rounded-full bg-[var(--sky-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--sky)]">
+                <span className="inline-block rounded-full bg-[var(--sky-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--sky)]">
                   Bookable
                 </span>
               )}
               {therapist && therapist.publicBookable === false && (
-                <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--muted)]" title="Not offered on the public online-booking page">
+                <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-caption font-semibold text-[var(--muted)]" title="Not offered on the public online-booking page">
                   Hidden online
                 </span>
               )}
               {!member && therapist && (
-                <span className="inline-block rounded-full bg-[var(--amber-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--amber-strong)]">
+                <span className="inline-block rounded-full bg-[var(--amber-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--amber-strong)]">
                   No login
                 </span>
               )}
@@ -419,7 +419,7 @@ export function TeamMemberCard({
         <div className="flex-1" />
 
         {isLastAdmin && (
-          <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
+          <p className="text-hint text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
         )}
 
         <div className="flex flex-wrap items-center gap-3 pt-3 mt-1 border-t border-[var(--border)]">
@@ -581,7 +581,7 @@ export function TeamMemberCard({
                         <label htmlFor="member-bookable-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
                           Bookable in schedule
                         </label>
-                        <p className="text-[11px] text-[var(--muted)] leading-tight">
+                        <p className="text-hint text-[var(--muted)] leading-tight">
                           Appears in schedule, appointments, visits and team filters.
                         </p>
                       </div>
@@ -632,7 +632,7 @@ export function TeamMemberCard({
                           <label htmlFor="public-bookable-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
                             Show in online booking
                           </label>
-                          <p className="text-[11px] text-[var(--muted)] leading-tight">
+                          <p className="text-hint text-[var(--muted)] leading-tight">
                             Lets patients pick this therapist on your public booking page.
                           </p>
                         </div>
@@ -645,7 +645,7 @@ export function TeamMemberCard({
                         />
                       </div>
                       {!publicBookableDraft && (
-                        <p className="text-[11px] text-[var(--muted)]">
+                        <p className="text-hint text-[var(--muted)]">
                           Hidden from patients only. They stay on your team, in the schedule, and in shift planning — front desk can still book them.
                         </p>
                       )}
@@ -1210,7 +1210,7 @@ export function Therapists() {
             >
               {f}
               {f === 'unlinked' && unlinkedCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-[var(--rust)] px-1.5 py-0.5 text-[10px] text-white">
+                <span className="ml-1.5 rounded-full bg-[var(--rust)] px-1.5 py-0.5 text-caption text-white">
                   {unlinkedCount}
                 </span>
               )}

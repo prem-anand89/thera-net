@@ -120,9 +120,9 @@ export function ShiftCoverageGrid({
                     key={day}
                     className="sticky top-0 z-10 bg-[var(--paper)] px-1 py-1.5 text-center font-semibold text-[var(--ink)] w-[10%] min-w-[50px]"
                   >
-                    <div className="text-[11px] leading-tight">{meta.short}</div>
+                    <div className="text-hint leading-tight">{meta.short}</div>
                     {isClosed && (
-                      <div className="text-[9.5px] font-normal text-[var(--muted)] leading-tight">Closed</div>
+                      <div className="text-caption font-normal text-[var(--muted)] leading-tight">Closed</div>
                     )}
                   </th>
                 );
@@ -130,7 +130,7 @@ export function ShiftCoverageGrid({
 
               {/* Weekly Total column (8%) */}
               <th className="sticky top-0 right-0 z-30 bg-[var(--paper)] px-2.5 py-2 text-right font-semibold text-[var(--ink)] w-[8%] min-w-[60px] border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                <div className="text-[11px] leading-tight">Total</div>
+                <div className="text-hint leading-tight">Total</div>
               </th>
             </tr>
           </thead>
@@ -160,14 +160,14 @@ export function ShiftCoverageGrid({
                             style={{ background: therapist.color ?? '#2c5f63' }}
                             aria-hidden
                           />
-                          <span className="font-medium text-[11.5px] text-[var(--ink)] truncate max-w-[80px]" title={therapist.name}>
+                          <span className="font-medium text-hint text-[var(--ink)] truncate max-w-[80px]" title={therapist.name}>
                             {therapist.name}
                           </span>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleEditTherapist(therapist.id)}
-                          className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition shrink-0"
+                          className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-caption font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition shrink-0"
                           title={`Edit ${therapist.name}'s schedule`}
                           aria-label={`Edit ${therapist.name}'s schedule`}
                         >
@@ -197,7 +197,7 @@ export function ShiftCoverageGrid({
                                   return (
                                     <span
                                       key={template.id}
-                                      className={`inline-block truncate rounded border px-1 py-0.5 text-[10px] font-semibold leading-tight ${pal.bg} ${pal.text} ${pal.border} w-full text-center`}
+                                      className={`inline-block truncate rounded border px-1 py-0.5 text-caption font-semibold leading-tight ${pal.bg} ${pal.text} ${pal.border} w-full text-center`}
                                     >
                                       {template.name}
                                     </span>
@@ -207,25 +207,25 @@ export function ShiftCoverageGrid({
                             )}
 
                             {cell.type === 'custom' && (
-                              <span className="inline-block truncate whitespace-nowrap rounded border border-[var(--border)] bg-[var(--paper)] px-1 py-0.5 text-[9.5px] font-medium text-[var(--ink)] w-full text-center">
+                              <span className="inline-block truncate whitespace-nowrap rounded border border-[var(--border)] bg-[var(--paper)] px-1 py-0.5 text-caption font-medium text-[var(--ink)] w-full text-center">
                                 {cell.label}
                               </span>
                             )}
 
                             {cell.type === 'off' && (
-                              <span className="inline-block truncate rounded border border-dashed border-[var(--border)] px-1 py-0.5 text-[9.5px] font-medium text-[var(--muted)] w-full text-center">
+                              <span className="inline-block truncate rounded border border-dashed border-[var(--border)] px-1 py-0.5 text-caption font-medium text-[var(--muted)] w-full text-center">
                                 Off
                               </span>
                             )}
 
                             {cell.type === 'clinic_closed' && (
-                              <span className="inline-block truncate rounded border border-dashed border-[var(--border)]/70 bg-[var(--paper)]/30 px-1 py-0.5 text-[9.5px] font-medium text-[var(--muted)]/60 w-full text-center">
+                              <span className="inline-block truncate rounded border border-dashed border-[var(--border)]/70 bg-[var(--paper)]/30 px-1 py-0.5 text-caption font-medium text-[var(--muted)]/60 w-full text-center">
                                 Closed
                               </span>
                             )}
 
                             {cell.type === 'clinic_default' && (
-                              <span className="inline-block truncate rounded px-1 py-0.5 text-[10.5px] font-medium text-[var(--muted)] w-full text-center">
+                              <span className="inline-block truncate rounded px-1 py-0.5 text-caption font-medium text-[var(--muted)] w-full text-center">
                                 {defaultHourLabel}
                               </span>
                             )}
@@ -237,10 +237,10 @@ export function ShiftCoverageGrid({
                     {/* Weekly Total - Compact Stacked (Hours + Label) */}
                     <td className="sticky right-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] px-2 py-1.5 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                       <div className="flex flex-col items-end leading-tight">
-                        <span className="font-bold text-xs text-[var(--ink)]">
+                        <span className="font-semibold text-xs text-[var(--ink)]">
                           {weekly.totalHours}h
                         </span>
-                        <span className="text-[9.5px] text-[var(--muted)]">
+                        <span className="text-caption text-[var(--muted)]">
                           {weekly.isAllDefault ? 'Default' : `${weekly.shiftsCount} shifts`}
                         </span>
                       </div>
@@ -255,7 +255,7 @@ export function ShiftCoverageGrid({
           {activeTherapists.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-[var(--border)] bg-[var(--paper)]/90 text-xs font-semibold text-[var(--ink)]">
-                <td className="sticky left-0 z-20 bg-[var(--paper)] px-3 py-1.5 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] font-medium text-[10.5px] text-[var(--muted)]">
+                <td className="sticky left-0 z-20 bg-[var(--paper)] px-3 py-1.5 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] font-medium text-caption text-[var(--muted)]">
                   Daily capacity
                 </td>
                 {WEEKDAY_ORDER.map((weekday) => {
@@ -264,15 +264,15 @@ export function ShiftCoverageGrid({
                   return (
                     <td key={weekday} className="p-1 text-center">
                       {isClosed ? (
-                        <span className="text-[10px] text-[var(--muted)]">Closed</span>
+                        <span className="text-caption text-[var(--muted)]">Closed</span>
                       ) : daily.staffCount === 0 ? (
                         <div className="flex flex-col items-center rounded bg-[var(--amber-light)]/40 px-1 py-0.5 border border-[var(--amber)]/30 leading-tight">
-                          <span className="font-bold text-[10px] text-[var(--amber-strong)]">0 staff</span>
+                          <span className="font-semibold text-caption text-[var(--amber-strong)]">0 staff</span>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center leading-tight">
-                          <span className="text-[10.5px] font-semibold text-[var(--teal)]">{daily.staffCount} staff</span>
-                          <span className="text-[9.5px] font-normal text-[var(--muted)]">
+                          <span className="text-caption font-semibold text-[var(--teal)]">{daily.staffCount} staff</span>
+                          <span className="text-caption font-normal text-[var(--muted)]">
                             {daily.capacityHours}h
                           </span>
                         </div>
@@ -280,7 +280,7 @@ export function ShiftCoverageGrid({
                     </td>
                   );
                 })}
-                <td className="sticky right-0 z-20 bg-[var(--paper)] px-2.5 py-1.5 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)] text-[var(--muted)] font-normal text-[11px]">
+                <td className="sticky right-0 z-20 bg-[var(--paper)] px-2.5 py-1.5 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)] text-[var(--muted)] font-normal text-hint">
                   —
                 </td>
               </tr>
@@ -322,13 +322,13 @@ export function ShiftCoverageGrid({
                     <button
                       type="button"
                       onClick={() => handleEditTherapist(therapist.id)}
-                      className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition"
+                      className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-caption font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition"
                       aria-label={`Edit ${therapist.name}'s schedule`}
                     >
                       Edit
                     </button>
                   </div>
-                  <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
+                  <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-caption font-semibold text-[var(--teal)]">
                     {weekly.totalHours}h {weekly.isAllDefault ? '• Default' : `• ${weekly.shiftsCount} shifts`}
                   </span>
                 </div>
@@ -365,10 +365,10 @@ export function ShiftCoverageGrid({
                         title={cell?.tooltip}
                         className="flex flex-col items-center justify-center rounded-lg border border-[var(--border)]/80 p-1 text-center min-h-[44px]"
                       >
-                        <span className="text-[9.5px] font-bold text-[var(--muted)] leading-none mb-1">
+                        <span className="text-caption font-semibold text-[var(--muted)] leading-none mb-1">
                           {meta.short}
                         </span>
-                        <span className={`inline-block truncate rounded px-1 py-0.5 text-[9px] font-semibold leading-tight w-full border ${pillStyle}`}>
+                        <span className={`inline-block truncate rounded px-1 py-0.5 text-caption font-semibold leading-tight w-full border ${pillStyle}`}>
                           {pillContent}
                         </span>
                       </div>

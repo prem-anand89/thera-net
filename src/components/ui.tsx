@@ -70,17 +70,17 @@ export function Field({
     // A multi-control field: the label points at one control instead of wrapping them all.
     return (
       <div className="block">
-        <label htmlFor={htmlFor} className="mb-1 block text-xs font-medium text-[var(--muted)]">{label}</label>
+        <label htmlFor={htmlFor} className="mb-1 block text-label font-medium text-[var(--muted)]">{label}</label>
         {children}
-        {hint && <span className="mt-1 block text-[11px] text-[var(--muted)]">{hint}</span>}
+        {hint && <span className="mt-1 block text-hint text-[var(--muted)]">{hint}</span>}
       </div>
     );
   }
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{label}</span>
+      <span className="mb-1 block text-label font-medium text-[var(--muted)]">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-[var(--muted)]">{hint}</span>}
+      {hint && <span className="mt-1 block text-hint text-[var(--muted)]">{hint}</span>}
     </label>
   );
 }

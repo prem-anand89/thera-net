@@ -165,7 +165,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                 <div className="flex-1 space-y-3 w-full">
                   <div className="flex flex-wrap items-baseline gap-3">
                     <h3 className="text-xl font-semibold text-[var(--ink)]">{form.name || 'Your Clinic Name'}</h3>
-                    <span className="rounded-full bg-[var(--surface)] border border-[var(--border)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+                    <span className="rounded-full bg-[var(--surface)] border border-[var(--border)] px-2.5 py-0.5 text-hint font-medium text-[var(--muted)]">
                       {form.clinicType === 'individual' ? 'Single Therapist' : 'Multiple Therapists'}
                     </span>
                   </div>
@@ -206,7 +206,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                         <img src={partnerLogoPreviewUrl} className="h-10 w-10 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Partner Logo" />
                       )}
                       <div>
-                        <div className="text-[11px] font-semibold text-[var(--muted)]">Partner Organization</div>
+                        <div className="text-hint font-semibold text-[var(--muted)]">Partner Organization</div>
                         <div className="text-[var(--ink)] font-medium">{clinic.partnerHospitalName}</div>
                       </div>
                     </div>
@@ -215,7 +215,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                     <div className="flex items-center gap-3 md:border-l md:border-[var(--border)] md:pl-6">
                       <img src={signaturePreviewUrl} className="h-10 w-20 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Signature" />
                       <div>
-                        <div className="text-[11px] font-semibold text-[var(--muted)]">Authorized Signature</div>
+                        <div className="text-hint font-semibold text-[var(--muted)]">Authorized Signature</div>
                         <div className="text-[var(--ink)] font-medium">Included on invoices</div>
                       </div>
                     </div>
@@ -239,7 +239,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                       </div>
                     )}
-                    <label className="cursor-pointer text-[11px] font-semibold text-[var(--teal)] hover:underline">
+                    <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
                       Upload logo
                       <input 
                         type="file" 
@@ -253,7 +253,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                   <div className="flex-1 w-full space-y-4">
                     <div className="flex flex-wrap gap-4">
                       <div className="flex-1 min-w-[200px]">
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Clinic Name</label>
+                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Clinic Name</label>
                         <input 
                           className={inputCls} 
                           value={form.name} 
@@ -262,7 +262,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                         />
                       </div>
                       <div className="w-40">
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Therapist Setup</label>
+                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Therapist Setup</label>
                         <select 
                           className={inputCls} 
                           value={form.clinicType ?? 'multiple'} 
@@ -275,7 +275,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                     </div>
                     
                     <div>
-                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Address</label>
+                      <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Address</label>
                       <textarea 
                         className={`${inputCls} resize-none min-h-[72px]`} 
                         rows={3} 
@@ -287,7 +287,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
 
                     <div className="flex flex-wrap gap-4 pt-1">
                       <div className="flex-1 min-w-[140px]">
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Phone</label>
+                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Phone</label>
                         <PhoneField
                           value={form.phone ?? ''}
                           onChange={(phone) => set({ phone: phone || null })}
@@ -295,7 +295,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                         />
                       </div>
                       <div className="flex-1 min-w-[180px]">
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Email</label>
+                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Email</label>
                         <input 
                           className={inputCls} 
                           value={form.email ?? ''} 
@@ -304,7 +304,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                         />
                       </div>
                       <div className="w-28">
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5 flex items-center gap-1">
+                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5 flex items-center gap-1">
                           Patient ID Prefix
                           <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001). Defaults to 'W'." />
                         </label>
@@ -342,11 +342,11 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                               className="h-14 w-14 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm" 
                             />
                           ) : (
-                            <div className="h-14 w-14 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-[10px]">
+                            <div className="h-14 w-14 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-caption">
                               None
                             </div>
                           )}
-                          <label className="cursor-pointer text-[10px] font-semibold text-[var(--teal)] hover:underline">
+                          <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
                             Upload logo
                             <input 
                               type="file" 
@@ -357,7 +357,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                           </label>
                         </div>
                         <div className="flex-1 w-full">
-                          <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Partner Name</label>
+                          <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Partner Name</label>
                           <input 
                             className={inputCls} 
                             value={form.partnerHospitalName ?? ''} 
@@ -371,8 +371,8 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
 
                   {/* Signature Column */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-[var(--muted)] mb-2">Authorized Signature</label>
-                    <p className="text-[11px] text-[var(--muted)] mb-4 leading-relaxed">
+                    <label className="block text-label font-medium text-[var(--muted)] mb-2">Authorized Signature</label>
+                    <p className="text-hint text-[var(--muted)] mb-4 leading-relaxed">
                       A one-time uploaded signature image, printed on every invoice in place of the blank "Authorised signature" line.
                     </p>
                     <div className="flex flex-col items-start gap-2">
@@ -383,11 +383,11 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                           className="h-16 w-32 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm" 
                         />
                       ) : (
-                        <div className="h-16 w-32 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-[10px]">
+                        <div className="h-16 w-32 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-caption">
                           No signature
                         </div>
                       )}
-                      <label className="cursor-pointer text-[11px] font-semibold text-[var(--teal)] hover:underline">
+                      <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
                         Upload signature
                         <input 
                           type="file" 
@@ -496,7 +496,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
                   </option>
                 ))}
               </select>
-              <span className="mt-1 block text-[11px] text-[var(--muted)]">{timezoneHint(form.timezone ?? 'Asia/Kolkata')}</span>
+              <span className="mt-1 block text-hint text-[var(--muted)]">{timezoneHint(form.timezone ?? 'Asia/Kolkata')}</span>
             </Field>
             <Field
               label={
@@ -646,7 +646,7 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
               />
             </div>
 
-            <p className="sm:col-span-2 border-t border-[var(--border)] pt-4 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            <p className="sm:col-span-2 border-t border-[var(--border)] pt-4 text-sm font-semibold text-[var(--ink)]">
               Appointments
             </p>
 

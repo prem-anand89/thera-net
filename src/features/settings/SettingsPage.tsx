@@ -143,7 +143,7 @@ function SettingsSearch({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const height = variant === 'rail' ? 'h-9 text-[13px]' : 'h-10 text-sm';
+  const height = variant === 'rail' ? 'h-9 text-label' : 'h-10 text-sm';
 
   return (
     <div ref={ref} className={`relative ${className ?? ''}`}>
@@ -202,7 +202,7 @@ function SettingsSearch({
                 }}
               >
                 <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]">{card.title}</span>
-                <span className="shrink-0 text-[11px] text-[var(--muted)]">{SETTINGS_TAB_META[card.tab].label}</span>
+                <span className="shrink-0 text-hint text-[var(--muted)]">{SETTINGS_TAB_META[card.tab].label}</span>
               </button>
             </li>
           ))}

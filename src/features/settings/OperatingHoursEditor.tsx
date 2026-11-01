@@ -162,7 +162,7 @@ function DayBar({ shifts, range }: { shifts: Shifts; range: BarRange }) {
           <span key={from} data-part="open" className="absolute inset-y-0 rounded-full bg-[var(--teal)]" style={span(from, to)} />
         ))}
       </div>
-      <div className="relative mt-1 h-3.5 text-[10px] leading-none text-[var(--muted)]">
+      <div className="relative mt-1 h-3.5 text-caption leading-none text-[var(--muted)]">
         {ticks.map((t) => {
           const pct = at(t);
           return (
@@ -184,7 +184,7 @@ function DayBar({ shifts, range }: { shifts: Shifts; range: BarRange }) {
 function BarLegend({ staff, closed }: { staff: boolean; closed: boolean }) {
   const swatch = 'inline-block h-2 w-3.5 rounded-sm align-middle';
   return (
-    <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]" data-testid="bar-legend">
+    <p className="flex flex-wrap gap-x-3 gap-y-1 text-hint text-[var(--muted)]" data-testid="bar-legend">
       <span>
         <span className={`${swatch} bg-[var(--teal)]`} /> Open
       </span>
