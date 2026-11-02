@@ -6,7 +6,8 @@
 export const SETTINGS_TABS = ['general', 'team', 'services', 'booking', 'billing', 'account'] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
-export const CATALOG_VIEWS = ['packages', 'treatments', 'referrals'] as const;
+/** The two lists on the Services & treatments tab. (Referral sources moved to General: see `card` below.) */
+export const CATALOG_VIEWS = ['packages', 'treatments'] as const;
 export type CatalogViewKey = (typeof CATALOG_VIEWS)[number];
 
 /** The Team tab's two views: the people, and their shifts. */
@@ -14,9 +15,9 @@ export const TEAM_VIEWS = ['members', 'shifts'] as const;
 export type TeamViewKey = (typeof TEAM_VIEWS)[number];
 
 export const SETTINGS_TAB_META: Record<SettingsTab, { label: string; description: string }> = {
-  general: { label: 'General', description: 'Clinic profile, address and contact details, and clinical notes.' },
+  general: { label: 'General', description: 'Clinic profile, region, what happens after a visit, and how patients find you.' },
   team: { label: 'Team', description: 'Therapists, invites and who can sign in.' },
-  services: { label: 'Services', description: 'Treatments, packages and referral sources.' },
+  services: { label: 'Services & treatments', description: 'What patients pay for, and what you record doing in each session.' },
   booking: { label: 'Schedule & Booking', description: 'Clinic hours, closed days and holidays, your online booking page and patient messages.' },
   billing: { label: 'Payments & billing', description: 'How patients pay, invoices and GST, and partner revenue split.' },
   account: { label: 'Account', description: 'Your plan, data import, backup and clinic deletion.' },
@@ -24,7 +25,7 @@ export const SETTINGS_TAB_META: Record<SettingsTab, { label: string; description
 
 /** Tab values from before the 6-section layout. Old links, bookmarks and
  *  saved setup steps keep landing in the right place. */
-const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewKey }> = {
+const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewKey; card?: SettingsCardKey }> = {
   profile: { tab: 'general' },
   patientComms: { tab: 'booking' },
   partner: { tab: 'billing' },
@@ -33,12 +34,19 @@ const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewK
   data: { tab: 'account' },
   // Pre-catalog-merge names.
   treatments: { tab: 'services', catalogView: 'treatments' },
-  referrals: { tab: 'services', catalogView: 'referrals' },
+  // Referral sources moved to General ("How patients found you").
+  referrals: { tab: 'general', card: 'referrals' },
 };
+
+/** A card a link can scroll to on landing (only cards that moved tabs need one). */
+export type SettingsCardKey = 'referrals';
+export const REFERRALS_CARD_ID = 'settings-card-general-referrals';
 
 export interface SettingsSearch {
   tab?: SettingsTab;
   catalogView?: CatalogViewKey;
+  /** Open the tab and scroll to this card: how an old referral-sources link lands on its new home. */
+  card?: SettingsCardKey;
   /** Team only: which view opens. Absent means Team members. */
   teamView?: TeamViewKey;
   fromSetup?: boolean;
@@ -57,10 +65,15 @@ export function parseSettingsSearch(search: Record<string, unknown>): SettingsSe
     : rawTab && (SETTINGS_TABS as readonly string[]).includes(rawTab)
       ? (rawTab as SettingsTab)
       : undefined;
+  const fromSetup = search.fromSetup === true || search.fromSetup === 'true' ? true : undefined;
+  // Referral sources used to be a view of the Services tab: `?catalogView=referrals` (with or without a tab) and the
+  // old `?tab=referrals` all land on General at the card.
+  if (search.catalogView === 'referrals' || legacy?.card === 'referrals') {
+    return fromSetup ? { tab: 'general', card: 'referrals', fromSetup } : { tab: 'general', card: 'referrals' };
+  }
   if (!tab) return search.fromSetup ? { fromSetup: true } : {};
 
   const catalogView = rawView ?? legacy?.catalogView;
-  const fromSetup = search.fromSetup === true || search.fromSetup === 'true' ? true : undefined;
   const teamView =
     typeof search.teamView === 'string' && (TEAM_VIEWS as readonly string[]).includes(search.teamView)
       ? (search.teamView as TeamViewKey)
@@ -76,7 +89,7 @@ export interface SettingsCard {
   id: string;
   title: string;
   tab: SettingsTab;
-  /** Services only: which sub-view the card lives in. */
+  /** Services & treatments only: which list the card lives in. */
   catalogView?: CatalogViewKey;
   /** Team only: which view the card lives in. */
   teamView?: TeamViewKey;
@@ -88,11 +101,11 @@ export const SETTINGS_CARDS: SettingsCard[] = [
   { id: 'settings-card-general-profile', title: 'Clinic profile', tab: 'general', keywords: ['clinic name', 'logo', 'signature', 'address', 'phone', 'email', 'contact', 'clinic code', 'prefix', 'invoice prefix', 'patient id', 'walk-in', 'mrno'] },
   { id: 'settings-card-region', title: 'Region and agenda', tab: 'general', keywords: ['region', 'time zone', 'timezone', 'country code', 'phone country', 'financial year', 'fiscal year', 'daily agenda', 'agenda email', 'evening email'] },
   { id: 'settings-card-after-visit', title: 'After a visit', tab: 'general', keywords: ['clinical notes', 'notes', 'clinical', 'soap', 'documentation', 'consultation', 'feedback', 'patient feedback', 'google review', 'review link', 'rating'] },
+  { id: REFERRALS_CARD_ID, title: 'How patients found you', tab: 'general', keywords: ['referral', 'referrals', 'referral sources', 'referred by', 'source', 'doctor', 'word of mouth', 'walk-in'] },
   { id: 'settings-card-team-therapists', title: 'Team members', tab: 'team', teamView: 'members', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
   { id: 'settings-card-team-shifts', title: 'Shifts & coverage', tab: 'team', teamView: 'shifts', keywords: ['shift', 'shift template', 'coverage', 'roster', 'break', 'shift request', 'swap'] },
-  { id: 'settings-card-services-packages', title: 'Services & packages', tab: 'services', catalogView: 'packages', keywords: ['price', 'package', 'session', 'service', 'catalog', 'group'] },
-  { id: 'settings-card-services-treatments', title: 'Treatments performed', tab: 'services', catalogView: 'treatments', keywords: ['treatment', 'manual therapy', 'exercise', 'taping', 'checklist'] },
-  { id: 'settings-card-services-referrals', title: 'Referral sources', tab: 'services', catalogView: 'referrals', keywords: ['referral', 'referred by', 'source', 'doctor'] },
+  { id: 'settings-card-services-packages', title: 'Services and prices', tab: 'services', catalogView: 'packages', keywords: ['services', 'service', 'prices', 'price', 'price list', 'package', 'session', 'catalog', 'group', 'fees'] },
+  { id: 'settings-card-services-treatments', title: 'Treatments', tab: 'services', catalogView: 'treatments', keywords: ['treatments', 'treatment', 'manual therapy', 'exercise', 'taping', 'checklist', 'quick picks'] },
   { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'booking', keywords: ['booking hours', 'hours', 'opening hours', 'open days', 'closed day', 'holiday', 'closure', 'split', 'lunch', 'break', 'different hours', 'staff can book outside', 'appointment duration'] },
   { id: 'settings-card-booking-online', title: 'Online booking page', tab: 'booking', keywords: ['whatsapp', 'booking page', 'booking link', 'slug', 'patient messages', 'online booking', 'public booking'] },
   { id: 'settings-card-payments', title: 'Payments', tab: 'billing', keywords: ['payment', 'upi', 'qr', 'vpa', 'upi id', 'scan to pay', 'payee', 'collect'] },

@@ -17,13 +17,18 @@ export interface CatalogTemplateDraft {
   enabled: boolean;
 }
 
+/**
+ * Two groups only: Consultation and Physiotherapy. A group is a heading for the visit picker, not a treatment: earlier
+ * starters made "Manual Therapy" and "Exercise Therapy" one-item service groups, the same words the treatment list uses,
+ * which is why many clinics had one-item groups that duplicated their Treatments.
+ */
 export const STARTER_CATALOG_TEMPLATE: readonly Omit<CatalogTemplateDraft, 'key' | 'enabled'>[] = [
   { group: 'Consultation', name: 'Initial Consultation', sessionCount: 1, basePricePaise: 50000 },
   { group: 'Consultation', name: 'Follow-up Consultation', sessionCount: 1, basePricePaise: 30000 },
   { group: 'Physiotherapy', name: 'Physiotherapy Session', sessionCount: 1, basePricePaise: 80000 },
   { group: 'Physiotherapy', name: 'Physiotherapy Package (5)', sessionCount: 5, basePricePaise: 350000 },
-  { group: 'Manual Therapy', name: 'Manual Therapy Session', sessionCount: 1, basePricePaise: 100000 },
-  { group: 'Exercise Therapy', name: 'Exercise Therapy Session', sessionCount: 1, basePricePaise: 70000 },
+  { group: 'Physiotherapy', name: 'Manual Therapy Session', sessionCount: 1, basePricePaise: 100000 },
+  { group: 'Physiotherapy', name: 'Exercise Therapy Session', sessionCount: 1, basePricePaise: 70000 },
 ];
 
 export function createStarterCatalogDrafts(): CatalogTemplateDraft[] {

@@ -704,14 +704,14 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 
 | Tab | Contains |
 |---|---|
-| `general` | Clinic profile (no partner fields), Region and agenda, **After a visit** (`AfterVisitSection`: two switch rows — "Prompt for clinical notes after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off) |
+| `general` | Clinic profile (no partner fields), Region and agenda, **After a visit** (`AfterVisitSection`: two switch rows — "Prompt for clinical notes after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off), then **How patients found you** (`ReferralSourcesCard`: the referral sources staff pick when adding a patient — formerly the Referral sources view of the Services tab; card id `settings-card-general-referrals`) |
 | `team` | Two views on a `Segmented` control: **Team members** (therapists, invites, logins; the unlinked-login banner) and **Shifts & coverage** (pending shift requests, coverage grid, shift templates), with a count badge on Shifts while shift requests are pending. `?teamView=members|shifts` (parsed like `catalogView`; unknown values fall back to members) opens a view; Schedule's "N shift requests pending · Review" link and Settings search for shift words open Shifts. Default is Team members. |
-| `services` | Catalog (`catalogView` = packages / treatments / referrals) |
+| `services` (label **Services & treatments**; the key and URL stay `services`) | Two views on a `Segmented` control, **Services** (`catalogView=packages`: card "Services and prices") and **Treatments** (`catalogView=treatments`). One sentence under each title says where the list shows up (services: what patients pay for, picked on a visit and printed on bills; treatments: what you did in the session, shown as quick picks on each visit). No count pills. Wording: "Stop offering" / "Offer again" for services, "Hide" / "Show" for treatments and referral sources, "No longer offered (N)" and "Show hidden (N)" for the stopped ones, "One visit" (never "Single session"). |
 | `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), **Online booking page** (the booking link, and the WhatsApp Business sub-block) |
 | `billing` (label **Payments & billing**; never hidden on any plan) | Three cards in this order: **Payments** (every plan: UPI collection — show-QR switch, UPI ID, payee name, QR image. There is no default payment method setting: payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last, else UPI — `defaultPaymentMethod()` in `domain/paymentMethods.ts`), **Invoicing** (card title was "Modules & invoicing" and then "Billing & invoicing"; GST number and who can issue — the invoice prefix moved to the Clinic code in Clinic profile, the fiscal year to Region and agenda, and the bill policy was removed; below the invoicing tier it is a compact `LockedCard` — the card with its title and "Available on the Solo plan and above.", so search still lands on it), **Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan and above", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. Before such a save (and before **Turn off partner mode**) it counts, from local data and against the unsaved settings, the visits that would change (`visitService.countUninvoicedSplitChanges`); with N > 0 a `ConfirmDialog` says "This recalculates N visits that have no invoice yet. Invoices already issued stay as they are." and Cancel saves nothing; with N = 0 it saves without asking. The count and `recomputeUninvoicedSplits` share one rule (`uninvoicedSplitRates` + `visitNeedsSplitUpdate` in `domain/split.ts`), so the number shown is the number updated. If the visit update fails after the settings saved, the card says so and offers **Update visits again**. |
 | `account` | Plan, historical data import, backup, danger zone |
 
-Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` / `referrals` → services with that view. Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
+Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` → services with the treatments view, and every old referral-sources link (`?tab=referrals`, `?catalogView=referrals` with or without a tab) → **general at the How patients found you card** (`SettingsSearch.card = 'referrals'`; `SettingsPage` scrolls to `REFERRALS_CARD_ID`). Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
 
 **Confirmations in Settings.** Everything saves without asking except three changes where a mistake is costly: (1) the partner split change above (only when N > 0); (2) changing or clearing a booking link that already exists ("Anyone using the old link will no longer reach your booking page."; setting a first link just saves); (3) changing the time zone in Region and agenda ("Times patients and staff see in booking pages and emails will change."). All use the shared `ConfirmDialog`.
 
@@ -726,10 +726,8 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 - Fiscal year start month (default April → FY 26-27) — set in the **Region and agenda** card, which reads as one line ("India (+91) · India Standard Time (UTC+5:30) · Financial year from April", `regionSummary`) with **Change** to open the time zone, phone country code and financial year fields (the card stays open while it has unsaved changes); no longer in Invoicing
 - **Walk-in MRNO prefix**: the Patient ID half of the Clinic code (defaults to 'W' for a clinic that never set one)
 
-#### Catalog (Settings → Services)
-Single settings section with three sub-tabs — **Services & packages**, **Treatments
-performed**, and **Referral sources** — each using a set-once card pattern. Legacy `?tab=services|treatments|referrals`
-URLs redirect to `?tab=catalog&catalogView=…`.
+#### Catalog (Settings → Services & treatments)
+One settings tab with two lists, **Services** and **Treatments** (the same words as the visit screen's "Services" and "Treatments" cards). **Referral sources** moved to General as "How patients found you" (they are about patients, not services). `parseSettingsSearch` sends old `?tab=services|treatments` links to the matching view and every old referral link to General at that card.
 
 #### Clinic onboarding wizard (new self-service clinics)
 - **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
@@ -769,12 +767,12 @@ URLs redirect to `?tab=catalog&catalogView=…`.
   team" is optional on a one-login plan; there, "Link every therapist" needs only the owner's
   own row (`therapistSignals`), so setup can reach 100% with no teammate.
 
-#### Service Catalog (Services & packages tab)
+#### Service Catalog (Services tab → "Services and prices")
 - **Service groups** — stored as `category` on each row; UI shows editable group
   panels (rename rewrites all items in the group). New groups are created by name
   when adding the first service or package in that group.
-- **Single-session services** (`session_count = 1`) and **packages** (`session_count ≥ 2`)
-  per group — add via **+ Single session** or **+ Package** on the group header; session
+- **One-visit services** (`session_count = 1`) and **packages** (`session_count ≥ 2`)
+  per group — add via **+ One visit** or **+ Package** on the group header; session
   count and total price on each row (per-session rate derived for packages).
 - Name per item — autocompleted group names via datalist when moving a row between groups
 - Session count — editable after create; 1 = one visit, 2+ = package line on invoices
@@ -784,13 +782,14 @@ URLs redirect to `?tab=catalog&catalogView=…`.
   reports. Shown on the row as "· 20 min" when set. The form rejects anything else inline
   ("Enter minutes between 1 and 480, or leave it blank.") and never sends it. It is snapshotted onto
   a visit's service line when entered, which is what utilisation reports read.
-- Active toggle (deactivate, not delete) — inactive items are shown in their own
-  collapsed "Inactive services" section below the active groups, not interspersed
+- Stop offering (not delete) — stopped items are shown in their own
+  collapsed "No longer offered (N)" section below the active groups, not interspersed
 - **Permanent delete** (`hard_delete_catalog_item` RPC) — admin-only, zero-history
   items only (blocked if any visit or visit service line references the row, same shape as
   `hard_delete_therapist`/`hard_delete_patient`); only offered once deactivated.
-  A service with any usage must stay on Deactivate.
-- Unique constraint per clinic
+  A service with any usage can only be stopped, not deleted.
+- Unique constraint per clinic (`unique (clinic_id, name)`; the same on treatments and referral sources)
+- **Starter list for new clinics** (`STARTER_CATALOG_TEMPLATE`, first-run setup): two groups only — Consultation (Initial, Follow-up) and Physiotherapy (session, 5-session package, manual therapy session, exercise therapy session). No group is named after a treatment (earlier starters seeded "Manual Therapy" and "Exercise Therapy" as one-item groups, the same words the treatment list uses). The setup editor uses the same words as Settings: "+ One visit", "Rename group", "Add another group (optional)".
 
 #### No-Return Reason Catalog
 - Clinic-editable list of predefined reasons for patient no-shows

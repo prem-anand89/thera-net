@@ -78,9 +78,10 @@ export function ServiceCatalogTemplateEditor({
       ))}
 
       <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)] p-4">
-        <p className="text-sm font-semibold text-[var(--ink)]">Add a service group</p>
+        <p className="text-sm font-semibold text-[var(--ink)]">Add another group (optional)</p>
         <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
-          Creates an empty group — add services with the buttons inside the group.
+          Groups are headings for your services, like Consultation or Physiotherapy. Add services to a group with the
+          buttons inside it.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -128,7 +129,7 @@ function ServiceTemplateGroupPanel({
                 className={`${inputCls} max-w-xs text-sm font-semibold`}
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
-                aria-label="Service group name"
+                aria-label="Group name"
               />
               <button
                 type="button"
@@ -163,7 +164,7 @@ function ServiceTemplateGroupPanel({
                   setEditingName(true);
                 }}
               >
-                Edit group name
+                Rename group
               </button>
             </div>
           )}
@@ -174,7 +175,7 @@ function ServiceTemplateGroupPanel({
             className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold"
             onClick={() => onAdd('single')}
           >
-            + Single session
+            + One visit
           </button>
           <button
             type="button"

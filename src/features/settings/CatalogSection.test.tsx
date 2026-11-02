@@ -54,14 +54,15 @@ describe('ServiceCatalog — active vs. inactive separation', () => {
     ];
     render(<CatalogSection view="packages" onViewChange={() => {}} />);
     expect(await screen.findByText('Active Service')).toBeInTheDocument();
-    // The Inactive services section starts collapsed.
+    // The "No longer offered" section starts collapsed.
     expect(screen.queryByText('Retired Service')).not.toBeInTheDocument();
 
-    const expand = screen.getByRole('button', { name: 'Expand inactive services' });
+    const expand = screen.getByRole('button', { name: 'Expand no longer offered' });
     fireEvent.click(expand);
     expect(await screen.findByText('Retired Service')).toBeInTheDocument();
-    // No "Inactive" badge on the row — the section header already says so.
+    // No badge on the row — the section header already says so.
     expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hidden')).not.toBeInTheDocument();
   });
 });
 
@@ -148,7 +149,7 @@ describe('ServiceCatalogItemRow — hard delete', () => {
     usageCounts = { [retired.id]: 0 };
     render(<CatalogSection view="packages" onViewChange={() => {}} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand inactive services' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand no longer offered' }));
     const deleteBtn = await screen.findByRole('button', { name: 'Delete' });
     fireEvent.click(deleteBtn);
 
@@ -164,7 +165,7 @@ describe('ServiceCatalogItemRow — hard delete', () => {
     usageCounts = { [retired.id]: 12 };
     render(<CatalogSection view="packages" onViewChange={() => {}} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand inactive services' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand no longer offered' }));
     expect(await screen.findByText("Used on 12 visits — can't delete")).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });
@@ -212,3 +213,45 @@ describe('ServiceCatalog — optional duration', () => {
     expect(screen.getAllByText(/ min$/)).toHaveLength(1);
   });
 });
+
+describe('Services & treatments tab — plain words', () => {
+  it('switches between Services and Treatments, with no referral view and no count pills', () => {
+    catalogItems = [item(), item({ name: 'Follow-up', category: 'Consultation' })];
+    const onViewChange = vi.fn();
+    render(<CatalogSection view="packages" onViewChange={onViewChange} />);
+    expect(screen.getByRole('radio', { name: 'Services' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Treatments' })).not.toBeChecked();
+    expect(screen.queryByRole('radio', { name: /Referral/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Treatments' }));
+    expect(onViewChange).toHaveBeenCalledWith('treatments');
+    expect(screen.queryByText(/single-session$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ (active|groups|packages|inactive)$/)).not.toBeInTheDocument();
+  });
+
+  it('titles the services card "Services and prices" and says where it shows up', () => {
+    catalogItems = [item()];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    expect(screen.getByRole('heading', { name: 'Services and prices' })).toBeInTheDocument();
+    expect(screen.getByText(/What patients pay for\. You pick these on a visit, and they print on bills and invoices\./)).toBeInTheDocument();
+    expect(screen.getByText(/Record what you did in the session under Treatments\./)).toBeInTheDocument();
+  });
+
+  it('says "Stop offering" and "One visit", never "Deactivate" or "Single session"', () => {
+    catalogItems = [item({ name: 'Solo visit' })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Stop offering' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Deactivate/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText('One visit').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Single session')).not.toBeInTheDocument();
+  });
+
+  it('shows a stopped service under "No longer offered (1)" with "Offer again"', () => {
+    catalogItems = [item({ name: 'Old service', active: false })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    expect(screen.getByRole('heading', { name: 'No longer offered' })).toBeInTheDocument();
+    expect(screen.getByText('(1)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand no longer offered' }));
+    expect(screen.getByRole('button', { name: 'Offer again' })).toBeInTheDocument();
+  });
+});
+

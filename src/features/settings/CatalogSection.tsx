@@ -9,71 +9,25 @@ import {
   type ReferringSourceItem,
   type TreatmentItem,
 } from '@/domain/types';
-import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, RupeeInput, SectionCard, ConfirmDialog } from '@/components/ui';
+import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, RupeeInput, SectionCard, ConfirmDialog, Segmented } from '@/components/ui';
+import { REFERRALS_CARD_ID } from './sections';
 import { toFriendlyMessage } from '@/lib/errors';
 
-export type CatalogView = 'packages' | 'treatments' | 'referrals';
+/** The two lists on the Services & treatments tab. Referral sources live on General ("How patients found you"). */
+export type CatalogView = 'packages' | 'treatments';
 
-const CATALOG_VIEWS: { key: CatalogView; label: string }[] = [
-  { key: 'packages', label: 'Services & packages' },
-  { key: 'treatments', label: 'Treatments' },
-  { key: 'referrals', label: 'Referral sources' },
+const CATALOG_VIEWS: { value: CatalogView; label: string }[] = [
+  { value: 'packages', label: 'Services' },
+  { value: 'treatments', label: 'Treatments' },
 ];
 
 export function CatalogSection({ view, onViewChange }: { view: CatalogView; onViewChange: (v: CatalogView) => void }) {
   return (
     <div>
-      <div className="mb-5 flex gap-1.5">
-        {CATALOG_VIEWS.map(({ key, label }) => {
-          const selected = view === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
-              style={{
-                borderColor: selected ? 'var(--teal)' : 'var(--border)',
-                background: selected ? 'var(--teal-light)' : 'var(--surface)',
-                color: selected ? 'var(--teal-strong)' : 'var(--muted)',
-              }}
-              onClick={() => onViewChange(key)}
-            >
-              {label}
-            </button>
-          );
-        })}
+      <div className="mb-5">
+        <Segmented label="Services or treatments" options={CATALOG_VIEWS} value={view} onChange={onViewChange} />
       </div>
-      {view === 'packages' && <ServiceCatalog />}
-      {view === 'treatments' && <TreatmentCatalog />}
-      {view === 'referrals' && <ReferringSourcesCatalog />}
-    </div>
-  );
-}
-
-function CatalogStats({ items }: { items: { label: string; value: string | number; warn?: boolean }[] }) {
-  return (
-    <div className="mb-4 flex flex-wrap gap-1.5">
-      {items.map((s) => (
-        <span
-          key={s.label}
-          className="rounded-full border px-2.5 py-0.5 font-mono text-hint"
-          style={
-            s.warn
-              ? {
-                  borderColor: 'var(--amber)',
-                  background: 'var(--amber-light)',
-                  color: 'var(--amber-strong)',
-                }
-              : {
-                  borderColor: 'var(--border)',
-                  background: 'var(--paper)',
-                  color: 'var(--muted)',
-                }
-          }
-        >
-          {s.value} {s.label}
-        </span>
-      ))}
+      {view === 'packages' ? <ServiceCatalog /> : <TreatmentCatalog />}
     </div>
   );
 }
@@ -87,7 +41,7 @@ function InactivePill() {
       className="inline-block self-start rounded-full px-2.5 py-0.5 text-caption font-semibold"
       style={{ background: 'var(--paper)', color: 'var(--muted)' }}
     >
-      Inactive
+      Hidden
     </span>
   );
 }
@@ -204,39 +158,19 @@ function ServiceCatalog() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [items, search]);
 
-  const stats = useMemo(() => {
-    const all = items ?? [];
-    const active = all.filter((i) => i.active).length;
-    const groupCount = new Set(all.map((i) => groupKey(i.category))).size;
-    const singles = all.filter((i) => i.sessionCount <= 1).length;
-    const packages = all.filter((i) => i.sessionCount > 1).length;
-    return { total: all.length, active, inactive: all.length - active, groupCount, singles, packages };
-  }, [items]);
-
   const groupNames = useMemo(
     () => [...new Set((items ?? []).map((i) => groupKey(i.category)))].sort(),
     [items]
   );
 
   return (
-    <SectionCard id="settings-card-services-packages" title="Services & packages">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Organize billable items into <strong>service groups</strong> (e.g. Consultation, Treatment).
-        Each row is a single-session service (<strong>1 session</strong>) or a multi-session{' '}
-        <strong>package</strong> (2+ sessions, one total price). Price changes affect{' '}
-        <strong>future</strong> visits only — deactivate a service you've stopped offering, then
-        delete it for good once it's never been used.
+    <SectionCard id="settings-card-services-packages" title="Services and prices">
+      <p className="mb-1 text-xs text-[var(--muted)]">
+        What patients pay for. You pick these on a visit, and they print on bills and invoices.
       </p>
-      <CatalogStats
-        items={[
-          { label: 'items', value: stats.total },
-          { label: 'active', value: stats.active },
-          { label: 'groups', value: stats.groupCount },
-          { label: 'single-session', value: stats.singles },
-          { label: 'packages', value: stats.packages },
-          ...(stats.inactive > 0 ? [{ label: 'inactive', value: stats.inactive, warn: true }] : []),
-        ]}
-      />
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Charge for the visit or the package. Record what you did in the session under Treatments.
+      </p>
       <input
         type="search"
         className={`${inputCls} mb-4`}
@@ -296,15 +230,13 @@ function InactiveServicesSection({
           type="button"
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface)]"
           aria-expanded={open}
-          aria-label={open ? 'Collapse inactive services' : 'Expand inactive services'}
+          aria-label={open ? 'Collapse no longer offered' : 'Expand no longer offered'}
           onClick={() => setCollapsed((c) => !c)}
         >
           <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
         </button>
-        <h3 className="text-sm font-semibold text-[var(--ink)]">Inactive services</h3>
-        <span className="text-hint text-[var(--muted)]">
-          {items.length} item{items.length === 1 ? '' : 's'}
-        </span>
+        <h3 className="text-sm font-semibold text-[var(--ink)]">No longer offered</h3>
+        <span className="text-hint text-[var(--muted)]">({items.length})</span>
       </div>
       {open && (
         <div className="divide-y divide-[var(--border)] bg-[var(--surface)]">
@@ -330,7 +262,7 @@ function SessionKindPill({ sessionCount }: { sessionCount: number }) {
           : { background: 'var(--paper)', color: 'var(--muted)', border: '1px solid var(--border)' }
       }
     >
-      {isPackage ? `Package · ${sessionCount} sessions` : 'Single session'}
+      {isPackage ? `Package · ${sessionCount} sessions` : 'One visit'}
     </span>
   );
 }
@@ -414,7 +346,7 @@ function ServiceGroupPanel({
                   className={`${inputCls} max-w-xs text-sm font-semibold`}
                   value={groupNameDraft}
                   onChange={(e) => setGroupNameDraft(e.target.value)}
-                  aria-label="Service group name"
+                  aria-label="Group name"
                   autoFocus
                 />
                 <button
@@ -458,7 +390,7 @@ function ServiceGroupPanel({
               setAddKind('single');
             }}
           >
-            + Single session
+            + One visit
           </button>
           <button
             type="button"
@@ -727,7 +659,7 @@ function ServiceCatalogItemRow({
         <div className="ml-auto flex shrink-0 flex-wrap gap-2">
           <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
           <CatalogActionButton tone={item.active ? 'rust' : 'teal'} onClick={() => void toggleActive()}>
-            {item.active ? 'Deactivate' : 'Reactivate'}
+            {item.active ? 'Stop offering' : 'Offer again'}
           </CatalogActionButton>
           {!item.active && usageCount === 0 && (
             <CatalogActionButton tone="rust" onClick={() => setDeleteConfirm(true)}>
@@ -793,7 +725,7 @@ function ServiceCatalogInlineAdd({
     }
     const sessions = Math.max(1, Number(sessionCount) || 1);
     if (kind === 'single' && sessions !== 1) {
-      setError('Single-session services must have session count 1 — use + Package for multi-session.');
+      setError('One-visit services have 1 session — use + Package for more than one.');
       return;
     }
     if (kind === 'package' && sessions < 2) {
@@ -825,7 +757,7 @@ function ServiceCatalogInlineAdd({
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-[var(--ink)]">
-        {kind === 'package' ? 'Add package to this group' : 'Add single-session service'}
+        {kind === 'package' ? 'Add package to this group' : 'Add a one-visit service'}
       </p>
       <Field label="Name">
         <input
@@ -900,13 +832,13 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
   return (
     <CatalogAddCard
       title="Add a service group"
-      hint="Groups organize the visit picker (Consultation, Assessment, Treatment, …). Add at least one service or package in the group."
+      hint="Groups organize the visit picker (Consultation, Assessment, Physiotherapy, …). Add at least one service or package in the group."
     >
       <Field label="Group name">
         <input
           className={inputCls}
           list="catalog-service-groups"
-          placeholder="e.g. Treatment"
+          placeholder="e.g. Physiotherapy"
           value={groupName}
           onChange={(e) => {
             setGroupName(e.target.value);
@@ -917,7 +849,7 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
       </Field>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={btnSecondary} onClick={() => startAdd('single')}>
-          + First single-session service
+          + First one-visit service
         </button>
         <button type="button" className={btnSecondary} onClick={() => startAdd('package')}>
           + First package
@@ -962,24 +894,15 @@ function TreatmentCatalog() {
   const itemList = itemsRaw ?? [];
 
   return (
-    <SectionCard id="settings-card-services-treatments" title="Treatments performed">
+    <SectionCard id="settings-card-services-treatments" title="Treatments">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Clinical checklist on each visit, independent of billing. Deactivate instead of deleting so
-        past visits keep displaying correctly.
+        What you did in the session, for your clinical record. Not on the bill. Shown as quick picks on each visit,
+        most used first. Hide a treatment instead of deleting it, so past visits keep showing it.
       </p>
-      <CatalogStats
-        items={[
-          { label: 'total', value: itemList.length },
-          { label: 'active', value: activeCount },
-          ...(itemList.length - activeCount > 0
-            ? [{ label: 'inactive', value: itemList.length - activeCount, warn: true }]
-            : []),
-        ]}
-      />
       {itemList.length - activeCount > 0 && (
         <label className="mb-4 flex items-center gap-2 text-xs text-[var(--muted)]">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-          Show inactive treatments
+          Show hidden ({itemList.length - activeCount})
         </label>
       )}
       {visible.length > 0 ? (
@@ -1066,7 +989,7 @@ function TreatmentCard({ item }: { item: TreatmentItem }) {
         <>
           <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
           <CatalogActionButton tone={item.active ? 'rust' : 'teal'} onClick={() => void toggleActive()}>
-            {item.active ? 'Deactivate' : 'Reactivate'}
+            {item.active ? 'Hide' : 'Show'}
           </CatalogActionButton>
         </>
       }
@@ -1120,7 +1043,8 @@ function TreatmentAddForm() {
   );
 }
 
-function ReferringSourcesCatalog() {
+/** "How patients found you": the referral sources staff pick when adding a patient. Lives on the General tab. */
+export function ReferralSourcesCard() {
   const clinic = useClinic();
   const itemsRaw = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]);
   const [showInactive, setShowInactive] = useState(false);
@@ -1135,31 +1059,19 @@ function ReferringSourcesCatalog() {
     [itemsRaw, showInactive]
   );
   const itemList = itemsRaw ?? [];
-  const withDetail = itemList.filter((i) => i.detailLabel).length;
   const activeCount = itemList.filter((i) => i.active).length;
 
   return (
-    <SectionCard id="settings-card-services-referrals" title="Referral sources">
+    <SectionCard id={REFERRALS_CARD_ID} title="How patients found you">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients
-        keep displaying correctly. Optionally add a <strong>detail field label</strong> — when staff pick
-        that source, the patient form shows an extra text field with that label (e.g. source &quot;Doctor
-        referral&quot; with detail &quot;Referring doctor&quot;).
+        Asked when you add a patient. Feeds the Referral sources report. Hide a source instead of deleting it, so
+        existing patients keep showing it. Optionally add a <strong>detail field label</strong>: when staff pick that
+        source, the patient form shows an extra box with that label (e.g. &quot;Referring doctor&quot;).
       </p>
-      <CatalogStats
-        items={[
-          { label: 'sources', value: itemList.length },
-          { label: 'active', value: activeCount },
-          { label: 'with detail field', value: withDetail },
-          ...(itemList.length - activeCount > 0
-            ? [{ label: 'inactive', value: itemList.length - activeCount, warn: true }]
-            : []),
-        ]}
-      />
       {itemList.length - activeCount > 0 && (
         <label className="mb-4 flex items-center gap-2 text-xs text-[var(--muted)]">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-          Show inactive sources
+          Show hidden ({itemList.length - activeCount})
         </label>
       )}
       {visible.length > 0 ? (
@@ -1262,7 +1174,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
         <>
           <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
           <CatalogActionButton tone={item.active ? 'rust' : 'teal'} onClick={() => void toggleActive()}>
-            {item.active ? 'Deactivate' : 'Reactivate'}
+            {item.active ? 'Hide' : 'Show'}
           </CatalogActionButton>
         </>
       }

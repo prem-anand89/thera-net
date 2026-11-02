@@ -14,6 +14,13 @@ describe('onboardingCatalogTemplates', () => {
     expect(drafts.every((d) => d.enabled)).toBe(true);
   });
 
+  it('starter groups are only Consultation and Physiotherapy: none is named after a treatment', () => {
+    const groups = [...new Set(createStarterCatalogDrafts().map((d) => d.group))].sort();
+    expect(groups).toEqual(['Consultation', 'Physiotherapy']);
+    // Every group holds more than one row, so no one-item groups for new clinics.
+    for (const g of groups) expect(createStarterCatalogDrafts().filter((d) => d.group === g).length).toBeGreaterThan(1);
+  });
+
   it('requires at least one enabled priced row', () => {
     const drafts = createStarterCatalogDrafts().map((d) => ({
       ...d,

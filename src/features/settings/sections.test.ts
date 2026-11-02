@@ -17,13 +17,22 @@ describe('parseSettingsSearch', () => {
     expect(parseSettingsSearch({ tab: 'data' })).toEqual({ tab: 'account' });
   });
 
-  it('keeps catalog views on the services tab, including pre-merge names', () => {
-    expect(parseSettingsSearch({ tab: 'catalog', catalogView: 'referrals' })).toEqual({
+  it('keeps the two catalog views on the services tab, including the pre-merge treatments name', () => {
+    expect(parseSettingsSearch({ tab: 'catalog', catalogView: 'treatments' })).toEqual({
       tab: 'services',
-      catalogView: 'referrals',
+      catalogView: 'treatments',
     });
     expect(parseSettingsSearch({ tab: 'treatments' })).toEqual({ tab: 'services', catalogView: 'treatments' });
     expect(parseSettingsSearch({ tab: 'services' })).toEqual({ tab: 'services' });
+  });
+
+  it('sends every old referral-sources link to the General tab, at the card', () => {
+    const landing = { tab: 'general', card: 'referrals' };
+    expect(parseSettingsSearch({ tab: 'catalog', catalogView: 'referrals' })).toEqual(landing);
+    expect(parseSettingsSearch({ tab: 'services', catalogView: 'referrals' })).toEqual(landing);
+    expect(parseSettingsSearch({ tab: 'referrals' })).toEqual(landing);
+    expect(parseSettingsSearch({ catalogView: 'referrals' })).toEqual(landing);
+    expect(parseSettingsSearch({ tab: 'services', catalogView: 'referrals', fromSetup: true })).toEqual({ ...landing, fromSetup: true });
   });
 
   it('opens the Team tab on the view asked for, falling back to members', () => {
@@ -103,6 +112,21 @@ describe('matchSettingsCards', () => {
     expect(tabsInOrder).toEqual(['general', 'team', 'services', 'booking', 'billing', 'account']);
     const booking = SETTINGS_CARDS.filter((c) => c.tab === 'booking').map((c) => c.id);
     expect(booking).toEqual(['settings-card-booking-hours', 'settings-card-booking-online']);
+  });
+
+  it('names the tab "Services & treatments" and the referral card "How patients found you" on General', () => {
+    expect(SETTINGS_TAB_META.services.label).toBe('Services & treatments');
+    const card = SETTINGS_CARDS.find((c) => c.id === 'settings-card-general-referrals');
+    expect(card).toMatchObject({ title: 'How patients found you', tab: 'general' });
+    expect(matchSettingsCards('referral').map((c) => c.id)).toEqual(['settings-card-general-referrals']);
+    expect(matchSettingsCards('referred by').map((c) => c.tab)).toEqual(['general']);
+  });
+
+  it('finds the services and treatments cards by the words people use', () => {
+    expect(matchSettingsCards('prices').map((c) => c.id)).toContain('settings-card-services-packages');
+    expect(matchSettingsCards('price list').map((c) => c.id)).toEqual(['settings-card-services-packages']);
+    expect(matchSettingsCards('treatments').map((c) => c.id)).toContain('settings-card-services-treatments');
+    expect(matchSettingsCards('quick picks').map((c) => c.id)).toEqual(['settings-card-services-treatments']);
   });
 
   it('returns nothing for an empty or unknown query', () => {

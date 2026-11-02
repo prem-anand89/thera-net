@@ -6,10 +6,10 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { ConfirmDialog, Segmented } from '@/components/ui';
-import { CatalogSection, type CatalogView } from './CatalogSection';
+import { CatalogSection, ReferralSourcesCard, type CatalogView } from './CatalogSection';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
-import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab, type TeamViewKey } from './sections';
+import { REFERRALS_CARD_ID, SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab, type TeamViewKey } from './sections';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { LockedCard } from './settingsShared';
 import { PlanSection } from './PlanSection';
@@ -229,7 +229,8 @@ export function SettingsPage() {
   // scroll to. Used for tab clicks, search results and the discard dialog.
   type Target = { tab: SettingsTab; catalogView?: CatalogView; teamView?: TeamViewKey; anchor?: string };
   const [pendingTarget, setPendingTarget] = useState<Target | null>(null);
-  const [anchor, setAnchor] = useState<string | null>(null);
+  // An old referral-sources link (`?catalogView=referrals`) lands on General and scrolls to the card.
+  const [anchor, setAnchor] = useState<string | null>(search.card === 'referrals' ? REFERRALS_CARD_ID : null);
   const [query, setQuery] = useState('');
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -467,6 +468,7 @@ export function SettingsPage() {
               <ClinicProfileSection onDirtyChange={setProfileDirty} invoicing={canSeeBilling} />
               <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
               <AfterVisitSection onDirtyChange={setAfterVisitDirty} />
+              <ReferralSourcesCard />
             </>
           )}
           {activeTab === 'team' && (
