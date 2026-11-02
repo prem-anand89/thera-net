@@ -718,12 +718,12 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 - Name, address, phone, email, GST number
 - Logo upload
 - Partner hospital name and logo
-- Invoice prefix (e.g., "BM" → `BM/26-27/0001`)
+- **Clinic code** (Settings → General → Clinic profile; `ClinicCodeField`, `domain/clinicCode.ts`): one short code that starts both invoice numbers (`BM/26-27/0001`) and Patient IDs (`BM26-0001`). Made at sign-up from the clinic name — the first letter of the first two words, skipping "&", "and", "of", "the" (Beyond Mechanics → BM; one word: its two CamelCase capitals or first two letters; falls back to `INV` for the invoice prefix when the name has no letters) — and written to both `invoice_prefix` and `walk_in_mrno_prefix`. Editable: 1–6 uppercase letters or digits. While the two stored codes are equal, editing changes both; a clinic whose codes differ (or has no patient prefix and so uses the `W` fallback) keeps them until it taps "Use X for both". Under the field: "Patient IDs look like BM26-0001 · Invoices look like BM/26-27/0001" (the invoice example only on plans with invoicing). A change applies to new patients and invoices; existing IDs and numbers are never renumbered. The Invoicing card no longer has an invoice prefix field
 - Revenue split % (BM share, default 75%)
 - Tax % (default 10%)
 - TDS basis selection (gross bill or BM share) — under **More options** in Partner & split, with the report column names (share labels); the section opens by itself when a label or the clinic-share basis is already set
 - Fiscal year start month (default April → FY 26-27) — set in the **Region and agenda** card, which reads as one line ("India (+91) · India Standard Time (UTC+5:30) · Financial year from April", `regionSummary`) with **Change** to open the time zone, phone country code and financial year fields (the card stays open while it has unsaved changes); no longer in Invoicing
-- **Walk-in MRNO prefix** (configurable, defaults to 'W')
+- **Walk-in MRNO prefix**: the Patient ID half of the Clinic code (defaults to 'W' for a clinic that never set one)
 
 #### Catalog (Settings → Services)
 Single settings section with three sub-tabs — **Services & packages**, **Treatments
@@ -1566,7 +1566,7 @@ id                          uuid PRIMARY KEY
 name                        text NOT NULL
 address, phone, email, gst_no, logo_path  text (NULLABLE)
 partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
-invoice_prefix              text NOT NULL (e.g., "BM")
+invoice_prefix              text NOT NULL (e.g., "BM") — the Clinic code (invoice half); made from the clinic name at sign-up
 bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
@@ -1587,7 +1587,7 @@ invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — LEGACY: no longer read or edited (the "Bills after a visit" setting was removed); kept for old rows
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
 show_therapist_comparison   boolean NOT NULL
-walk_in_mrno_prefix         text (NULLABLE, default 'W')
+walk_in_mrno_prefix         text (NULLABLE, default 'W') — the Clinic code (Patient ID half); set from the clinic name at sign-up through the normal outbox push (the create RPC does not take it)
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
                              Dexie prefs (useVisitColumnPrefs); no client code
                              reads/writes this column today
@@ -3570,7 +3570,7 @@ id                          uuid PRIMARY KEY
 name                        text NOT NULL
 address, phone, email, gst_no, logo_path  text (NULLABLE)
 partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
-invoice_prefix              text NOT NULL (e.g., "BM")
+invoice_prefix              text NOT NULL (e.g., "BM") — the Clinic code (invoice half); made from the clinic name at sign-up
 bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
@@ -3591,7 +3591,7 @@ invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — LEGACY: no longer read or edited (the "Bills after a visit" setting was removed); kept for old rows
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
 show_therapist_comparison   boolean NOT NULL
-walk_in_mrno_prefix         text (NULLABLE, default 'W')
+walk_in_mrno_prefix         text (NULLABLE, default 'W') — the Clinic code (Patient ID half); set from the clinic name at sign-up through the normal outbox push (the create RPC does not take it)
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
                              Dexie prefs (useVisitColumnPrefs); no client code
                              reads/writes this column today

@@ -72,6 +72,11 @@ describe('Billing & invoicing', () => {
     expect(screen.queryByText('Show UPI QR at collection')).toBeNull();
   });
 
+  it('no longer holds the invoice prefix: that is the Clinic code in General → Clinic profile', () => {
+    render(<BillingSection onDirtyChange={vi.fn()} />);
+    expect(screen.queryByText('Invoice prefix')).toBeNull();
+  });
+
   it('has no "Bills after a visit" setting: the Give bill button after a visit is the only way to offer a bill', () => {
     render(<BillingSection onDirtyChange={vi.fn()} />);
     expect(screen.queryByText('Bills after a visit')).toBeNull();

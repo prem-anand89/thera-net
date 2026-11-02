@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { PhoneField } from '@/components/PhoneField';
+import { clinicCode } from '@/domain/clinicCode';
 import { useNavigate } from '@tanstack/react-router';
 import { setActiveClinic } from '@/app/useActiveClinic';
 import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
@@ -100,12 +101,14 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         return;
       }
 
+      // One clinic code starts both the invoice numbers and the Patient IDs.
+      const code = clinicCode(form.name);
       const { data, error: rpcError } = await supabase.rpc('create_clinic_with_admin', {
         p_name: form.name.trim(),
         p_email: form.email.trim(),
         p_phone: form.phone.trim(),
         p_address: form.address.trim(),
-        p_invoice_prefix: form.name.trim().slice(0, 3).toUpperCase(),
+        p_invoice_prefix: code || 'INV',
       });
 
       if (rpcError) {
@@ -157,6 +160,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         partnerHospitalName: row.partner_hospital_name,
         partnerHospitalLogoPath: row.partner_hospital_logo_path,
         invoicePrefix: row.invoice_prefix,
+        walkInMrnoPrefix: code || null,
         clinicSplitPct: row.clinic_split_pct,
         taxPct: row.tax_pct,
         tdsBasis: row.tds_basis,
@@ -173,9 +177,9 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       await repos.clinics.putLocal(clinic);
       // The uploaded logo path exists only in storage and this local cache
       // so far — the RPC's row has `logo_path: null` since it predates the
-      // upload. A normal `put` (not `putLocal`) queues this one field for
+      // upload, and the RPC does not set the Patient ID prefix. A normal `put` (not `putLocal`) queues those fields for
       // the usual outbox sync, same as any later edit in Settings.
-      if (logoFile && logoPath !== row.logo_path) {
+      if ((logoFile && logoPath !== row.logo_path) || code) {
         await repos.clinics.put(clinic);
       }
       await setActiveClinic(clinic.id);

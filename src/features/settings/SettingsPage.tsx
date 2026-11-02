@@ -453,7 +453,7 @@ export function SettingsPage() {
           </div>
           {activeTab === 'general' && (
             <>
-              <ClinicProfileSection onDirtyChange={setProfileDirty} />
+              <ClinicProfileSection onDirtyChange={setProfileDirty} invoicing={canSeeBilling} />
               <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
               <AfterVisitSection onDirtyChange={setAfterVisitDirty} />
             </>

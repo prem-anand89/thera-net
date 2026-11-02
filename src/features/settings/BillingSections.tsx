@@ -10,7 +10,6 @@ import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShar
 
 type BillingFields = Pick<
   Clinic,
-  | 'invoicePrefix'
   | 'gstNo'
   | 'invoicingAccess'
 >;
@@ -19,7 +18,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
   const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } =
     useClinicSectionForm<BillingFields>(
       (c) => ({
-        invoicePrefix: c.invoicePrefix,
         gstNo: c.gstNo,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
       }),
@@ -36,13 +34,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
     >
       <fieldset disabled={busy} className="contents">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="Invoice prefix">
-          <input
-            className={inputCls}
-            value={form.invoicePrefix}
-            onChange={(e) => set({ invoicePrefix: e.target.value.toUpperCase() })}
-          />
-        </Field>
         <Field
           label={
             <>
@@ -81,7 +72,7 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
       </fieldset>
       {dirty && (
         <p className="mt-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]">
-          The invoice prefix and GST number apply to invoices issued from now on. Invoices already issued keep their numbers and rates.
+          The GST number applies to invoices issued from now on. Invoices already issued keep their numbers and rates.
         </p>
       )}
       {showSaveBar && (

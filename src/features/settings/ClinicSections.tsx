@@ -1,4 +1,5 @@
 import { OperatingHoursEditor } from './OperatingHoursEditor';
+import { ClinicCodeField } from './ClinicCodeField';
 import { COUNTRY_CODES } from '@/domain/countryCodes';
 import { clinicCountryCode, clinicTimezone, regionSummary, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
@@ -21,13 +22,14 @@ type ProfileFields = Pick<
   | 'address'
   | 'phone'
   | 'email'
+  | 'invoicePrefix'
   | 'walkInMrnoPrefix'
   | 'logoPath'
   | 'signaturePath'
 
 >;
 
-export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDirtyChange: (dirty: boolean) => void; invoicing?: boolean }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar } =
     useClinicSectionForm<ProfileFields>(
       (c) => ({
@@ -35,6 +37,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
         address: c.address,
         phone: c.phone,
         email: c.email,
+        invoicePrefix: c.invoicePrefix,
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
         signaturePath: c.signaturePath,
@@ -161,19 +164,15 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
                           placeholder="Email address" 
                         />
                       </div>
-                      <div className="w-28">
-                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5 flex items-center gap-1">
-                          Patient ID Prefix
-                          <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001). Defaults to 'W'." />
-                        </label>
-                        <input 
-                          className={inputCls} 
-                          value={form.walkInMrnoPrefix ?? ''} 
-                          onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })} 
-                          placeholder="W" 
-                        />
-                      </div>
                     </div>
+
+                    <ClinicCodeField
+                      invoicePrefix={form.invoicePrefix ?? ''}
+                      walkInMrnoPrefix={form.walkInMrnoPrefix}
+                      fyStartMonth={clinic.fyStartMonth}
+                      invoicing={invoicing}
+                      onChange={(code) => set(code)}
+                    />
                   </div>
                 </div>
 
@@ -218,6 +217,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
               saved={saved}
               busy={busy}
               onSave={() => void saveProfile()}
+              saveDisabled={!(form.invoicePrefix ?? '').trim()}
               onCancel={() => {
                 cancel();
               }}
