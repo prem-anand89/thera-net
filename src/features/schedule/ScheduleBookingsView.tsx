@@ -1065,7 +1065,7 @@ export function ScheduleBookingsView({
                 <span>
                   <strong>{pendingShiftRequestCount}</strong> shift request{pendingShiftRequestCount === 1 ? '' : 's'} pending.
                 </span>
-                <Link to="/settings" search={{ tab: 'team' }} className="text-xs font-medium underline hover:no-underline">
+                <Link to="/settings" search={{ tab: 'team', teamView: 'shifts' }} className="text-xs font-medium underline hover:no-underline">
                   Review
                 </Link>
               </div>

@@ -9,6 +9,10 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export const CATALOG_VIEWS = ['packages', 'treatments', 'referrals'] as const;
 export type CatalogViewKey = (typeof CATALOG_VIEWS)[number];
 
+/** The Team tab's two views: the people, and their shifts. */
+export const TEAM_VIEWS = ['members', 'shifts'] as const;
+export type TeamViewKey = (typeof TEAM_VIEWS)[number];
+
 export const SETTINGS_TAB_META: Record<SettingsTab, { label: string; description: string }> = {
   general: { label: 'General', description: 'Clinic profile, address and contact details, and clinical notes.' },
   team: { label: 'Team', description: 'Therapists, invites and who can sign in.' },
@@ -35,6 +39,8 @@ const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewK
 export interface SettingsSearch {
   tab?: SettingsTab;
   catalogView?: CatalogViewKey;
+  /** Team only: which view opens. Absent means Team members. */
+  teamView?: TeamViewKey;
   fromSetup?: boolean;
 }
 
@@ -55,8 +61,13 @@ export function parseSettingsSearch(search: Record<string, unknown>): SettingsSe
 
   const catalogView = rawView ?? legacy?.catalogView;
   const fromSetup = search.fromSetup === true || search.fromSetup === 'true' ? true : undefined;
-  
+  const teamView =
+    typeof search.teamView === 'string' && (TEAM_VIEWS as readonly string[]).includes(search.teamView)
+      ? (search.teamView as TeamViewKey)
+      : undefined;
+
   if (catalogView && tab === 'services') return { tab, catalogView, fromSetup };
+  if (teamView && tab === 'team') return fromSetup ? { tab, teamView, fromSetup } : { tab, teamView };
   return fromSetup ? { tab, fromSetup } : { tab };
 }
 
@@ -67,6 +78,8 @@ export interface SettingsCard {
   tab: SettingsTab;
   /** Services only: which sub-view the card lives in. */
   catalogView?: CatalogViewKey;
+  /** Team only: which view the card lives in. */
+  teamView?: TeamViewKey;
   /** Words an admin might type to find this card. */
   keywords: string[];
 }
@@ -75,8 +88,8 @@ export const SETTINGS_CARDS: SettingsCard[] = [
   { id: 'settings-card-general-profile', title: 'Clinic profile', tab: 'general', keywords: ['clinic name', 'logo', 'signature', 'address', 'phone', 'email', 'contact', 'clinic code', 'prefix', 'invoice prefix', 'patient id', 'walk-in', 'mrno'] },
   { id: 'settings-card-region', title: 'Region and agenda', tab: 'general', keywords: ['region', 'time zone', 'timezone', 'country code', 'phone country', 'financial year', 'fiscal year', 'daily agenda', 'agenda email', 'evening email'] },
   { id: 'settings-card-after-visit', title: 'After a visit', tab: 'general', keywords: ['clinical notes', 'notes', 'clinical', 'soap', 'documentation', 'consultation', 'feedback', 'patient feedback', 'google review', 'review link', 'rating'] },
-  { id: 'settings-card-team-therapists', title: 'Team members', tab: 'team', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
-  { id: 'settings-card-team-shifts', title: 'Shifts & coverage', tab: 'team', keywords: ['shift', 'shift template', 'coverage', 'roster', 'break', 'shift request', 'swap'] },
+  { id: 'settings-card-team-therapists', title: 'Team members', tab: 'team', teamView: 'members', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
+  { id: 'settings-card-team-shifts', title: 'Shifts & coverage', tab: 'team', teamView: 'shifts', keywords: ['shift', 'shift template', 'coverage', 'roster', 'break', 'shift request', 'swap'] },
   { id: 'settings-card-services-packages', title: 'Services & packages', tab: 'services', catalogView: 'packages', keywords: ['price', 'package', 'session', 'service', 'catalog', 'group'] },
   { id: 'settings-card-services-treatments', title: 'Treatments performed', tab: 'services', catalogView: 'treatments', keywords: ['treatment', 'manual therapy', 'exercise', 'taping', 'checklist'] },
   { id: 'settings-card-services-referrals', title: 'Referral sources', tab: 'services', catalogView: 'referrals', keywords: ['referral', 'referred by', 'source', 'doctor'] },

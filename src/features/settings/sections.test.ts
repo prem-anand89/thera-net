@@ -26,6 +26,18 @@ describe('parseSettingsSearch', () => {
     expect(parseSettingsSearch({ tab: 'services' })).toEqual({ tab: 'services' });
   });
 
+  it('opens the Team tab on the view asked for, falling back to members', () => {
+    expect(parseSettingsSearch({ tab: 'team', teamView: 'shifts' })).toEqual({ tab: 'team', teamView: 'shifts' });
+    expect(parseSettingsSearch({ tab: 'team', teamView: 'members' })).toEqual({ tab: 'team', teamView: 'members' });
+    expect(parseSettingsSearch({ tab: 'team', teamView: 'nope' })).toEqual({ tab: 'team' });
+    expect(parseSettingsSearch({ tab: 'billing', teamView: 'shifts' })).toEqual({ tab: 'billing' });
+  });
+
+  it('search opens the shifts view for shift cards', () => {
+    expect(matchSettingsCards('shift')[0]).toMatchObject({ tab: 'team', teamView: 'shifts' });
+    expect(matchSettingsCards('invite')[0]).toMatchObject({ tab: 'team', teamView: 'members' });
+  });
+
   it('drops unknown tabs and catalog views on other tabs', () => {
     expect(parseSettingsSearch({ tab: 'nope' })).toEqual({});
     expect(parseSettingsSearch({ tab: 'billing', catalogView: 'packages' })).toEqual({ tab: 'billing' });

@@ -5,11 +5,11 @@ import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
-import { ConfirmDialog } from '@/components/ui';
+import { ConfirmDialog, Segmented } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
-import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab } from './sections';
+import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab, type TeamViewKey } from './sections';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { LockedCard } from './settingsShared';
 import { PlanSection } from './PlanSection';
@@ -222,17 +222,20 @@ export function SettingsPage() {
   const navigate = useNavigate({ from: '/settings' });
   const [activeTab, setActiveTabState] = useState<SettingsTab>(search.tab ?? 'general');
   const catalogView: CatalogView = search.catalogView ?? 'packages';
+  const teamView: TeamViewKey = search.teamView ?? 'members';
   const [, startTransition] = useTransition();
   const [dirtyForms, setDirtyForms] = useState<Set<FormKey>>(new Set());
   // A jump target: the tab (plus Services sub-view) and optionally the card to
   // scroll to. Used for tab clicks, search results and the discard dialog.
-  type Target = { tab: SettingsTab; catalogView?: CatalogView; anchor?: string };
+  type Target = { tab: SettingsTab; catalogView?: CatalogView; teamView?: TeamViewKey; anchor?: string };
   const [pendingTarget, setPendingTarget] = useState<Target | null>(null);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => t.active && !t.userId).length;
+  const shiftAssignments = useLiveQuery(() => repos.therapistShiftAssignments.listByClinic(clinic.id), [clinic.id]);
+  const pendingShiftCount = (shiftAssignments ?? []).filter((a) => a.status === 'pending').length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
@@ -263,17 +266,25 @@ export function SettingsPage() {
     });
   }
 
+  function setTeamView(view: TeamViewKey) {
+    void navigate({
+      search: (prev) => ({ ...prev, tab: 'team', teamView: view }),
+      replace: true,
+    });
+  }
+
   // `replace` so switching tabs doesn't fill browser history. The state
   // update runs in a transition: a tab swap renders a whole heavy section in
   // one commit, which otherwise shows up as a slow-input (INP) warning on
   // the nav click.
-  function setActiveTab(tab: SettingsTab, view?: CatalogView) {
+  function setActiveTab(tab: SettingsTab, view?: CatalogView, team?: TeamViewKey) {
     startTransition(() => {
       setActiveTabState(tab);
     });
     void navigate({
       search: (prev) => {
-        const next = tab === 'services' && view ? { tab, catalogView: view } : { tab };
+        const next =
+          tab === 'services' && view ? { tab, catalogView: view } : tab === 'team' && team ? { tab, teamView: team } : { tab };
         return prev.fromSetup ? { ...next, fromSetup: true } : next;
       },
       replace: true,
@@ -286,7 +297,7 @@ export function SettingsPage() {
       return;
     }
     setAnchor(target.anchor ?? null);
-    setActiveTab(target.tab, target.catalogView);
+    setActiveTab(target.tab, target.catalogView, target.teamView);
   }
 
   // After a card jump, the target tab may still be loading its data, so the
@@ -309,7 +320,7 @@ export function SettingsPage() {
     };
     frame = requestAnimationFrame(attempt);
     return () => cancelAnimationFrame(frame);
-  }, [anchor, activeTab, catalogView]);
+  }, [anchor, activeTab, catalogView, teamView]);
 
 
 
@@ -359,7 +370,7 @@ export function SettingsPage() {
 
   function pickCard(card: SettingsCard) {
     setQuery('');
-    goTo({ tab: card.tab, catalogView: card.catalogView, anchor: card.id });
+    goTo({ tab: card.tab, catalogView: card.catalogView, teamView: card.teamView, anchor: card.id });
   }
 
   // Nav already hides Settings for non-admins; this covers a direct URL hit.
@@ -460,15 +471,29 @@ export function SettingsPage() {
           )}
           {activeTab === 'team' && (
             <>
-              {unlinkedCount > 0 && (
+              <Segmented
+                label="Team view"
+                options={[
+                  { value: 'members', label: 'Team members' },
+                  { value: 'shifts', label: 'Shifts & coverage', badge: pendingShiftCount },
+                ]}
+                value={teamView}
+                onChange={setTeamView}
+              />
+              {teamView === 'members' && unlinkedCount > 0 && (
                 <div className="rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
                   {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login.
                   Open them below and add their email to invite them, so their Workspace isn’t empty.
                 </div>
               )}
-              <Therapists />
-              <ShiftAssignmentsSection />
-              <ShiftTemplatesSection />
+              {teamView === 'members' ? (
+                <Therapists />
+              ) : (
+                <>
+                  <ShiftAssignmentsSection />
+                  <ShiftTemplatesSection />
+                </>
+              )}
             </>
           )}
           {activeTab === 'services' && <CatalogSection view={catalogView} onViewChange={setCatalogView} />}
@@ -510,7 +535,7 @@ export function SettingsPage() {
         onConfirm={() => {
           if (pendingTarget) {
             setAnchor(pendingTarget.anchor ?? null);
-            setActiveTab(pendingTarget.tab, pendingTarget.catalogView);
+            setActiveTab(pendingTarget.tab, pendingTarget.catalogView, pendingTarget.teamView);
           }
           setPendingTarget(null);
         }}

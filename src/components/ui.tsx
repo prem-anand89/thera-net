@@ -695,7 +695,8 @@ export function Segmented<T extends string>({
   onChange,
 }: {
   label: string;
-  options: readonly { value: T; label: string; hint?: string }[];
+  /** `badge`: a count shown beside the label (e.g. pending requests); hidden at 0. */
+  options: readonly { value: T; label: string; hint?: string; badge?: number }[];
   value: T;
   onChange: (next: T) => void;
 }) {
@@ -714,6 +715,14 @@ export function Segmented<T extends string>({
           }`}
         >
           {option.label}
+          {option.badge ? (
+            <>
+              <span aria-hidden="true" className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1.5 text-caption font-semibold text-white">
+                {option.badge}
+              </span>
+              <span className="sr-only">{` (${option.badge} pending)`}</span>
+            </>
+          ) : null}
         </button>
       ))}
     </div>
