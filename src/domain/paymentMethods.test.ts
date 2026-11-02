@@ -36,20 +36,22 @@ describe('defaultPaymentMethod', () => {
     expect(defaultPaymentMethod(solo)).toBe('upi');
   });
 
-  it('the clinic default beats what the device used last', () => {
-    expect(defaultPaymentMethod({ ...solo, defaultPaymentMethod: 'card' }, 'cash')).toBe('card');
-  });
-
-  it('the device memory applies only when the clinic set no default', () => {
+  it('starts from the method this device used last', () => {
     expect(defaultPaymentMethod(solo, 'cash')).toBe('cash');
   });
 
+  it('ignores a clinic default stored on an old row', () => {
+    const old = { ...solo, defaultPaymentMethod: 'card' } as typeof solo;
+    expect(defaultPaymentMethod(old, 'cash')).toBe('cash');
+    expect(defaultPaymentMethod(old)).toBe('upi');
+  });
+
   it('the partner collecting wins over everything', () => {
-    expect(defaultPaymentMethod({ ...hospital, partnerCollects: true, defaultPaymentMethod: 'cash' }, 'upi')).toBe('partner');
+    expect(defaultPaymentMethod({ ...hospital, partnerCollects: true }, 'upi')).toBe('partner');
   });
 
   it('skips a partner method the clinic can no longer use', () => {
-    expect(defaultPaymentMethod({ ...solo, defaultPaymentMethod: 'partner' }, 'partner')).toBe('upi');
+    expect(defaultPaymentMethod(solo, 'partner')).toBe('upi');
     expect(defaultPaymentMethod({ hasPartner: false, partnerCollects: true })).toBe('upi');
   });
 });

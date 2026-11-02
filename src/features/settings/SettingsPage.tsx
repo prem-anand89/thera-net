@@ -13,7 +13,7 @@ import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { LockedCard } from './settingsShared';
 import { PlanSection } from './PlanSection';
-import { ClinicProfileSection, ClinicRegionSection, ClinicHoursSection, ClinicalDocsSection, PaymentsSection } from './ClinicSections';
+import { ClinicProfileSection, ClinicRegionSection, ClinicHoursSection, AfterVisitSection, PaymentsSection } from './ClinicSections';
 import { BillingSection, PartnerSection } from './BillingSections';
 import { PatientCommsSection } from './BookingSections';
 import { HistoricalData, DataBackup, DangerZone } from './DataSections';
@@ -21,13 +21,13 @@ import { Therapists } from './TeamSection';
 
 /** Sections that edit a slice of the clinic row and report unsaved edits.
  *  A tab can hold more than one (Payments & billing holds payments, invoicing and partner). */
-type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'clinicalDocs' | 'payments' | 'billing' | 'partner' | 'patientComms';
+type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'afterVisit' | 'payments' | 'billing' | 'partner' | 'patientComms';
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
   profile: 'general',
   clinicHours: 'booking',
   clinicRegion: 'general',
-  clinicalDocs: 'general',
+  afterVisit: 'general',
   payments: 'billing',
   billing: 'billing',
   partner: 'billing',
@@ -343,7 +343,7 @@ export function SettingsPage() {
   const setProfileDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'profile', d)), []);
   const setClinicHoursDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicHours', d)), []);
   const setClinicRegionDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicRegion', d)), []);
-  const setClinicalDocsDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicalDocs', d)), []);
+  const setAfterVisitDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'afterVisit', d)), []);
   const setPaymentsDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'payments', d)), []);
   const setBillingDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'billing', d)), []);
   const setPartnerDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'partner', d)), []);
@@ -455,7 +455,7 @@ export function SettingsPage() {
             <>
               <ClinicProfileSection onDirtyChange={setProfileDirty} />
               <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
-              <ClinicalDocsSection onDirtyChange={setClinicalDocsDirty} />
+              <AfterVisitSection onDirtyChange={setAfterVisitDirty} />
             </>
           )}
           {activeTab === 'team' && (

@@ -56,6 +56,10 @@ describe('matchSettingsCards', () => {
     expect(matchSettingsCards('upi').map((c) => c.id)).toEqual(['settings-card-payments']);
     expect(matchSettingsCards('upi').map((c) => c.tab)).toEqual(['billing']);
     expect(matchSettingsCards('vpa').map((c) => c.id)).toEqual(['settings-card-payments']);
+    expect(matchSettingsCards('clinical notes').map((c) => c.id)).toEqual(['settings-card-after-visit']);
+    expect(matchSettingsCards('feedback').map((c) => c.id)).toEqual(['settings-card-after-visit']);
+    expect(matchSettingsCards('google review').map((c) => c.id)).toEqual(['settings-card-after-visit']);
+    expect(matchSettingsCards('booking link').map((c) => c.id)).toEqual(['settings-card-booking-online']);
     expect(matchSettingsCards('whatsapp').map((c) => c.id)).toEqual(['settings-card-booking-online']);
     expect(matchSettingsCards('backup').map((c) => c.id)).toEqual(['settings-card-account-backup']);
   });

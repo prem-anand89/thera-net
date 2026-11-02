@@ -5,8 +5,7 @@ import { MONTH_NAMES } from '@/domain/fiscalYear';
 import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
-import { type Clinic, type PaymentMethod } from '@/domain/types';
-import { paymentMethodLabel, paymentMethodOptions, partnerName } from '@/domain/paymentMethods';
+import { type Clinic } from '@/domain/types';
 import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { OpenDaysStrip } from './OpenDaysStrip';
 import { withOpenDays } from '@/domain/operatingHours';
@@ -559,65 +558,100 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
   );
 }
 
-type ClinicalDocsFields = Pick<Clinic, 'clinicalDocsEnabled'>;
+type AfterVisitFields = Pick<Clinic, 'clinicalDocsEnabled' | 'enablePatientComms' | 'googleReviewUrl'>;
 
-/** Clinical notes on visits. Not billing-shaped: it lives on General so a plan without invoicing can still reach it. */
-export function ClinicalDocsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<ClinicalDocsFields>(
-    (c) => ({ clinicalDocsEnabled: c.clinicalDocsEnabled ?? false }),
+/** One switch row: label and what it does on the left, the switch on the right (the same row as "Daily agenda email"). */
+function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+      <span>
+        <span className="block text-sm font-medium text-[var(--ink)]">{label}</span>
+        <span className="block text-xs text-[var(--muted)]">{hint}</span>
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        aria-label={label}
+        className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </label>
+  );
+}
+
+/**
+ * What staff are offered right after logging a visit: a prompt for the clinical note, and a feedback request (with the
+ * clinic's Google review link). Both sit here, on General, so a plan without invoicing reaches them too.
+ */
+export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<AfterVisitFields>(
+    (c) => ({
+      clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
+      enablePatientComms: c.enablePatientComms ?? false,
+      googleReviewUrl: c.googleReviewUrl ?? null,
+    }),
     onDirtyChange
   );
 
   return (
     <div>
-      <SectionCard
-        id="settings-card-clinical-docs"
-        title="Clinical notes"
-      >
+      <SectionCard id="settings-card-after-visit" title="After a visit">
         <fieldset disabled={busy} className="contents">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                <>
-                  Clinical documentation module
-                  <InfoTip text="Enables clinical notes for visits. When off, therapists can still access notes from a patient's profile, but visit workflows won't prompt for them." />
-                </>
-              }
-            >
-              <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
-            </Field>
+          <div className="space-y-3">
+            <SwitchRow
+              label="Prompt for clinical notes after each visit"
+              hint="When off, therapists can still open a patient's notes from their profile."
+              checked={form.clinicalDocsEnabled ?? false}
+              onChange={(v) => set({ clinicalDocsEnabled: v })}
+            />
+            <SwitchRow
+              label="Ask patients for feedback"
+              hint="Staff can send a one-time feedback link by WhatsApp. No patient login needed."
+              checked={form.enablePatientComms ?? false}
+              onChange={(v) => set({ enablePatientComms: v })}
+            />
+            {form.enablePatientComms && (
+              <Field
+                label={
+                  <>
+                    Google review link (optional)
+                    <InfoTip text="Your clinic's Google review page. Set it to offer a 'Leave a Google review' prompt to patients who rate 5 stars, and an 'Ask for a Google review' action for staff. Leave blank to skip Google review nudges." />
+                  </>
+                }
+                htmlFor="clinic-google-review"
+              >
+                <input
+                  id="clinic-google-review"
+                  type="url"
+                  className={inputCls}
+                  placeholder="https://g.page/r/…/review"
+                  value={form.googleReviewUrl ?? ''}
+                  onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
+                />
+              </Field>
+            )}
           </div>
-
         </fieldset>
         {showSaveBar && (
-          <SectionSaveBar
-            dirty={dirty}
-            saved={saved}
-            busy={busy}
-            onSave={() => void save()}
-            onCancel={() => {
-              cancel();
-            }}
-            error={error}
-          />
+          <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
         )}
       </SectionCard>
     </div>
   );
 }
 
-type PaymentsFields = Pick<Clinic, 'defaultPaymentMethod' | 'upiVpa' | 'upiPayeeName' | 'upiQrPath' | 'upiQrEnabled'>;
+type PaymentsFields = Pick<Clinic, 'upiVpa' | 'upiPayeeName' | 'upiQrPath' | 'upiQrEnabled'>;
 
 /**
- * What payment screens start with. Who collects patient payments, for a clinic with a partner, is set in
- * Payments & billing → Partner & split; here it only locks the default to "Collected by {partner}" when the partner collects.
- * Also the clinic's UPI collection (ID, payee name, QR image): New visit and Take payment show a Scan to pay sheet from
- * it, and Lite can collect by UPI, so it lives on General (not Billing) where every plan reaches it.
+ * How the clinic collects by UPI: show-QR switch, UPI ID, payee name, QR image. New visit and Take payment show a Scan to
+ * pay sheet from it, and Lite can collect by UPI, so it is on every plan. (There is no default payment method setting:
+ * payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last,
+ * else UPI. Who collects is set in Payments & billing → Partner & split.)
  */
 export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar } = useClinicSectionForm<PaymentsFields>(
     (c) => ({
-      defaultPaymentMethod: c.defaultPaymentMethod ?? null,
       upiVpa: c.upiVpa ?? '',
       upiPayeeName: c.upiPayeeName ?? '',
       upiQrPath: c.upiQrPath ?? null,
@@ -655,10 +689,6 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
     }
     await save();
   }
-  const hasPartner = Boolean(clinic.hasPartner);
-  const partnerCollects = hasPartner && Boolean(clinic.partnerCollects);
-  const options = paymentMethodOptions(clinic);
-  const name = partnerName(clinic);
 
   return (
     <div>
@@ -667,43 +697,6 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
         title="Payments"
       >
         <fieldset disabled={busy} className="contents">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                <>
-                  Default payment method
-                  <InfoTip text="What New Visit, Take payment and Record advance start with. Staff can still pick another method on any payment." />
-                </>
-              }
-            >
-              <select
-                className={inputCls}
-                disabled={partnerCollects}
-                value={partnerCollects ? 'partner' : (form.defaultPaymentMethod ?? '')}
-                onChange={(e) => set({ defaultPaymentMethod: (e.target.value || null) as PaymentMethod | null })}
-              >
-                {partnerCollects ? (
-                  <option value="partner">{paymentMethodLabel('partner', clinic)}</option>
-                ) : (
-                  <>
-                    <option value="">Last one used on this device</option>
-                    {options.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-              {partnerCollects && (
-                <p className="mt-1 text-hint text-[var(--muted)]">
-                  {name} collects patient payments. Change that in Payments & billing → Partner & split.
-                </p>
-              )}
-            </Field>
-          </div>
-
-          <h3 className="mt-6 mb-1 text-sm font-semibold text-[var(--ink)]">UPI collection</h3>
           <p className="mb-3 text-xs text-[var(--muted)]">
             One clinic UPI for the front desk. When the payment method is UPI, staff can show a QR the patient scans. A UPI ID
             builds a QR with the visit amount and Patient ID in the note; an uploaded image is the fallback.

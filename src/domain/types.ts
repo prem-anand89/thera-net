@@ -85,7 +85,7 @@ export interface Clinic {
   billingEnabled?: boolean;
   /** The partner (e.g. a hospital) collects patients' payments at its own counter and settles with the clinic. Only meaningful with `hasPartner`. */
   partnerCollects?: boolean;
-  /** What payment screens preselect; null = follow `partnerCollects`, else UPI. */
+  /** Legacy, no longer read or edited: payment screens start from `partnerCollects`, else the method this device used last, else UPI. Column kept for old rows. */
   defaultPaymentMethod?: PaymentMethod | null;
   /**
    * Who may issue invoices when billing is on. 'everyone' = any clinical

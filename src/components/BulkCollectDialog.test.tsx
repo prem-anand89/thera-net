@@ -5,7 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const logPayment = vi.fn();
-vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false, defaultPaymentMethod: 'cash' }) }));
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false }) }));
 vi.mock('@/services', () => ({
   directPaymentService: { logPayment: (...a: unknown[]) => logPayment(...a) },
 }));
@@ -18,6 +18,9 @@ const rows = [
   { visitId: 'v2', duePaise: 0 },
   { visitId: 'v3', duePaise: 150000 },
 ];
+
+// There is no clinic default payment method any more: a device starts from the method it used last.
+beforeEach(() => window.localStorage.setItem('theranet:last-payment-method:c1', 'cash'));
 
 describe('BulkCollectDialog', () => {
   beforeEach(() => logPayment.mockReset());

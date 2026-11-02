@@ -705,11 +705,11 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 
 | Tab | Contains |
 |---|---|
-| `general` | Clinic profile (no partner fields), region, clinical notes |
+| `general` | Clinic profile (no partner fields), Region and agenda, **After a visit** (`AfterVisitSection`: two switch rows — "Prompt for clinical notes after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off) |
 | `team` | Therapists, invites, logins |
 | `services` | Catalog (`catalogView` = packages / treatments / referrals) |
-| `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), online booking page, WhatsApp, feedback |
-| `billing` (label **Payments & billing**; never hidden on any plan) | Three cards in this order: **Payments** (every plan: default payment method and UPI collection — ID, payee name, QR; when the partner collects, the default is locked to "Collected by {partner}" with a pointer to Payments & billing → Partner & split), **Invoicing** (card title was "Modules & invoicing" and then "Billing & invoicing"; invoice prefix, GST, fiscal year, who can issue, bill policy; below the invoicing tier it is a compact `LockedCard` — the card with its title and "Available on the Solo plan and above.", so search still lands on it), Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan and above", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. |
+| `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), **Online booking page** (the booking link, and the WhatsApp Business sub-block) |
+| `billing` (label **Payments & billing**; never hidden on any plan) | Three cards in this order: **Payments** (every plan: UPI collection — show-QR switch, UPI ID, payee name, QR image. There is no default payment method setting: payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last, else UPI — `defaultPaymentMethod()` in `domain/paymentMethods.ts`), **Invoicing** (card title was "Modules & invoicing" and then "Billing & invoicing"; invoice prefix, GST, fiscal year, who can issue, bill policy; below the invoicing tier it is a compact `LockedCard` — the card with its title and "Available on the Solo plan and above.", so search still lands on it), Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan and above", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. |
 | `account` | Plan, historical data import, backup, danger zone |
 
 Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` / `referrals` → services with that view. Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
@@ -818,7 +818,7 @@ still falls through to the existing share sheet, unchanged.
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
   refuse to resolve when a clinic hasn't turned this on. Toggled from
-  Settings → **Patient communications** (its own section/chip, admin-only —
+  Settings → **General → After a visit** (the "Ask patients for feedback" switch; admin-only —
   just the on/off switch for now; slug, Google review URL, message
   templates, and WhatsApp Business fields arrive with later phases).
 - **`patients.do_not_message`** — opt-out flag, staff-settable, no automated
@@ -1582,7 +1582,7 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              "your split changed on X" banner off this
 billing_enabled              boolean NOT NULL — legacy: no longer read or editable (billing is always on); server invoice checks still read it (all true)
 partner_collects             boolean NOT NULL DEFAULT false — the partner collects patients' payments (only with has_partner)
-default_payment_method       text NULL — what payment screens preselect (CHECK: the six methods)
+default_payment_method       text NULL — LEGACY: no longer read or edited (the Settings default payment method was removed; screens start from partner-collects, else the device's last-used method, else UPI); kept for old rows
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — LEGACY: no longer read or edited (the "Bills after a visit" setting was removed); kept for old rows
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
@@ -3586,7 +3586,7 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              "your split changed on X" banner off this
 billing_enabled              boolean NOT NULL — legacy: no longer read or editable (billing is always on); server invoice checks still read it (all true)
 partner_collects             boolean NOT NULL DEFAULT false — the partner collects patients' payments (only with has_partner)
-default_payment_method       text NULL — what payment screens preselect (CHECK: the six methods)
+default_payment_method       text NULL — LEGACY: no longer read or edited (the Settings default payment method was removed; screens start from partner-collects, else the device's last-used method, else UPI); kept for old rows
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — LEGACY: no longer read or edited (the "Bills after a visit" setting was removed); kept for old rows
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value

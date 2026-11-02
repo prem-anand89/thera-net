@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { type Clinic, type UUID } from '@/domain/types';
 import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
-import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar } from './settingsShared';
 
-type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
+type PatientCommsFields = Pick<Clinic, 'bookingSlug'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
@@ -12,20 +12,14 @@ type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' 
 const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /**
- * Patient Communications, Slice 1-5 — module on/off, the Google review
- * URL (Slice 3), and the public booking slug (Slice 5). Per
- * HANDOFF-patient-comms.md's "one chip, not scattered" instruction this
- * is its own section rather than a checkbox bolted onto Clinic profile's
- * "Optional modules" grid; the message-template/WhatsApp-number fields
- * the full spec describes arrive with later slices, not here.
+ * The public booking page: the booking link (slug) patients use to request an appointment, plus the optional
+ * WhatsApp Business sub-block. The feedback switch and Google review link now live in General → After a visit.
  */
 export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const clinic = useClinic();
   const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } =
     useClinicSectionForm<PatientCommsFields>(
       (c) => ({
-        enablePatientComms: c.enablePatientComms ?? false,
-        googleReviewUrl: c.googleReviewUrl ?? null,
         bookingSlug: c.bookingSlug ?? null,
       }),
       _onDirtyChange
@@ -49,39 +43,10 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
     <>
       <SectionCard
         id="settings-card-booking-online"
-        title="Online booking & patient feedback"
+        title="Online booking page"
       >
         <fieldset disabled={busy} className="contents">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                <>
-                  Feedback
-                  <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
-                </>
-              }
-            >
-              <BoolToggle
-                value={form.enablePatientComms ?? false}
-                onChange={(v) => set({ enablePatientComms: v })}
-              />
-            </Field>
-            <Field
-              label={
-                <>
-                  Google review link
-                  <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 5 stars, plus an 'Ask for a Google review' action for staff on those same responses — or any visit at all, via the row menu. Leave blank to skip Google review nudges entirely." />
-                </>
-              }
-            >
-              <input
-                type="url"
-                className={inputCls}
-                placeholder="https://g.page/r/…/review"
-                value={form.googleReviewUrl ?? ''}
-                onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
-              />
-            </Field>
             <Field
               label={
                 <>

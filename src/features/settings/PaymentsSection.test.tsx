@@ -56,12 +56,11 @@ describe('UPI collection in General → Payments', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
-  it('saving the default payment method alone does not need any UPI details', async () => {
+  it('has no default payment method setting: only UPI collection', () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'cash' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
-    expect(put.mock.calls[0][0]).toMatchObject({ defaultPaymentMethod: 'cash', upiQrEnabled: false });
+    expect(screen.queryByText('Default payment method')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByText('Show UPI QR at collection')).toBeInTheDocument();
   });
 });
 

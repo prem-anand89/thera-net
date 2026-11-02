@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
 const logPayment = vi.fn();
-vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false, defaultPaymentMethod: 'cash' }) }));
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false }) }));
 vi.mock('@/services', () => ({
   repos: {
     invoices: { get: () => undefined },
@@ -36,6 +36,9 @@ function open() {
     />
   );
 }
+
+// There is no clinic default payment method any more: a device starts from the method it used last.
+beforeEach(() => window.localStorage.setItem('theranet:last-payment-method:c1', 'cash'));
 
 describe('TakePaymentDialog received date', () => {
   beforeEach(() => logPayment.mockReset().mockResolvedValue(undefined));

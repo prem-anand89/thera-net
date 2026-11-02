@@ -44,19 +44,18 @@ export function isCashInHand(method: PaymentMethod): boolean {
 }
 
 /**
- * The method a payment screen opens with: the clinic's default (or the partner
- * when it collects), then what this device used last — only when the clinic set
- * no default, so a one-off cash walk-in never changes what the next visit
- * preselects — then UPI. A stored value the clinic can no longer use is skipped.
+ * The method a payment screen opens with: the partner when it collects the patient's money, else what this device
+ * used last (so a one-off cash walk-in only changes this device's next start), else UPI. There is no clinic-wide
+ * default any more (`clinics.default_payment_method` is legacy and ignored). A stored value the clinic can no longer
+ * use is skipped.
  */
 export function defaultPaymentMethod(
-  clinic: Pick<Clinic, 'hasPartner' | 'partnerCollects' | 'defaultPaymentMethod'>,
+  clinic: Pick<Clinic, 'hasPartner' | 'partnerCollects'>,
   lastUsed?: PaymentMethod | null
 ): PaymentMethod {
   const usable = (m: PaymentMethod | null | undefined): m is PaymentMethod =>
     Boolean(m) && (m !== 'partner' || Boolean(clinic.hasPartner));
   if (clinic.hasPartner && clinic.partnerCollects) return 'partner';
-  if (usable(clinic.defaultPaymentMethod)) return clinic.defaultPaymentMethod;
   if (usable(lastUsed)) return lastUsed;
   return 'upi';
 }
