@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { type Clinic, type UUID } from '@/domain/types';
-import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
+import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { useClinicSectionForm, SectionSaveBar } from './settingsShared';
 
 type PatientCommsFields = Pick<Clinic, 'bookingSlug'>;
@@ -25,6 +25,10 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
       _onDirtyChange
     );
   const [slugCopied, setSlugCopied] = useState(false);
+  // Changing or clearing a link that already exists breaks the old one for anyone who has it, so it asks first.
+  // Setting a link for the first time just saves.
+  const [confirmingLink, setConfirmingLink] = useState(false);
+  const linkChanges = Boolean(clinic.bookingSlug) && (form.bookingSlug ?? null) !== clinic.bookingSlug;
   const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
   const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug as string);
 
@@ -92,7 +96,7 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
             dirty={dirty}
             saved={saved}
             busy={busy}
-            onSave={() => void save()}
+            onSave={() => (linkChanges ? setConfirmingLink(true) : void save())}
             onCancel={() => {
               cancel();
             }}
@@ -100,6 +104,17 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
             saveDisabled={slugInvalid}
           />
         )}
+        <ConfirmDialog
+          open={confirmingLink}
+          title={form.bookingSlug ? 'Change the booking link?' : 'Turn off the booking link?'}
+          message="Anyone using the old link will no longer reach your booking page."
+          confirmLabel={form.bookingSlug ? 'Change link' : 'Turn off link'}
+          onCancel={() => setConfirmingLink(false)}
+          onConfirm={() => {
+            setConfirmingLink(false);
+            void save();
+          }}
+        />
       </SectionCard>
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
     </>

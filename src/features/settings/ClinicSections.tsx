@@ -7,7 +7,7 @@ import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { type Clinic } from '@/domain/types';
-import { Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
+import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { OpenDaysStrip } from './OpenDaysStrip';
 import { withOpenDays } from '@/domain/operatingHours';
 import { LetterheadPreview } from './LetterheadPreview';
@@ -268,6 +268,9 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
     }),
     onDirtyChange
   );
+  // A new time zone shifts the times on the public booking page and in the emailed agendas, so it asks first.
+  const [confirmingZone, setConfirmingZone] = useState(false);
+  const zoneChanges = (form.timezone ?? 'Asia/Kolkata') !== clinicTimezone(clinic);
   const zones = useMemo(() => {
     const all = timezoneOptions();
     return form.timezone && !all.includes(form.timezone) ? [form.timezone, ...all] : all;
@@ -409,13 +412,24 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             dirty={dirty}
             saved={saved}
             busy={busy}
-            onSave={() => void save()}
+            onSave={() => (zoneChanges ? setConfirmingZone(true) : void save())}
             onCancel={() => {
               cancel();
             }}
             error={error}
           />
         )}
+        <ConfirmDialog
+          open={confirmingZone}
+          title="Change the time zone?"
+          message="Times patients and staff see in booking pages and emails will change."
+          confirmLabel="Change time zone"
+          onCancel={() => setConfirmingZone(false)}
+          onConfirm={() => {
+            setConfirmingZone(false);
+            void save();
+          }}
+        />
       </SectionCard>
     </div>
   );

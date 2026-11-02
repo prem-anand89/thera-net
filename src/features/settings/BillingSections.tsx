@@ -3,7 +3,7 @@ import { visitService } from '@/services';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { clinicShareLabels, type Clinic } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
-import { btnSecondary, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
+import { btnSecondary, ConfirmDialog, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
 import { toFriendlyMessage } from '@/lib/errors';
 import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
@@ -154,10 +154,16 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
   const partnerLogoUrl = publicLogoUrl(form.partnerHospitalLogoPath);
   const planName = PLAN_TIER_LABELS[minimumTierFor('revenueSplit')];
 
+  // Changing partner mode, the split, tax % or TDS basis rewrites visits not yet invoiced, so it asks first, saying how
+  // many. `pendingSplitSave` holds what to run once confirmed and the count shown.
+  const [pendingSplitSave, setPendingSplitSave] = useState<{ count: number; run: () => Promise<void> } | null>(null);
+  const [recomputeFailed, setRecomputeFailed] = useState(false);
+
   /** Re-applies the split to visits not yet invoiced, and stamps the change for Workspace's "your split changed" note. */
   async function recomputeSplits() {
-    await saveFieldNow({ lastSplitChangeAt: new Date().toISOString() });
+    setRecomputeFailed(false);
     try {
+      await saveFieldNow({ lastSplitChangeAt: new Date().toISOString() });
       const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
       setRecomputeMsg(
         updated > 0
@@ -165,21 +171,48 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
           : 'No not-yet-invoiced visits needed updating.'
       );
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      setRecomputeFailed(true);
+      setError(`Settings saved, but visits not yet invoiced were not updated: ${toFriendlyMessage(e)}`);
     }
   }
 
-  async function savePartner() {
+  /** Runs `run` straight away when it changes no visit; otherwise asks first with the number of visits it changes. */
+  async function confirmIfVisitsChange(settings: PartnerFields, run: () => Promise<void>) {
     setRecomputeMsg(null);
+    setError(null);
+    let count = 0;
+    try {
+      count = await visitService.countUninvoicedSplitChanges(clinic.id, {
+        hasPartner: settings.hasPartner,
+        clinicSplitPct: settings.clinicSplitPct,
+        taxPct: settings.taxPct,
+        tdsBasis: settings.tdsBasis,
+      });
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+      return;
+    }
+    if (count === 0) await run();
+    else setPendingSplitSave({ count, run });
+  }
+
+  async function savePartner() {
     const splitAffected = partnerSplitChanged(clinic, form);
     const ok = await save();
     if (ok && splitAffected) await recomputeSplits();
   }
 
+  function onSavePartner() {
+    if (!partnerSplitChanged(clinic, form)) {
+      setRecomputeMsg(null);
+      void save();
+      return;
+    }
+    void confirmIfVisitsChange(form, savePartner);
+  }
+
   const [turningOff, setTurningOff] = useState(false);
   async function turnOffPartnerMode() {
-    setRecomputeMsg(null);
-    setError(null);
     setTurningOff(true);
     try {
       await saveFieldNow({ hasPartner: false, partnerCollects: false });
@@ -190,6 +223,31 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
       setTurningOff(false);
     }
   }
+
+  const splitConfirm = (
+    <ConfirmDialog
+      open={pendingSplitSave !== null}
+      title="Update visits not yet invoiced?"
+      message={
+        pendingSplitSave
+          ? `This recalculates ${pendingSplitSave.count} visit${pendingSplitSave.count === 1 ? '' : 's'} that ${pendingSplitSave.count === 1 ? 'has' : 'have'} no invoice yet. Invoices already issued stay as they are.`
+          : ''
+      }
+      confirmLabel="Save and update"
+      onCancel={() => setPendingSplitSave(null)}
+      onConfirm={() => {
+        const run = pendingSplitSave?.run;
+        setPendingSplitSave(null);
+        if (run) void run();
+      }}
+    />
+  );
+
+  const retryRecompute = recomputeFailed && (
+    <button type="button" className={btnSecondary} onClick={() => { setError(null); void recomputeSplits(); }}>
+      Update visits again
+    </button>
+  );
 
   async function uploadPartnerLogo(file: File) {
     setError(null);
@@ -221,11 +279,12 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
               Turning it off re-applies the split to visits not yet invoiced. Visits already marked “Collected by partner”
               keep that.
             </p>
-            <button type="button" className={btnSecondary} disabled={turningOff} onClick={() => void turnOffPartnerMode()}>
+            <button type="button" className={btnSecondary} disabled={turningOff} onClick={() => void confirmIfVisitsChange({ ...form, hasPartner: false }, turnOffPartnerMode)}>
               {turningOff ? 'Turning off…' : 'Turn off partner mode'}
             </button>
             {recomputeMsg && <p className="text-xs text-[var(--moss)]">{recomputeMsg}</p>}
             <ErrorNote message={error} />
+            {retryRecompute}
           </div>
         ) : (
           <div className="flex min-h-11 items-center justify-between gap-3 opacity-70">
@@ -238,6 +297,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             <input type="checkbox" role="switch" aria-label="We work with a partner" className="h-5 w-5 shrink-0" checked={false} disabled readOnly />
           </div>
         )}
+        {splitConfirm}
       </SectionCard>
     );
   }
@@ -394,19 +454,21 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
           already-logged visit that hasn&apos;t been invoiced yet. Invoiced visits keep the rates they were billed under.
         </p>
         {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+        {retryRecompute && <div className="mt-2">{retryRecompute}</div>}
       </fieldset>
       {showSaveBar && (
         <SectionSaveBar
           dirty={dirty}
           saved={saved}
           busy={busy}
-          onSave={() => void savePartner()}
+          onSave={onSavePartner}
           onCancel={() => {
             cancel();
           }}
           error={error}
         />
       )}
+      {splitConfirm}
     </SectionCard>
   );
 }

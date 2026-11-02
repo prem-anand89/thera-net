@@ -7,7 +7,7 @@ import {
   type UUID,
 } from '@/domain/types';
 import { roundToRupeeHalfUp, type Paise } from '@/domain/money';
-import { computeVisitSplit } from '@/domain/split';
+import { computeVisitSplit, uninvoicedSplitRates, visitNeedsSplitUpdate, type SplitRates } from '@/domain/split';
 import {
   SHARE_BELOW_PACKAGE,
   SHARE_BELOW_ZERO,
@@ -872,28 +872,32 @@ export function createVisitService(repos: Repos) {
     async recomputeUninvoicedSplits(clinicId: UUID): Promise<{ updated: number }> {
       const clinic = await repos.clinics.get(clinicId);
       if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
-      const { partnerSplit } = clinicBillingConfig(clinic);
-      const splitPct = partnerSplit ? clinic.clinicSplitPct : 100;
-      const taxPct = partnerSplit ? clinic.taxPct : 0;
-      const tdsBasis = partnerSplit ? clinic.tdsBasis : 'gross_bill';
+      const rates = uninvoicedSplitRates(clinic);
 
       const visits = await repos.visits.list({ clinicId });
       let updated = 0;
       for (const v of visits) {
-        if (v.invoiceId) continue;
-        if (v.clinicSplitPct === splitPct && v.taxPct === taxPct && v.tdsBasis === tdsBasis) continue;
-        const split = computeVisitSplit(v.actualBillPaise, splitPct, taxPct, tdsBasis);
+        if (!visitNeedsSplitUpdate(v, rates)) continue;
+        const split = computeVisitSplit(v.actualBillPaise, rates.clinicSplitPct, rates.taxPct, rates.tdsBasis);
         await repos.visits.put({
           ...v,
-          clinicSplitPct: splitPct,
-          taxPct,
-          tdsBasis,
+          ...rates,
           ...split,
           updatedAt: new Date().toISOString(),
         });
         updated++;
       }
       return { updated };
+    },
+
+    /**
+     * How many visits {@link recomputeUninvoicedSplits} would update if the clinic's partner settings were `settings`
+     * (the unsaved form). Local data only, so Settings can ask before saving without waiting on the network.
+     */
+    async countUninvoicedSplitChanges(clinicId: UUID, settings: Parameters<typeof uninvoicedSplitRates>[0]): Promise<number> {
+      const rates: SplitRates = uninvoicedSplitRates(settings);
+      const visits = await repos.visits.list({ clinicId });
+      return visits.filter((v) => visitNeedsSplitUpdate(v, rates)).length;
     },
   };
 }

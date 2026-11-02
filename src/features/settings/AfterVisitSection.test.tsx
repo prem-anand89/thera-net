@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Clinic } from '@/domain/types';
 
 const clinicRef: { current: Partial<Clinic> } = { current: {} };
@@ -65,4 +65,39 @@ describe('Online booking page', () => {
     expect(screen.queryByText('Feedback')).toBeNull();
     expect(screen.queryByText('Google review link')).toBeNull();
   });
+
 });
+
+describe('Booking link', () => {
+  const linkInput = () => screen.getByPlaceholderText('my-clinic-name');
+
+  it('changing a link that already exists asks first; Cancel saves nothing', async () => {
+    render(<PatientCommsSection onDirtyChange={vi.fn()} />);
+    fireEvent.change(linkInput(), { target: { value: 'physio-care' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Anyone using the old link will no longer reach your booking page.');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(put).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change link' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ bookingSlug: 'physio-care' });
+  });
+
+  it('clearing an existing link asks too', () => {
+    render(<PatientCommsSection onDirtyChange={vi.fn()} />);
+    fireEvent.change(linkInput(), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Turn off the booking link?');
+  });
+
+  it('setting a link for the first time saves without asking', async () => {
+    clinicRef.current = { ...clinicRef.current, bookingSlug: null };
+    render(<PatientCommsSection onDirtyChange={vi.fn()} />);
+    fireEvent.change(linkInput(), { target: { value: 'physio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+

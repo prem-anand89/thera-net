@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeVisitSplit } from './split';
+import { computeVisitSplit, uninvoicedSplitRates, visitNeedsSplitUpdate } from './split';
 import { rupeesToPaise as rs } from './money';
 
 // Vectors taken directly from the Beyond Mechanics / Health Valley FY26-27
@@ -100,5 +100,23 @@ describe('computeVisitSplit', () => {
     expect(s.partnerSharePaise).toBe(rs(2000)); // hospital's 40% — never taxed in this model
     expect(s.clinicSharePaise).toBe(s.postTaxPaise + s.tdsPaise);
     expect(s.clinicSharePaise + s.partnerSharePaise).toBe(rs(5000));
+  });
+});
+
+describe('uninvoicedSplitRates / visitNeedsSplitUpdate', () => {
+  const partner = { hasPartner: true, clinicSplitPct: 60, taxPct: 10, tdsBasis: 'gross_bill' as const };
+
+  it('with no partner, visits not yet invoiced go to 100% with no tax', () => {
+    expect(uninvoicedSplitRates({ ...partner, hasPartner: false })).toEqual({ clinicSplitPct: 100, taxPct: 0, tdsBasis: 'gross_bill' });
+    expect(uninvoicedSplitRates(partner)).toEqual({ clinicSplitPct: 60, taxPct: 10, tdsBasis: 'gross_bill' });
+  });
+
+  it('a visit needs updating only when it has no invoice and its rates differ', () => {
+    const rates = uninvoicedSplitRates(partner);
+    const visit = { invoiceId: null, clinicSplitPct: 60, taxPct: 10, tdsBasis: 'gross_bill' as const };
+    expect(visitNeedsSplitUpdate(visit, rates)).toBe(false);
+    expect(visitNeedsSplitUpdate({ ...visit, clinicSplitPct: 100 }, rates)).toBe(true);
+    expect(visitNeedsSplitUpdate({ ...visit, tdsBasis: 'clinic_share' }, rates)).toBe(true);
+    expect(visitNeedsSplitUpdate({ ...visit, clinicSplitPct: 100, invoiceId: 'inv1' }, rates)).toBe(false);
   });
 });

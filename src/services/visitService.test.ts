@@ -547,6 +547,24 @@ describe('visitService.recomputeUninvoicedSplits', () => {
     const result = await svc.recomputeUninvoicedSplits('clinic-1');
     expect(result.updated).toBe(0);
   });
+
+  it('the count Settings shows before saving is the number the recompute then updates', async () => {
+    const fake = makeFakeRepos(); // clinicSplitPct: 75, taxPct: 10, tdsBasis: 'gross_bill'
+    const svc = createVisitService(fake.repos);
+    await svc.create(base);
+    await svc.create({ ...base, visitDate: '2026-05-11' });
+    const invoiced = await svc.create({ ...base, visitDate: '2026-05-12' });
+    fake.visits.set(invoiced.id, { ...invoiced, invoiceId: 'inv-1' });
+    const clinic = (await fake.repos.clinics.get('clinic-1'))!;
+    const pending = { hasPartner: clinic.hasPartner, clinicSplitPct: 60, taxPct: 10, tdsBasis: clinic.tdsBasis };
+
+    expect(await svc.countUninvoicedSplitChanges('clinic-1', { ...pending, clinicSplitPct: 75 })).toBe(0);
+    const shown = await svc.countUninvoicedSplitChanges('clinic-1', pending);
+    expect(shown).toBe(2);
+
+    await fake.repos.clinics.put({ ...clinic, clinicSplitPct: 60 });
+    expect((await svc.recomputeUninvoicedSplits('clinic-1')).updated).toBe(shown);
+  });
 });
 
 describe('patientService MRNO fallback', () => {

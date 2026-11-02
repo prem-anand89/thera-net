@@ -109,7 +109,7 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
    *  unsaved edit — it's already persisted. */
   async function saveFieldNow(patch: Partial<F>) {
     const current = await repos.clinics.get(clinic.id);
-    if (!current) return;
+    if (!current) throw new Error('Clinic not found');
     await repos.clinics.put({ ...current, ...patch, updatedAt: new Date().toISOString() });
     setForm((f) => ({ ...f, ...patch }));
   }

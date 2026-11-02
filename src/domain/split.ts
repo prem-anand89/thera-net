@@ -74,3 +74,35 @@ export function computeVisitSplit(
   const partnerSharePaise = billPaise - clinicSharePaise;
   return { clinicSharePaise, postTaxPaise, tdsPaise, partnerSharePaise };
 }
+
+/** The rates a not-yet-invoiced visit should carry under a clinic's partner settings. */
+export interface SplitRates {
+  clinicSplitPct: number;
+  taxPct: number;
+  tdsBasis: TdsBasis;
+}
+
+/**
+ * The rates visits not yet invoiced take from the clinic's settings: with no partner the clinic keeps 100% with no tax.
+ * Used both to count the visits a change will touch (Settings asks before saving) and to update them, so the number
+ * shown is the number updated.
+ */
+export function uninvoicedSplitRates(settings: {
+  hasPartner?: boolean | null;
+  clinicSplitPct: number;
+  taxPct: number;
+  tdsBasis: TdsBasis;
+}): SplitRates {
+  return settings.hasPartner
+    ? { clinicSplitPct: settings.clinicSplitPct, taxPct: settings.taxPct, tdsBasis: settings.tdsBasis }
+    : { clinicSplitPct: 100, taxPct: 0, tdsBasis: 'gross_bill' };
+}
+
+/** True when a visit has no invoice yet and its stored rates differ from `rates`. */
+export function visitNeedsSplitUpdate(
+  visit: { invoiceId: string | null; clinicSplitPct: number; taxPct: number; tdsBasis: TdsBasis },
+  rates: SplitRates
+): boolean {
+  if (visit.invoiceId) return false;
+  return visit.clinicSplitPct !== rates.clinicSplitPct || visit.taxPct !== rates.taxPct || visit.tdsBasis !== rates.tdsBasis;
+}
