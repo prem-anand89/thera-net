@@ -533,9 +533,8 @@ queued with a visible error.
 - **Validated categorical color palette**
 
 #### Therapist Comparison
-- **Opt-in chart** (off by default; admin enables in Settings → Features)
+- **Who sees it**: shown automatically to admins on a plan with the revenue split when the clinic has 2+ active therapists (`showsTherapistComparison`, `src/domain/therapistComparison.ts`; one rule for the Reports section, its jump-nav pill and the printable trends review). No setting; therapists never see it. The old `show_therapist_comparison` column is no longer read.
 - **Single dual-bar chart** (visits + revenue per therapist, month picker) plus live month table with retention % and new packages
-- **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
 - **Utilisation column** (`src/domain/utilisation.ts`, hook `useTherapistUtilisation`): work actually done ÷ time made available, from logged **visits** — not bookings, so walk-ins and last-minute bookings count. A visit **without service lines** counts as one clinic slot (`slotDurationMinutes`); a visit **with** lines counts each therapist's minutes from the lines they delivered (`therapistMinutes`: the sum of their lines' durations when every one has one, else the sitting once, capped at the sitting; 0 if they delivered nothing — so an assistant's time counts even on a ₹0 bill). The sitting is the linked appointment's `durationMinutes` (appointments whose `visitId` is the visit), else the clinic slot; `loadUtilisationVisits` (`src/services/utilisationVisits.ts`) attaches lines and sitting with one range query each; available time is the therapist's working hours (breaks excluded) over non-closed days, or the clinic's booking hours when none are set (shown with `*`). Each day is capped at 100% of that day's available time, so overlapping entries can't overstate it; the in-progress month only counts elapsed time; a legacy visit (no service lines) keeps the old shared-percentage time rule (`sharedPct`) even if its money split is later edited in the share editor, because the editor writes share rows and never changes `shared_pct`; a visit with lines uses `therapistMinutes` only (durations capped at the sitting, else the sitting once); visit time on days off isn't counted. No schema change. Same column on the Trends print page.
 - **Top performers**: no blended score. The comparison table's Net / Visits / Retention / Utilisation headers sort (click again to restore the default order), and the best value in each column gets a "Top" marker (`src/domain/therapistRanking.ts`). The Visits column is **patients treated** (assisted visits included, each visit once), and only therapists with at least 20 patients treated in the period are eligible, a column needs two eligible therapists to have a leader, ties share it, and a best value of zero marks nobody.
@@ -654,7 +653,7 @@ Front desk's `visits_update` reach is the same as an admin's or the visit's own 
 
 #### Clinic-Level Toggles (Settings → Features/Billing)
 - **Billing access** — who's allowed to issue invoices
-- **Therapist comparison** — visible to therapists (off by default)
+- (Therapist comparison is no longer a toggle: see Therapist Comparison.)
 
 ---
 
@@ -798,7 +797,7 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Linked to visit records for reporting
 
 #### Feature Toggles
-- Therapist comparison chart (off by default)
+- Therapist comparison chart (no toggle: admin + revenue-split plan + 2+ active therapists)
 - Billing staff restriction (on by default)
 
 ### 9. Patient Communications (Phase 0–5, plus Phase 9's Business API)
@@ -1588,7 +1587,7 @@ default_payment_method       text NULL — LEGACY: no longer read or edited (the
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — LEGACY: no longer read or edited (the "Bills after a visit" setting was removed); kept for old rows
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
-show_therapist_comparison   boolean NOT NULL
+show_therapist_comparison   boolean NOT NULL — legacy, no longer read (the comparison shows by rule)
 walk_in_mrno_prefix         text (NULLABLE, default 'W') — the Clinic code (Patient ID half); set from the clinic name at sign-up through the normal outbox push (the create RPC does not take it)
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
                              Dexie prefs (useVisitColumnPrefs); no client code
@@ -2923,8 +2922,8 @@ The **Clinical notes** toggle (`clinicalDocsEnabled`) lives on Settings → Gene
 `can('revenueSplit')`) — since `LedgerPage.tsx`'s Invoices tab and
 `ReportsPage.tsx`'s Attribution Audit tab both already consume those two
 booleans, tier-gating happens there for free. `TherapistComparisonCard.tsx`
-needed its own `can('revenueSplit')` check instead (it's gated on
-`clinic.showTherapistComparison`, not a `usePermissions()` flag).
+uses `useShowTherapistComparison()` (admin + `can('revenueSplit')` + 2+
+active therapists), not a `usePermissions()` flag.
 
 Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
@@ -3592,7 +3591,7 @@ default_payment_method       text NULL — LEGACY: no longer read or edited (the
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 invoice_policy              text NOT NULL DEFAULT 'on_request' — LEGACY: no longer read or edited (the "Bills after a visit" setting was removed); kept for old rows
 clinical_docs_enabled       boolean NOT NULL DEFAULT true — new clinics start on (migration 20261025110000); existing clinics keep their value
-show_therapist_comparison   boolean NOT NULL
+show_therapist_comparison   boolean NOT NULL — legacy, no longer read (the comparison shows by rule)
 walk_in_mrno_prefix         text (NULLABLE, default 'W') — the Clinic code (Patient ID half); set from the clinic name at sign-up through the normal outbox push (the create RPC does not take it)
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
                              Dexie prefs (useVisitColumnPrefs); no client code
@@ -4927,8 +4926,8 @@ The **Clinical notes** toggle (`clinicalDocsEnabled`) lives on Settings → Gene
 `can('revenueSplit')`) — since `LedgerPage.tsx`'s Invoices tab and
 `ReportsPage.tsx`'s Attribution Audit tab both already consume those two
 booleans, tier-gating happens there for free. `TherapistComparisonCard.tsx`
-needed its own `can('revenueSplit')` check instead (it's gated on
-`clinic.showTherapistComparison`, not a `usePermissions()` flag).
+uses `useShowTherapistComparison()` (admin + `can('revenueSplit')` + 2+
+active therapists), not a `usePermissions()` flag.
 
 Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since

@@ -18,6 +18,7 @@ import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
+import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import { ClinicUtilisationCard } from '@/components/ClinicUtilisationCard';
 import { SingleVisitPatientsCard } from '@/components/SingleVisitPatientsCard';
 import { SERIES_COLORS } from '@/components/chartColors';
@@ -453,7 +454,7 @@ export function ReportsOverviewPage() {
     }, 600);
   }
 
-  const showTherapistComparison = scope.isAdmin && clinic.showTherapistComparison;
+  const showTherapistComparison = useShowTherapistComparison();
   const jumpTargets = DASHBOARD_SECTIONS.filter(
     (s) =>
       (s.key !== 'therapistComparison' || showTherapistComparison) &&

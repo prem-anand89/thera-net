@@ -99,10 +99,9 @@ export interface Clinic {
    */
   invoicePolicy?: InvoicePolicy;
   /**
-   * Therapist comparison chart on Reports: visible to admin + therapist
-   * (not front_desk) when on, for competitive visibility. Off by default
-   * — an admin opts in explicitly. Optional so older cached rows default
-   * to false (original admin-only behavior).
+   * Legacy, no longer read: the therapist comparison now shows by one rule
+   * (`showsTherapistComparison`: admin, plan with the revenue split, 2+ active
+   * therapists). The column stays for old rows.
    */
   showTherapistComparison?: boolean;
   /**

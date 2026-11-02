@@ -58,7 +58,7 @@ client-side implementation yet — no UI, no Dexie/sync integration. See
 
 ### Analytics & Dashboard
 - **Dashboard** — rolling last-6-months view: Post-Tax BM revenue trend, open packages sorted by days since last visit (flagged stale past 14 days), outstanding invoices summary. Charts are hand-built SVG (no charting dependency), colored from validated categorical palette.
-- **Therapist comparison** — opt-in chart (off by default; an admin enables it in Settings → Features) showing revenue and visit-count side-by-side per therapist. Visible to therapists too, not just admins — the deliberate exception to "financial aggregates are admin-only."
+- **Therapist comparison** — revenue and visit-count side-by-side per therapist, shown automatically to admins on a plan with the revenue split when the clinic has two or more active therapists. No setting; therapists never see colleagues' revenue.
 
 ### Patient Communications (optional module, off by default)
 - **Feedback** — staff ask a patient for feedback from a visit row; a one-time link takes them to a public, no-login star-rating + comment form. Admin sees every response with its rating and comment on Requests → Feedback; a 4-5★ response can be nudged toward a Google review.
@@ -119,11 +119,10 @@ Three roles per clinic membership, enforced server-side via Postgres RLS
 client-side for UI framing; the RLS policies and `SECURITY DEFINER` RPCs
 in `supabase/migrations/` are the actual enforcement boundary.
 
-Two clinic-level toggles (Settings → Features/Billing) layer on top of the
-role model: **billing access** (`billingEnabled` + who's allowed to issue
-invoices — everyone or billing staff only) and **therapist comparison**
-(off by default; widens the dashboard's revenue/visit charts to
-therapists, not just admins).
+One clinic-level setting layers on top of the role model: **billing
+access** (who's allowed to issue invoices — everyone or billing staff
+only). The therapist comparison has no setting: admins see it on a plan
+with the revenue split when the clinic has 2+ active therapists.
 
 **Onboarding** — inviting a `therapist` from Settings → Team creates their
 login *and* their service-roster entry (linked to that login) in one step;
@@ -216,8 +215,8 @@ invoices on record, **permanently deleted** — matching how patients work.
   independently drifted wrong in five places across the codebase.
 - **Billing access control** — clinics can gate who's allowed to issue
   invoices, enforced inside the `issue_invoice()` RPC.
-- **Therapist comparison chart** — opt-in dashboard chart visible to
-  therapists, not just admins.
+- **Therapist comparison chart** — shown to admins automatically when a
+  clinic has 2+ active therapists (originally an opt-in visible to therapists).
 - **Responsive breakpoint fix** — a dedicated `tab:` (744px) Tailwind
   token so iPad Mini gets the tablet layout instead of the phone layout.
 - Plus a New Visit rebuild, notes-completion prompting, Ledger hygiene,

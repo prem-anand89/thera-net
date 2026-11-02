@@ -3,13 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
 import type { MonthlyReport } from '@/services/reportService';
 import { useClinic } from '@/app/clinicContext';
-import { useWorkspaceScope } from '@/app/useWorkspaceScope';
-import { useEntitlements } from '@/app/useEntitlements';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
 import { SectionCard } from '@/components/ui';
 import { useTherapistUtilisation } from '@/components/useTherapistUtilisation';
+import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import {
   TherapistComparisonTable,
   type TherapistComparisonRow,
@@ -18,14 +17,9 @@ import { MonthlyRevenueChart } from '@/components/MonthlyRevenueChart';
 import { MonthlyVisitsChart } from '@/components/MonthlyVisitsChart';
 
 /**
- * Revenue and visit-count side by side, one bar series per therapist.
- * Financial aggregates are admin-only everywhere else (decision 3 in the
- * build plan) — this chart is the deliberate exception (decision 4),
- * visible to therapists too for competitive visibility, gated only by the
- * clinic-wide `showTherapistComparison` opt-in. front_desk is excluded —
- * no clinical work of their own to compare against colleagues. Renders
- * nothing when the clinic hasn't opted in, or for front_desk, so call
- * sites can drop it in without re-deriving that gate themselves.
+ * Revenue and visit-count side by side, one bar series per therapist. Shown only by the one rule in
+ * `showsTherapistComparison` (admin, plan with the revenue split, 2+ active therapists — no setting), so the Reports
+ * section, its jump-nav pill and the print never disagree. Renders nothing otherwise, so call sites can drop it in.
  */
 type TherapistComparisonCardProps = {
   /** Reports → Trends: parent owns period + `revenueTrend` query. */
@@ -42,9 +36,7 @@ export function TherapistComparisonCard({
   onChartMonthIndexChange,
 }: TherapistComparisonCardProps = {}) {
   const clinic = useClinic();
-  const scope = useWorkspaceScope();
-  const entitlements = useEntitlements(clinic.id);
-  const showComparison = !scope.isFrontDesk && entitlements.can('revenueSplit');
+  const showComparison = useShowTherapistComparison();
   const { partnerSplit } = clinicBillingConfig(clinic);
   const labels = clinicShareLabels(clinic);
   const showPostTax = partnerSplit;

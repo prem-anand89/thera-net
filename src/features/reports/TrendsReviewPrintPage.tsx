@@ -3,6 +3,7 @@ import { Link, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, reportService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import { publicLogoUrl } from '@/lib/supabase';
 import { formatINR } from '@/domain/money';
 import { fiscalYearOf, monthName, formatDateDM } from '@/domain/fiscalYear';
@@ -115,7 +116,8 @@ export function TrendsReviewPrintPage() {
   }, [clinic.id, period.year, period.month, report?.rows]);
 
   const printTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const utilisationById = useTherapistUtilisation(period, printTherapists, Boolean(clinic.showTherapistComparison));
+  const showComparison = useShowTherapistComparison();
+  const utilisationById = useTherapistUtilisation(period, printTherapists, showComparison);
 
   const engagementById = useMemo(
     () => new Map((therapistEngagement ?? []).map((e) => [e.therapistId, e])),
@@ -203,7 +205,7 @@ export function TrendsReviewPrintPage() {
     report && prevReport ? report.total.visitCount - prevReport.total.visitCount : null;
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
-  const showTherapistBlock = clinic.showTherapistComparison && therapistNames.length > 0;
+  const showTherapistBlock = showComparison && therapistNames.length > 0;
 
   return (
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
