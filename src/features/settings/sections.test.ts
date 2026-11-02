@@ -64,6 +64,35 @@ describe('matchSettingsCards', () => {
     expect(matchSettingsCards('backup').map((c) => c.id)).toEqual(['settings-card-account-backup']);
   });
 
+  it('finds every setting people search for, in the card that holds it now', () => {
+    const first = (q: string) => matchSettingsCards(q)[0]?.id;
+    expect(first('timezone')).toBe('settings-card-region');
+    expect(first('time zone')).toBe('settings-card-region');
+    expect(first('agenda')).toBe('settings-card-region');
+    expect(first('financial year')).toBe('settings-card-region');
+    expect(first('shift')).toBe('settings-card-team-shifts');
+    expect(matchSettingsCards('signature').map((c) => c.id)).toEqual(['settings-card-general-profile']);
+    expect(matchSettingsCards('clinic code').map((c) => c.id)).toEqual(['settings-card-general-profile']);
+    expect(matchSettingsCards('partner').map((c) => c.id)).toEqual(['settings-card-billing-partner']);
+    expect(matchSettingsCards('lunch').map((c) => c.id)).toEqual(['settings-card-booking-hours']);
+    expect(matchSettingsCards('opening hours').map((c) => c.id)).toEqual(['settings-card-booking-hours']);
+    expect(matchSettingsCards('open days').map((c) => c.id)).toEqual(['settings-card-booking-hours']);
+    expect(matchSettingsCards('staff can book outside').map((c) => c.id)).toEqual(['settings-card-booking-hours']);
+  });
+
+  it('no longer offers words for settings that are gone', () => {
+    expect(matchSettingsCards('weekly closed')).toEqual([]);
+    expect(matchSettingsCards('buffer')).toEqual([]);
+    expect(matchSettingsCards('slot')).toEqual([]);
+  });
+
+  it('lists cards in the order they appear on the page', () => {
+    const tabsInOrder = SETTINGS_CARDS.map((c) => c.tab).filter((t, i, all) => all.indexOf(t) === i);
+    expect(tabsInOrder).toEqual(['general', 'team', 'services', 'booking', 'billing', 'account']);
+    const booking = SETTINGS_CARDS.filter((c) => c.tab === 'booking').map((c) => c.id);
+    expect(booking).toEqual(['settings-card-booking-hours', 'settings-card-booking-online']);
+  });
+
   it('returns nothing for an empty or unknown query', () => {
     expect(matchSettingsCards('')).toEqual([]);
     expect(matchSettingsCards('zzzz')).toEqual([]);

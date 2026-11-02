@@ -72,16 +72,18 @@ export interface SettingsCard {
 }
 
 export const SETTINGS_CARDS: SettingsCard[] = [
-  { id: 'settings-card-general-profile', title: 'Clinic profile', tab: 'general', keywords: ['clinic name', 'logo', 'address', 'phone', 'email', 'walk-in', 'mrno', 'prefix', 'modules', 'contact'] },
+  { id: 'settings-card-general-profile', title: 'Clinic profile', tab: 'general', keywords: ['clinic name', 'logo', 'signature', 'address', 'phone', 'email', 'contact', 'clinic code', 'prefix', 'invoice prefix', 'patient id', 'walk-in', 'mrno'] },
+  { id: 'settings-card-region', title: 'Region and agenda', tab: 'general', keywords: ['region', 'time zone', 'timezone', 'country code', 'phone country', 'financial year', 'fiscal year', 'daily agenda', 'agenda email', 'evening email'] },
+  { id: 'settings-card-after-visit', title: 'After a visit', tab: 'general', keywords: ['clinical notes', 'notes', 'clinical', 'soap', 'documentation', 'consultation', 'feedback', 'patient feedback', 'google review', 'review link', 'rating'] },
   { id: 'settings-card-team-therapists', title: 'Team members', tab: 'team', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
+  { id: 'settings-card-team-shifts', title: 'Shifts & coverage', tab: 'team', keywords: ['shift', 'shift template', 'coverage', 'roster', 'break', 'shift request', 'swap'] },
   { id: 'settings-card-services-packages', title: 'Services & packages', tab: 'services', catalogView: 'packages', keywords: ['price', 'package', 'session', 'service', 'catalog', 'group'] },
   { id: 'settings-card-services-treatments', title: 'Treatments performed', tab: 'services', catalogView: 'treatments', keywords: ['treatment', 'manual therapy', 'exercise', 'taping', 'checklist'] },
   { id: 'settings-card-services-referrals', title: 'Referral sources', tab: 'services', catalogView: 'referrals', keywords: ['referral', 'referred by', 'source', 'doctor'] },
+  { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'booking', keywords: ['booking hours', 'hours', 'opening hours', 'open days', 'closed day', 'holiday', 'closure', 'split', 'lunch', 'break', 'different hours', 'staff can book outside', 'appointment duration'] },
   { id: 'settings-card-booking-online', title: 'Online booking page', tab: 'booking', keywords: ['whatsapp', 'booking page', 'booking link', 'slug', 'patient messages', 'online booking', 'public booking'] },
-  { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'booking', keywords: ['booking hours', 'hours', 'closed day', 'weekly closed', 'holiday', 'closure', 'slot', 'appointment duration'] },
-  { id: 'settings-card-after-visit', title: 'After a visit', tab: 'general', keywords: ['clinical notes', 'notes', 'clinical', 'soap', 'documentation', 'consultation', 'feedback', 'patient feedback', 'google review', 'review link', 'rating'] },
-  { id: 'settings-card-payments', title: 'Payments', tab: 'billing', keywords: ['payment', 'upi', 'qr', 'vpa', 'upi id', 'scan to pay', 'payee'] },
-  { id: 'settings-card-billing-invoicing', title: 'Invoicing', tab: 'billing', keywords: ['gst', 'tax', 'invoice', 'prefix', 'signature', 'fiscal year', 'who can bill', 'number'] },
+  { id: 'settings-card-payments', title: 'Payments', tab: 'billing', keywords: ['payment', 'upi', 'qr', 'vpa', 'upi id', 'scan to pay', 'payee', 'collect'] },
+  { id: 'settings-card-billing-invoicing', title: 'Invoicing', tab: 'billing', keywords: ['gst', 'gstin', 'invoice', 'receipt', 'who can bill', 'who can issue', 'bill'] },
   { id: 'settings-card-billing-partner', title: 'Partner & split', tab: 'billing', keywords: ['partner', 'split', 'revenue share', 'tds', 'tax', 'hospital', 'share', 'collects', 'collected by', 'partner logo', 'partner name'] },
   { id: 'settings-card-account-plan', title: 'Your plan', tab: 'account', keywords: ['plan', 'tier', 'limit', 'seats', 'subscription'] },
   { id: 'settings-card-account-included', title: "What's included", tab: 'account', keywords: ['plan', 'features', 'included', 'tier'] },

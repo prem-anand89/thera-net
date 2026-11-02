@@ -34,7 +34,7 @@ export function ShiftAssignmentsSection() {
   if (!therapists || !templates || !assignments) return null;
 
   return (
-    <div className="space-y-4" data-testid="shift-assignments-section">
+    <div id="settings-card-team-shifts" className="scroll-mt-4 space-y-4" data-testid="shift-assignments-section">
       {/* 1. Pending Shift Requests Strip (Admin only; shows when pending requests exist) */}
       {isAdmin && (
         <PendingShiftRequestsStrip
