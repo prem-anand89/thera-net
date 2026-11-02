@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Field, InfoTip, inputCls } from '@/components/ui';
 import { cleanClinicCode } from '@/domain/clinicCode';
 import { fiscalYearOf } from '@/domain/fiscalYear';
@@ -29,7 +30,11 @@ export function ClinicCodeField({
   today?: Date;
 }) {
   const patientPrefix = walkInMrnoPrefix?.trim() || '';
-  const linked = patientPrefix !== '' && patientPrefix === invoicePrefix;
+  // Whether editing changes both codes. Worked out while the field has a code; when the field is emptied to retype it,
+  // the last answer is kept, so clearing the field does not break the link.
+  const linkedRef = useRef(false);
+  if (invoicePrefix !== '') linkedRef.current = patientPrefix !== '' && patientPrefix === invoicePrefix;
+  const linked = linkedRef.current;
   const patientEffective = patientPrefix || 'W';
   const yy = String(today.getFullYear()).slice(2);
   const differs = invoicePrefix !== '' && patientEffective !== invoicePrefix;

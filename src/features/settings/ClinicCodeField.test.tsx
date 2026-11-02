@@ -51,6 +51,18 @@ describe('ClinicCodeField', () => {
     expect(onChange).toHaveBeenCalledWith({ invoicePrefix: 'LAX', walkInMrnoPrefix: 'LAX' });
   });
 
+  it('clearing the field and retyping keeps the two codes linked', () => {
+    let value = { invoicePrefix: 'BM', walkInMrnoPrefix: 'BM' as string | null };
+    const onChange = vi.fn((next: typeof value) => {
+      value = next;
+    });
+    const { rerender } = render(<ClinicCodeField {...value} fyStartMonth={4} invoicing onChange={onChange} today={today} />);
+    fireEvent.change(input(), { target: { value: '' } });
+    rerender(<ClinicCodeField {...value} fyStartMonth={4} invoicing onChange={onChange} today={today} />);
+    fireEvent.change(input(), { target: { value: 'X' } });
+    expect(onChange).toHaveBeenLastCalledWith({ invoicePrefix: 'X', walkInMrnoPrefix: 'X' });
+  });
+
   it('shows nothing extra when the two codes already match', () => {
     renderField();
     expect(screen.queryByTestId('clinic-code-differs')).toBeNull();
