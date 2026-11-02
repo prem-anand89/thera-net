@@ -44,6 +44,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
       }),
       onDirtyChange
     );
+  const [previewOpen, setPreviewOpen] = useState(false);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
   // Partner name and logo are edited in Payments & billing → Partner & split; the letterhead preview shows the saved ones.
   const partnerLogoPreviewUrl = clinic.hasPartner ? publicLogoUrl(clinic.partnerHospitalLogoPath) : null;
@@ -179,9 +180,9 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
                 <div className="pt-6 border-t border-[var(--border)]">
                   {/* Signature Column */}
                   <div>
-                    <label className="block text-label font-medium text-[var(--muted)] mb-2">Authorized Signature</label>
-                    <p className="text-hint text-[var(--muted)] mb-4 leading-relaxed">
-                      A one-time uploaded signature image, printed on every invoice in place of the blank "Authorised signature" line.
+                    <p className="mb-1.5 block text-label font-medium text-[var(--muted)]">Authorised signature</p>
+                    <p className="text-hint text-[var(--muted)] mb-3 leading-relaxed">
+                      Printed on every invoice in place of the blank signature line.
                     </p>
                     <div className="flex flex-col items-start gap-2">
                       {signaturePreviewUrl ? (
@@ -232,6 +233,17 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
           above rather than mounting (and re-rendering, and double-fetching
           images for) two separate copies. */}
       <div className="order-2 desktop:order-none desktop:sticky desktop:top-20 desktop:col-start-2 desktop:row-start-1 desktop:w-[16rem] desktop:shrink-0">
+        {/* On phones the preview is tall, so it stays folded until asked for; beside the form on desktop it is always shown. */}
+        <button
+          type="button"
+          className="flex min-h-11 w-full items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--teal)] desktop:hidden"
+          aria-expanded={previewOpen}
+          onClick={() => setPreviewOpen((v) => !v)}
+        >
+          {previewOpen ? 'Hide invoice preview' : 'Show invoice preview'}
+          <span aria-hidden="true">{previewOpen ? '▴' : '▾'}</span>
+        </button>
+        <div className={`${previewOpen ? 'mt-3 block' : 'hidden'} desktop:mt-0 desktop:block`}>
         <LetterheadPreview
           draft={{
             name: form.name,
@@ -244,6 +256,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
           logoUrl={logoPreviewUrl}
           partnerLogoUrl={partnerLogoPreviewUrl}
         />
+        </div>
       </div>
     </div>
   );
@@ -383,6 +396,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             />
           </div>
           {form.agendaEnabled !== false && (
+            <div className="mt-3">
             <Field label="Send at" htmlFor="clinic-agenda-hour">
               <select
                 id="clinic-agenda-hour"
@@ -397,6 +411,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
                 ))}
               </select>
             </Field>
+            </div>
           )}
         </fieldset>
         {showSaveBar && (
@@ -534,7 +549,7 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
                   .sort((x, y) => x - y)
                   .map((hours) => (
                     <option key={hours} value={hours}>
-                      {hours === 0 ? 'No, opening hours only' : `Up to ${hours} hour${hours === 1 ? '' : 's'} before opening and after closing`}
+                      {hours === 0 ? 'No, opening hours only' : `Up to ${hours} hour${hours === 1 ? '' : 's'} before and after`}
                     </option>
                   ))}
               </select>
@@ -683,15 +698,11 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
         title="Payments"
       >
         <fieldset disabled={busy} className="contents">
-          <p className="mb-3 text-xs text-[var(--muted)]">
-            One clinic UPI for the front desk. When the payment method is UPI, staff can show a QR the patient scans. A UPI ID
-            builds a QR with the visit amount and Patient ID in the note; an uploaded image is the fallback.
-          </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <SwitchRow
                 label="Show UPI QR at collection"
-                hint="New visit and Take payment show a Scan to pay sheet when the method is UPI."
+                hint="When the method is UPI, staff can show a Scan to pay sheet. A UPI ID builds the QR with the visit amount; an uploaded image is the fallback."
                 checked={form.upiQrEnabled ?? false}
                 onChange={(v) => set({ upiQrEnabled: v })}
               />
@@ -726,7 +737,7 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
                   <input
                     type="file"
                     accept="image/*"
-                    className={inputCls}
+                    className="block w-full text-sm text-[var(--muted)] file:mr-3 file:min-h-10 file:rounded-lg file:border file:border-[var(--border)] file:bg-[var(--paper)] file:px-3 file:text-sm file:font-semibold file:text-[var(--teal)]"
                     onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
                   />
                   {qrPreviewUrl && <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />}

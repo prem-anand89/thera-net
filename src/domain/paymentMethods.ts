@@ -21,7 +21,7 @@ export function partnerName(clinic: PartnerNames): string {
   return clinic.partnerHospitalName?.trim() || clinic.partnerShareLabel?.trim() || 'partner';
 }
 
-/** "Collected by Health Valley" / "Collected by partner" for `partner`; the plain name for everything else. */
+/** "Collected by City Hospital" / "Collected by partner" for `partner`; the plain name for everything else. */
 export function paymentMethodLabel(method: PaymentMethod, clinic: PartnerNames): string {
   return method === 'partner' ? `Collected by ${partnerName(clinic)}` : PLAIN_LABELS[method] ?? method;
 }

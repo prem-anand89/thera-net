@@ -77,8 +77,8 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
                 <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
                   Your booking link
                 </span>
-                <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5">
-                  <span className="truncate font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-[10px] border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5">
+                  <span className="min-w-0 break-all font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
                   <button
                     type="button"
                     className="whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"

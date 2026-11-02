@@ -9,11 +9,11 @@ import {
 } from './paymentMethods';
 
 const solo = { hasPartner: false };
-const hospital = { hasPartner: true, partnerHospitalName: 'Health Valley' };
+const hospital = { hasPartner: true, partnerHospitalName: 'City Hospital' };
 
 describe('payment method labels and options', () => {
   it('names the partner, falling back to a plain word', () => {
-    expect(paymentMethodLabel('partner', hospital)).toBe('Collected by Health Valley');
+    expect(paymentMethodLabel('partner', hospital)).toBe('Collected by City Hospital');
     expect(paymentMethodLabel('partner', { hasPartner: true, partnerShareLabel: 'HV' })).toBe('Collected by HV');
     expect(paymentMethodLabel('partner', { hasPartner: true })).toBe('Collected by partner');
     expect(paymentMethodLabel('upi', solo)).toBe('UPI');

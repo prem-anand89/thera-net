@@ -19,7 +19,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     email: null,
     gstNo: null,
     logoPath: null,
-    partnerHospitalName: 'Health Valley',
+    partnerHospitalName: 'City Hospital',
     partnerHospitalLogoPath: null,
     hasPartner: true,
     invoicePrefix: 'BM',

@@ -120,6 +120,13 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
   return { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar };
 }
 
+/**
+ * The Save / Cancel bar of a Settings card. It appears only while there is something to save, a problem to read, or for
+ * a moment after saving (see `showSaveBar` in {@link useClinicSectionForm}). It sticks to the bottom of the screen while
+ * its card is in view (above the phone's bottom nav), so Save is always in reach however long the card is and however
+ * far up the field being edited is; it stops at the card's own end. Its status line says what state the card is in, and
+ * a problem is shown inside the bar so it can't be hidden below the fold.
+ */
 export function SectionSaveBar({
   dirty,
   saved,
@@ -137,26 +144,28 @@ export function SectionSaveBar({
   error: string | null;
   saveDisabled?: boolean;
 }) {
+  const status = busy ? 'Saving…' : dirty ? 'Unsaved changes' : saved ? 'Saved ✓' : '';
   return (
-    <>
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          type="button"
-          className={btnPrimary}
-          disabled={busy || !dirty || saveDisabled}
-          onClick={onSave}
+    <div
+      data-testid="section-save-bar"
+      className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[9] -mx-2 mt-4 space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)]/95 p-2.5 shadow-md backdrop-blur sm:bottom-4"
+    >
+      {error && <ErrorNote message={error} />}
+      <div className="flex items-center gap-2">
+        <span
+          role="status"
+          className={`min-w-0 flex-1 truncate text-sm ${dirty && !busy ? 'text-[var(--amber)]' : saved && !dirty ? 'text-[var(--moss)]' : 'text-[var(--muted)]'}`}
         >
-          {busy ? 'Saving…' : 'Save'}
-        </button>
-        <button type="button" className={btnSecondary} disabled={!dirty} onClick={onCancel}>
+          {status}
+        </span>
+        <button type="button" className={btnSecondary} disabled={!dirty || busy} onClick={onCancel}>
           Cancel
         </button>
-        {saved && !dirty && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}
+        <button type="button" className={btnPrimary} disabled={busy || !dirty || saveDisabled} onClick={onSave}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
       </div>
-      <div className="mt-2">
-        <ErrorNote message={error} />
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -222,14 +231,19 @@ export function SwitchRow({
         <span className="block text-sm font-medium text-[var(--ink)]">{label}</span>
         {hint && <span className="block text-xs text-[var(--muted)]">{hint}</span>}
       </span>
+      {/* The input stays the real control (role="switch", keyboard, screen readers); the track and thumb are its picture. */}
       <input
         type="checkbox"
         role="switch"
         aria-label={label}
-        className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+        className="peer sr-only"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
+      />
+      <span
+        aria-hidden="true"
+        className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--border)] transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-[var(--teal)] peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--teal)] peer-focus-visible:ring-offset-2"
       />
     </label>
   );

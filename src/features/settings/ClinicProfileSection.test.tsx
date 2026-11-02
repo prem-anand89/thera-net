@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('@/app/clinicContext', () => ({
   useClinic: () => ({ id: 'c1', name: 'Physio Clinic', address: '1 Main Road', clinicType: 'individual', hasPartner: false, invoicePrefix: 'PC', walkInMrnoPrefix: 'PC', fyStartMonth: 4 }),
@@ -29,5 +29,13 @@ describe('ClinicProfileSection', () => {
     expect(screen.getByRole('textbox', { name: /Clinic code/ })).toBeInTheDocument();
     expect(screen.queryByText('Patient ID Prefix')).toBeNull();
     expect(screen.queryByText('Invoice prefix')).toBeNull();
+  });
+
+  it('keeps the tall invoice preview folded on phones until asked for', () => {
+    render(<ClinicProfileSection onDirtyChange={vi.fn()} />);
+    const toggle = screen.getByRole('button', { name: 'Show invoice preview' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Hide invoice preview' })).toHaveAttribute('aria-expanded', 'true');
   });
 });

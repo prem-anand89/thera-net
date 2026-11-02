@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeVisitSplit, uninvoicedSplitRates, visitNeedsSplitUpdate } from './split';
 import { rupeesToPaise as rs } from './money';
 
-// Vectors taken directly from the Beyond Mechanics / Health Valley FY26-27
+// Vectors taken directly from a real clinic and partner-hospital FY26-27
 // sheets — these numbers must match the hospital's report exactly.
 describe('computeVisitSplit', () => {
   it('matches the charges sheet for a ₹800 consultation (gross_bill basis)', () => {

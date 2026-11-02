@@ -983,7 +983,7 @@ export interface ClinicClosedDate {
   updatedAt: string;
 }
 
-/** What Health Valley actually paid Beyond Mechanics for one fiscal month. */
+/** What the partner actually paid the clinic (or the clinic paid the partner) for one fiscal month. */
 export interface Settlement {
   id: UUID;
   clinicId: UUID;

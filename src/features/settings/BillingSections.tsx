@@ -350,7 +350,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             <div className="sm:col-span-2">
               <SwitchRow
                 label={`${form.partnerHospitalName?.trim() || 'The partner'} collects patient payments`}
-                hint="On: patients pay at the partner's counter and the partner settles with you. Off: patients pay the clinic and you settle the partner's share. You can change it on a single visit."
+                hint="Turn on if patients pay at the partner's counter. You can change it on a single visit."
                 checked={Boolean(form.partnerCollects)}
                 onChange={(v) => set({ partnerCollects: v })}
               />
@@ -389,7 +389,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
               >
                 {moreOpen ? 'Fewer options' : 'More options'}
               </button>
-              <span className="ml-1 text-hint text-[var(--muted)]">Report column names{form.taxPct > 0 ? ' and how TDS is worked out' : ''}</span>
+              <span className="block px-2 text-hint text-[var(--muted)]">Report column names{form.taxPct > 0 ? ' and how TDS is worked out' : ''}</span>
             </div>
             {moreOpen && (
               <>
@@ -430,10 +430,6 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             )}
           </div>
         )}
-        <p className="mt-3 text-xs text-[var(--muted)]">
-          Turning partner mode on or off, or changing the split or tax, applies going forward and, on Save, also to any
-          already-logged visit that hasn&apos;t been invoiced yet. Invoiced visits keep the rates they were billed under.
-        </p>
         {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
         {retryRecompute && <div className="mt-2">{retryRecompute}</div>}
       </fieldset>

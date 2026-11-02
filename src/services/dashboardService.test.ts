@@ -26,7 +26,7 @@ function makeFakeRepos() {
     email: null,
     gstNo: null,
     logoPath: null,
-    partnerHospitalName: 'Health Valley',
+    partnerHospitalName: 'City Hospital',
     partnerHospitalLogoPath: null,
     invoicePrefix: 'BM',
     clinicSplitPct: 75,
