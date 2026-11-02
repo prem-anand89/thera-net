@@ -603,7 +603,7 @@ Front desk's `visits_update` reach is the same as an admin's or the visit's own 
 #### Onboarding
 - **Therapist invites** from Settings → Team create login *and* service-roster entry in one step
 - **Admin/front_desk invites** only need login
-- **Bookable admin/front_desk invites**: the form sends `bookable: true` and `invite-therapist` creates/links the roster row to the new login (same `linkTherapistRosterRow` as therapist invites), so one person is one card. The client never creates an unlinked roster row for an invited login.
+- **"Sees patients" admin/front_desk invites** (the checkbox was labelled "Bookable"; the stored field and the `bookable` payload key are unchanged; the member badge, edit checkbox, Add form, filter chip and deactivate message all say "Sees patients" — a non-clinical admin leaves it off: full admin rights, no schedule column): the form sends `bookable: true` and `invite-therapist` creates/links the roster row to the new login (same `linkTherapistRosterRow` as therapist invites), so one person is one card. The client never creates an unlinked roster row for an invited login.
 - **Deactivation** (keeps history intact) or **permanent deletion** (zero visits/notes/invoices only)
 - **Invite email → password setup**: `invite-therapist` calls
   `auth.admin.inviteUserByEmail()` with `redirectTo` set to the inviting

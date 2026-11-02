@@ -357,7 +357,7 @@ export function TeamMemberCard({
               )}
               {isBookable && (
                 <span className="inline-block rounded-full bg-[var(--sky-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--sky)]">
-                  Bookable
+                  Sees patients
                 </span>
               )}
               {therapist && therapist.publicBookable === false && (
@@ -579,10 +579,10 @@ export function TeamMemberCard({
                     <div className="flex items-center justify-between">
                       <div className="pr-2">
                         <label htmlFor="member-bookable-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
-                          Bookable in schedule
+                          Sees patients
                         </label>
                         <p className="text-hint text-[var(--muted)] leading-tight">
-                          Appears in schedule, appointments, visits and team filters.
+                          Appears in the schedule and can be chosen on visits.
                         </p>
                       </div>
                       <input
@@ -740,7 +740,7 @@ function ColorClashNotice({ therapists }: { therapists: Therapist[] }) {
   );
 }
 
-function AddTeamMemberForm({
+export function AddTeamMemberForm({
   clinicId,
   onAdded,
   loginsLocked = false,
@@ -782,7 +782,7 @@ function AddTeamMemberForm({
     if (!name.trim()) return setError('Name is required');
     if (needsLogin && !email.trim()) return setError('Email is required for login');
     const effectiveBookable = role === 'front_desk' ? false : bookable;
-    if (!needsLogin && !effectiveBookable) return setError('Must either need a login or be bookable');
+    if (!needsLogin && !effectiveBookable) return setError('Must either need a login or see patients');
     if (!needsLogin && rosterLocked) return setError(rosterHint);
 
     setBusy(true);
@@ -894,13 +894,17 @@ function AddTeamMemberForm({
           </p>
         )}
         {role !== 'front_desk' && (
-          <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+          <label className="flex items-start gap-2 text-sm text-[var(--ink)]">
             <input
               type="checkbox"
+              className="mt-0.5"
               checked={bookable}
               onChange={(e) => setBookable(e.target.checked)}
             />
-            Bookable (appears in schedule and invoices)
+            <span>
+              Sees patients
+              <span className="block text-hint text-[var(--muted)]">Appears in the schedule and can be chosen on visits.</span>
+            </span>
           </label>
         )}
       </div>
@@ -1208,7 +1212,7 @@ export function Therapists() {
                 color: filter === f ? 'var(--teal)' : 'var(--muted)',
               }}
             >
-              {f}
+              {f === 'bookable' ? 'Sees patients' : f}
               {f === 'unlinked' && unlinkedCount > 0 && (
                 <span className="ml-1.5 rounded-full bg-[var(--rust)] px-1.5 py-0.5 text-caption text-white">
                   {unlinkedCount}
@@ -1303,7 +1307,7 @@ export function Therapists() {
         <ConfirmDialog
           open={true}
           title="Deactivate therapist"
-          message={`${deactivateTarget.therapist.name} will no longer be bookable or shown in schedule filters. Past records stay intact; you can reactivate anytime.${
+          message={`${deactivateTarget.therapist.name} will no longer see patients or appear in the schedule. Past records stay intact; you can reactivate anytime.${
             deactivateTarget.upcoming > 0
               ? ` They still have ${deactivateTarget.upcoming} upcoming appointment(s) — reassign or cancel those separately.`
               : ''
