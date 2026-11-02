@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
@@ -199,42 +199,38 @@ export function LockedCard({ id, title, feature }: { id: string; title: string; 
   );
 }
 
-/** Two-option pill toggle — same selected/unselected visual language as
- *  Team's invite-role picker (border/background/color keyed off a boolean
- *  instead of a 3-way role), so a feature flag reads the same way a role
- *  or status does elsewhere in Settings, instead of as a plain browser
- *  &lt;select&gt;. */
-export function BoolToggle({
-  value,
+/**
+ * The one on/off control in Settings: the label and what it does on the left, a real switch (`role="switch"`) on the
+ * right, in a 44px row. When the two states mean something specific, say so in the hint.
+ */
+export function SwitchRow({
+  label,
+  hint,
+  checked,
   onChange,
-  offLabel = 'Off',
-  onLabel = 'On',
+  disabled = false,
 }: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  offLabel?: string;
-  onLabel?: string;
+  label: string;
+  hint?: ReactNode;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex gap-1.5">
-      {([false, true] as const).map((v) => {
-        const selected = value === v;
-        return (
-          <button
-            key={String(v)}
-            type="button"
-            onClick={() => onChange(v)}
-            className="flex-1 rounded-lg border px-2 py-1.5 text-center text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
-            style={{
-              borderColor: selected ? 'var(--teal)' : 'var(--border)',
-              background: selected ? 'var(--teal-light)' : 'var(--surface)',
-              color: selected ? 'var(--teal)' : 'var(--muted)',
-            }}
-          >
-            {v ? onLabel : offLabel}
-          </button>
-        );
-      })}
-    </div>
+    <label className={`flex min-h-11 items-center justify-between gap-3 ${disabled ? 'opacity-70' : 'cursor-pointer'}`}>
+      <span>
+        <span className="block text-sm font-medium text-[var(--ink)]">{label}</span>
+        {hint && <span className="block text-xs text-[var(--muted)]">{hint}</span>}
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        aria-label={label}
+        className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </label>
   );
 }

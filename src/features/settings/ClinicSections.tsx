@@ -14,7 +14,7 @@ import { LetterheadPreview } from './LetterheadPreview';
 import { clampBufferHours } from './shiftUtils';
 import { toFriendlyMessage } from '@/lib/errors';
 import { isValidUpiVpa } from '@/domain/upiPay';
-import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
 
 type ProfileFields = Pick<
   Clinic,
@@ -374,22 +374,14 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             </Field>
           </div>
           )}
-          <label className="mt-4 flex min-h-11 cursor-pointer items-center justify-between gap-3">
-            <span>
-              <span className="block text-sm font-medium text-[var(--ink)]">Daily agenda email</span>
-              <span className="block text-xs text-[var(--muted)]">
-                Each therapist with a login gets tomorrow's appointments in one email, with a calendar file.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="Daily agenda email"
-              className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+          <div className="mt-4">
+            <SwitchRow
+              label="Daily agenda email"
+              hint="Each therapist with a login gets tomorrow's appointments in one email, with a calendar file."
               checked={form.agendaEnabled !== false}
-              onChange={(e) => set({ agendaEnabled: e.target.checked })}
+              onChange={(v) => set({ agendaEnabled: v })}
             />
-          </label>
+          </div>
           {form.agendaEnabled !== false && (
             <Field label="Send at" htmlFor="clinic-agenda-hour">
               <select
@@ -574,26 +566,6 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
 
 type AfterVisitFields = Pick<Clinic, 'clinicalDocsEnabled' | 'enablePatientComms' | 'googleReviewUrl'>;
 
-/** One switch row: label and what it does on the left, the switch on the right (the same row as "Daily agenda email"). */
-function SwitchRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (next: boolean) => void }) {
-  return (
-    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
-      <span>
-        <span className="block text-sm font-medium text-[var(--ink)]">{label}</span>
-        <span className="block text-xs text-[var(--muted)]">{hint}</span>
-      </span>
-      <input
-        type="checkbox"
-        role="switch"
-        aria-label={label}
-        className="h-5 w-5 shrink-0 accent-[var(--teal)]"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-    </label>
-  );
-}
-
 /**
  * What staff are offered right after logging a visit: a prompt for the clinical note, and a feedback request (with the
  * clinic's Google review link). Both sit here, on General, so a plan without invoicing reaches them too.
@@ -716,16 +688,14 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
             builds a QR with the visit amount and Patient ID in the note; an uploaded image is the fallback.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                <>
-                  Show UPI QR at collection
-                  <InfoTip text="When on, New visit and Take payment show a Scan to pay sheet if the method is UPI." />
-                </>
-              }
-            >
-              <BoolToggle value={form.upiQrEnabled ?? false} onChange={(v) => set({ upiQrEnabled: v })} />
-            </Field>
+            <div className="sm:col-span-2">
+              <SwitchRow
+                label="Show UPI QR at collection"
+                hint="New visit and Take payment show a Scan to pay sheet when the method is UPI."
+                checked={form.upiQrEnabled ?? false}
+                onChange={(v) => set({ upiQrEnabled: v })}
+              />
+            </div>
             {form.upiQrEnabled && (
               <>
                 <Field label="UPI ID (VPA)">

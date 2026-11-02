@@ -31,7 +31,7 @@ afterEach(cleanup);
 describe('UPI collection in General → Payments', () => {
   it('a Lite clinic can save a UPI ID and payee name', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Show UPI QR at collection' }));
     fireEvent.change(screen.getByPlaceholderText('clinic@okaxis'), { target: { value: 'physio@okaxis' } });
     fireEvent.change(screen.getByPlaceholderText('Physio Clinic'), { target: { value: 'Physio Clinic LLP' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -41,7 +41,7 @@ describe('UPI collection in General → Payments', () => {
 
   it('refuses an invalid UPI ID and says why, without saving', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Show UPI QR at collection' }));
     fireEvent.change(screen.getByPlaceholderText('clinic@okaxis'), { target: { value: 'not a upi id' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText(/Enter a valid UPI ID/)).toBeInTheDocument();
@@ -50,10 +50,18 @@ describe('UPI collection in General → Payments', () => {
 
   it('refuses turning the QR on with no UPI ID and no image', async () => {
     render(<PaymentsSection onDirtyChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Show UPI QR at collection' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText(/Add a UPI ID or upload a QR image/)).toBeInTheDocument();
     expect(put).not.toHaveBeenCalled();
+  });
+
+  it('Show UPI QR is a switch that starts off and toggles', () => {
+    render(<PaymentsSection onDirtyChange={vi.fn()} />);
+    const toggle = screen.getByRole('switch', { name: 'Show UPI QR at collection' });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
   });
 
   it('has no default payment method setting: only UPI collection', () => {

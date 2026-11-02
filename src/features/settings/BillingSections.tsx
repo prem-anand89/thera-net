@@ -6,7 +6,7 @@ import type { TdsBasis } from '@/domain/split';
 import { btnSecondary, ConfirmDialog, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
 import { toFriendlyMessage } from '@/lib/errors';
-import { useClinicSectionForm, SectionSaveBar, BoolToggle } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
 
 type BillingFields = Pick<
   Clinic,
@@ -287,15 +287,13 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             {retryRecompute}
           </div>
         ) : (
-          <div className="flex min-h-11 items-center justify-between gap-3 opacity-70">
-            <span>
-              <span className="block text-sm font-medium text-[var(--ink)]">We work with a partner</span>
-              <span className="block text-hint text-[var(--muted)]">
-                Share revenue with a hospital or centre. Available on the {planName} plan and above.
-              </span>
-            </span>
-            <input type="checkbox" role="switch" aria-label="We work with a partner" className="h-5 w-5 shrink-0" checked={false} disabled readOnly />
-          </div>
+          <SwitchRow
+            label="We work with a partner"
+            hint={`Share revenue with a hospital or centre. Available on the ${planName} plan and above.`}
+            checked={false}
+            disabled
+            onChange={() => {}}
+          />
         )}
         {splitConfirm}
       </SectionCard>
@@ -308,20 +306,12 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
       title="Partner & split"
     >
       <fieldset disabled={busy} className="contents">
-        <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
-          <span>
-            <span className="block text-sm font-medium text-[var(--ink)]">We work with a partner</span>
-            <span className="block text-hint text-[var(--muted)]">A hospital or centre you share each visit&apos;s revenue with.</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            aria-label="We work with a partner"
-            className="h-5 w-5 shrink-0 accent-[var(--teal)]"
-            checked={Boolean(form.hasPartner)}
-            onChange={(e) => set({ hasPartner: e.target.checked })}
-          />
-        </label>
+        <SwitchRow
+          label="We work with a partner"
+          hint="A hospital or centre you share each visit's revenue with."
+          checked={Boolean(form.hasPartner)}
+          onChange={(v) => set({ hasPartner: v })}
+        />
 
         {form.hasPartner && (
           <div className="mt-4 grid grid-cols-1 gap-4 border-t border-[var(--border)] pt-4 sm:grid-cols-2">
@@ -358,21 +348,12 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             </div>
 
             <div className="sm:col-span-2">
-              <Field
-                label={
-                  <>
-                    Who collects patient payments?
-                    <InfoTip text="We do: patients pay the clinic and you settle the partner's share. The partner does: patients pay at the partner's counter and the partner settles with you. Either way you can change it on a single visit." />
-                  </>
-                }
-              >
-                <BoolToggle
-                  value={Boolean(form.partnerCollects)}
-                  onChange={(v) => set({ partnerCollects: v })}
-                  offLabel="We do"
-                  onLabel={`${form.partnerHospitalName?.trim() || 'The partner'} does`}
-                />
-              </Field>
+              <SwitchRow
+                label={`${form.partnerHospitalName?.trim() || 'The partner'} collects patient payments`}
+                hint="On: patients pay at the partner's counter and the partner settles with you. Off: patients pay the clinic and you settle the partner's share. You can change it on a single visit."
+                checked={Boolean(form.partnerCollects)}
+                onChange={(v) => set({ partnerCollects: v })}
+              />
             </div>
 
             <Field label={`Your share % (${labels.own} split)`}>

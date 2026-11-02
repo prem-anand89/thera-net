@@ -85,7 +85,7 @@ describe('PartnerSection on a plan with the partner split', () => {
     render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
     fireEvent.click(screen.getByRole('switch', { name: 'We work with a partner' }));
     expect(screen.getByLabelText('Partner name')).toBeInTheDocument();
-    expect(screen.getByText('Who collects patient payments?')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'The partner collects patient payments' })).not.toBeChecked();
     expect(screen.getByText(/Your share %/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Partner name'), { target: { value: 'City Hospital' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -193,3 +193,17 @@ describe('PartnerSection asks before it rewrites visits not yet invoiced', () =>
     expect(screen.queryByRole('button', { name: 'Update visits again' })).toBeNull();
   });
 });
+
+describe('Who collects patient payments', () => {
+  it('is a switch named after the partner, and saves partnerCollects', async () => {
+    clinicRef.current = { ...base, hasPartner: true, partnerHospitalName: 'City Hospital' };
+    render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
+    const toggle = screen.getByRole('switch', { name: 'City Hospital collects patient payments' });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({ partnerCollects: true });
+  });
+});
+
