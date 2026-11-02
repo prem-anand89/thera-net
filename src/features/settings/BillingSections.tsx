@@ -37,7 +37,7 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
   return (
     <SectionCard
       id="settings-card-billing-invoicing"
-      title="Billing & invoicing"
+      title="Invoicing"
     >
       <fieldset disabled={busy} className="contents">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,7 +165,7 @@ export function partnerSplitChanged(
 }
 
 /**
- * Billing → "Partner & split": every partner setting in one card — whether the clinic works with a partner (a hospital
+ * Payments & billing → "Partner & split": every partner setting in one card — whether the clinic works with a partner (a hospital
  * or a centre it shares revenue with), the partner's name and logo, who collects patient payments, the share labels,
  * the split %, tax % and TDS basis. These all feed clinicBillingConfig() / computeVisitSplit(), so they save together.
  *
@@ -274,7 +274,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             <span>
               <span className="block text-sm font-medium text-[var(--ink)]">We work with a partner</span>
               <span className="block text-hint text-[var(--muted)]">
-                Share revenue with a hospital or centre. Available on the {planName} plan.
+                Share revenue with a hospital or centre. Available on the {planName} plan and above.
               </span>
             </span>
             <input type="checkbox" role="switch" aria-label="We work with a partner" className="h-5 w-5 shrink-0" checked={false} disabled readOnly />

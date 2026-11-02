@@ -11,7 +11,7 @@ import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
 import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab } from './sections';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
-import { LockedSectionNotice } from './settingsShared';
+import { LockedCard } from './settingsShared';
 import { PlanSection } from './PlanSection';
 import { ClinicProfileSection, ClinicRegionSection, ClinicHoursSection, ClinicalDocsSection, PaymentsSection } from './ClinicSections';
 import { BillingSection, PartnerSection } from './BillingSections';
@@ -20,7 +20,7 @@ import { HistoricalData, DataBackup, DangerZone } from './DataSections';
 import { Therapists } from './TeamSection';
 
 /** Sections that edit a slice of the clinic row and report unsaved edits.
- *  A tab can hold more than one (Billing holds billing + partner). */
+ *  A tab can hold more than one (Payments & billing holds payments, invoicing and partner). */
 type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'clinicalDocs' | 'payments' | 'billing' | 'partner' | 'patientComms';
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
@@ -28,7 +28,7 @@ const FORM_TAB: Record<FormKey, SettingsTab> = {
   clinicHours: 'booking',
   clinicRegion: 'general',
   clinicalDocs: 'general',
-  payments: 'general',
+  payments: 'billing',
   billing: 'billing',
   partner: 'billing',
   patientComms: 'booking',
@@ -456,7 +456,6 @@ export function SettingsPage() {
               <ClinicProfileSection onDirtyChange={setProfileDirty} />
               <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
               <ClinicalDocsSection onDirtyChange={setClinicalDocsDirty} />
-              <PaymentsSection onDirtyChange={setPaymentsDirty} />
             </>
           )}
           {activeTab === 'team' && (
@@ -481,10 +480,11 @@ export function SettingsPage() {
           )}
           {activeTab === 'billing' && (
             <>
+              <PaymentsSection onDirtyChange={setPaymentsDirty} />
               {canSeeBilling ? (
                 <BillingSection onDirtyChange={setBillingDirty} />
               ) : (
-                <LockedSectionNotice feature="invoicing" sectionLabel="Billing & invoicing" />
+                <LockedCard id="settings-card-billing-invoicing" title="Invoicing" feature="invoicing" />
               )}
               <PartnerSection onDirtyChange={setPartnerDirty} allowed={canSeePartner} />
             </>

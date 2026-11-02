@@ -42,7 +42,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
       onDirtyChange
     );
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
-  // Partner name and logo are edited in Billing → Partner & split; the letterhead preview shows the saved ones.
+  // Partner name and logo are edited in Payments & billing → Partner & split; the letterhead preview shows the saved ones.
   const partnerLogoPreviewUrl = clinic.hasPartner ? publicLogoUrl(clinic.partnerHospitalLogoPath) : null;
   const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
@@ -559,7 +559,7 @@ type PaymentsFields = Pick<Clinic, 'defaultPaymentMethod' | 'upiVpa' | 'upiPayee
 
 /**
  * What payment screens start with. Who collects patient payments, for a clinic with a partner, is set in
- * Billing → Partner & split; here it only locks the default to "Collected by {partner}" when the partner collects.
+ * Payments & billing → Partner & split; here it only locks the default to "Collected by {partner}" when the partner collects.
  * Also the clinic's UPI collection (ID, payee name, QR image): New visit and Take payment show a Scan to pay sheet from
  * it, and Lite can collect by UPI, so it lives on General (not Billing) where every plan reaches it.
  */
@@ -646,7 +646,7 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
               </select>
               {partnerCollects && (
                 <p className="mt-1 text-hint text-[var(--muted)]">
-                  {name} collects patient payments. Change that in Billing → Partner &amp; split.
+                  {name} collects patient payments. Change that in Payments & billing → Partner & split.
                 </p>
               )}
             </Field>

@@ -38,9 +38,10 @@ describe('Schedule & Booking tab', () => {
     const owner = (id: string) => SETTINGS_CARDS.find((c) => c.id === id)?.tab;
     expect(owner('settings-card-booking-hours')).toBe('booking');
     expect(owner('settings-card-booking-online')).toBe('booking');
-    // everything else in General stays put, and Payments stays reachable on every plan
-    expect(owner('settings-card-payments')).toBe('general');
+    // Payments moved to the Billing tab, which is never hidden, so every plan still reaches it
+    expect(owner('settings-card-payments')).toBe('billing');
     expect(SETTINGS_TAB_META.booking.label).toBe('Schedule & Booking');
+    expect(SETTINGS_TAB_META.billing.label).toBe('Payments & billing');
   });
 
   it('finds the hours card by what people type', () => {
@@ -53,6 +54,7 @@ describe('matchSettingsCards', () => {
   it('finds the exact card that owns a setting', () => {
     expect(matchSettingsCards('gst').map((c) => c.id)).toEqual(['settings-card-billing-invoicing']);
     expect(matchSettingsCards('upi').map((c) => c.id)).toEqual(['settings-card-payments']);
+    expect(matchSettingsCards('upi').map((c) => c.tab)).toEqual(['billing']);
     expect(matchSettingsCards('vpa').map((c) => c.id)).toEqual(['settings-card-payments']);
     expect(matchSettingsCards('whatsapp').map((c) => c.id)).toEqual(['settings-card-booking-online']);
     expect(matchSettingsCards('backup').map((c) => c.id)).toEqual(['settings-card-account-backup']);

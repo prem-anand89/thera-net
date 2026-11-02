@@ -66,9 +66,9 @@ describe('UPI collection in General → Payments', () => {
 });
 
 describe('Billing & invoicing', () => {
-  it('is titled Billing & invoicing and no longer holds the UPI settings', () => {
+  it('is titled Invoicing and no longer holds the UPI settings', () => {
     render(<BillingSection onDirtyChange={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: 'Billing & invoicing' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Invoicing' })).toBeInTheDocument();
     expect(screen.queryByText('UPI collection')).toBeNull();
     expect(screen.queryByText('Show UPI QR at collection')).toBeNull();
   });

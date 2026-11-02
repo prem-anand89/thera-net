@@ -3,7 +3,7 @@ import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
 import { type Clinic } from '@/domain/types';
-import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
+import { btnPrimary, btnSecondary, ErrorNote, SectionCard } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 
 /** Accent hues used by the Danger zone, team cards and other in-section badges. */
@@ -183,6 +183,19 @@ export function LockedSectionNotice({
         Included in {PLAN_TIER_LABELS[minimumTierFor(feature)]} and above.
       </p>
     </div>
+  );
+}
+
+/**
+ * The compact stand-in for a card whose feature is above the clinic's plan: the card itself, with its title and one
+ * line saying which plan has it. Keeps the card in the page (so Settings search still lands on it) without a large
+ * empty box. Partner & split uses the same wording for its disabled state.
+ */
+export function LockedCard({ id, title, feature }: { id: string; title: string; feature: PlanFeature }) {
+  return (
+    <SectionCard id={id} title={title}>
+      <p className="text-sm text-[var(--muted)]">Available on the {PLAN_TIER_LABELS[minimumTierFor(feature)]} plan and above.</p>
+    </SectionCard>
   );
 }
 
