@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { visitService } from '@/services';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
-import { MONTH_NAMES } from '@/domain/fiscalYear';
 import { clinicShareLabels, type Clinic } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import { btnSecondary, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
@@ -13,7 +12,6 @@ type BillingFields = Pick<
   Clinic,
   | 'invoicePrefix'
   | 'gstNo'
-  | 'fyStartMonth'
   | 'invoicingAccess'
 >;
 
@@ -23,7 +21,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
       (c) => ({
         invoicePrefix: c.invoicePrefix,
         gstNo: c.gstNo,
-        fyStartMonth: c.fyStartMonth,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
       }),
       onDirtyChange
@@ -60,19 +57,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
             onChange={(e) => set({ gstNo: e.target.value || null })}
           />
         </Field>
-        <Field label="Fiscal year starts in month">
-          <select
-            className={inputCls}
-            value={form.fyStartMonth}
-            onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
-          >
-            {MONTH_NAMES.map((label, i) => (
-              <option key={label} value={i + 1}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
         <Field
             label={
               <>
@@ -97,7 +81,7 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
       </fieldset>
       {dirty && (
         <p className="mt-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]">
-          The invoice prefix, fiscal year and tax apply to invoices issued from now on. Invoices already issued keep their numbers and rates.
+          The invoice prefix and GST number apply to invoices issued from now on. Invoices already issued keep their numbers and rates.
         </p>
       )}
       {showSaveBar && (
@@ -173,6 +157,9 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
     );
   const labels = clinicShareLabels(form);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+  // Report column names and the TDS basis are rarely changed: tucked under "More options" unless already customised.
+  const [moreOpenByHand, setMoreOpen] = useState(false);
+  const moreOpen = moreOpenByHand || Boolean(form.ownShareLabel || form.partnerShareLabel || form.tdsBasis === 'clinic_share');
   const partnerLogoUrl = publicLogoUrl(form.partnerHospitalLogoPath);
   const planName = PLAN_TIER_LABELS[minimumTierFor('revenueSplit')];
 
@@ -337,22 +324,6 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
               </Field>
             </div>
 
-            <Field label="Your share label (report column, e.g. Clinic)">
-              <input
-                className={inputCls}
-                placeholder="Clinic"
-                value={form.ownShareLabel ?? ''}
-                onChange={(e) => set({ ownShareLabel: e.target.value || null })}
-              />
-            </Field>
-            <Field label="Partner share label (report column, e.g. Hospital)">
-              <input
-                className={inputCls}
-                placeholder="Hospital"
-                value={form.partnerShareLabel ?? ''}
-                onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
-              />
-            </Field>
             <Field label={`Your share % (${labels.own} split)`}>
               <input
                 type="number"
@@ -377,22 +348,53 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
                 onChange={(e) => set({ taxPct: e.target.value === '' ? 0 : Number(e.target.value) })}
               />
             </Field>
-            {form.taxPct > 0 && (
-              <Field
-                label={
-                  <>
-                    TDS basis
-                    <InfoTip text="Whether the tax % is calculated on the full bill (standard format) or only on the clinic's own share. Both produce the same final clinic payout." />
-                  </>
-                }
+            <div className="sm:col-span-2">
+              <button
+                type="button"
+                className="min-h-9 rounded-md px-2 text-xs font-semibold text-[var(--teal)] hover:bg-[var(--paper)]"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((v) => !v)}
               >
-                <select className={inputCls} value={form.tdsBasis} onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}>
-                  <option value="gross_bill">
-                    {form.taxPct}% of gross bill (matches {labels.partner} sheet)
-                  </option>
-                  <option value="clinic_share">On clinic share only</option>
-                </select>
+                {moreOpen ? 'Fewer options' : 'More options'}
+              </button>
+              <span className="ml-1 text-hint text-[var(--muted)]">Report column names{form.taxPct > 0 ? ' and how TDS is worked out' : ''}</span>
+            </div>
+            {moreOpen && (
+              <>
+              <Field label="Your share label (report column, e.g. Clinic)">
+                <input
+                  className={inputCls}
+                  placeholder="Clinic"
+                  value={form.ownShareLabel ?? ''}
+                  onChange={(e) => set({ ownShareLabel: e.target.value || null })}
+                />
               </Field>
+              <Field label="Partner share label (report column, e.g. Hospital)">
+                <input
+                  className={inputCls}
+                  placeholder="Hospital"
+                  value={form.partnerShareLabel ?? ''}
+                  onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
+                />
+              </Field>
+              {form.taxPct > 0 && (
+                <Field
+                  label={
+                    <>
+                      TDS basis
+                      <InfoTip text="Whether the tax % is calculated on the full bill (standard format) or only on the clinic's own share. Both produce the same final clinic payout." />
+                    </>
+                  }
+                >
+                  <select className={inputCls} value={form.tdsBasis} onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}>
+                    <option value="gross_bill">
+                      {form.taxPct}% of gross bill (matches {labels.partner} sheet)
+                    </option>
+                    <option value="clinic_share">On clinic share only</option>
+                  </select>
+                </Field>
+              )}
+              </>
             )}
           </div>
         )}

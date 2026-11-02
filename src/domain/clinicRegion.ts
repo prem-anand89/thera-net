@@ -1,5 +1,6 @@
 import { CLINIC_TIMEZONE } from './publicBookingDays';
 import { DEFAULT_COUNTRY_CODE } from './countryCodes';
+import { MONTH_NAMES } from './fiscalYear';
 
 /** The clinic's time zone, India until it has been set. */
 export function clinicTimezone(clinic: { timezone?: string | null } | null | undefined): string {
@@ -37,4 +38,10 @@ export function timezoneHint(zone: string, at: Date = new Date()): string {
   } catch {
     return zone;
   }
+}
+
+/** The Region card's one line: "India (+91) · India Standard Time (UTC+5:30) · Financial year from April". */
+export function regionSummary(input: { country: string; timezone: string; fyStartMonth: number }, at: Date = new Date()): string {
+  const month = MONTH_NAMES[input.fyStartMonth - 1];
+  return [input.country, timezoneHint(input.timezone, at), month ? `Financial year from ${month}` : ''].filter(Boolean).join(' · ');
 }

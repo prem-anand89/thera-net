@@ -1,6 +1,7 @@
 import { OperatingHoursEditor } from './OperatingHoursEditor';
 import { COUNTRY_CODES } from '@/domain/countryCodes';
-import { clinicCountryCode, clinicTimezone, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
+import { clinicCountryCode, clinicTimezone, regionSummary, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
+import { MONTH_NAMES } from '@/domain/fiscalYear';
 import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
@@ -249,7 +250,7 @@ export function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty:
   );
 }
 
-type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode' | 'agendaEnabled' | 'agendaHour'>;
+type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode' | 'fyStartMonth' | 'agendaEnabled' | 'agendaHour'>;
 
 /** Time zone and phone country code: what every server-sent time and every new phone number starts from. */
 /** Evening hours offered for the agenda email (clinic time). */
@@ -258,14 +259,29 @@ const AGENDA_HOURS = [16, 17, 18, 19, 20, 21, 22];
 const hourLabel = (hour: number) => `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour < 12 ? 'am' : 'pm'}`;
 
 export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<ClinicRegionFields>(
-    (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c), agendaEnabled: c.agendaEnabled !== false, agendaHour: c.agendaHour ?? 20 }),
+  const { clinic, form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<ClinicRegionFields>(
+    (c) => ({
+      timezone: clinicTimezone(c),
+      defaultCountryCode: clinicCountryCode(c),
+      fyStartMonth: c.fyStartMonth,
+      agendaEnabled: c.agendaEnabled !== false,
+      agendaHour: c.agendaHour ?? 20,
+    }),
     onDirtyChange
   );
   const zones = useMemo(() => {
     const all = timezoneOptions();
     return form.timezone && !all.includes(form.timezone) ? [form.timezone, ...all] : all;
   }, [form.timezone]);
+  // The region is one line of text until someone wants to change it. A disclosure, not a lock: nothing is disabled.
+  const [open, setOpen] = useState(false);
+  const expanded = open || dirty;
+  const country = COUNTRY_CODES.find((c) => c.code === (form.defaultCountryCode ?? '+91'));
+  const summary = regionSummary({
+    country: country?.code ? `${country.name} (${country.code})` : 'Other country',
+    timezone: form.timezone ?? 'Asia/Kolkata',
+    fyStartMonth: form.fyStartMonth,
+  });
 
   return (
     <div>
@@ -274,7 +290,18 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
         title="Region and agenda"
       >
         <fieldset disabled={busy} className="contents">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm text-[var(--ink)]" data-testid="region-summary">
+              {summary}
+            </p>
+            {!dirty && (
+              <button type="button" className="min-h-8 shrink-0 rounded-md px-2 text-xs font-semibold text-[var(--teal)] hover:bg-[var(--paper)]" aria-expanded={expanded} onClick={() => setOpen((v) => !v)}>
+                {expanded ? 'Done' : 'Change'}
+              </button>
+            )}
+          </div>
+          {expanded && (
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={
                 <>
@@ -320,7 +347,31 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
                 ))}
               </select>
             </Field>
+            <Field
+              label={
+                <>
+                  Financial year starts in
+                  <InfoTip text="Invoice numbers restart each financial year (for example BM/26-27/0001). April is the usual choice in India." />
+                </>
+              }
+              htmlFor="clinic-fy-start"
+              hint={form.fyStartMonth !== clinic.fyStartMonth ? 'Applies to invoices issued from now on. Invoices already issued keep their numbers.' : undefined}
+            >
+              <select
+                id="clinic-fy-start"
+                className={inputCls}
+                value={form.fyStartMonth}
+                onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
+              >
+                {MONTH_NAMES.map((label, i) => (
+                  <option key={label} value={i + 1}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </div>
+          )}
           <label className="mt-4 flex min-h-11 cursor-pointer items-center justify-between gap-3">
             <span>
               <span className="block text-sm font-medium text-[var(--ink)]">Daily agenda email</span>

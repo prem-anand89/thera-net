@@ -86,6 +86,33 @@ describe('PartnerSection on a plan with the partner split', () => {
     expect(put.mock.calls[0][0]).toMatchObject({ hasPartner: true, partnerHospitalName: 'City Hospital' });
   });
 
+  it('keeps the report column names and the TDS basis under More options, closed unless already customised', () => {
+    clinicRef.current = { ...base, hasPartner: true, partnerHospitalName: 'City Hospital', taxPct: 10 };
+    render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
+    expect(screen.queryByText(/Your share label/)).toBeNull();
+    expect(screen.queryByText('TDS basis')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByText(/Your share label/)).toBeInTheDocument();
+    expect(screen.getByText(/Partner share label/)).toBeInTheDocument();
+    expect(screen.getByText('TDS basis')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fewer options' }));
+    expect(screen.queryByText(/Your share label/)).toBeNull();
+  });
+
+  it('More options opens by itself when a label or the TDS basis has been customised', () => {
+    clinicRef.current = { ...base, hasPartner: true, partnerShareLabel: 'Hospital', taxPct: 10 };
+    render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
+    expect(screen.getByText(/Partner share label/)).toBeInTheDocument();
+  });
+
+  it('with no tax %, More options holds only the report column names', () => {
+    clinicRef.current = { ...base, hasPartner: true, partnerHospitalName: 'City Hospital', taxPct: 0 };
+    render(<PartnerSection onDirtyChange={vi.fn()} allowed />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByText(/Your share label/)).toBeInTheDocument();
+    expect(screen.queryByText('TDS basis')).toBeNull();
+  });
+
   it('renaming the partner alone saves without re-applying the split', async () => {
     clinicRef.current = { ...base, hasPartner: true, partnerHospitalName: 'City Hospital' };
     render(<PartnerSection onDirtyChange={vi.fn()} allowed />);

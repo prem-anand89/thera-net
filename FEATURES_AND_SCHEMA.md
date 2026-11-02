@@ -721,8 +721,8 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 - Invoice prefix (e.g., "BM" → `BM/26-27/0001`)
 - Revenue split % (BM share, default 75%)
 - Tax % (default 10%)
-- TDS basis selection (gross bill or BM share)
-- Fiscal year start month (default April → FY 26-27)
+- TDS basis selection (gross bill or BM share) — under **More options** in Partner & split, with the report column names (share labels); the section opens by itself when a label or the clinic-share basis is already set
+- Fiscal year start month (default April → FY 26-27) — set in the **Region and agenda** card, which reads as one line ("India (+91) · India Standard Time (UTC+5:30) · Financial year from April", `regionSummary`) with **Change** to open the time zone, phone country code and financial year fields (the card stays open while it has unsaved changes); no longer in Invoicing
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
 #### Catalog (Settings → Services)
@@ -1570,7 +1570,7 @@ invoice_prefix              text NOT NULL (e.g., "BM")
 bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
-fy_start_month              int NOT NULL (default 4 = April)
+fy_start_month              int NOT NULL (default 4 = April) — edited in Settings → General → Region and agenda
 clinic_type                 text (NULLABLE) — 'individual' | 'multiple'. LEGACY: no longer read or edited anywhere (the Settings "Therapist Setup" select was removed); kept for old rows
 has_partner                 boolean NOT NULL
 billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner
@@ -3574,7 +3574,7 @@ invoice_prefix              text NOT NULL (e.g., "BM")
 bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
-fy_start_month              int NOT NULL (default 4 = April)
+fy_start_month              int NOT NULL (default 4 = April) — edited in Settings → General → Region and agenda
 clinic_type                 text (NULLABLE) — 'individual' | 'multiple'. LEGACY: no longer read or edited anywhere (the Settings "Therapist Setup" select was removed); kept for old rows
 has_partner                 boolean NOT NULL
 billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner

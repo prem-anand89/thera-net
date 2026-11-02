@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clinicCountryCode, clinicTimezone, isValidTimezone, timezoneHint } from './clinicRegion';
+import { clinicCountryCode, clinicTimezone, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
 
 describe('clinic region', () => {
   it('defaults to India until set', () => {
@@ -17,5 +17,16 @@ describe('clinic region', () => {
   });
   it('describes a zone with its UTC offset', () => {
     expect(timezoneHint('Asia/Kolkata')).toContain('UTC+5:30');
+  });
+});
+
+describe('regionSummary', () => {
+  it('reads as one line: country, time zone and the financial year', () => {
+    expect(regionSummary({ country: 'India (+91)', timezone: 'Asia/Kolkata', fyStartMonth: 4 })).toBe(
+      'India (+91) · India Standard Time (UTC+5:30) · Financial year from April'
+    );
+  });
+  it('leaves the financial year out when the month is not valid', () => {
+    expect(regionSummary({ country: 'UK (+44)', timezone: 'Europe/London', fyStartMonth: 0 }, new Date('2026-01-15T00:00:00Z'))).not.toMatch(/Financial year/);
   });
 });
