@@ -1218,11 +1218,6 @@ export function NewVisitPage() {
         mrno: patient.mrno,
       });
       setFeedbackRequested(false);
-      // Clinic policy "always": the bill step opens straight after a paid visit
-      // (still the usual review-then-issue dialog, never issued silently).
-      if (clinic.invoicePolicy === 'always' && billPaise > 0 && canBill && paymentChoice === 'paid' && paymentMethod !== 'partner' && !paymentError) {
-        setInvoicing(true);
-      }
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {

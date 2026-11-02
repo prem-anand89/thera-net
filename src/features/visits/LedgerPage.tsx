@@ -790,10 +790,7 @@ export function LedgerPage() {
             >
               {v.label}
               {v.key === 'invoices' && (
-                <CountBadge
-                  count={clinic.invoicePolicy === 'never_nag' ? 0 : (needsReceipt?.length ?? 0)}
-                  tone="amber"
-                />
+                <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
               )}
             </button>
           ))}

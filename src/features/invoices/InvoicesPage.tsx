@@ -295,7 +295,7 @@ export function InvoicesPage() {
         </div>
       </div>
 
-      {needsReceipt && needsReceipt.length > 0 && clinic.invoicePolicy !== 'never_nag' && (
+      {needsReceipt && needsReceipt.length > 0 && (
         <SectionCard title={`Needs receipt (${needsReceipt.length})`}>
           <div className="space-y-2">
             <p className="text-xs text-[var(--muted)]">

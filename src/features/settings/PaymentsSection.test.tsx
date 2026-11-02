@@ -72,4 +72,10 @@ describe('Billing & invoicing', () => {
     expect(screen.queryByText('UPI collection')).toBeNull();
     expect(screen.queryByText('Show UPI QR at collection')).toBeNull();
   });
+
+  it('has no "Bills after a visit" setting: the Give bill button after a visit is the only way to offer a bill', () => {
+    render(<BillingSection onDirtyChange={vi.fn()} />);
+    expect(screen.queryByText('Bills after a visit')).toBeNull();
+    expect(screen.queryByText(/Never remind|Always — open the bill step/)).toBeNull();
+  });
 });

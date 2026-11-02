@@ -94,10 +94,8 @@ export interface Clinic {
    */
   invoicingAccess?: 'everyone' | 'billing_staff';
   /**
-   * What the app nudges after a visit. A payment is always recorded; an
-   * invoice is optional. 'on_request' (default): a Give bill button, Needs
-   * receipt list kept. 'always': the bill step opens right after a visit
-   * saved as paid. 'never_nag': the Needs receipt list and badge are hidden.
+   * Legacy, no longer read or edited anywhere: every clinic behaves as 'on_request' (a Give bill button after each
+   * visit, the Needs receipt list kept). The "Bills after a visit" setting was removed; the column stays for old rows.
    */
   invoicePolicy?: InvoicePolicy;
   /**

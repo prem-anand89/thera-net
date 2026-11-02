@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { visitService } from '@/services';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
-import { clinicShareLabels, type Clinic, type InvoicePolicy } from '@/domain/types';
+import { clinicShareLabels, type Clinic } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import { btnSecondary, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
@@ -15,7 +15,6 @@ type BillingFields = Pick<
   | 'gstNo'
   | 'fyStartMonth'
   | 'invoicingAccess'
-  | 'invoicePolicy'
 >;
 
 export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -26,7 +25,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         gstNo: c.gstNo,
         fyStartMonth: c.fyStartMonth,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
-        invoicePolicy: c.invoicePolicy ?? 'on_request',
       }),
       onDirtyChange
     );
@@ -92,24 +90,6 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
             >
               <option value="everyone">Everyone</option>
               <option value="billing_staff">Front desk and admins only</option>
-            </select>
-          </Field>
-        <Field
-            label={
-              <>
-                Bills after a visit
-                <InfoTip text="Payments are always recorded. A bill (invoice) is a separate numbered document that can't be edited once given — so it's your call when to offer it." />
-              </>
-            }
-          >
-            <select
-              className={inputCls}
-              value={form.invoicePolicy ?? 'on_request'}
-              onChange={(e) => set({ invoicePolicy: e.target.value as InvoicePolicy })}
-            >
-              <option value="on_request">On request — a "Give bill" button after each visit</option>
-              <option value="always">Always — open the bill step after a paid visit</option>
-              <option value="never_nag">Never remind — hide the Needs receipt list</option>
             </select>
           </Field>
       </div>
