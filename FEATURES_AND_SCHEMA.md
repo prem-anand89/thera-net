@@ -755,15 +755,18 @@ One settings tab with two lists, **Services** and **Treatments** (the same words
 - **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row:
   invoice name, registration no., phone. Completion sets `therapists.profile_confirmed_at` (synced).
   RLS `therapists_update_self` plus trigger `therapists_guard_self_update` limit self-updates to safe
-  columns only. **The clinic creator never sees this page:** the wizard's Team step ("I treat
-  patients") already asks name on invoices, registration no. and phone, and stamps
+  columns only. **The clinic creator never sees this page:** the wizard's Team step ("I see
+  patients at this clinic") already asks name on invoices, registration no. and phone, and stamps
   `profile_confirmed_at` itself, so finishing the wizard lands straight on Workspace (the page
   remains for invited therapists).
 - **Team step follows the plan** (`OnboardingTeamStep`): on a one-login plan (`maxMembers <= 1`)
   the email-invite form is replaced by "Add a colleague without a login" (name only; limited by
   `max_roster_therapists`) with a note on what more logins need, because `invite-therapist`
   would refuse the invite (the owner already uses the one seat). Plans with several logins keep
-  the invite form.
+  the invite form. Both cards display a solo practitioner reassurance ("Optional — skip if it's just you. You can invite people later in Settings → Team.").
+  The self-inclusion toggle uses standard terminology ("I see patients at this clinic").
+  In `OnboardingPage`, Step 2 drops the outer wrapper's border and padding and widens to `tab:max-w-3xl`
+  so the two cards have comfortable column space, and Continue is full-width on phones (`w-full sm:w-auto`).
 - **Clinic address is optional** at creation (`CreateClinicForm`: "Printed on bills and receipts.
   Add it now or later in Settings"). It is asked for where it matters: the invoice form
   (`IssueInvoiceDialog` → `ClinicAddressPrompt`) lets an admin add it in place and holds "Review

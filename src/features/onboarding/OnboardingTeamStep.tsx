@@ -187,8 +187,8 @@ export function OnboardingTeamStep({
         <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Your team</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
           {seatLimited
-            ? 'Your plan has one login. If you treat patients, add yourself to the roster; you can add a colleague without a login too.'
-            : 'Invite colleagues now or from Settings later. If you treat patients, add yourself to the service roster with this login.'}
+            ? 'Your plan has one login. If you see patients, add yourself to the roster; you can add a colleague without a login too.'
+            : 'Invite colleagues now or from Settings later. If you see patients, add yourself to the service roster with this login.'}
         </p>
       </div>
 
@@ -204,7 +204,7 @@ export function OnboardingTeamStep({
               checked={iTreat}
               onChange={(e) => setITreat(e.target.checked)}
             />
-            I treat patients at this clinic
+            I see patients at this clinic
           </label>
           {iTreat ? (
             <>
@@ -246,6 +246,9 @@ export function OnboardingTeamStep({
           <h2 id="onboarding-colleague" className="font-display text-base font-semibold text-[var(--ink)]">
             Add a colleague without a login
           </h2>
+          <p className="text-xs text-[var(--muted)]">
+            Optional — skip if it&apos;s just you. You can invite people later in Settings → Team.
+          </p>
           {addedColleagues.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Colleagues added">
               {addedColleagues.map((name) => (
@@ -293,6 +296,9 @@ export function OnboardingTeamStep({
           <h2 id="onboarding-invite" className="font-display text-base font-semibold text-[var(--ink)]">
             Invite a therapist
           </h2>
+          <p className="text-xs text-[var(--muted)]">
+            Optional — skip if it&apos;s just you. You can invite people later in Settings → Team.
+          </p>
           {sentInvites.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Invites sent">
               {sentInvites.map((invite) => (
@@ -331,7 +337,7 @@ export function OnboardingTeamStep({
         )}
       </div>
 
-      <button type="button" className={`${btnPrimary} w-full tab:w-auto`} disabled={continueBusy} onClick={() => void handleContinue()}>
+      <button type="button" className={`${btnPrimary} w-full sm:w-auto`} disabled={continueBusy} onClick={() => void handleContinue()}>
         {continueBusy ? 'Saving…' : 'Continue'}
       </button>
     </div>

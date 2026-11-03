@@ -152,7 +152,13 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   }
 
   return (
-    <div className="mx-auto max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-8">
+    <div
+      className={
+        clampedStep === 2
+          ? 'mx-auto max-w-xl tab:max-w-3xl space-y-6'
+          : 'mx-auto max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-8'
+      }
+    >
       {clampedStep !== 'password' && <OnboardingProgress step={progressStep} />}
       {clampedStep === 2 && <OnboardingTeamStep onContinue={goAfterTeamStep} />}
       {clampedStep === 'password' && (

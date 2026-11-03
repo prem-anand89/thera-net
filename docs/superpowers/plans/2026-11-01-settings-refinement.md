@@ -1,0 +1,207 @@
+# Settings Refinement — Plan (v5)
+
+**Date:** 2026-11-03 · **Status:** Steps 1–11 and the phone layout pass are built and pushed. **Open: Step 12 (Onboarding & first-week setup), Step 13 (Schedule mini-calendar dots fix), Step 14 (Shifts & coverage refinement), Step 15 (Lite tier & Settings refinements), and the 360px phone check.** When all are done, delete this file and update the docs, per the housekeeping rule.
+**Process:** Work on `main`, one commit per step, never push without asking. Before each commit that touches `src/`: `npm run typecheck && npm run lint && npm run test`, plus `npm run build` when shared components, routing or Tailwind config change. Per `CLAUDE.md`: no new npm dependencies, CSS variables only, every `<button>` has an explicit `type`, errors inside dialogs via `<ErrorNote>`, update `FEATURES_AND_SCHEMA.md` (every copy) in the same commit. (There is no `THERA_NET.md`; `CLAUDE.md` is the rule file.) **Migrations:** none through Step 13. **14a needs one** (the `assign_shift` RPC): apply it live and commit the matching `supabase/migrations/` file in the same change, per `CLAUDE.md`.
+**Models:** only Opus and Sonnet. Each step names who builds it and who reviews it. Opus builds and reviews anything that touches money or the shared form state every card uses.
+
+---
+
+## The goal in one paragraph
+
+Settings should feel like a normal form: click a field, type, press Save. Each setting lives in exactly one place, search finds it, and a new therapist can understand the words. Steps 1–11 did this for Settings; Steps 12–15 carry the same rules to first-run setup, the schedule's shifts and the Lite plan.
+
+## Done (all pushed to `origin/main`, 2026-11-02 and 2026-11-03)
+
+| Step | What was built | Commit | Differs from the old plan |
+|---|---|---|---|
+| 1 | "Single / Multiple Therapists" removed; Share follows the number of active therapists | 7e9257b | Share also respects `enableTherapistSplit`, so a clinic with the split off keeps its service tagging |
+| 2 | Every partner setting in Billing → Partner & split; switch disabled below the plan; "Turn off partner mode" for downgrades | 90be3bb | |
+| 3 | UPI collection reachable on every plan | 7ff7765 | Later moved with Payments (3b) |
+| 4 | No Edit buttons; untouched cards follow saved values; Save bar only on changes | 6cdff79 | |
+| 3b | Payments in the Billing tab, "Payments & billing" | fe2c767 | |
+| 3c | "Bills after a visit" removed | 77b61fb | |
+| 3d | Region in one line; partner labels and TDS basis under "More options" | 3445689 | |
+| 3e | "After a visit" card; default payment method removed | 394b30b | |
+| 3f | One "Clinic code" for Patient IDs and invoices | af53fe5, fix 6d25953 | Shows format examples ("BM26-0001"), not the live next number, because the server allocates it; no separate invoice-prefix note, since the field moved |
+| 5 | Three confirmations (partner split with a count, booking link, time zone) | 7a90732 | Also a retry button when the visit update fails after a save; `saveFieldNow` now throws if the clinic row is missing |
+| 6 | Search finds Region and agenda, Shifts & coverage; keywords follow moved settings | c537527 | |
+| 7 | Team tab in two views with a pending badge; `?teamView=` | 25e555f | No "default by role": only admins open Settings |
+| 8 | "Bookable" → "Sees patients" | 930ef91 | Also the filter chip and the add-form error |
+| 9 | Therapist comparison by one rule (admin, revenue-split plan, 2+ active therapists) | b80ea20 | Front desk and therapists no longer see it; 1 clinic gains it, 2 lose an empty card |
+| 10 | One on/off control (`SwitchRow`) | 0e548af | Redrawn as a track-and-thumb switch in the phone pass |
+| — | Phone layout pass: sticky Save bar with a status line, invoice preview folded on phones, several layout bugs, shorter text, Health Valley references removed | f0e458e | The "sticky mobile save bar already exists" note in the old plan was wrong; it was built here |
+| 11a | "Services & treatments" tab; referral sources to General; wording; two-group starter list | feade7e | The General card later kept the name **"Referral sources"** (6c00be9) |
+| 11c | Name checks for services, treatments and referral sources, in `catalogService` and every form | 0635895 | |
+| 11b | New Services list, desktop table, one add/edit sheet, group sheet, Show usage; visit picker on the same order | e1e9ac5, f80281d, d43c6b3; fixes f371ba6 | |
+| 11d / 11e | Treatments as chips; Referral sources as a list | 5b1ff78, 2f7df6d | |
+| — | Service form pass and email/address boxes | 7d76354 | "More" removed; Save off until a change |
+| — | Save bar: slimmed (f29a855), then made a **static card footer** (36b18b6) at the owner's request | 36b18b6 | The sticky bar is gone |
+| — | Visible "Settings" title on phones only | 84e2c8d | |
+
+### Decisions from Steps 1–11 to keep (so later steps don't undo them)
+
+- **Names (owner):** the tab is **Services & treatments** with `Services | Treatments`; referral sources are a General card called **Referral sources** (first line "How patients found you"); the word "technique" is never used; the visit screen's "Services" and "Treatments" cards use the same words.
+- **Prices:** per-session prices are whole rupees with no qualifier ("₹1,667 each", never "≈" or paise); `effectivePricePerSession` stays exact for maths. Display goes through `catalogDisplay.ts` (`serviceSubline`, `perSessionLabel`, `groupServices`).
+- **Names are unique:** the database has `unique (clinic_id, name)` on services, treatments and referral sources, and the app saves on the device first, so every add or rename goes through `catalogService`, which refuses a taken name (capitals ignored) before writing. Use `nameCheck` for any new list of named things.
+- **Shared pieces:** `SheetDialog` (bottom sheet on phones, pinned buttons), `HiddenItemsFooter`, `SwitchRow`, `Segmented`, `useShowUsage` (a per-device view switch, off by default, never a clinic setting), `SectionSaveBar`.
+- **Save bar:** a plain static row at the foot of the card. A floating bar was tried and dropped (it felt broken and cost phone/iPad height); the tab dot and the leave prompt are the safety net on long cards.
+- **Group rules:** groups are optional; named groups first, ungrouped under "Other", one flat list when no groups; the visit picker follows the same rule.
+- **Mockup (reference):** https://claude.ai/artifact/NFxXHxizzsRZUs9xQbaST4
+
+## Order of work (what is left)
+
+| Step | What | Builds | Reviews |
+|---|---|---|---|
+| 12 | Onboarding & first-week setup polish (12a–12d) | Sonnet / Opus | Opus |
+| 13 | Schedule mini-calendar dots fix (decouple `implicitSelection` from month `dayState`) | Sonnet | Opus |
+| 14 | Shifts & coverage refinement (bugs incl. one `assign_shift` migration, SheetDialog, phone cards, palette tokens) | Sonnet / Opus | Opus |
+| 15 | Lite tier & Settings refinements (past invoices stay printable with a note, Team seat cap on unlinked therapists, banner wording) | Sonnet | Opus |
+| — | Phone check at 360px (the owner), then the final review | owner / Opus | Opus |
+
+---
+
+### Step 12 — Onboarding & first-week setup
+
+Steps 1–11 changed Settings' words and layout (`Sees patients`, `One visit`, `₹700 each`, `Services & treatments`, `Referral sources`, `Payments & billing`, `Schedule & Booking`, one list card per list, the shared sheet). First-run setup (`/onboarding`, `/onboarding/profile`, `CreateClinicForm`) and the first-week checklist (`/setup`) still carry the old layout and words, plus a few phone/tablet layout bugs. **Reviewed against the code 2026-11-03:** the claims below were checked; corrections are marked *(corrected)*.
+
+| Sub-step | Scope | Build | Review |
+|---|---|---|---|
+| **12a** | Hide the dead nav during onboarding (`Shell.tsx`); Step 1 single card, code preview, address line breaks (`CreateClinicForm.tsx`) — **built** | Sonnet | Opus |
+| **12b** | Step 2 width, "I see patients", solo hint, full-width button (`OnboardingPage.tsx`, `OnboardingTeamStep.tsx`) | Sonnet | Opus |
+| **12c** | Step 3 starter editor in the Step 11 look; Step 4 button order (`ServiceCatalogTemplateEditor.tsx`, `OnboardingPage.tsx`) | Opus | Opus |
+| **12d** | Invited therapist page; `/setup` checklist words and links (`TherapistProfileOnboardingPage.tsx`, `setupGuide.ts`, `sections.ts`) | Sonnet | Opus |
+
+#### 12a — Onboarding shell & Step 1 Clinic form (Sonnet)
+- **Hide the dead nav on `/onboarding*` (`Shell.tsx`):** while onboarding, the app redirects every other route back (`Shell.tsx` ~273–305), yet the desktop nav links and the phone bottom bar still show. Make `shouldShowPhoneBottomNav(pathname)` return `false` for `pathname.startsWith('/onboarding')`, and hide the desktop nav links there too, keeping the brand and the account menu (so Sign out stays reachable).
+- **One card on the sign-up page (`CreateClinicForm.tsx`):** in the `page` variant the form has its own bordered `p-6` box inside the page's bordered `p-6` card (two boxes, ~128px of padding on a 360px phone). Give the `<form>` plain `space-y-4` in the page variant; keep the box for the `dialog` variant (Add clinic), which has no outer card.
+- **Code preview in the "Invoice header preview" panel:** add one line, e.g. "Invoices BM/26-27/0001 · Patient IDs BM26-0001", from `clinicCode(form.name)` with `formatInvoiceNo` / `formatWalkInMrno` (the same helpers as the Clinic code field). *(corrected)* There is no "CL" fallback: `clinicCode` returns `''` for a name with no letters and sign-up then uses "INV", so show the line only once the name gives a code.
+- **Address line breaks in the preview:** the address box is now multi-line (7d76354), but the preview prints it in one `<p>` that collapses the line breaks. Add `whitespace-pre-line` so the preview shows the rows as the bill will.
+- *(dropped)* Folding the preview on phones: on a phone the preview sits **below** the Continue and Sign out buttons, so it pushes nothing down; leave it.
+- **Built 12a (2026-11-03, `be41753`):** `shouldShowPhoneBottomNav` & `shouldShowDesktopNav` hide nav on `/onboarding*`; `CreateClinicForm` uses `className="space-y-4"` with single outer page card; address in preview preserves line breaks via `whitespace-pre-line`; live invoice and patient ID code preview from `clinicCode(form.name)`.
+- **Tests:** `shouldShowPhoneBottomNav('/onboarding')` and `('/onboarding/profile')` are `false`; the page variant has one bordered box; the preview line follows the name and hides with no code; a two-line address shows as two lines.
+
+#### 12b — Step 2 Team (Sonnet)
+- **Built 12b (2026-11-03):** `OnboardingPage` widens step 2 to `tab:max-w-3xl` and drops the outer border/padding around the two cards; "I see patients at this clinic" replaces "I treat patients"; solo hint under colleague and invite card headers; Continue is `w-full sm:w-auto`.
+- **Tests:** `OnboardingTeamStep.test.tsx` (9 tests: checkbox name, blank invite continuation, solo hint on 1-seat and multi-seat plans); `OnboardingPage.test.tsx` (3 tests: step 2 layout without outer border and with `tab:max-w-3xl`, step 3 and done with bordered card `max-w-xl`).
+
+#### 12c — Step 3 starter editor & Step 4 Done (Opus)
+- **Starter editor in the Step 11 look (`ServiceCatalogTemplateEditor.tsx`):** one list card with small uppercase group headings (CONSULTATION, PHYSIOTHERAPY) instead of a bordered box per group with a "Rename group" button and the "Add another group (optional)" box.
+  - **No "Single visit" label** on one-visit rows; packages show "N sessions · ₹700 each" from `perSessionLabel` / `serviceSubline` (`catalogDisplay.ts`), replacing the editor's own "≈ ₹…/session".
+  - **Names look editable:** the name box is `border-0 bg-transparent` today; give it the normal input look (`inputCls`, compact) so a new owner sees the starter names can be changed.
+  - **Add row:** a dashed "+ Add a service" row at the end (one visit; a package via a small One visit | Package choice), no group management here; a note: "You can change prices, groups and treatments anytime in Settings → Services & treatments."
+  - **Name check as you type:** reuse `nameCheck` per row against the other rows (the Finish check from 11c already stops duplicates; this shows it at the row instead of only at the end).
+  - Writes stay as they are: Finish already saves through `catalogService.addServices` (11c).
+- **Step 3 button:** "Finish setup → Workspace" → **"Finish setup"** (it goes to Step 4, not Workspace), `w-full sm:w-auto`.
+- **Step 4 Done:** make **"Go to Workspace"** the primary button and **"First-week checklist"** the secondary. *(corrected)* Not because `/setup` bounces back (it doesn't: `SetupPage` is the checklist); because Workspace is where a new clinic works, and it already shows the setup progress bar while essentials are open.
+- **Tests:** headings render; "₹700 each", no "≈", no "Single visit"; a duplicate row name is flagged at the row and blocks Finish; Step 3 button reads "Finish setup"; Step 4's primary button is "Go to Workspace".
+
+#### 12d — Invited therapist page & `/setup` checklist (Sonnet)
+- **Invited therapist (`TherapistProfileOnboardingPage.tsx`):** greet with the clinic name ("Welcome to {clinic.name}"). When `!hasPasswordIdentity(session.user.identities)`, offer an optional "Set a password" step reusing `OnboardingPasswordStep` (the admin flow already does this in `OnboardingPage.tsx`). *(corrected)* They are not stranded today (the account menu has "Set a password"), but nobody finds it; offering it here is the improvement.
+- **Checklist words and links (`src/domain/setupGuide.ts`)** *(corrected — the real IDs)*: keep all **11** step IDs unchanged (`clinic-profile`, `price-services`, `invite-team`, `link-therapist`, `log-visit`, `wait-synced`, `clinical-notes`, `backup`, `billing`, `booking`, `notifications`) so the completed steps stored under `firstWeekChecklistCompletedSteps:{clinicId}` and the "done of total" count don't shift. Change only words and links:
+  - `price-services`: action "Open services" → **"Open services & treatments"**.
+  - `clinical-notes`: action "Open clinic profile" → **"Open After a visit"**, and link to that card, not just the tab (see below).
+  - `billing`: title "Configure billing" → **"Set up payments & billing"**; why "Set up GST, tax preferences, and invoice prefixes." (prefixes moved to the Clinic code) → **"Add your UPI ID for payments, and your GST number if you issue invoices."** (the partner split is Clinic-plan only, so it isn't promised here); action → **"Open Payments & billing"**.
+  - `booking`: title → **"Set hours & online booking"**; why → **"Check your open days and hours, and your booking link."**; action → **"Open Schedule & Booking"**.
+  - `invite-team` / `link-therapist`: link to the Team members view (`teamView: 'members'`).
+- **Linked change — land on the card:** checklist links today open a tab at its top. Extend `SettingsSearch.card` (added for Referral sources in 11a) with `'after-visit'` (and later other cards as needed), so `clinical-notes` opens General and scrolls to After a visit, using the same scroll-and-highlight `SettingsPage` already does.
+- **Tests:** the 11 IDs are unchanged; each new label and link; `?card=after-visit` scrolls to that card.
+
+---
+
+### Step 13 — Schedule mini-calendar dots fix (Sonnet builds, Opus reviews)
+
+**Problem (checked in the code, accurate):** clicking another date in the mini-month makes the dots on other days change. In Day view the admin's columns hide therapists who are off that day (`implicitSelection`, `ScheduleBookingsView.tsx` ~237). That selection feeds `selectedIds` → `visibleAppointments` → `byDate`, and `dayState(day)` counts dots from `byDate`, so the clicked date's off-duty filter is applied to the whole month. `hasFreeTime` also uses `visibleRoster`, which is limited to the clicked date's columns.
+- **Split the two selections:** `explicitSelectedIds` (the link's `?therapist=` or the therapist's own id, never `implicitSelection`) for the month; keep the current `selectedIds` (with `implicitSelection`) for the Day grid's columns only.
+- **Month data from the explicit selection:** `monthByDate` filtered by `explicitSelectedIds` and not-cancelled; `dayState(day)` counts from it, and `hasFreeTime` checks the explicitly selected (or all active) therapists who work on **that** day (`workingFor(t.id, day)`).
+- **Make it testable:** move the per-day calculation into a pure helper (e.g. `monthDayState(day, { appointments, therapists, workingFor, closedFor, today, … })` in `src/domain/` or `components/schedule/`) and call it from the component; today it is a `useCallback` inside a 1,400-line view, which the plan's unit test can't reach.
+- **Tests:** for an admin, the helper's `booked` and dot counts for every day of the month are identical whichever date is selected (e.g. a Tuesday with 1 therapist on vs a Saturday with 3); a therapist's own view is unchanged; Day-view columns still collapse off-duty therapists.
+
+---
+
+### Step 14 — Shifts & coverage refinement (Sonnet builds, Opus reviews)
+
+| Sub-step | Scope | Build | Review |
+|---|---|---|---|
+| **14a** | Bugs: removed weekdays, split clinic hours in coverage, appointment conflicts (**one migration**) | Opus | Opus |
+| **14b** | One assign sheet on `SheetDialog` with `Shift template \| Custom hours \| Clinic hours`; several templates per therapist | Sonnet | Opus |
+| **14c** | Coverage card, clickable desktop rows, readable phone cards, session-gap note | Sonnet | Opus |
+| **14d** | Templates list + sheet + name check + Hidden footer; palette colours as tokens | Sonnet | Opus |
+
+Build order: 14a, then 14b (which depends on 14a's "edit this assignment" call), then 14c and 14d.
+
+#### 14a — Bug fixes (Opus, one migration)
+1. **Unchecked weekdays stay on (confirmed):** `supersede_overlapping_weekdays` keeps an older assignment's days that the new one doesn't cover, so editing Mon–Sat down to Mon–Fri leaves Saturday on in the old row, and `rebuild_working_hours_from_shifts` keeps it. *(corrected)* Don't fix it by superseding **all** of the therapist's assignments: that would wipe the second template of a therapist on Morning Mon/Wed + Evening Tue/Thu, which 14b supports. Instead, when the admin **edits** an existing assignment, pass its id (`assign_shift(…, p_replaces uuid default null)`): the RPC supersedes that row entirely, supersedes overlaps on other rows as today, and rebuilds working hours. A new assignment (no id) behaves as now. Migration: drop/recreate `assign_shift` with the new defaulted parameter, re-grant, and add the file to `supabase/migrations/`.
+2. **Split clinic hours in coverage (confirmed):** `ShiftCoverageGrid` (~line 50) and `buildCoverage` take clinic hours as one block from `bookingStartHour` to `bookingEndHour`. Read the clinic's per-weekday sessions instead, through the same helper `describeSchedule` and the hours editor use (`domain/operatingHours.ts`), so 9–1 and 4–8 is 8 hours, not 11.
+3. **Appointments outside the new hours:** reuse `appointmentsOutsideHours` (`features/schedule/hoursConflicts.ts`) and the existing confirm pattern in `SetWorkingHoursFlow` ("with conflicts, confirm appears; Cancel does not save, Save anyway does"): "3 upcoming appointments fall outside these hours." with **Save anyway** / Cancel. No emoji.
+- **Tests:** editing Mon–Sat to Mon–Fri turns Saturday off; a therapist with two templates keeps both when one is edited; a new assignment without `p_replaces` behaves as before (SQL test); split hours give 8h; the conflict count and Save anyway.
+
+#### 14b — One assign sheet (Sonnet)
+- `AssignShiftDialog` on the shared `SheetDialog` (pinned buttons), with a `Segmented` **Shift template | Custom hours | Clinic hours** at the top; Custom hours shows the hours editor inline instead of opening a second dialog.
+- Remove the `initialWeekday` branch: confirmed unused (no caller passes it).
+- `getTherapistScheduleInfo` lists every active template for a therapist with several, not just the first.
+- Editing an existing assignment passes its id to `assign_shift` (14a).
+- **Tests:** the sheet renders on `SheetDialog`; Custom hours is inline (one dialog); a two-template therapist shows both names; editing passes the id.
+
+#### 14c — Coverage grid & phone cards (Sonnet)
+- Wrap in `SectionCard` "Weekly coverage" with "+ Assign shift" in the header.
+- **Desktop:** drop the inline Edit button that cuts names at ~80px; the row is focusable and clickable, with a faint "Edit ›" on hover/focus (the `ServicesView` table pattern).
+- **Phones** *(corrected: the app's breakpoints are `tab:` and `desktop:`, not `md:`)*: below `tab:`, one card per therapist instead of the 7-column micro-grid: colour dot, full name, weekly hours ("40h / wk"), the `describeSchedule` line, and a quiet M T W T F S S strip (on / off / clinic closed). The whole card opens the therapist's sheet.
+- **Session gap note:** when a day has two clinic sessions and the people on shift only cover one, an amber "Evening gap" (or "Morning gap") in that day's footer. Uses 14a's per-session hours.
+- **Tests:** a row click opens that therapist's sheet; the phone card shows the full name and schedule line; a gap day shows the note.
+
+#### 14d — Shift templates & palette tokens (Sonnet)
+- `SectionCard` "Shift templates" with "+ Add" in the header; a calm list instead of the 3-column card grid and the inline add form; add/edit on `SheetDialog`.
+- **Name check:** template names use `nameCheck` (no database `unique` constraint here, so a near or exact match only warns unless the team wants it to block; decide in the build).
+- Inactive templates in `HiddenItemsFooter` ("Inactive (N)").
+- "Delete template" as a quiet red link at the bottom of the edit sheet (the services sheet pattern), behind the existing confirm.
+- **Palette as tokens** *(corrected)*: `SHIFT_PALETTES` has 8 palettes × 4 values. They must stay 8 *distinct* colours, so don't map them onto the few theme tokens (`--teal`, `--amber`, `--moss`), which would make templates look alike. Define 8 palette tokens in `index.css` (e.g. `--shift-1-bg`, `--shift-1-ink`, `--shift-1-line`) with dark-theme values, and have `SHIFT_PALETTES` use `var(--shift-n-…)`.
+- **Tests:** add/edit in the sheet; name check; inactive in the footer; no hex literals left in `shiftUtils.ts`.
+
+---
+
+### Step 15 — Lite tier & Settings refinements (Sonnet builds, Opus reviews)
+
+**Decisions with owner (2026-11-03):** the invoice preview and the authorised signature stay on every plan; the server's `issue_invoice()` already refuses Lite clinics.
+
+**Live data (2026-11-03):** 11 Lite clinics, **0 invoices** among them; 4 Clinic+ clinics, 43 invoices.
+
+| Sub-step | Scope | Build | Review |
+|---|---|---|---|
+| **15a** | Invoices on a plan without invoicing: keep past invoices printable, make the state clear | Sonnet | Opus |
+| **15b** | Team seat cap on unlinked therapists; the unlinked banner at the cap | Sonnet | Opus |
+
+#### 15a — Invoices on a plan without invoicing (Sonnet) *(corrected)*
+- **Don't block printing past invoices.** A Lite clinic can't create invoices (server and UI), so the only Lite clinic that has any is one that **downgraded**, and it still needs to reprint and re-share invoices it already issued (GST records, patient requests). Gating `InvoicePrintPage` on `can('invoicing')` would lock those away and protects nothing today (0 Lite invoices).
+- **Instead:** on `InvoicePrintPage` for a clinic without invoicing, keep print and PDF, and show one quiet line above the invoice: "Your plan doesn't issue new invoices. Invoices you already issued stay here to print or share." Issuing stays blocked as now.
+- **`IssueInvoiceDialog`:** every caller already opens it only when `usePermissions().canBill` (which includes `can('invoicing')`), and the server refuses anyway; add no second guard. *(dropped)*
+- **Tests:** a downgraded clinic can open and print an existing invoice and sees the note; a clinic with invoicing sees no note.
+
+#### 15b — Team seat cap & unlinked banner (Sonnet) (checked, accurate)
+- **Unlinked therapist at the seat cap (`TeamSection.tsx`):** `Therapists` already computes `atSeatCap` and `loginsHint` and passes them to the Add form only. Pass them to `TeamMemberCard` too: for a roster therapist with no login, when at the cap, disable "Email address (link to login)" and show the hint, instead of letting the admin trigger an invite the plan refuses.
+- **Banner (`SettingsPage.tsx`, Team tab):** below the cap keep "N therapists not linked to a login. Open them below and add their email…"; at the cap say "N therapists are on the schedule without a login. Your plan's logins are all in use; upgrade to invite them." (no instruction the plan forbids).
+- **Tests:** the email box is disabled with the hint at the cap and enabled below it; the banner wording at and below the cap.
+
+---
+
+## Parked (not in this plan)
+
+- **From Step 11:** price history, package expiry, custom ordering of services, adding a service from the visit screen, moving the other 26 hand-made dialogs to `SheetDialog`. Considered and dropped: starter-set buttons for empty lists (every clinic is seeded at setup), usage shown by default, a clinic-wide usage setting, "≈"/"about" before prices, a side panel for editing on desktop, an inline add box for treatments.
+
+- Short descriptions under card titles: the tab header already explains each tab.
+- One shared image-upload component for logo / partner logo / signature / UPI QR: nice tidy-up, no user-facing bug.
+- Receipt tab in the letterhead preview: the preview is already a full receipt.
+- Making "Schedule" a link in the Hours card's closures note (the tests render without a router).
+- `font-bold` outside Settings (about 85 places; 700 is not loaded): separate sweep.
+- **App-wide pass for redundant buttons, fields and options (deferred by the owner 2026-11-02):** read-only first, a list to approve before any change. Screens: New visit, the saved-visit screen, Ledger, Schedule, Workspace, Patient profile. Look for duplicate buttons doing the same thing, options nobody changes (check the live data), and the same setting asked in two places.
+
+## Final check (Opus, whole plan)
+
+**Already verified (tests, reviews and renders, 2026-11-02 and 2026-11-03):** Steps 1–11 and the phone layout pass: Lite UPI and Payments; partner settings in one card and a Lite clinic can turn partner mode off; fields typeable on first click, the Save bar only after a change; untouched cards never show Save; the three confirmations; search finds timezone, agenda, shift, signature, upi, partner, lunch, opening hours; Team views and the deep link; comparison with no toggle; Services & treatments (add a service and a package from one button, names can't duplicate on any write path, usage behind "Show usage", whole-rupee prices, Referral sources on General); `FEATURES_AND_SCHEMA.md` updated in each commit.
+
+**Still open**
+- [ ] **Phone check at 360px (the owner):** the Settings tab chips and search, the Hours card, the Partner card with its confirmation, Team views, the Services sheet with the keyboard open, the email box's keyboard, and the static Save bar at the end of a long card.
+- [ ] **Step 12:** a new clinic can sign up, invite or skip a team, check its starter services and finish on a phone without a dead nav bar or a doubled box; the checklist's words and links match the new Settings, and no step ID changed.
+- [ ] **Step 13:** the dots on every other day don't change when another date is clicked.
+- [ ] **Step 14:** unchecking a weekday turns it off without losing a therapist's second shift; split clinic hours count correctly; assigning shows appointments that fall outside the hours; the migration is applied live and committed.
+- [ ] **Step 15:** a downgraded clinic can still print its old invoices; an unlinked therapist at the seat cap can't be sent an invite the plan refuses.
+- [ ] `FEATURES_AND_SCHEMA.md` updated in each commit; then delete this file.

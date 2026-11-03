@@ -76,10 +76,37 @@ describe('OnboardingTeamStep', () => {
     );
   });
 
-  it('skipping "I treat patients" does not touch the roster', async () => {
+  it('displays the solo practitioner hint on a 1-login plan', () => {
+    render(<OnboardingTeamStep onContinue={vi.fn()} />);
+    expect(
+      screen.getByText("Optional — skip if it's just you. You can invite people later in Settings → Team.")
+    ).toBeInTheDocument();
+  });
+
+  it('displays the solo practitioner hint on a multi-login plan', () => {
+    plan.maxMembers = 5;
+    render(<OnboardingTeamStep onContinue={vi.fn()} />);
+    expect(
+      screen.getByText("Optional — skip if it's just you. You can invite people later in Settings → Team.")
+    ).toBeInTheDocument();
+  });
+
+  it('continuing with blank invite fields succeeds without sending invites', async () => {
+    plan.maxMembers = 5;
     const onContinue = vi.fn();
     render(<OnboardingTeamStep onContinue={onContinue} />);
-    await userEvent.click(screen.getByRole('checkbox', { name: /I treat patients/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(onContinue).toHaveBeenCalled());
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('skipping "I see patients" does not touch the roster', async () => {
+    const onContinue = vi.fn();
+    render(<OnboardingTeamStep onContinue={onContinue} />);
+    const checkbox = screen.getByRole('checkbox', { name: 'I see patients at this clinic' });
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).toBeChecked();
+    await userEvent.click(checkbox);
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(onContinue).toHaveBeenCalled());
     expect(put).not.toHaveBeenCalled();
