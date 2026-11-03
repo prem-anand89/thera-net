@@ -36,14 +36,14 @@ afterEach(() => {
 
 const dialog = () => screen.getByRole('dialog');
 
-describe('How patients found you (General)', () => {
+describe('Referral sources (General)', () => {
   it('is a card anchored where old links land, with "+ Add" in the header and no count pills', () => {
     sources = [source(), source({ name: 'Walk-in', detailLabel: null })];
     const { container } = render(<ReferralSourcesCard />);
-    expect(screen.getByRole('heading', { name: 'How patients found you' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Referral sources' })).toBeInTheDocument();
     expect(container.querySelector('#settings-card-general-referrals')).not.toBeNull();
     expect(screen.getByRole('button', { name: '+ Add' })).toBeInTheDocument();
-    expect(screen.getByText(/Asked when you add a patient\. Feeds the Referral sources report\./)).toBeInTheDocument();
+    expect(screen.getByText(/How patients found you\. Asked when you add a patient; feeds the Referral sources report\./)).toBeInTheDocument();
     expect(screen.queryByText(/with detail field/)).toBeNull();
   });
 
@@ -64,7 +64,7 @@ describe('How patients found you (General)', () => {
   });
 });
 
-describe('How patients found you — the sheet', () => {
+describe('Referral sources — the sheet', () => {
   it('"+ Add" adds a source with no follow-up question by default', async () => {
     render(<ReferralSourcesCard />);
     fireEvent.click(screen.getByRole('button', { name: '+ Add' }));

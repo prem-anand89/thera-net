@@ -2,7 +2,7 @@ import { Segmented } from '@/components/ui';
 import { ServicesView } from './ServicesView';
 import { TreatmentCatalog } from './TreatmentsView';
 
-/** The two lists on the Services & treatments tab. Referral sources live on General ("How patients found you"). */
+/** The two lists on the Services & treatments tab. Referral sources live on General. */
 export type CatalogView = 'packages' | 'treatments';
 
 const CATALOG_VIEWS: { value: CatalogView; label: string }[] = [

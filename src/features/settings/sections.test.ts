@@ -114,10 +114,10 @@ describe('matchSettingsCards', () => {
     expect(booking).toEqual(['settings-card-booking-hours', 'settings-card-booking-online']);
   });
 
-  it('names the tab "Services & treatments" and the referral card "How patients found you" on General', () => {
+  it('names the tab "Services & treatments" and keeps the referral card "Referral sources" on General', () => {
     expect(SETTINGS_TAB_META.services.label).toBe('Services & treatments');
     const card = SETTINGS_CARDS.find((c) => c.id === 'settings-card-general-referrals');
-    expect(card).toMatchObject({ title: 'How patients found you', tab: 'general' });
+    expect(card).toMatchObject({ title: 'Referral sources', tab: 'general' });
     expect(matchSettingsCards('referral').map((c) => c.id)).toEqual(['settings-card-general-referrals']);
     expect(matchSettingsCards('referred by').map((c) => c.tab)).toEqual(['general']);
   });

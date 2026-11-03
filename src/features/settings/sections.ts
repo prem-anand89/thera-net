@@ -15,7 +15,7 @@ export const TEAM_VIEWS = ['members', 'shifts'] as const;
 export type TeamViewKey = (typeof TEAM_VIEWS)[number];
 
 export const SETTINGS_TAB_META: Record<SettingsTab, { label: string; description: string }> = {
-  general: { label: 'General', description: 'Clinic profile, region, what happens after a visit, and how patients find you.' },
+  general: { label: 'General', description: 'Clinic profile, region, what happens after a visit, and referral sources.' },
   team: { label: 'Team', description: 'Therapists, invites and who can sign in.' },
   services: { label: 'Services & treatments', description: 'What patients pay for, and what you record doing in each session.' },
   booking: { label: 'Schedule & Booking', description: 'Clinic hours, closed days and holidays, your online booking page and patient messages.' },
@@ -34,7 +34,7 @@ const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewK
   data: { tab: 'account' },
   // Pre-catalog-merge names.
   treatments: { tab: 'services', catalogView: 'treatments' },
-  // Referral sources moved to General ("How patients found you").
+  // Referral sources moved to General (a card on its own, still called "Referral sources").
   referrals: { tab: 'general', card: 'referrals' },
 };
 
@@ -101,7 +101,7 @@ export const SETTINGS_CARDS: SettingsCard[] = [
   { id: 'settings-card-general-profile', title: 'Clinic profile', tab: 'general', keywords: ['clinic name', 'logo', 'signature', 'address', 'phone', 'email', 'contact', 'clinic code', 'prefix', 'invoice prefix', 'patient id', 'walk-in', 'mrno'] },
   { id: 'settings-card-region', title: 'Region and agenda', tab: 'general', keywords: ['region', 'time zone', 'timezone', 'country code', 'phone country', 'financial year', 'fiscal year', 'daily agenda', 'agenda email', 'evening email'] },
   { id: 'settings-card-after-visit', title: 'After a visit', tab: 'general', keywords: ['clinical notes', 'notes', 'clinical', 'soap', 'documentation', 'consultation', 'feedback', 'patient feedback', 'google review', 'review link', 'rating'] },
-  { id: REFERRALS_CARD_ID, title: 'How patients found you', tab: 'general', keywords: ['referral', 'referrals', 'referral sources', 'referred by', 'source', 'doctor', 'word of mouth', 'walk-in'] },
+  { id: REFERRALS_CARD_ID, title: 'Referral sources', tab: 'general', keywords: ['referral', 'referrals', 'referral sources', 'how patients found you', 'found you', 'referred by', 'source', 'doctor', 'word of mouth', 'walk-in'] },
   { id: 'settings-card-team-therapists', title: 'Team members', tab: 'team', teamView: 'members', keywords: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo', 'staff'] },
   { id: 'settings-card-team-shifts', title: 'Shifts & coverage', tab: 'team', teamView: 'shifts', keywords: ['shift', 'shift template', 'coverage', 'roster', 'break', 'shift request', 'swap'] },
   { id: 'settings-card-services-packages', title: 'Services and prices', tab: 'services', catalogView: 'packages', keywords: ['services', 'service', 'prices', 'price', 'price list', 'package', 'session', 'catalog', 'group', 'fees'] },

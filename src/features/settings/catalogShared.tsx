@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { NameTakenError, nameCheckBlocks, type NameCheckResult, type NamedItem } from '@/domain/nameCheck';
 import { toFriendlyMessage } from '@/lib/errors';
 
-/** Pieces shared by the Services, Treatments and How patients found you lists. */
+/** Pieces shared by the Services, Treatments and Referral sources lists. */
 
 /** A name refused by `catalogService` reads as itself; anything else gets the usual friendly message. */
 export function saveErrorMessage(e: unknown): string {

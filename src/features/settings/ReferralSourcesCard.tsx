@@ -12,7 +12,7 @@ import { HiddenItemsFooter, NameCheckNote, saveErrorMessage } from './catalogSha
 type SourceSheet = { kind: 'add' } | { kind: 'edit'; item: ReferringSourceItem };
 
 /**
- * "How patients found you": the referral sources staff pick when adding a patient (General tab). One list card, one
+ * Referral sources: how patients found the clinic, picked when adding a patient (General tab). One list card, one
  * row per source with its follow-up question under the name; "+ Add" in the header and a tap on a row open the same
  * small sheet; hidden sources sit in a footer. The follow-up question is the old "detail field label" (`detail_label`).
  */
@@ -28,7 +28,7 @@ export function ReferralSourcesCard() {
   return (
     <SectionCard
       id={REFERRALS_CARD_ID}
-      title="How patients found you"
+      title="Referral sources"
       action={
         <button type="button" className={`${btnPrimary} min-h-9 px-3 text-sm`} onClick={() => setSheet({ kind: 'add' })}>
           + Add
@@ -36,7 +36,7 @@ export function ReferralSourcesCard() {
       }
     >
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Asked when you add a patient. Feeds the Referral sources report.
+        How patients found you. Asked when you add a patient; feeds the Referral sources report.
       </p>
       {shown.length === 0 ? (
         <p className="py-4 text-sm text-[var(--muted)]">

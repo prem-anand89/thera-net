@@ -704,14 +704,14 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 
 | Tab | Contains |
 |---|---|
-| `general` | Clinic profile (no partner fields), Region and agenda, **After a visit** (`AfterVisitSection`: two switch rows — "Prompt for clinical notes after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off), then **How patients found you** (`ReferralSourcesCard`: the referral sources staff pick when adding a patient — formerly the Referral sources view of the Services tab; card id `settings-card-general-referrals`) |
+| `general` | Clinic profile (no partner fields), Region and agenda, **After a visit** (`AfterVisitSection`: two switch rows — "Prompt for clinical notes after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off), then **Referral sources** (`ReferralSourcesCard`: how patients found the clinic — the sources staff pick when adding a patient — formerly the Referral sources view of the Services tab; card id `settings-card-general-referrals`) |
 | `team` | Two views on a `Segmented` control: **Team members** (therapists, invites, logins; the unlinked-login banner) and **Shifts & coverage** (pending shift requests, coverage grid, shift templates), with a count badge on Shifts while shift requests are pending. `?teamView=members|shifts` (parsed like `catalogView`; unknown values fall back to members) opens a view; Schedule's "N shift requests pending · Review" link and Settings search for shift words open Shifts. Default is Team members. |
 | `services` (label **Services & treatments**; the key and URL stay `services`) | Two views on a `Segmented` control, **Services** (`catalogView=packages`: card "Services and prices") and **Treatments** (`catalogView=treatments`). One sentence under each title says where the list shows up (services: what patients pay for, picked on a visit and printed on bills; treatments: what you did in the session, shown as quick picks on each visit). No count pills. Wording: "Stop offering" / "Offer again" for services, "Hide" / "Show" for treatments and referral sources, "No longer offered (N)" and "Show hidden (N)" for the stopped ones, "One visit" (never "Single session"). |
 | `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), **Online booking page** (the booking link, and the WhatsApp Business sub-block) |
 | `billing` (label **Payments & billing**; never hidden on any plan) | Three cards in this order: **Payments** (every plan: UPI collection — show-QR switch, UPI ID, payee name, QR image. There is no default payment method setting: payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last, else UPI — `defaultPaymentMethod()` in `domain/paymentMethods.ts`), **Invoicing** (card title was "Modules & invoicing" and then "Billing & invoicing"; GST number and who can issue — the invoice prefix moved to the Clinic code in Clinic profile, the fiscal year to Region and agenda, and the bill policy was removed; below the invoicing tier it is a compact `LockedCard` — the card with its title and "Available on the Solo plan and above.", so search still lands on it), **Partner & split** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan and above", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. Before such a save (and before **Turn off partner mode**) it counts, from local data and against the unsaved settings, the visits that would change (`visitService.countUninvoicedSplitChanges`); with N > 0 a `ConfirmDialog` says "This recalculates N visits that have no invoice yet. Invoices already issued stay as they are." and Cancel saves nothing; with N = 0 it saves without asking. The count and `recomputeUninvoicedSplits` share one rule (`uninvoicedSplitRates` + `visitNeedsSplitUpdate` in `domain/split.ts`), so the number shown is the number updated. If the visit update fails after the settings saved, the card says so and offers **Update visits again**. |
 | `account` | Plan, historical data import, backup, danger zone |
 
-Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` → services with the treatments view, and every old referral-sources link (`?tab=referrals`, `?catalogView=referrals` with or without a tab) → **general at the How patients found you card** (`SettingsSearch.card = 'referrals'`; `SettingsPage` scrolls to `REFERRALS_CARD_ID`). Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
+Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` → services with the treatments view, and every old referral-sources link (`?tab=referrals`, `?catalogView=referrals` with or without a tab) → **general at the Referral sources card** (`SettingsSearch.card = 'referrals'`; `SettingsPage` scrolls to `REFERRALS_CARD_ID`). Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
 
 **Confirmations in Settings.** Everything saves without asking except three changes where a mistake is costly: (1) the partner split change above (only when N > 0); (2) changing or clearing a booking link that already exists ("Anyone using the old link will no longer reach your booking page."; setting a first link just saves); (3) changing the time zone in Region and agenda ("Times patients and staff see in booking pages and emails will change."). All use the shared `ConfirmDialog`.
 
@@ -727,11 +727,11 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 - **Walk-in MRNO prefix**: the Patient ID half of the Clinic code (defaults to 'W' for a clinic that never set one)
 
 #### Catalog (Settings → Services & treatments)
-One settings tab with two lists, **Services** and **Treatments** (the same words as the visit screen's "Services" and "Treatments" cards). **Referral sources** moved to General as "How patients found you" (they are about patients, not services). `parseSettingsSearch` sends old `?tab=services|treatments` links to the matching view and every old referral link to General at that card.
+One settings tab with two lists, **Services** and **Treatments** (the same words as the visit screen's "Services" and "Treatments" cards). **Referral sources** moved to General (they are about patients, not services; the card keeps its name, with "How patients found you" as its first line). `parseSettingsSearch` sends old `?tab=services|treatments` links to the matching view and every old referral link to General at that card.
 
 **Treatments** (`TreatmentsView.tsx`): one wrap of chips, most used first (the same 90-day order the visit screen's quick picks use, `dashboardService.treatmentUsageCounts`; alphabetical for ties). "+ Add" in the card header and tapping a chip open the same small `SheetDialog`: a name (live name check; "Show it again" for a hidden one) and, when editing, a **Shown** switch. The line "Tap a treatment to rename or hide it." sits under the chips; hidden treatments are in a collapsed "Hidden (N)" footer (`HiddenItemsFooter`) and keep their names on past visits. Counts ("312" = visits in the last 90 days) appear only with **Show usage** (`useShowUsage('treatments')`, a per-device view switch, off by default). The card is capped at 640px wide on desktop.
 
-**How patients found you** (`ReferralSourcesCard.tsx`, General tab): one list card, one row per source with "Then asks: …" under the name when it has a follow-up question; "+ Add" in the header and a tap on a row open one sheet: name (name-checked), **Ask a follow-up question** (a switch; its **Question** box is the `detail_label` column, and turning the switch off saves it as null so the patient form shows no extra box), and **Shown**. Hidden sources are in a "Hidden (N)" footer.
+**Referral sources** (`ReferralSourcesCard.tsx`, General tab): one list card, one row per source with "Then asks: …" under the name when it has a follow-up question; "+ Add" in the header and a tap on a row open one sheet: name (name-checked), **Ask a follow-up question** (a switch; its **Question** box is the `detail_label` column, and turning the switch off saves it as null so the patient form shows no extra box), and **Shown**. Hidden sources are in a "Hidden (N)" footer.
 
 #### Clinic onboarding wizard (new self-service clinics)
 - **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
@@ -2612,7 +2612,7 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → General → How patients found you; it used to be a view of the Services tab), same add / hide-not-delete / edit
+patient (Settings → General → Referral sources; it used to be a view of the Services tab), same add / hide-not-delete / edit
 pattern as `no_return_reason_catalog`. A source's `detail_label` is its optional follow-up question (the extra box on the patient form). Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
@@ -2635,7 +2635,7 @@ UNIQUE (clinic_id, name)
 Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
 Kinesio Taping, ...), managed from Settings → Services & treatments →
 Treatments (chips, most used first; referral sources moved to General as
-"How patients found you"). Independent of
+"Referral sources" card). Independent of
 the billing-side `service_catalog` — one visit is
 billed under one service package but can record several treatment types
 performed via `visits.treatment_ids`, picked from the catalog on both the
@@ -4616,7 +4616,7 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → General → How patients found you; it used to be a view of the Services tab), same add / hide-not-delete / edit
+patient (Settings → General → Referral sources; it used to be a view of the Services tab), same add / hide-not-delete / edit
 pattern as `no_return_reason_catalog`. A source's `detail_label` is its optional follow-up question (the extra box on the patient form). Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
@@ -4639,7 +4639,7 @@ UNIQUE (clinic_id, name)
 Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
 Kinesio Taping, ...), managed from Settings → Services & treatments →
 Treatments (chips, most used first; referral sources moved to General as
-"How patients found you"). Independent of
+"Referral sources" card). Independent of
 the billing-side `service_catalog` — one visit is
 billed under one service package but can record several treatment types
 performed via `visits.treatment_ids`, picked from the catalog on both the
