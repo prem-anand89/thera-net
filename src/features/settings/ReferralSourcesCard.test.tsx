@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReferringSourceItem } from '@/domain/types';
 
 let sources: ReferringSourceItem[] = [];
@@ -47,3 +47,18 @@ describe('How patients found you (General)', () => {
     expect(screen.queryByText(/with detail field/)).toBeNull();
   });
 });
+
+describe('How patients found you — name check', () => {
+  it('stops adding a source that already exists and offers a hidden one again', () => {
+    sources = [source({}), source({ name: 'Old ad', active: false, detailLabel: null })];
+    render(<ReferralSourcesCard />);
+    const box = screen.getByPlaceholderText('Source name');
+    fireEvent.change(box, { target: { value: 'doctor referral' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('You already have Doctor referral.');
+    expect(screen.getByRole('button', { name: '+ Add' })).toBeDisabled();
+    fireEvent.change(box, { target: { value: 'old ad' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Old ad is hidden.');
+    expect(screen.getByRole('button', { name: 'Show it again' })).toBeInTheDocument();
+  });
+});
+

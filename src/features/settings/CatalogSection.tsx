@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, catalogService } from '@/services';
@@ -11,6 +11,66 @@ import {
 } from '@/domain/types';
 import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, RupeeInput, SectionCard, ConfirmDialog, Segmented } from '@/components/ui';
 import { REFERRALS_CARD_ID } from './sections';
+import { groupNameCheck, nameCheck, nameCheckBlocks, NameTakenError, type NameCheckResult, type NamedItem } from '@/domain/nameCheck';
+
+/** Every service in the clinic (offered and not), for the name check in the add and edit forms. */
+const AllServicesContext = createContext<CatalogItem[]>([]);
+
+/** A name refused by `catalogService` reads as itself; anything else gets the usual friendly message. */
+function saveErrorMessage(e: unknown): string {
+  return e instanceof NameTakenError ? e.message : toFriendlyMessage(e);
+}
+
+/**
+ * The live name check under a name box: the same name (capitals ignored) blocks and says so; a hidden one offers to
+ * switch it back on; a near match only asks. Renders nothing when the name is free.
+ */
+function NameCheckNote<T extends NamedItem>({
+  result,
+  hiddenText,
+  restoreLabel,
+  onRestore,
+  onUse,
+}: {
+  result: NameCheckResult<T>;
+  /** e.g. "is in No longer offered" / "is hidden". */
+  hiddenText: string;
+  restoreLabel?: string;
+  onRestore?: (match: T) => void;
+  onUse: (name: string) => void;
+}) {
+  const match = result.match;
+  if (!match || result.kind === 'none') return null;
+  const name = match.name.trim();
+  const block = nameCheckBlocks(result);
+  const action =
+    result.kind === 'hidden' && onRestore && restoreLabel
+      ? { label: restoreLabel, run: () => onRestore(match) }
+      : result.kind === 'similar'
+        ? { label: `Use ${name}`, run: () => onUse(name) }
+        : null;
+  const text =
+    result.kind === 'exact'
+      ? `You already have ${name}.`
+      : result.kind === 'hidden'
+        ? `${name} ${hiddenText}.`
+        : `You already have ${name}. Use that?`;
+  return (
+    <div
+      role={block ? 'alert' : 'status'}
+      className={`mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-md px-3 py-2 text-xs ${
+        block ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--amber-light)] text-[var(--amber-strong)]'
+      }`}
+    >
+      <span>{text}</span>
+      {action && (
+        <button type="button" className="min-h-8 rounded-md border border-current px-2.5 font-semibold" onClick={action.run}>
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
 import { toFriendlyMessage } from '@/lib/errors';
 
 /** The two lists on the Services & treatments tab. Referral sources live on General ("How patients found you"). */
@@ -164,6 +224,7 @@ function ServiceCatalog() {
   );
 
   return (
+    <AllServicesContext.Provider value={items ?? []}>
     <SectionCard id="settings-card-services-packages" title="Services and prices">
       <p className="mb-1 text-xs text-[var(--muted)]">
         What patients pay for. You pick these on a visit, and they print on bills and invoices.
@@ -208,6 +269,7 @@ function ServiceCatalog() {
 
       <NewServiceGroupForm existingGroupNames={groupNames} />
     </SectionCard>
+    </AllServicesContext.Provider>
   );
 }
 
@@ -299,8 +361,11 @@ function ServiceGroupPanel({
     setAddKind(null);
   }, [category]);
 
+  const renameCheck = editingGroupName ? groupNameCheck(groupNameDraft, groupNames, category) : null;
+
   async function saveGroupRename() {
-    const trimmed = groupNameDraft.trim();
+    // Typing an existing group's name (capitals ignored) moves these services into that group, under its spelling.
+    const trimmed = renameCheck?.kind === 'exact' && renameCheck.match ? renameCheck.match : groupNameDraft.trim();
     if (!trimmed) {
       setGroupError('Group name is required');
       return;
@@ -320,7 +385,7 @@ function ServiceGroupPanel({
       setEditingGroupName(false);
       setAddKind(null);
     } catch (e) {
-      setGroupError(toFriendlyMessage(e));
+      setGroupError(saveErrorMessage(e));
     } finally {
       setGroupRenameBusy(false);
     }
@@ -368,6 +433,17 @@ function ServiceGroupPanel({
                 >
                   Cancel
                 </button>
+                {renameCheck?.kind === 'exact' && (
+                  <p className="w-full text-xs text-[var(--muted)]">These services join the existing group {renameCheck.match}.</p>
+                )}
+                {renameCheck?.kind === 'similar' && renameCheck.match && (
+                  <div role="status" className="flex w-full flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]">
+                    <span>You already have {renameCheck.match}. Use that?</span>
+                    <button type="button" className="min-h-8 rounded-md border border-current px-2.5 font-semibold" onClick={() => setGroupNameDraft(renameCheck.match ?? groupNameDraft)}>
+                      Use {renameCheck.match}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
@@ -440,6 +516,9 @@ function ServiceCatalogItemRow({
   const [category, setCategory] = useState(item.category);
   const [creatingNewGroup, setCreatingNewGroup] = useState(false);
   const [name, setName] = useState(item.name);
+  const allServices = useContext(AllServicesContext);
+  const check = nameCheck(name, allServices, { selfId: item.id });
+  const newGroupCheck = creatingNewGroup ? groupNameCheck(category, groupNames) : null;
   const [sessionCount, setSessionCount] = useState(String(item.sessionCount));
   const [pricePaise, setPricePaise] = useState<number | null>(item.basePricePaise);
   const [duration, setDuration] = useState(item.durationMinutes != null ? String(item.durationMinutes) : '');
@@ -491,11 +570,12 @@ function ServiceCatalogItemRow({
       setError(DURATION_ERROR);
       return;
     }
+    if (nameCheckBlocks(check)) return;
     const sessions = Math.max(1, Number(sessionCount) || 1);
     setSaving(true);
     setError(null);
     try {
-      await repos.catalog.put({
+      await catalogService.updateService({
         ...item,
         durationMinutes,
         category: category.trim(),
@@ -509,7 +589,7 @@ function ServiceCatalogItemRow({
       setSavedFlash(true);
       savedTimeoutRef.current = setTimeout(() => setSavedFlash(false), 1500);
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      setError(saveErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -582,9 +662,28 @@ function ServiceCatalogItemRow({
                 <option value="__new__">+ Create a new group…</option>
               </select>
             )}
+            {newGroupCheck?.kind === 'exact' && (
+              <p className="mt-1 text-xs text-[var(--muted)]">This service joins the existing group {newGroupCheck.match}.</p>
+            )}
+            {newGroupCheck?.kind === 'similar' && newGroupCheck.match && (
+              <div role="status" className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]">
+                <span>You already have {newGroupCheck.match}. Use that?</span>
+                <button
+                  type="button"
+                  className="min-h-8 rounded-md border border-current px-2.5 font-semibold"
+                  onClick={() => {
+                    setCategory(newGroupCheck.match ?? category);
+                    setCreatingNewGroup(false);
+                  }}
+                >
+                  Use {newGroupCheck.match}
+                </button>
+              </div>
+            )}
           </Field>
           <Field label="Name on visits & invoices">
             <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <NameCheckNote result={check} hiddenText="is in No longer offered" onUse={setName} />
           </Field>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -627,7 +726,7 @@ function ServiceCatalogItemRow({
         </p>
         <ErrorNote message={error} />
         <div className="flex flex-wrap gap-2 pt-1">
-          <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+          <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
             {saving ? 'Saving…' : 'Save'}
           </button>
           <button type="button" className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
@@ -707,6 +806,22 @@ function ServiceCatalogInlineAdd({
   const clinic = useClinic();
   const defaultSessions = kind === 'package' ? '5' : '1';
   const [name, setName] = useState('');
+  const allServices = useContext(AllServicesContext);
+  const check = nameCheck(name, allServices);
+
+  /** "Offer it again": switches the stopped service with this name back on, instead of adding a second one. */
+  async function offerAgain(match: CatalogItem) {
+    setSaving(true);
+    setError(null);
+    try {
+      await repos.catalog.put({ ...match, active: true, updatedAt: new Date().toISOString() });
+      onDone();
+    } catch (e) {
+      setError(saveErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
   const [sessionCount, setSessionCount] = useState(defaultSessions);
   const [pricePaise, setPricePaise] = useState<number | null>(null);
   const [duration, setDuration] = useState('');
@@ -732,10 +847,11 @@ function ServiceCatalogInlineAdd({
       setError('Packages need at least 2 sessions.');
       return;
     }
+    if (nameCheckBlocks(check)) return;
     setSaving(true);
     setError(null);
     try {
-      await repos.catalog.put({
+      await catalogService.addService({
         id: crypto.randomUUID(),
         clinicId: clinic.id,
         category,
@@ -748,7 +864,7 @@ function ServiceCatalogInlineAdd({
       });
       onDone();
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      setError(saveErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -766,6 +882,13 @@ function ServiceCatalogInlineAdd({
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
+        />
+        <NameCheckNote
+          result={check}
+          hiddenText="is in No longer offered"
+          restoreLabel="Offer it again"
+          onRestore={(m) => void offerAgain(m)}
+          onUse={setName}
         />
       </Field>
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -797,7 +920,7 @@ function ServiceCatalogInlineAdd({
       </Field>
       <ErrorNote message={error} />
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+        <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
           {saving ? 'Adding…' : 'Add'}
         </button>
         <button type="button" className={btnSecondary} disabled={saving} onClick={onCancel}>
@@ -813,16 +936,13 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
   const [addKind, setAddKind] = useState<CatalogAddKind | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const trimmed = groupName.trim();
-  const duplicate = trimmed && existingGroupNames.some((g) => g.toLowerCase() === trimmed.toLowerCase());
+  const check = groupNameCheck(groupName, existingGroupNames);
+  // Typing an existing group's name (capitals ignored) adds to that group, under its spelling.
+  const trimmed = check.kind === 'exact' && check.match ? check.match : groupName.trim();
 
   function startAdd(kind: CatalogAddKind) {
     if (!trimmed) {
       setError('Enter a group name first');
-      return;
-    }
-    if (duplicate) {
-      setError('That group already exists — pick it from the list above or use a different name.');
       return;
     }
     setError(null);
@@ -855,10 +975,16 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
           + First package
         </button>
       </div>
-      {duplicate && (
-        <p className="text-xs text-[var(--amber)]">This group name is already in use.</p>
+      {check.kind === 'exact' && <p className="text-xs text-[var(--muted)]">{check.match} already exists: this adds to it.</p>}
+      {check.kind === 'similar' && check.match && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]">
+          <span>You already have {check.match}. Use that?</span>
+          <button type="button" className="min-h-8 rounded-md border border-current px-2.5 font-semibold" onClick={() => setGroupName(check.match ?? groupName)}>
+            Use {check.match}
+          </button>
+        </div>
       )}
-      {addKind && trimmed && !duplicate && (
+      {addKind && trimmed && (
         <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
           <ServiceCatalogInlineAdd
             category={trimmed}
@@ -908,22 +1034,23 @@ function TreatmentCatalog() {
       {visible.length > 0 ? (
         <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => (
-            <TreatmentCard key={item.id} item={item} />
+            <TreatmentCard key={item.id} item={item} all={itemList} />
           ))}
         </div>
       ) : (
         <p className="mb-6 text-xs text-[var(--muted)]">No treatments yet.</p>
       )}
-      <TreatmentAddForm />
+      <TreatmentAddForm all={itemList} />
     </SectionCard>
   );
 }
 
-function TreatmentCard({ item }: { item: TreatmentItem }) {
+function TreatmentCard({ item, all }: { item: TreatmentItem; all: TreatmentItem[] }) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(item.name);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const check = nameCheck(nameDraft, all, { selfId: item.id });
 
   useEffect(() => {
     if (!editing) setNameDraft(item.name);
@@ -935,17 +1062,18 @@ function TreatmentCard({ item }: { item: TreatmentItem }) {
       setError('Name is required');
       return;
     }
+    if (nameCheckBlocks(check)) return;
     setSaving(true);
     setError(null);
     try {
-      await repos.treatmentCatalog.put({
+      await catalogService.updateTreatment({
         ...item,
         name: trimmed,
         updatedAt: new Date().toISOString(),
       });
       setEditing(false);
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      setError(saveErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -965,7 +1093,7 @@ function TreatmentCard({ item }: { item: TreatmentItem }) {
         active={item.active}
         footer={
           <>
-            <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+            <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button type="button" className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
@@ -976,6 +1104,7 @@ function TreatmentCard({ item }: { item: TreatmentItem }) {
       >
         <Field label="Treatment name">
           <input className={inputCls} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoFocus />
+          <NameCheckNote result={check} hiddenText="is hidden" onUse={setNameDraft} />
         </Field>
         <ErrorNote message={error} />
       </CatalogCardShell>
@@ -1000,10 +1129,11 @@ function TreatmentCard({ item }: { item: TreatmentItem }) {
   );
 }
 
-function TreatmentAddForm() {
+function TreatmentAddForm({ all }: { all: TreatmentItem[] }) {
   const clinic = useClinic();
   const [draftName, setDraftName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const check = nameCheck(draftName, all);
 
   async function addItem() {
     setError(null);
@@ -1012,14 +1142,29 @@ function TreatmentAddForm() {
       setError('Name is required');
       return;
     }
-    await repos.treatmentCatalog.put({
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    });
-    setDraftName('');
+    if (nameCheckBlocks(check)) return;
+    try {
+      await catalogService.addTreatment({
+        id: crypto.randomUUID(),
+        clinicId: clinic.id,
+        name,
+        active: true,
+        updatedAt: new Date().toISOString(),
+      });
+      setDraftName('');
+    } catch (e) {
+      setError(saveErrorMessage(e));
+    }
+  }
+
+  /** "Show it again": switches the hidden treatment with this name back on, instead of adding a second one. */
+  async function showAgain(match: TreatmentItem) {
+    try {
+      await repos.treatmentCatalog.put({ ...match, active: true, updatedAt: new Date().toISOString() });
+      setDraftName('');
+    } catch (e) {
+      setError(saveErrorMessage(e));
+    }
   }
 
   return (
@@ -1034,10 +1179,11 @@ function TreatmentAddForm() {
             if (e.key === 'Enter') void addItem();
           }}
         />
-        <button type="button" className={btnSecondary} onClick={() => void addItem()}>
+        <button type="button" className={btnSecondary} disabled={nameCheckBlocks(check)} onClick={() => void addItem()}>
           + Add
         </button>
       </div>
+      <NameCheckNote result={check} hiddenText="is hidden" restoreLabel="Show it again" onRestore={(m) => void showAgain(m)} onUse={setDraftName} />
       <ErrorNote message={error} />
     </CatalogAddCard>
   );
@@ -1077,23 +1223,24 @@ export function ReferralSourcesCard() {
       {visible.length > 0 ? (
         <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => (
-            <ReferralSourceCard key={item.id} item={item} />
+            <ReferralSourceCard key={item.id} item={item} all={itemList} />
           ))}
         </div>
       ) : (
         <p className="mb-6 text-xs text-[var(--muted)]">No referral sources yet.</p>
       )}
-      <ReferralSourceAddForm />
+      <ReferralSourceAddForm all={itemList} />
     </SectionCard>
   );
 }
 
-function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
+function ReferralSourceCard({ item, all }: { item: ReferringSourceItem; all: ReferringSourceItem[] }) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(item.name);
   const [detailDraft, setDetailDraft] = useState(item.detailLabel ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const check = nameCheck(nameDraft, all, { selfId: item.id });
 
   useEffect(() => {
     if (!editing) {
@@ -1108,10 +1255,11 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
       setError('Name is required');
       return;
     }
+    if (nameCheckBlocks(check)) return;
     setSaving(true);
     setError(null);
     try {
-      await repos.referringSourceCatalog.put({
+      await catalogService.updateReferralSource({
         ...item,
         name,
         detailLabel: detailDraft.trim() || null,
@@ -1119,7 +1267,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
       });
       setEditing(false);
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      setError(saveErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -1139,7 +1287,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
         active={item.active}
         footer={
           <>
-            <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+            <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button type="button" className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
@@ -1150,6 +1298,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
       >
         <Field label="Source name">
           <input className={inputCls} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoFocus />
+          <NameCheckNote result={check} hiddenText="is hidden" onUse={setNameDraft} />
         </Field>
         <Field label="Detail field label (optional)">
           <input
@@ -1190,11 +1339,12 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
   );
 }
 
-function ReferralSourceAddForm() {
+function ReferralSourceAddForm({ all }: { all: ReferringSourceItem[] }) {
   const clinic = useClinic();
   const [draftName, setDraftName] = useState('');
   const [draftDetailLabel, setDraftDetailLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const check = nameCheck(draftName, all);
 
   async function addItem() {
     setError(null);
@@ -1203,16 +1353,32 @@ function ReferralSourceAddForm() {
       setError('Name is required');
       return;
     }
-    await repos.referringSourceCatalog.put({
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      detailLabel: draftDetailLabel.trim() || null,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    });
-    setDraftName('');
-    setDraftDetailLabel('');
+    if (nameCheckBlocks(check)) return;
+    try {
+      await catalogService.addReferralSource({
+        id: crypto.randomUUID(),
+        clinicId: clinic.id,
+        name,
+        detailLabel: draftDetailLabel.trim() || null,
+        active: true,
+        updatedAt: new Date().toISOString(),
+      });
+      setDraftName('');
+      setDraftDetailLabel('');
+    } catch (e) {
+      setError(saveErrorMessage(e));
+    }
+  }
+
+  /** "Show it again": switches the hidden source with this name back on, instead of adding a second one. */
+  async function showAgain(match: ReferringSourceItem) {
+    try {
+      await repos.referringSourceCatalog.put({ ...match, active: true, updatedAt: new Date().toISOString() });
+      setDraftName('');
+      setDraftDetailLabel('');
+    } catch (e) {
+      setError(saveErrorMessage(e));
+    }
   }
 
   return (
@@ -1239,7 +1405,8 @@ function ReferralSourceAddForm() {
             if (e.key === 'Enter') void addItem();
           }}
         />
-        <button type="button" className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
+        <NameCheckNote result={check} hiddenText="is hidden" restoreLabel="Show it again" onRestore={(m) => void showAgain(m)} onUse={setDraftName} />
+        <button type="button" className={`${btnSecondary} w-full`} disabled={nameCheckBlocks(check)} onClick={() => void addItem()}>
           + Add
         </button>
         <ErrorNote message={error} />

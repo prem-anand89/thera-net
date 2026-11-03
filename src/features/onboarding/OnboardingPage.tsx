@@ -4,7 +4,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
 import { useClinicRole } from '@/app/useClinicRole';
 import { useSession } from '@/app/useSession';
-import { repos } from '@/services';
+import { catalogService, repos } from '@/services';
+import { firstDuplicateName, NameTakenError } from '@/domain/nameCheck';
 import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
@@ -107,30 +108,37 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
       setFinishError('Add a price (₹0 if you do not charge patients) to at least one included service or package.');
       return;
     }
+    const toSave = catalogDrafts.filter(isPricedDraft);
+    // The database allows each service name once per clinic, so two rows with the same name (capitals ignored) would
+    // fail to sync. Caught here, before anything is written.
+    const twice = firstDuplicateName(toSave.map((d) => d.name));
+    if (twice) {
+      setFinishError(`"${twice}" is listed twice. Give each service its own name.`);
+      return;
+    }
     setFinishBusy(true);
     setFinishError(null);
     try {
       const now = new Date().toISOString();
-      const toSave = catalogDrafts.filter(isPricedDraft);
-      for (const d of toSave) {
-        const item: CatalogItem = {
-          id: d.key,
-          clinicId: clinic.id,
-          category: d.group.trim(),
-          name: d.name.trim(),
-          sessionCount: Math.max(1, d.sessionCount),
-          basePricePaise: d.basePricePaise!,
-          active: true,
-          updatedAt: now,
-        };
-        await repos.catalog.put(item);
-      }
+      const items: CatalogItem[] = toSave.map((d) => ({
+        id: d.key,
+        clinicId: clinic.id,
+        category: d.group.trim(),
+        name: d.name.trim(),
+        sessionCount: Math.max(1, d.sessionCount),
+        basePricePaise: d.basePricePaise!,
+        active: true,
+        updatedAt: now,
+      }));
+      await catalogService.addServices(items);
       setOnboardingWizardPhase(clinic.id, 'done');
       void syncEngine.schedule(0);
       void navigate({ to: '/onboarding', search: { step: 'done' } });
     } catch (e) {
       setFinishError(
-        `${toFriendlyMessage(e)} If this mentions a missing column, apply the latest Supabase migrations first.`
+        e instanceof NameTakenError
+          ? `${e.message} Give each service its own name.`
+          : `${toFriendlyMessage(e)} If this mentions a missing column, apply the latest Supabase migrations first.`
       );
     } finally {
       setFinishBusy(false);

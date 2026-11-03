@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { CatalogItem } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 
@@ -10,13 +10,17 @@ let catalogItems: CatalogItem[] = [];
 let usageCounts: Record<string, number> = {};
 const put = vi.fn().mockResolvedValue(undefined);
 const hardDelete = vi.fn().mockResolvedValue(undefined);
-vi.mock('@/services', () => ({
-  repos: {
+vi.mock('@/lib/supabase', () => ({ getSupabase: () => null }));
+// The real catalogService (so its name checks run) on top of the mocked repos; only the online-only delete is stubbed.
+vi.mock('@/services', async () => {
+  const { createCatalogService } = await import('@/services/catalogService');
+  const repos = {
     catalog: { list: () => catalogItems, put: (item: unknown) => put(item) },
     visits: { countByService: (id: string) => usageCounts[id] ?? 0 },
-  },
-  catalogService: { hardDelete: (id: string) => hardDelete(id) },
-}));
+  };
+  const real = createCatalogService(repos as never);
+  return { repos, catalogService: { ...real, hardDelete: (id: string) => hardDelete(id) } };
+});
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1' }) }));
 // The real useLiveQuery resolves its querier asynchronously against the
 // live Dexie table; calling the querier directly keeps these tests
@@ -252,6 +256,51 @@ describe('Services & treatments tab — plain words', () => {
     expect(screen.getByText('(1)')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Expand no longer offered' }));
     expect(screen.getByRole('button', { name: 'Offer again' })).toBeInTheDocument();
+  });
+});
+
+describe('Services — name check as you type', () => {
+  function openAdd() {
+    fireEvent.click(screen.getByRole('button', { name: '+ One visit' }));
+  }
+
+  it('stops a name that already exists (capitals ignored) and keeps Add off', async () => {
+    catalogItems = [item({ name: 'Initial Consultation' })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    openAdd();
+    fireEvent.change(screen.getByPlaceholderText('e.g. Follow-up consultation'), { target: { value: 'initial consultation' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('You already have Initial Consultation.');
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('offers a stopped service again instead of adding a second one', async () => {
+    const stopped = item({ name: 'Dry Needling', active: false });
+    catalogItems = [item(), stopped];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    openAdd();
+    fireEvent.change(screen.getByPlaceholderText('e.g. Follow-up consultation'), { target: { value: 'dry needling' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Dry Needling is in No longer offered.');
+    fireEvent.click(screen.getByRole('button', { name: 'Offer it again' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ id: stopped.id, active: true });
+  });
+
+  it('only asks about a near match, and still lets you add', async () => {
+    catalogItems = [item({ name: 'Initial Consultation' })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    openAdd();
+    fireEvent.change(screen.getByPlaceholderText('e.g. Follow-up consultation'), { target: { value: 'Initial Consultations' } });
+    expect(screen.getByRole('status')).toHaveTextContent('You already have Initial Consultation. Use that?');
+    expect(screen.getByRole('button', { name: 'Add' })).not.toBeDisabled();
+  });
+
+  it('editing a service keeps its own name without a warning', () => {
+    catalogItems = [item({ name: 'Initial Consultation' })];
+    render(<CatalogSection view="packages" onViewChange={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
   });
 });
 
