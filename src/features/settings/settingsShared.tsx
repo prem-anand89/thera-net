@@ -121,12 +121,12 @@ export function useClinicSectionForm<F extends Partial<Clinic>>(
 }
 
 /**
- * The Save / Cancel bar of a Settings card. It appears only while there is something to save, a problem to read, or for
- * a moment after saving (see `showSaveBar` in {@link useClinicSectionForm}). It sticks to the bottom of the screen while
- * its card is in view (above the phone's bottom nav), so Save is always in reach however long the card is and however
- * far up the field being edited is; it stops at the card's own end. It is deliberately slim (about 50px: one row, 40px
- * buttons, no shadow) because phones and iPads are short on height: the status ("Unsaved", "Saving…", "Saved ✓") shares
- * the buttons' row, and a problem is one small line inside the bar so it can't be hidden below the fold.
+ * The Save / Cancel row at the end of a Settings card. It is part of the card (static, never floating): it appears only
+ * while there is something to save, a problem to read, or for a moment after saving (see `showSaveBar` in
+ * {@link useClinicSectionForm}). A floating bar read as "something is broken" and took height phones and iPads don't
+ * have, so it sits at the card's foot like any form. The status ("Unsaved changes", "Saving…", "Saved ✓") shares the
+ * buttons' row, and a problem is one line above them. The Settings tab's dot already shows unsaved work elsewhere on
+ * the page, and leaving with unsaved edits asks first.
  */
 export function SectionSaveBar({
   dirty,
@@ -145,28 +145,25 @@ export function SectionSaveBar({
   error: string | null;
   saveDisabled?: boolean;
 }) {
-  const status = busy ? 'Saving…' : dirty ? 'Unsaved' : saved ? 'Saved ✓' : '';
+  const status = busy ? 'Saving…' : dirty ? 'Unsaved changes' : saved ? 'Saved ✓' : '';
   return (
-    <div
-      data-testid="section-save-bar"
-      className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[9] -mx-2 mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 px-2 py-1 backdrop-blur sm:bottom-4"
-    >
+    <div data-testid="section-save-bar" className="mt-4 border-t border-[var(--border)] pt-3">
       {error && (
-        <p role="alert" className="px-1 pt-1 text-xs leading-snug text-[var(--rust)]">
+        <p role="alert" className="mb-2 text-xs leading-snug text-[var(--rust)]">
           {error}
         </p>
       )}
       <div className="flex items-center gap-2">
         <span
           role="status"
-          className={`min-w-0 flex-1 truncate pl-1 text-sm ${dirty && !busy ? 'text-[var(--amber)]' : saved && !dirty ? 'text-[var(--moss)]' : 'text-[var(--muted)]'}`}
+          className={`min-w-0 flex-1 truncate text-sm ${dirty && !busy ? 'text-[var(--amber)]' : saved && !dirty ? 'text-[var(--moss)]' : 'text-[var(--muted)]'}`}
         >
           {status}
         </span>
-        <button type="button" className={`${btnSecondary} !min-h-10 !px-3.5`} disabled={!dirty || busy} onClick={onCancel}>
+        <button type="button" className={btnSecondary} disabled={!dirty || busy} onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className={`${btnPrimary} !min-h-10 !px-4`} disabled={busy || !dirty || saveDisabled} onClick={onSave}>
+        <button type="button" className={btnPrimary} disabled={busy || !dirty || saveDisabled} onClick={onSave}>
           {busy ? 'Saving…' : 'Save'}
         </button>
       </div>

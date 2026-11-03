@@ -14,18 +14,18 @@ const bar = (over: Partial<React.ComponentProps<typeof SectionSaveBar>> = {}) =>
 };
 
 describe('SectionSaveBar', () => {
-  it('says Unsaved, and saves or cancels', () => {
+  it('says there are unsaved changes, and saves or cancels', () => {
     const { onSave, onCancel } = bar();
-    expect(screen.getByRole('status')).toHaveTextContent('Unsaved');
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('sticks to the bottom of the screen while its card is in view', () => {
+  it('sits in the card, never floating over it', () => {
     bar();
-    expect(screen.getByTestId('section-save-bar').className).toMatch(/\bsticky\b/);
+    expect(screen.getByTestId('section-save-bar').className).not.toMatch(/\b(sticky|fixed|absolute)\b/);
   });
 
   it('says Saving… while busy, and Saved ✓ after a save', () => {
@@ -37,7 +37,7 @@ describe('SectionSaveBar', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
-  it('shows a problem inside the bar, so it is never below the fold', () => {
+  it('shows a problem right above the buttons', () => {
     bar({ error: 'Enter a valid UPI ID' });
     expect(screen.getByTestId('section-save-bar')).toContainElement(screen.getByRole('alert'));
   });
