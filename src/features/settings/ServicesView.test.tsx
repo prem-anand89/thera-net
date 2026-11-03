@@ -161,7 +161,8 @@ describe('Add a service', () => {
     expect(count()).toBe('3');
     fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price for the whole package' }), { target: { value: '5000' } });
     expect(within(dialog()).getByText('₹1,667 each')).toBeInTheDocument();
-    expect(within(dialog()).getByText(/Past visits, open packages and issued invoices stay as they were\./)).toBeInTheDocument();
+    // Adding has nothing to reassure about: the line is for editing an existing price.
+    expect(within(dialog()).queryByText(/Past visits, open packages and issued invoices stay as they were\./)).toBeNull();
     fireEvent.change(within(dialog()).getByRole('textbox', { name: 'Name' }), { target: { value: 'Physio package (3)' } });
     fireEvent.change(within(dialog()).getByRole('combobox', { name: 'Group (optional)' }), { target: { value: 'Physiotherapy' } });
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Add' }));
@@ -184,13 +185,13 @@ describe('Add a service', () => {
     expect(put.mock.calls[0][0]).toMatchObject({ id: stopped.id, active: true });
   });
 
-  it('session length lives under "More": invalid minutes are refused, valid ones saved', async () => {
+  it('session length is a plain optional field (no "More"): invalid minutes are refused, valid ones saved', async () => {
     render(<ServicesView />);
     fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
     fireEvent.change(within(dialog()).getByRole('textbox', { name: 'Name' }), { target: { value: 'Assessment' } });
     fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price' }), { target: { value: '1000' } });
-    fireEvent.click(within(dialog()).getByRole('button', { name: 'More' }));
-    const length = within(dialog()).getByRole('spinbutton', { name: /Session length/ });
+    expect(within(dialog()).queryByRole('button', { name: 'More' })).toBeNull();
+    const length = within(dialog()).getByRole('spinbutton', { name: 'Session length (minutes, optional)' });
     fireEvent.change(length, { target: { value: '0' } });
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Add' }));
     expect(await within(dialog()).findByText(/Enter minutes between 1 and 480/)).toBeInTheDocument();
@@ -324,6 +325,62 @@ describe('Services list — review fixes', () => {
     render(<ServicesView />);
     expect(screen.getByText(/No services offered right now/)).toBeInTheDocument();
     expect(screen.queryByText(/No services yet/)).toBeNull();
+  });
+});
+
+describe('Edit a service — form refinements', () => {
+  const open = (it_: CatalogItem) => {
+    catalogItems = [it_];
+    render(<ServicesView />);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Edit ${it_.name},`) }));
+  };
+
+  it('Save stays off until something changes, and the reassurance line shows only when editing', () => {
+    open(item({ name: 'Follow-up', basePricePaise: 60000 }));
+    expect(within(dialog()).getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(within(dialog()).getByText(/Past visits, open packages and issued invoices stay as they were\./)).toBeInTheDocument();
+    fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price' }), { target: { value: '700' } });
+    expect(within(dialog()).getByRole('button', { name: 'Save' })).not.toBeDisabled();
+    fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price' }), { target: { value: '600' } });
+    expect(within(dialog()).getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('shows what the price was once it is changed', () => {
+    open(item({ name: 'Follow-up', basePricePaise: 60000 }));
+    expect(within(dialog()).queryByText('Was ₹600')).toBeNull();
+    fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price' }), { target: { value: '750' } });
+    expect(within(dialog()).getByText('Was ₹600')).toBeInTheDocument();
+  });
+
+  it('warns when the session count of a used service changes: only later visits use it', async () => {
+    const used = item({ name: 'Rehab', sessionCount: 5, basePricePaise: 500000 });
+    visits = [{ id: 'v1', serviceCatalogId: used.id }];
+    open(used);
+    await within(dialog()).findByText(/Used on 1 visit/);
+    expect(within(dialog()).queryByText(/Visits logged from now on/)).toBeNull();
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'One more session' }));
+    expect(within(dialog()).getByText(/Visits logged from now on/)).toHaveTextContent('Visits logged from now on use 6 sessions. Packages already started keep their own count.');
+  });
+
+  it('Enter in the name or price box saves, but not while Save is off', async () => {
+    open(item({ name: 'Follow-up', basePricePaise: 60000 }));
+    const name = within(dialog()).getByRole('textbox', { name: 'Name' });
+    fireEvent.keyDown(name, { key: 'Enter' });
+    expect(put).not.toHaveBeenCalled();
+    fireEvent.change(name, { target: { value: 'Follow-up visit' } });
+    fireEvent.keyDown(name, { key: 'Enter' });
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ name: 'Follow-up visit' });
+  });
+
+  it('session length is saved from its own field, and can be cleared', async () => {
+    open(item({ name: 'Assessment', durationMinutes: 45 }));
+    const length = within(dialog()).getByRole('spinbutton', { name: 'Session length (minutes, optional)' });
+    expect(length).toHaveValue(45);
+    fireEvent.change(length, { target: { value: '' } });
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ durationMinutes: null });
   });
 });
 

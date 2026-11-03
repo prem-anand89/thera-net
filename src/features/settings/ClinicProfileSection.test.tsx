@@ -38,4 +38,37 @@ describe('ClinicProfileSection', () => {
     fireEvent.click(toggle);
     expect(screen.getByRole('button', { name: 'Hide invoice preview' })).toHaveAttribute('aria-expanded', 'true');
   });
+
+  it('the name, address, phone and email boxes are labelled (tapping the label focuses the box)', () => {
+    render(<ClinicProfileSection onDirtyChange={vi.fn()} />);
+    for (const name of ['Clinic name', 'Address', 'Email']) expect(screen.getByLabelText(name)).toBeInTheDocument();
+    expect(screen.getByLabelText('Address').tagName).toBe('TEXTAREA');
+  });
+
+  it('the email box gives a phone the email keyboard, with no auto-capital or spell-check', () => {
+    render(<ClinicProfileSection onDirtyChange={vi.fn()} />);
+    const email = screen.getByLabelText('Email');
+    expect(email).toHaveAttribute('type', 'email');
+    expect(email).toHaveAttribute('inputmode', 'email');
+    expect(email).toHaveAttribute('autocomplete', 'email');
+    expect(email).toHaveAttribute('autocapitalize', 'none');
+    expect(email).toHaveAttribute('spellcheck', 'false');
+    expect(screen.getByLabelText('Address')).toHaveAttribute('autocomplete', 'street-address');
+  });
+
+  it('an email that cannot be an address is called out and cannot be saved; a good one (or none) can', () => {
+    render(<ClinicProfileSection onDirtyChange={vi.fn()} />);
+    const email = screen.getByLabelText('Email');
+    fireEvent.change(email, { target: { value: 'not-an-email' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid email address');
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.change(email, { target: { value: ' clinic@example.com ' } });
+    expect(email).toHaveValue('clinic@example.com');
+    expect(screen.queryByText(/Enter a valid email address/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+    fireEvent.change(email, { target: { value: '' } });
+    expect(screen.queryByText(/Enter a valid email address/)).toBeNull();
+  });
 });
+

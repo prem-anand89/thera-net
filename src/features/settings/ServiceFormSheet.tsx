@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, catalogService } from '@/services';
 import type { CatalogItem } from '@/domain/types';
+import { formatINR } from '@/domain/money';
 import { perSessionLabel, usageLabel } from '@/domain/catalogDisplay';
 import { groupNameCheck, nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
 import { btnPrimary, btnSecondary, ConfirmDialog, Field, inputCls, RupeeInput, Segmented, SheetDialog } from '@/components/ui';
@@ -76,7 +77,6 @@ function ServiceForm({
   const [group, setGroup] = useState((editing?.category ?? '').trim() ?? '');
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [duration, setDuration] = useState(editing?.durationMinutes != null ? String(editing.durationMinutes) : '');
-  const [moreOpen, setMoreOpen] = useState(editing?.durationMinutes != null);
   const [active, setActive] = useState(editing?.active ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +84,8 @@ function ServiceForm({
   const nameId = useId();
   const sessionsId = useId();
   const groupId = useId();
+  const priceId = useId();
+  const lengthId = useId();
 
   const check = nameCheck(name, allItems, { selfId: editing?.id });
   const groupCheck = newGroup !== null ? groupNameCheck(newGroup, groupNames) : null;
@@ -95,6 +97,19 @@ function ServiceForm({
     [editing?.id, editing?.active]
   );
   const canDelete = Boolean(editing && !editing.active && historyCount === 0);
+  const sessionCount = isPackage ? sessions : 1;
+  // Editing: Save stays off until something differs from what is stored (adding is never "unchanged").
+  const changed =
+    !editing ||
+    name.trim() !== editing.name ||
+    sessionCount !== editing.sessionCount ||
+    pricePaise !== editing.basePricePaise ||
+    chosenGroup() !== (editing.category ?? '').trim() ||
+    (parseDuration(duration) ?? null) !== (editing.durationMinutes ?? null) ||
+    active !== editing.active;
+  const priceChanged = Boolean(editing && pricePaise != null && pricePaise !== editing.basePricePaise);
+  // A used service whose session count changes: only visits logged from now on use the new number.
+  const sessionsChanged = Boolean(editing && used > 0 && sessionCount !== editing.sessionCount);
 
   function chosenGroup(): string {
     if (newGroup === null) return group;
@@ -114,7 +129,7 @@ function ServiceForm({
     const fields = {
       name: name.trim(),
       category: chosenGroup(),
-      sessionCount: isPackage ? sessions : 1,
+      sessionCount,
       basePricePaise: pricePaise,
       durationMinutes,
       updatedAt: new Date().toISOString(),
@@ -174,13 +189,24 @@ function ServiceForm({
           <button type="button" className={btnSecondary} disabled={saving} onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
+          <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check) || !changed} onClick={() => void save()}>
             {saving ? 'Saving…' : editing ? 'Save' : 'Add'}
           </button>
         </>
       }
     >
-      <div className="space-y-4">
+      {/* Enter in a text or number box saves, like pressing the button (not in the group dropdown or on a button). */}
+      <div
+        className="space-y-4"
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || e.defaultPrevented) return;
+          const t = e.target as HTMLElement;
+          if (t.tagName !== 'INPUT' || (t as HTMLInputElement).type === 'checkbox') return;
+          if (saving || nameCheckBlocks(check) || !changed) return;
+          e.preventDefault();
+          void save();
+        }}
+      >
         <Segmented
           label="Kind of service"
           options={[
@@ -261,17 +287,33 @@ function ServiceForm({
 
         <Field
           label={isPackage ? 'Price for the whole package' : 'Price'}
+          htmlFor={priceId}
           hint={
-            isPackage && pricePaise != null ? (
-              <span className="text-[var(--moss)]">{perSessionLabel({ basePricePaise: pricePaise, sessionCount: sessions })}</span>
-            ) : undefined
+            <>
+              {isPackage && pricePaise != null && (
+                <span className="text-[var(--moss)]">{perSessionLabel({ basePricePaise: pricePaise, sessionCount: sessions })}</span>
+              )}
+              {isPackage && pricePaise != null && priceChanged && ' · '}
+              {priceChanged && editing && <span>Was {formatINR(editing.basePricePaise)}</span>}
+            </>
           }
         >
-          <RupeeInput valuePaise={pricePaise} onChange={setPricePaise} />
+          <div className="relative">
+            <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₹</span>
+            <RupeeInput id={priceId} valuePaise={pricePaise} onChange={setPricePaise} className={`font-num ${inputCls} !pl-7`} />
+          </div>
         </Field>
-        <p className="rounded-lg bg-[var(--paper)] px-3 py-2 text-hint text-[var(--muted)]">
-          Applies to visits from now on. Past visits, open packages and issued invoices stay as they were.
-        </p>
+        {editing && (
+          <p className="rounded-lg bg-[var(--paper)] px-3 py-2 text-hint text-[var(--muted)]">
+            Applies to visits from now on. Past visits, open packages and issued invoices stay as they were.
+          </p>
+        )}
+        {sessionsChanged && (
+          <p role="status" className="rounded-lg bg-[var(--amber-light)] px-3 py-2 text-hint text-[var(--amber-strong)]">
+            Visits logged from now on use {sessionCount === 1 ? 'one visit' : `${sessionCount} sessions`}. Packages already
+            started keep their own count.
+          </p>
+        )}
 
         <div className="-mx-5 border-t border-[var(--border)]" />
 
@@ -329,31 +371,23 @@ function ServiceForm({
           )}
         </Field>
 
-        <div>
-          <button
-            type="button"
-            className="flex min-h-9 w-full items-center justify-between text-sm font-semibold text-[var(--teal-strong)]"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen((v) => !v)}
-          >
-            More
-            <span aria-hidden="true">{moreOpen ? '▴' : '▾'}</span>
-          </button>
-          {moreOpen && (
-            <Field label="Session length (minutes)" hint="Helps the utilisation report. Leave blank if unsure.">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={480}
-                step={1}
-                className={inputCls}
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-              />
-            </Field>
-          )}
-        </div>
+        <Field
+          label="Session length (minutes, optional)"
+          htmlFor={lengthId}
+          hint={`${isPackage ? 'Per session. ' : ''}Helps the utilisation report. Leave blank if unsure.`}
+        >
+          <input
+            id={lengthId}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={480}
+            step={1}
+            className={inputCls}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+          />
+        </Field>
 
         {editing && (
           <div className="space-y-2 border-t border-[var(--border)] pt-3">

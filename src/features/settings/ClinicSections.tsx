@@ -7,6 +7,7 @@ import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { type Clinic } from '@/domain/types';
+import { validateEmail } from '@/domain/publicBookingDays';
 import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { OpenDaysStrip } from './OpenDaysStrip';
 import { withOpenDays } from '@/domain/operatingHours';
@@ -82,7 +83,11 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
     await saveFieldNow({ signaturePath: path } as Partial<ProfileFields>);
   }
 
+  // The email is optional, but if there is one it has to look like an address: it prints on bills and receipts.
+  const emailProblem = validateEmail(form.email ?? '');
+
   async function saveProfile() {
+    if (emailProblem) return;
     await save();
   }
 
@@ -126,44 +131,66 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
                   <div className="flex-1 w-full space-y-4">
                     <div className="flex flex-wrap gap-4">
                       <div className="flex-1 min-w-[200px]">
-                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Clinic Name</label>
-                        <input 
-                          className={inputCls} 
-                          value={form.name} 
-                          onChange={(e) => set({ name: e.target.value })} 
-                          placeholder="Your Clinic Name" 
-                        />
+                        <Field label="Clinic name" htmlFor="clinic-name">
+                          <input
+                            id="clinic-name"
+                            className={inputCls}
+                            value={form.name}
+                            autoComplete="organization"
+                            onChange={(e) => set({ name: e.target.value })}
+                            placeholder="Your clinic name"
+                          />
+                        </Field>
                       </div>
                     </div>
                     
-                    <div>
-                      <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Address</label>
-                      <textarea 
-                        className={`${inputCls} resize-none min-h-[72px]`} 
-                        rows={3} 
-                        placeholder={'Street\nCity, State — PIN'} 
-                        value={form.address ?? ''} 
-                        onChange={(e) => set({ address: e.target.value || null })} 
+                    <Field label="Address" htmlFor="clinic-address" hint="Printed on bills and receipts, one line per row.">
+                      <textarea
+                        id="clinic-address"
+                        className={`${inputCls} resize-none min-h-[72px] max-h-48 field-sizing-content`}
+                        rows={3}
+                        autoComplete="street-address"
+                        placeholder={'Street\nCity, State — PIN'}
+                        value={form.address ?? ''}
+                        onChange={(e) => set({ address: e.target.value || null })}
                       />
-                    </div>
+                    </Field>
 
                     <div className="flex flex-wrap gap-4 pt-1">
                       <div className="flex-1 min-w-[140px]">
-                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Phone</label>
-                        <PhoneField
-                          value={form.phone ?? ''}
-                          onChange={(phone) => set({ phone: phone || null })}
-                          ariaLabel="Clinic phone"
-                        />
+                        <Field label="Phone" htmlFor="clinic-phone">
+                          <PhoneField
+                            id="clinic-phone"
+                            value={form.phone ?? ''}
+                            onChange={(phone) => set({ phone: phone || null })}
+                            ariaLabel="Clinic phone"
+                          />
+                        </Field>
                       </div>
-                      <div className="flex-1 min-w-[180px]">
-                        <label className="block text-label font-medium text-[var(--muted)] mb-1.5">Email</label>
-                        <input 
-                          className={inputCls} 
-                          value={form.email ?? ''} 
-                          onChange={(e) => set({ email: e.target.value || null })} 
-                          placeholder="Email address" 
-                        />
+                      <div className="flex-[1.5] min-w-[200px]">
+                        <Field label="Email" htmlFor="clinic-email">
+                          {/* An email keyboard on phones (with @ and .com), no auto-capital or spell-check, and a plain
+                              message under the box when what is typed can't be an address. */}
+                          <input
+                            id="clinic-email"
+                            type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            className={inputCls}
+                            value={form.email ?? ''}
+                            aria-invalid={emailProblem ? true : undefined}
+                            aria-describedby={emailProblem ? 'clinic-email-problem' : undefined}
+                            onChange={(e) => set({ email: e.target.value.trim() || null })}
+                            placeholder="clinic@example.com"
+                          />
+                          {emailProblem && (
+                            <p id="clinic-email-problem" role="alert" className="mt-1 text-hint text-[var(--rust)]">
+                              {emailProblem}
+                            </p>
+                          )}
+                        </Field>
                       </div>
                     </div>
 
@@ -218,7 +245,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
               saved={saved}
               busy={busy}
               onSave={() => void saveProfile()}
-              saveDisabled={!(form.invoicePrefix ?? '').trim()}
+              saveDisabled={!(form.invoicePrefix ?? '').trim() || emailProblem !== null}
               onCancel={() => {
                 cancel();
               }}

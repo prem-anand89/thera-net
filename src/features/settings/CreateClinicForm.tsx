@@ -250,6 +250,10 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       <Field label="Email">
         <input
           type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          spellCheck={false}
           className={inputCls}
           placeholder="clinic@example.com"
           value={form.email}
@@ -260,10 +264,12 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         <PhoneField id="clinic-phone" value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} />
       </Field>
       <Field label="Address">
-        <input
-          type="text"
-          className={inputCls}
-          placeholder="Street, city"
+        {/* Same box as in Settings: the address prints on bills one line per row. */}
+        <textarea
+          className={`${inputCls} resize-none`}
+          rows={2}
+          autoComplete="street-address"
+          placeholder={'Street\nCity, State — PIN'}
           value={form.address}
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
         />

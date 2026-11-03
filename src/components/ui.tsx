@@ -123,14 +123,17 @@ export function RupeeInput({
   onChange,
   disabled,
   className,
+  id,
 }: {
   valuePaise: Paise | null;
   onChange: (paise: Paise | null) => void;
   disabled?: boolean;
   className?: string;
+  id?: string;
 }) {
   return (
     <input
+      id={id}
       type="number"
       min={0}
       step="1"
