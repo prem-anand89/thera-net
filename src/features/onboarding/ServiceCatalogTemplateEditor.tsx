@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import {
   type CatalogTemplateDraft,
   groupCatalogDrafts,
+  isPricedDraft,
 } from '@/domain/onboardingCatalogTemplates';
 import { perSessionLabel } from '@/domain/catalogDisplay';
 import { nameCheck } from '@/domain/nameCheck';
@@ -21,8 +22,8 @@ export function ServiceCatalogTemplateEditor({
     [drafts]
   );
 
-  const namedItems = useMemo(
-    () => drafts.map((d) => ({ id: d.key, name: d.name, active: d.enabled })),
+  const pricedSavedItems = useMemo(
+    () => drafts.filter(isPricedDraft).map((d) => ({ id: d.key, name: d.name, active: true })),
     [drafts]
   );
 
@@ -58,7 +59,7 @@ export function ServiceCatalogTemplateEditor({
                 <TemplateRow
                   key={row.key}
                   row={row}
-                  otherItems={namedItems.filter((item) => item.id !== row.key && item.active)}
+                  otherSavedItems={pricedSavedItems.filter((item) => item.id !== row.key)}
                   onUpdate={(patch) => updateRow(row.key, patch)}
                 />
               ))}
@@ -67,25 +68,18 @@ export function ServiceCatalogTemplateEditor({
         ))}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-[var(--border)] bg-[var(--paper)]/50 px-3 py-2.5">
-          <button
-            type="button"
-            className="text-sm font-semibold text-[var(--teal-strong)] hover:underline"
-            onClick={() => addRow('single')}
-          >
-            + Add a service
-          </button>
-          <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-            <span>or add a:</span>
+          <span className="text-sm font-semibold text-[var(--ink)]">+ Add a service:</span>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
               onClick={() => addRow('single')}
             >
               One visit
             </button>
             <button
               type="button"
-              className="rounded border border-[var(--teal)] bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)]/20"
+              className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-3 py-1 text-xs font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)]/20"
               onClick={() => addRow('package')}
             >
               Package
@@ -102,11 +96,11 @@ export function ServiceCatalogTemplateEditor({
 
 function TemplateRow({
   row,
-  otherItems,
+  otherSavedItems,
   onUpdate,
 }: {
   row: CatalogTemplateDraft;
-  otherItems: { id: string; name: string; active: boolean }[];
+  otherSavedItems: { id: string; name: string; active: boolean }[];
   onUpdate: (patch: Partial<CatalogTemplateDraft>) => void;
 }) {
   const isPackage = row.sessionCount > 1;
@@ -115,10 +109,13 @@ function TemplateRow({
       ? perSessionLabel({ basePricePaise: row.basePricePaise, sessionCount: row.sessionCount })
       : null;
 
-  const check = row.name.trim()
-    ? nameCheck(row.name, otherItems)
-    : { kind: 'none' as const, match: null };
+  const willBeSaved = isPricedDraft(row);
+  const check =
+    willBeSaved && row.name.trim()
+      ? nameCheck(row.name, otherSavedItems)
+      : { kind: 'none' as const, match: null };
   const hasExactDuplicate = check.kind === 'exact';
+  const hasSimilarDuplicate = check.kind === 'similar';
 
   return (
     <div className={`p-3 ${row.enabled ? '' : 'opacity-50'}`}>
@@ -150,16 +147,22 @@ function TemplateRow({
         </p>
       )}
 
+      {hasSimilarDuplicate && check.match && (
+        <p className="mt-1 pl-6 text-xs text-[var(--muted)]">
+          Similar to &quot;{check.match.name}&quot;.
+        </p>
+      )}
+
       <div className="mt-2 flex flex-wrap items-end justify-between gap-3 pl-6">
         {isPackage ? (
           <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
             Sessions
             <input
               type="number"
-              min={1}
+              min={2}
               className="w-16 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--ink)]"
               value={String(row.sessionCount)}
-              onChange={(e) => onUpdate({ sessionCount: Math.max(1, Number(e.target.value) || 1) })}
+              onChange={(e) => onUpdate({ sessionCount: Math.max(2, Number(e.target.value) || 2) })}
             />
           </label>
         ) : (

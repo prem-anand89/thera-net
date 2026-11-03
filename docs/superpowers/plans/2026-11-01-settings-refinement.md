@@ -63,12 +63,13 @@ Settings should feel like a normal form: click a field, type, press Save. Each s
 ### Step 12 — Onboarding & first-week setup
 
 Steps 1–11 changed Settings' words and layout (`Sees patients`, `One visit`, `₹700 each`, `Services & treatments`, `Referral sources`, `Payments & billing`, `Schedule & Booking`, one list card per list, the shared sheet). First-run setup (`/onboarding`, `/onboarding/profile`, `CreateClinicForm`) and the first-week checklist (`/setup`) still carry the old layout and words, plus a few phone/tablet layout bugs. **Reviewed against the code 2026-11-03:** the claims below were checked; corrections are marked *(corrected)*.
+*(Note: Built steps 12a, 12b, 12c are committed locally on main; unpushed, awaiting final branch verification before push).*
 
 | Sub-step | Scope | Build | Review |
 |---|---|---|---|
 | **12a** | Hide the dead nav during onboarding (`Shell.tsx`); Step 1 single card, code preview, address line breaks (`CreateClinicForm.tsx`) — **built** | Sonnet | Opus |
-| **12b** | Step 2 width, "I see patients", solo hint, full-width button (`OnboardingPage.tsx`, `OnboardingTeamStep.tsx`) | Sonnet | Opus |
-| **12c** | Step 3 starter editor in the Step 11 look; Step 4 button order (`ServiceCatalogTemplateEditor.tsx`, `OnboardingPage.tsx`) | Opus | Opus |
+| **12b** | Step 2 width, "I see patients", solo hint, full-width button (`OnboardingPage.tsx`, `OnboardingTeamStep.tsx`) — **built** | Sonnet | Opus |
+| **12c** | Step 3 starter editor in the Step 11 look; Step 4 button order (`ServiceCatalogTemplateEditor.tsx`, `OnboardingPage.tsx`) — **built** | Opus | Opus |
 | **12d** | Invited therapist page; `/setup` checklist words and links (`TherapistProfileOnboardingPage.tsx`, `setupGuide.ts`, `sections.ts`) | Sonnet | Opus |
 
 #### 12a — Onboarding shell & Step 1 Clinic form (Sonnet)
