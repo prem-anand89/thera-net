@@ -2612,8 +2612,8 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → Catalog → Referral sources), same add / deactivate-not-delete / edit
-pattern as `no_return_reason_catalog`. Seeded with the app's original six
+patient (Settings → General → How patients found you; it used to be a view of the Services tab), same add / hide-not-delete / edit
+pattern as `no_return_reason_catalog`. A source's `detail_label` is its optional follow-up question (the extra box on the patient form). Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
 a backfill migration. `patients.referring_source_id` is the source of truth
@@ -2633,9 +2633,9 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
-Kinesio Taping, ...), managed from Settings → Treatments, its own tab
-alongside Services and Referral sources (all three used to be stacked in
-one "Services" tab; split apart so each is its own scroll). Independent of
+Kinesio Taping, ...), managed from Settings → Services & treatments →
+Treatments (chips, most used first; referral sources moved to General as
+"How patients found you"). Independent of
 the billing-side `service_catalog` — one visit is
 billed under one service package but can record several treatment types
 performed via `visits.treatment_ids`, picked from the catalog on both the
@@ -4616,8 +4616,8 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → Catalog → Referral sources), same add / deactivate-not-delete / edit
-pattern as `no_return_reason_catalog`. Seeded with the app's original six
+patient (Settings → General → How patients found you; it used to be a view of the Services tab), same add / hide-not-delete / edit
+pattern as `no_return_reason_catalog`. A source's `detail_label` is its optional follow-up question (the extra box on the patient form). Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
 a backfill migration. `patients.referring_source_id` is the source of truth
@@ -4637,9 +4637,9 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
-Kinesio Taping, ...), managed from Settings → Treatments, its own tab
-alongside Services and Referral sources (all three used to be stacked in
-one "Services" tab; split apart so each is its own scroll). Independent of
+Kinesio Taping, ...), managed from Settings → Services & treatments →
+Treatments (chips, most used first; referral sources moved to General as
+"How patients found you"). Independent of
 the billing-side `service_catalog` — one visit is
 billed under one service package but can record several treatment types
 performed via `visits.treatment_ids`, picked from the catalog on both the

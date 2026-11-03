@@ -168,6 +168,7 @@ function SourceForm({ mode, all, onClose }: { mode: SourceSheet; all: ReferringS
       <div className="mt-3 border-t border-[var(--border)] pt-1">
         <SwitchRow label="Ask a follow-up question" hint="Adds one more box on the patient form." checked={asks} onChange={setAsks} />
         {asks && (
+          <div className="mt-2">
           <Field label="Question" htmlFor={questionId} hint='Shown as the label of the extra box, e.g. "Referring doctor".'>
             <input
               id={questionId}
@@ -178,6 +179,7 @@ function SourceForm({ mode, all, onClose }: { mode: SourceSheet; all: ReferringS
               autoComplete="off"
             />
           </Field>
+          </div>
         )}
       </div>
       {editing && (
