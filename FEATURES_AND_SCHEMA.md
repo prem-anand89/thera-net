@@ -729,6 +729,10 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 #### Catalog (Settings → Services & treatments)
 One settings tab with two lists, **Services** and **Treatments** (the same words as the visit screen's "Services" and "Treatments" cards). **Referral sources** moved to General as "How patients found you" (they are about patients, not services). `parseSettingsSearch` sends old `?tab=services|treatments` links to the matching view and every old referral link to General at that card.
 
+**Treatments** (`TreatmentsView.tsx`): one wrap of chips, most used first (the same 90-day order the visit screen's quick picks use, `dashboardService.treatmentUsageCounts`; alphabetical for ties). "+ Add" in the card header and tapping a chip open the same small `SheetDialog`: a name (live name check; "Show it again" for a hidden one) and, when editing, a **Shown** switch. The line "Tap a treatment to rename or hide it." sits under the chips; hidden treatments are in a collapsed "Hidden (N)" footer (`HiddenItemsFooter`) and keep their names on past visits. Counts ("312" = visits in the last 90 days) appear only with **Show usage** (`useShowUsage('treatments')`, a per-device view switch, off by default). The card is capped at 640px wide on desktop.
+
+**How patients found you** (`ReferralSourcesCard.tsx`, General tab): one list card, one row per source with "Then asks: …" under the name when it has a follow-up question; "+ Add" in the header and a tap on a row open one sheet: name (name-checked), **Ask a follow-up question** (a switch; its **Question** box is the `detail_label` column, and turning the switch off saves it as null so the patient form shows no extra box), and **Shown**. Hidden sources are in a "Hidden (N)" footer.
+
 #### Clinic onboarding wizard (new self-service clinics)
 - **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
 - **Step 2** — Team: optional self-link on the service roster (“I treat patients”), therapist invite
