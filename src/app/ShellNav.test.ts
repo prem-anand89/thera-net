@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterNavItems, shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './Shell';
+import { filterNavItems, shouldShowDesktopNav, shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './Shell';
 
 describe('filterNavItems', () => {
   it('shows Settings to an admin in the main header nav', () => {
@@ -31,12 +31,23 @@ describe('filterNavItems', () => {
 });
 
 describe('shouldShowPhoneBottomNav', () => {
-  it('hides phone bottom nav only on /visits/new', () => {
+  it('hides phone bottom nav on /visits/new and /onboarding*', () => {
     expect(shouldShowPhoneBottomNav('/visits/new')).toBe(false);
+    expect(shouldShowPhoneBottomNav('/onboarding')).toBe(false);
+    expect(shouldShowPhoneBottomNav('/onboarding/profile')).toBe(false);
     expect(shouldShowPhoneBottomNav('/workspace')).toBe(true);
     expect(shouldShowPhoneBottomNav('/ledger')).toBe(true);
     expect(shouldShowPhoneBottomNav('/schedule')).toBe(true);
     expect(shouldShowPhoneBottomNav('/patients/abc')).toBe(true);
+  });
+});
+
+describe('shouldShowDesktopNav', () => {
+  it('hides desktop nav links on /onboarding*', () => {
+    expect(shouldShowDesktopNav('/onboarding')).toBe(false);
+    expect(shouldShowDesktopNav('/onboarding/profile')).toBe(false);
+    expect(shouldShowDesktopNav('/workspace')).toBe(true);
+    expect(shouldShowDesktopNav('/ledger')).toBe(true);
   });
 });
 

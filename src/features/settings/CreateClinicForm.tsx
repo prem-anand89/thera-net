@@ -1,6 +1,9 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { PhoneField } from '@/components/PhoneField';
 import { clinicCode } from '@/domain/clinicCode';
+import { fiscalYearOf } from '@/domain/fiscalYear';
+import { formatInvoiceNo } from '@/domain/invoiceNumber';
+import { formatWalkInMrno } from '@/domain/walkInMrno';
 import { useNavigate } from '@tanstack/react-router';
 import { setActiveClinic } from '@/app/useActiveClinic';
 import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
@@ -198,14 +201,15 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
     }
   }
 
+  const code = clinicCode(form.name);
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(2);
+  const fyLabel = fiscalYearOf(now, 4).label;
+
   const formEl = (
     <form
       onSubmit={handleSubmit}
-      className={
-        variant === 'page'
-          ? 'space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6'
-          : 'space-y-4'
-      }
+      className="space-y-4"
     >
       <Field label="Clinic name *">
         <input
@@ -317,10 +321,15 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           <p className={`font-display text-2xl font-semibold leading-tight ${logoPreview ? 'mt-3' : 'mt-8'}`}>
             {form.name.trim() || 'Your clinic name'}
           </p>
-          <p className="mt-2 text-sm text-white/75">{form.address.trim() || 'Street, city'}</p>
+          <p className="mt-2 text-sm text-white/75 whitespace-pre-line">{form.address.trim() || 'Street, city'}</p>
           <p className="mt-1 text-sm text-white/75">
             {[form.phone.trim(), form.email.trim()].filter(Boolean).join(' · ') || 'Phone and email'}
           </p>
+          {code ? (
+            <p className="mt-3 text-xs text-white/75 font-mono" data-testid="invoice-code-preview">
+              Invoices {formatInvoiceNo(code, fyLabel, 1)} · Patient IDs {formatWalkInMrno(code, yy, 1)}
+            </p>
+          ) : null}
           <p className="mt-auto border-t border-white/15 pt-6 text-xs text-white/60">
             Each invoice is numbered in sequence, so the number never skips.
           </p>

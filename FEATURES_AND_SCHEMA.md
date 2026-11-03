@@ -735,7 +735,7 @@ One settings tab with two lists, **Services** and **Treatments** (the same words
 **Referral sources** (`ReferralSourcesCard.tsx`, General tab): one list card, one row per source with "Then asks: …" under the name when it has a follow-up question; "+ Add" in the header and a tap on a row open one sheet: name (name-checked), **Ask a follow-up question** (a switch; its **Question** box is the `detail_label` column, and turning the switch off saves it as null so the patient form shows no extra box), and **Shown**. Hidden sources are in a "Hidden (N)" footer.
 
 #### Clinic onboarding wizard (new self-service clinics)
-- **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
+- **Step 1** — Create clinic (`CreateClinicForm`): address optional, progress “1 of 3”, then `/onboarding`. Single bordered card on the page variant (no nested form border); invoice header preview preserves multi-line address rows and displays live derived clinic code format preview (e.g. `Invoices BM/26-27/0001 · Patient IDs BM26-0001`). `Shell` hides phone bottom nav (`shouldShowPhoneBottomNav`) and desktop navigation links (`shouldShowDesktopNav`) across all `/onboarding*` routes.
 - **Step 2** — Team: optional self-link on the service roster (“I treat patients”), therapist invite
   (same `invite-therapist` edge function as Settings).
 - **Optional** — Google-only sign-in: skippable password step (`/onboarding?step=password`) before catalog.

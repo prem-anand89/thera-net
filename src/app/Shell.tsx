@@ -78,9 +78,17 @@ export function filterNavItems(role: string) {
 /**
  * Bottom tab bar on phones is hidden on focused creation routes like `/visits/new`
  * so the page's own action bar can sit flush at the bottom.
+ * It is also hidden on /onboarding* where navigation is locked until onboarding completes.
  */
 export function shouldShowPhoneBottomNav(pathname: string): boolean {
-  return pathname !== '/visits/new';
+  return pathname !== '/visits/new' && !pathname.startsWith('/onboarding');
+}
+
+/**
+ * On desktop the navigation strip is hidden on /onboarding* because clicking app links redirects right back to onboarding.
+ */
+export function shouldShowDesktopNav(pathname: string): boolean {
+  return !pathname.startsWith('/onboarding');
 }
 
 /**
@@ -434,34 +442,36 @@ export function Shell() {
             <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
               <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
             </Link>
-            <nav className="hidden shrink-0 gap-1 sm:flex">
-              {nav.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  // Icon-only below tab:, so the accessible name has to
-                  // come from the attribute rather than the hidden span —
-                  // `hidden` is display:none, which screen readers skip.
-                  aria-label={item.label}
-                  aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
-                  title={item.label}
-                  activeProps={{}}
-                  className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${
-                    isNavActive(pathname, item.to)
-                      ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                      : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
-                  <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
-                  {item.to === '/schedule' && pendingRequestsCount > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
-                      {pendingRequestsCount}
-                    </span>
-                  )}
-                </Link>
-              ))}
-            </nav>
+            {shouldShowDesktopNav(pathname) && (
+              <nav className="hidden shrink-0 gap-1 sm:flex">
+                {nav.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    // Icon-only below tab:, so the accessible name has to
+                    // come from the attribute rather than the hidden span —
+                    // `hidden` is display:none, which screen readers skip.
+                    aria-label={item.label}
+                    aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
+                    title={item.label}
+                    activeProps={{}}
+                    className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${
+                      isNavActive(pathname, item.to)
+                        ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+                        : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
+                    <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
+                    {item.to === '/schedule' && pendingRequestsCount > 0 && (
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
+                        {pendingRequestsCount}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </nav>
+            )}
             <div className="ml-auto flex min-w-0 items-center gap-2 tab:gap-3">
               <div className="flex min-w-0 justify-end">
                 <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} isAdmin={role === 'admin'} />

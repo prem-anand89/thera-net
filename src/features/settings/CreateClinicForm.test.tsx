@@ -70,4 +70,37 @@ describe('CreateClinicForm', () => {
     expect(putLocal.mock.calls[0][0]).toMatchObject({ walkInMrnoPrefix: null });
     expect(put).not.toHaveBeenCalled();
   });
+
+  it('renders a single bordered outer card in the page variant, with form having plain space-y-4', () => {
+    const { container } = render(<CreateClinicForm onSuccess={vi.fn()} variant="page" />);
+    const form = container.querySelector('form');
+    expect(form).toHaveClass('space-y-4');
+    expect(form?.className).not.toContain('border');
+    expect(form?.className).not.toContain('rounded-[10px]');
+  });
+
+  it('shows live code preview in the header preview panel when a clinic name produces a code, and hides when empty or no code', () => {
+    render(<CreateClinicForm onSuccess={vi.fn()} variant="page" />);
+    expect(screen.queryByTestId('invoice-code-preview')).not.toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('e.g., Sunrise Physiotherapy');
+    fireEvent.change(input, { target: { value: 'Beyond Mechanics' } });
+    const preview = screen.getByTestId('invoice-code-preview');
+    expect(preview).toBeInTheDocument();
+    expect(preview.textContent).toMatch(/Invoices BM\/.*\/0001 · Patient IDs BM.*-0001/);
+
+    // Number-only name produces no clinicCode letters
+    fireEvent.change(input, { target: { value: '1234' } });
+    expect(screen.queryByTestId('invoice-code-preview')).not.toBeInTheDocument();
+  });
+
+  it('renders address in the preview with whitespace-pre-line so line breaks are preserved', () => {
+    render(<CreateClinicForm onSuccess={vi.fn()} variant="page" />);
+    const addressInput = screen.getByLabelText('Address');
+    fireEvent.change(addressInput, { target: { value: '12 Main Street\nBangalore, KA — 560001' } });
+    const aside = screen.getByLabelText('Invoice header preview');
+    const renderedAddress = aside.querySelector('p.whitespace-pre-line');
+    expect(renderedAddress).toBeInTheDocument();
+    expect(renderedAddress?.textContent).toBe('12 Main Street\nBangalore, KA — 560001');
+  });
 });
