@@ -389,8 +389,15 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
+      {/* The title: one heading for screen readers at every width, and a visible copy on phones only (Settings isn't in
+          the phone tab bar and the header doesn't name the page). From `sm:` the top nav already highlights Settings, so
+          the visible title goes and gives its height back, like Ledger and Reports. The row then exists only on a wide
+          screen when "Back to setup" does. */}
+      <h1 className="sr-only">Settings</h1>
+      <div className={`flex flex-wrap items-center justify-between gap-3 ${search.fromSetup ? 'sm:justify-end' : 'sm:hidden'}`}>
+        <p aria-hidden="true" className="font-display text-lg font-semibold text-[var(--ink)] sm:hidden">
+          Settings
+        </p>
         {search.fromSetup && (
           <Link
             to="/setup"
