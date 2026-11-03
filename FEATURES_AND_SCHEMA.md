@@ -740,9 +740,13 @@ One settings tab with two lists, **Services** and **Treatments** (the same words
   (same `invite-therapist` edge function as Settings).
 - **Optional** — Google-only sign-in: skippable password step (`/onboarding?step=password`) before catalog.
 - **Step 3** — Services: editable starter templates (`STARTER_CATALOG_TEMPLATE` in
-  `onboardingCatalogTemplates.ts`) — same groups/names/session counts as the old RPC seed;
-  admin sets prices and can add groups, singles, and packages before any `service_catalog` rows
-  are written.
+  `onboardingCatalogTemplates.ts`) in the Step 11 single-card look (`ServiceCatalogTemplateEditor`):
+  small uppercase group headings (CONSULTATION, PHYSIOTHERAPY), editable name inputs (`inputCls`),
+  no "Single visit" labels on one-visit rows, packages showing "N sessions · ₹700 each" from `perSessionLabel`,
+  live per-row duplicate name checks (`nameCheck`) that block finish, a dashed "+ Add a service" row
+  at the end (one visit or package choice), and button "Finish setup" (`w-full sm:w-auto`).
+- **Step 4** — Done: "Go to Workspace" is the primary action (`btnPrimary`), with "First-week checklist"
+  (`/setup`) as secondary (`btnSecondary`), reflecting that Workspace is where day-to-day clinic operations begin.
 - Completion sets `clinics.onboarding_completed_at`; Shell **blocks all in-app routes** except
   `/onboarding` (wizard only), `/reset-password`, and public `/f/*` / `/book/*` until then.
   `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
@@ -786,7 +790,7 @@ Files: `ServicesView.tsx` (list, desktop table, group sheet), `ServiceFormSheet.
 - **No longer offered (N):** collapsed footer at the bottom (`HiddenItemsFooter`), each row noting its usage or "can be deleted".
 - Unique constraint per clinic (`unique (clinic_id, name)`; the same on treatments and referral sources)
 - **Name checks (rule, `domain/nameCheck.ts`):** because of that constraint and the device-first save (a duplicate would look saved, then fail to sync and stay stuck), every add and rename of a service, treatment or referral source goes through `catalogService` (`addService`, `updateService`, `addServices` for first-run setup, `addTreatment`, `updateTreatment`, `addReferralSource`, `updateReferralSource`), which refuses a taken name before writing (`NameTakenError`). The forms show the same check live (`NameCheckNote`): the same name as an offered item, capitals and spaces ignored, blocks ("You already have Initial assessment."); the name of a stopped/hidden item blocks and offers "Offer it again" / "Show it again", which switches that item back on; a near match (spaces, hyphens, punctuation, a trailing "s") only asks "Use that?". An item's own unchanged name never counts (so a clinic with an existing case-only pair can still edit both). Group names never block: typing an existing group with other capitals joins it under its spelling, a near one is offered. First-run setup checks its whole list (twice in the list, or already in the clinic) before writing any row. Abbreviations (CST / Craniosacral) are not caught.
-- **Starter list for new clinics** (`STARTER_CATALOG_TEMPLATE`, first-run setup): two groups only — Consultation (Initial, Follow-up) and Physiotherapy (session, 5-session package, manual therapy session, exercise therapy session). No group is named after a treatment (earlier starters seeded "Manual Therapy" and "Exercise Therapy" as one-item groups, the same words the treatment list uses). The setup editor uses the same words as Settings: "+ One visit", "Rename group", "Add another group (optional)".
+- **Starter list for new clinics** (`STARTER_CATALOG_TEMPLATE`, first-run setup): two groups only — Consultation (Initial, Follow-up) and Physiotherapy (session, 5-session package, manual therapy session, exercise therapy session). No group is named after a treatment (earlier starters seeded "Manual Therapy" and "Exercise Therapy" as one-item groups, the same words the treatment list uses). In onboarding, the editor uses the Step 11 single-card look: small uppercase headings, no "Single visit" labels, package sublines formatted with `perSessionLabel` ("N sessions · ₹700 each"), and dashed "+ Add a service" at the end with a small One visit | Package selector.
 
 #### No-Return Reason Catalog
 - Clinic-editable list of predefined reasons for patient no-shows
@@ -2931,7 +2935,7 @@ Team's Invite form locks (with the same informational-only copy) once
 - **Keys and step ids are unchanged** from the old checklist so finished steps stay finished on real devices. All meta keys are clinic-scoped, since `db.meta` is shared by every clinic on the device.
 - **Progress is drawn as treatment-course ticks** (`SetupTicks`): filled moss for done, a teal ring for next, hollow for pending.
 - **Pinned bar** (`SetupProgressBar`, "Step 3 of 8: …"): top of Workspace, top of Settings, and in the account menu, admins only. It shows only while the clinic lacks the basics (no profile address, an empty catalog, or an unlinked therapist), so established clinics that never ticked the manual steps aren't nudged again. A clinic that dismissed the old checklist (`firstWeekChecklistDismissed:${clinicId}`) stays dismissed; `/setup` stays reachable from the menu.
-- Onboarding's Done screen offers "Continue setup" (to `/setup`) and "Go to Workspace"; either marks onboarding complete first, since Shell keeps an unfinished clinic on `/onboarding`.
+- Onboarding's Done screen offers primary "Go to Workspace" and secondary "First-week checklist" (to `/setup`); either marks onboarding complete first, since Shell keeps an unfinished clinic on `/onboarding`.
 
 **Header layout budget** below — so it's the fifth now.)
     The mobile bottom tab bar is a separate hand-built 5-item row

@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   type CatalogTemplateDraft,
   groupCatalogDrafts,
-  renameCatalogDraftGroup,
 } from '@/domain/onboardingCatalogTemplates';
-import { effectivePricePerSession } from '@/domain/types';
-import { formatINR } from '@/domain/money';
-import { inputCls, btnSecondary, ErrorNote, RupeeInput } from '@/components/ui';
+import { perSessionLabel } from '@/domain/catalogDisplay';
+import { nameCheck } from '@/domain/nameCheck';
+import { inputCls, RupeeInput } from '@/components/ui';
 
 type AddKind = 'single' | 'package';
 
@@ -17,20 +16,27 @@ export function ServiceCatalogTemplateEditor({
   drafts: CatalogTemplateDraft[];
   onChange: (next: CatalogTemplateDraft[]) => void;
 }) {
-  const groups = useMemo(() => [...groupCatalogDrafts(drafts).entries()].sort(([a], [b]) => a.localeCompare(b)), [drafts]);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newGroupError, setNewGroupError] = useState<string | null>(null);
+  const groups = useMemo(
+    () => [...groupCatalogDrafts(drafts).entries()].sort(([a], [b]) => a.localeCompare(b)),
+    [drafts]
+  );
+
+  const namedItems = useMemo(
+    () => drafts.map((d) => ({ id: d.key, name: d.name, active: d.enabled })),
+    [drafts]
+  );
 
   function updateRow(key: string, patch: Partial<CatalogTemplateDraft>) {
     onChange(drafts.map((d) => (d.key === key ? { ...d, ...patch } : d)));
   }
 
-  function addRow(group: string, kind: AddKind) {
+  function addRow(kind: AddKind) {
+    const defaultGroup = drafts[drafts.length - 1]?.group?.trim() || 'General';
     onChange([
       ...drafts,
       {
         key: crypto.randomUUID(),
-        group,
+        group: defaultGroup,
         name: '',
         sessionCount: kind === 'package' ? 5 : 1,
         basePricePaise: null,
@@ -39,203 +45,112 @@ export function ServiceCatalogTemplateEditor({
     ]);
   }
 
-  function addGroup() {
-    const name = newGroupName.trim();
-    if (!name) {
-      setNewGroupError('Enter a group name');
-      return;
-    }
-    if (drafts.some((d) => d.group.toLowerCase() === name.toLowerCase())) {
-      setNewGroupError('That group already exists');
-      return;
-    }
-    setNewGroupError(null);
-    onChange([
-      ...drafts,
-      {
-        key: crypto.randomUUID(),
-        group: name,
-        name: '',
-        sessionCount: 1,
-        basePricePaise: null,
-        enabled: true,
-      },
-    ]);
-    setNewGroupName('');
-  }
-
   return (
-    <div className="space-y-4">
-      {groups.map(([group, rows]) => (
-        <ServiceTemplateGroupPanel
-          key={group}
-          group={group}
-          rows={rows}
-          onRename={(to) => onChange(renameCatalogDraftGroup(drafts, group, to))}
-          onUpdateRow={updateRow}
-          onAdd={(kind) => addRow(group, kind)}
-        />
-      ))}
-
-      <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)] p-4">
-        <p className="text-sm font-semibold text-[var(--ink)]">Add another group (optional)</p>
-        <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
-          Groups are headings for your services, like Consultation or Physiotherapy. Add services to a group with the
-          buttons inside it.
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            className={inputCls}
-            placeholder="e.g. Assessment"
-            value={newGroupName}
-            onChange={(e) => {
-              setNewGroupName(e.target.value);
-              setNewGroupError(null);
-            }}
-          />
-          <button type="button" className={`${btnSecondary} shrink-0 sm:w-auto`} onClick={() => addGroup()}>
-            + Group
-          </button>
-        </div>
-        <ErrorNote message={newGroupError} />
-      </div>
-    </div>
-  );
-}
-
-function ServiceTemplateGroupPanel({
-  group,
-  rows,
-  onRename,
-  onUpdateRow,
-  onAdd,
-}: {
-  group: string;
-  rows: CatalogTemplateDraft[];
-  onRename: (to: string) => void;
-  onUpdateRow: (key: string, patch: Partial<CatalogTemplateDraft>) => void;
-  onAdd: (kind: AddKind) => void;
-}) {
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState(group);
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-      <div className="flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          {editingName ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${inputCls} max-w-xs text-sm font-semibold`}
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                aria-label="Group name"
-              />
-              <button
-                type="button"
-                className="text-xs font-semibold text-[var(--teal)]"
-                onClick={() => {
-                  onRename(nameDraft);
-                  setEditingName(false);
-                }}
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="text-xs text-[var(--muted)]"
-                onClick={() => {
-                  setNameDraft(group);
-                  setEditingName(false);
-                }}
-              >
-                Cancel
-              </button>
+    <div className="space-y-2">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+        {groups.map(([group, rows], gIdx) => (
+          <div key={group} className={gIdx === 0 ? '' : 'border-t border-[var(--border)]'}>
+            <div className="bg-[var(--paper)] px-3 py-2 text-[11.5px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+              {group}
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-[var(--ink)]">{group}</h3>
-              <span className="text-[11px] text-[var(--muted)]">{rows.length} items</span>
-              <button
-                type="button"
-                className="text-xs font-semibold text-[var(--teal)] hover:underline"
-                onClick={() => {
-                  setNameDraft(group);
-                  setEditingName(true);
-                }}
-              >
-                Rename group
-              </button>
+            <div className="divide-y divide-[var(--border)]">
+              {rows.map((row) => (
+                <TemplateRow
+                  key={row.key}
+                  row={row}
+                  otherItems={namedItems.filter((item) => item.id !== row.key && item.active)}
+                  onUpdate={(patch) => updateRow(row.key, patch)}
+                />
+              ))}
             </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold"
-            onClick={() => onAdd('single')}
-          >
-            + One visit
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-1 text-[11px] font-semibold text-[var(--teal-strong)]"
-            onClick={() => onAdd('package')}
-          >
-            + Package
-          </button>
-        </div>
-      </div>
-      <div className="divide-y divide-[var(--border)]">
-        {rows.map((row) => (
-          <TemplateRow key={row.key} row={row} onUpdate={(patch) => onUpdateRow(row.key, patch)} />
+          </div>
         ))}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-[var(--border)] bg-[var(--paper)]/50 px-3 py-2.5">
+          <button
+            type="button"
+            className="text-sm font-semibold text-[var(--teal-strong)] hover:underline"
+            onClick={() => addRow('single')}
+          >
+            + Add a service
+          </button>
+          <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+            <span>or add a:</span>
+            <button
+              type="button"
+              className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              onClick={() => addRow('single')}
+            >
+              One visit
+            </button>
+            <button
+              type="button"
+              className="rounded border border-[var(--teal)] bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)]/20"
+              onClick={() => addRow('package')}
+            >
+              Package
+            </button>
+          </div>
+        </div>
       </div>
+      <p className="text-xs text-[var(--muted)]">
+        You can change prices, groups and treatments anytime in Settings → Services &amp; treatments.
+      </p>
     </div>
   );
 }
 
 function TemplateRow({
   row,
+  otherItems,
   onUpdate,
 }: {
   row: CatalogTemplateDraft;
+  otherItems: { id: string; name: string; active: boolean }[];
   onUpdate: (patch: Partial<CatalogTemplateDraft>) => void;
 }) {
   const isPackage = row.sessionCount > 1;
   const perSession =
-    row.basePricePaise != null && row.basePricePaise > 0
-      ? formatINR(effectivePricePerSession({ basePricePaise: row.basePricePaise, sessionCount: row.sessionCount }))
+    isPackage && row.basePricePaise != null && row.basePricePaise > 0
+      ? perSessionLabel({ basePricePaise: row.basePricePaise, sessionCount: row.sessionCount })
       : null;
+
+  const check = row.name.trim()
+    ? nameCheck(row.name, otherItems)
+    : { kind: 'none' as const, match: null };
+  const hasExactDuplicate = check.kind === 'exact';
 
   return (
     <div className={`p-3 ${row.enabled ? '' : 'opacity-50'}`}>
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="checkbox"
+          className="h-4 w-4 rounded accent-[var(--teal)]"
           checked={row.enabled}
           onChange={(e) => onUpdate({ enabled: e.target.checked })}
           aria-label="Include this service"
         />
         <input
-          className="min-w-[140px] flex-1 border-0 bg-transparent px-0 text-sm font-medium text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-0"
+          className={`${inputCls} min-w-[140px] flex-1 py-1.5 text-sm ${hasExactDuplicate ? '!border-[var(--rust)]' : ''}`}
           value={row.name}
           onChange={(e) => onUpdate({ name: e.target.value })}
           placeholder="Service name on visits & invoices"
           aria-label="Service name"
         />
-        <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-          style={
-            isPackage
-              ? { background: 'var(--teal-light)', color: 'var(--teal-strong)' }
-              : { background: 'var(--paper)', border: '1px solid var(--border)', color: 'var(--muted)' }
-          }
-        >
-          {isPackage ? `${row.sessionCount} sessions` : 'Single visit'}
-        </span>
+        {isPackage && (
+          <span className="shrink-0 rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[11px] font-semibold text-[var(--teal-strong)]">
+            {perSession ? `${row.sessionCount} sessions · ${perSession}` : `${row.sessionCount} sessions`}
+          </span>
+        )}
       </div>
-      <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+
+      {hasExactDuplicate && check.match && (
+        <p className="mt-1 pl-6 text-xs text-[var(--rust)]">
+          Duplicate name: &quot;{check.match.name}&quot; is already in use.
+        </p>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-3 pl-6">
         {isPackage ? (
           <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
             Sessions
@@ -250,16 +165,11 @@ function TemplateRow({
         ) : (
           <span />
         )}
-        <div className="flex flex-col items-end gap-0.5">
-          <RupeeInput
-            valuePaise={row.basePricePaise}
-            onChange={(p) => onUpdate({ basePricePaise: p })}
-            className="w-32 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-lg font-semibold text-[var(--ink)]"
-          />
-          {perSession && isPackage && (
-            <span className="text-[11px] text-[var(--muted)]">≈ {perSession}/session</span>
-          )}
-        </div>
+        <RupeeInput
+          valuePaise={row.basePricePaise}
+          onChange={(p) => onUpdate({ basePricePaise: p })}
+          className="w-32 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-base font-semibold text-[var(--ink)]"
+        />
       </div>
     </div>
   );

@@ -182,11 +182,11 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
               more steps get your first week running smoothly.
             </p>
           </div>
-          <button type="button" className={`${btnPrimary} w-full`} onClick={() => void completeAndOpen('/setup')}>
-            Continue setup
-          </button>
-          <button type="button" className={`${btnSecondary} w-full`} onClick={() => void completeAndOpen('/workspace')}>
+          <button type="button" className={`${btnPrimary} w-full`} onClick={() => void completeAndOpen('/workspace')}>
             Go to Workspace
+          </button>
+          <button type="button" className={`${btnSecondary} w-full`} onClick={() => void completeAndOpen('/setup')}>
+            First-week checklist
           </button>
           <button
             type="button"
@@ -220,11 +220,15 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
           <ErrorNote message={finishError} />
           <button
             type="button"
-            className={btnPrimary}
-            disabled={finishBusy || !catalogDraftsReadyToSave(catalogDrafts)}
+            className={`${btnPrimary} w-full sm:w-auto`}
+            disabled={
+              finishBusy ||
+              !catalogDraftsReadyToSave(catalogDrafts) ||
+              Boolean(firstDuplicateName(catalogDrafts.filter(isPricedDraft).map((d) => d.name)))
+            }
             onClick={() => void finishOnboarding()}
           >
-            {finishBusy ? 'Saving…' : 'Finish setup → Workspace'}
+            {finishBusy ? 'Saving…' : 'Finish setup'}
           </button>
           <button
             type="button"
