@@ -285,3 +285,45 @@ describe('Services list — desktop table', () => {
     expect(dialog()).toHaveAccessibleName('Edit service');
   });
 });
+
+describe('Services list — review fixes', () => {
+  it('a group heading and all its rows share one block, so the heading stays on screen for the whole group', () => {
+    catalogItems = [item({ name: 'A' }), item({ name: 'B' }), item({ name: 'C' }), item({ name: 'Solo', category: 'Physio' })];
+    render(<ServicesView />);
+    const heading = screen.getByRole('button', { name: 'Group Consultation: rename or remove' });
+    const block = heading.parentElement!;
+    for (const n of ['A', 'B', 'C']) expect(within(block).getByRole('button', { name: new RegExp(`^Edit ${n},`) })).toBeInTheDocument();
+    expect(within(block).queryByRole('button', { name: /^Edit Solo/ })).toBeNull();
+  });
+
+  it('the group sheet counts stopped services too, since a rename or remove moves them as well', () => {
+    catalogItems = [item({ name: 'A' }), item({ name: 'Old', active: false })];
+    render(<ServicesView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Group Consultation: rename or remove' }));
+    expect(within(dialog()).getByText('2 services. Renaming moves them all at once.')).toBeInTheDocument();
+  });
+
+  it('opening a row does not focus the name box (no keyboard on a phone); adding does', () => {
+    catalogItems = [item({ name: 'Follow-up' })];
+    render(<ServicesView />);
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Follow-up/ }));
+    expect(within(dialog()).getByRole('textbox', { name: 'Name' })).not.toHaveFocus();
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    expect(within(dialog()).getByRole('textbox', { name: 'Name' })).toHaveFocus();
+  });
+
+  it('a row\'s line under the name is its description, so a screen reader hears it', () => {
+    catalogItems = [item({ name: 'Package', sessionCount: 10, basePricePaise: 1000000 })];
+    render(<ServicesView />);
+    expect(screen.getByRole('button', { name: 'Edit Package, ₹10,000' })).toHaveAccessibleDescription('10 sessions · ₹1,000 each');
+  });
+
+  it('says so when every service is stopped, instead of "No services yet"', () => {
+    catalogItems = [item({ name: 'Old', active: false })];
+    render(<ServicesView />);
+    expect(screen.getByText(/No services offered right now/)).toBeInTheDocument();
+    expect(screen.queryByText(/No services yet/)).toBeNull();
+  });
+});
+

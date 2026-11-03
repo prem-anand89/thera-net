@@ -50,6 +50,15 @@ export function ServicesView() {
     () => all.filter((i) => !i.active && matches(i)).sort((a, b) => a.name.localeCompare(b.name)),
     [all, query] // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const blocks = useMemo(() => {
+    const out: { heading: string; items: CatalogItem[] }[] = [];
+    for (const { item, heading } of rows) {
+      const last = out[out.length - 1];
+      if (last && last.heading === heading) last.items.push(item);
+      else out.push({ heading, items: [item] });
+    }
+    return out;
+  }, [rows]);
   const groupNames = useMemo(() => [...new Set(all.map((i) => (i.category ?? '').trim()).filter(Boolean))].sort(), [all]);
   const showSearch = offered.length > SEARCH_ABOVE || query !== '';
 
@@ -87,19 +96,26 @@ export function ServicesView() {
 
       {rows.length === 0 ? (
         <p className="py-4 text-sm text-[var(--muted)]">
-          {query ? `No services match "${search.trim()}".` : 'No services yet. Add the first one with "+ Add".'}
+          {query
+            ? `No services match "${search.trim()}".`
+            : stopped.length > 0
+              ? 'No services offered right now. Offer one again under No longer offered, or add one with "+ Add".'
+              : 'No services yet. Add the first one with "+ Add".'}
         </p>
       ) : isDesktop ? (
         <ServicesTable rows={rows} usage={usage} showUsage={showUsage} flashId={flashId} onEdit={openEdit} onGroup={setGroupSheet} />
       ) : (
         <div className="overflow-clip rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          {rows.map(({ item, heading }, i) => (
-            // The divider sits on the wrapper: the heading or row inside is its first child, so `first:` drops its own.
-            <div key={item.id} className={i === 0 ? '' : 'border-t border-[var(--border)]'}>
-              {heading && heading !== rows[i - 1]?.heading && (
-                <GroupHeading name={heading} onOpen={heading === OTHER_GROUP ? undefined : () => setGroupSheet(heading)} />
+          {blocks.map((block, b) => (
+            // One block per group (heading plus all its rows): a sticky heading only stays at the top while its own
+            // block is on screen. The divider sits on the block; its first child drops its own top border.
+            <div key={block.heading || 'flat'} className={b === 0 ? '' : 'border-t border-[var(--border)]'}>
+              {block.heading && (
+                <GroupHeading name={block.heading} onOpen={block.heading === OTHER_GROUP ? undefined : () => setGroupSheet(block.heading)} />
               )}
-              <ServiceRow item={item} usage={usageFor(item)} flash={item.id === flashId} onOpen={() => openEdit(item)} />
+              {block.items.map((item) => (
+                <ServiceRow key={item.id} item={item} usage={usageFor(item)} flash={item.id === flashId} onOpen={() => openEdit(item)} />
+              ))}
             </div>
           ))}
           <button
@@ -142,7 +158,7 @@ export function ServicesView() {
         <GroupSheet
           key={groupSheet}
           name={groupSheet}
-          count={offered.filter((i) => (i.category ?? '').trim() === groupSheet).length}
+          count={all.filter((i) => (i.category ?? '').trim() === groupSheet).length}
           groupNames={groupNames}
           onClose={() => setGroupSheet(null)}
         />
@@ -181,10 +197,12 @@ function ServiceRow({
   onOpen: () => void;
 }) {
   const sub = [serviceSubline(item, usage), note].filter(Boolean).join(' · ');
+  const subId = useId();
   return (
     <button
       type="button"
       aria-label={`Edit ${item.name}, ${formatINR(item.basePricePaise)}`}
+      aria-describedby={sub ? subId : undefined}
       className={`flex min-h-11 w-full items-center gap-3 border-t border-[var(--border)] px-3 py-2.5 text-left transition-colors first:border-t-0 hover:bg-[var(--paper)] active:bg-[var(--paper)] ${
         flash ? 'bg-[var(--teal-light)]' : ''
       }`}
@@ -192,7 +210,7 @@ function ServiceRow({
     >
       <span className="min-w-0 flex-1">
         <span className="block break-words text-sm font-medium text-[var(--ink)]">{item.name}</span>
-        {sub && <span className="block text-xs text-[var(--muted)]">{sub}</span>}
+        {sub && <span id={subId} className="block text-xs text-[var(--muted)]">{sub}</span>}
       </span>
       <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--ink)]">{formatINR(item.basePricePaise)}</span>
       <span aria-hidden="true" className="shrink-0 text-lg text-[var(--muted)]">›</span>

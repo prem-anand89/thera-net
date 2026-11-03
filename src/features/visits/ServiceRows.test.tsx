@@ -666,5 +666,11 @@ describe('ServiceRows — the same order and headings as Settings → Services',
     fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
     expect(within(screen.getByRole('listbox')).getByText('3 sessions · ₹1,667 each')).toBeInTheDocument();
   });
+
+  it('with open packages and no groups, plain services are headed "Services", not run on from "Open packages"', () => {
+    const c = [{ ...item('a', 'Assessment', 80000), category: '' }];
+    render(<Harness initial={[row('a')]} catalog={c} openPackages={[pkg]} />);
+    expect(headingsAndOptions().filter((t) => !t?.startsWith('·'))).toEqual(['Open packages', 'Services']);
+  });
 });
 

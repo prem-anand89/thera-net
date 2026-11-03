@@ -198,7 +198,8 @@ function ServiceForm({
             value={name}
             placeholder={isPackage ? 'e.g. Physiotherapy package' : 'e.g. Follow-up consultation'}
             onChange={(e) => setName(e.target.value)}
-            autoFocus
+            // Opening a row to look at it shouldn't pop up the keyboard; adding starts in the name box.
+            autoFocus={!editing}
             autoComplete="off"
           />
           <NameCheckNote

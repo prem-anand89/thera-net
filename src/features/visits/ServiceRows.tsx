@@ -235,7 +235,9 @@ export function ServiceRows({
       title: i.name,
       subtitle: serviceSubline(i) || undefined,
       price: formatINR(i.basePricePaise),
-      group: heading || undefined,
+      // With no groups there is no heading, except next to "Open packages": then plain services are headed "Services"
+      // so they aren't read as more open packages.
+      group: heading || (packages.length > 0 ? 'Services' : undefined),
     }));
     return [...packages, ...services];
   }, [openPackages, catalog]);
