@@ -14,9 +14,9 @@ const bar = (over: Partial<React.ComponentProps<typeof SectionSaveBar>> = {}) =>
 };
 
 describe('SectionSaveBar', () => {
-  it('says there are unsaved changes, and saves or cancels', () => {
+  it('says Unsaved, and saves or cancels', () => {
     const { onSave, onCancel } = bar();
-    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onSave).toHaveBeenCalledTimes(1);
