@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatINR, roundToRupeeHalfUp } from '@/domain/money';
-import { effectivePricePerSession, type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/domain/types';
+import { type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/domain/types';
+import { orderedServices, perSessionLabel, serviceSubline } from '@/domain/catalogDisplay';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { therapistColor } from '@/components/schedule/scheduleColors';
 import { PickerMenu } from './PickerMenu';
@@ -226,21 +227,15 @@ export function ServiceRows({
       title: `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)`,
       group: 'Open packages',
     }));
-    const services = catalog.map((i) => ({
+    // The same order and headings as Settings → Services (`orderedServices`): named groups first, then the
+    // ungrouped ones under "Other" — or one flat list with no headings when the clinic uses no groups.
+    const services = orderedServices(catalog).map(({ item: i, heading }) => ({
       value: `svc:${i.id}`,
-      label: `${i.name} — ${formatINR(i.basePricePaise)}${i.sessionCount > 1
-          ? ` (${i.sessionCount} sessions, ${formatINR(effectivePricePerSession(i))}/session)`
-          : ''
-        }`,
+      label: `${i.name} — ${formatINR(i.basePricePaise)}${i.sessionCount > 1 ? ` (${i.sessionCount} sessions, ${perSessionLabel(i)})` : ''}`,
       title: i.name,
-      subtitle:
-        i.sessionCount > 1
-          ? `${i.sessionCount} sessions · ${formatINR(effectivePricePerSession(i))}/session`
-          : i.durationMinutes
-            ? `${i.durationMinutes} min`
-            : undefined,
+      subtitle: serviceSubline(i) || undefined,
       price: formatINR(i.basePricePaise),
-      group: i.category || 'Services',
+      group: heading || undefined,
     }));
     return [...packages, ...services];
   }, [openPackages, catalog]);
@@ -452,7 +447,7 @@ export function ServiceRows({
                 <span>{cat.sessionCount}-session package</span>
                 <span>·</span>
                 <span className="font-num font-medium text-[var(--ink)]">
-                  {formatINR(effectivePricePerSession(cat))}/session
+                  {perSessionLabel(cat)}
                 </span>
                 <span>·</span>
                 <span className="inline-flex items-center rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[11px] font-semibold text-[var(--teal-strong)]">

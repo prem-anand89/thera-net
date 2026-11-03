@@ -9,7 +9,7 @@ const HIDDEN_ITEM = 'is hidden';
 
 /** The existing spelling of a group the name matches (capitals and spaces ignored), else the name as typed. */
 function canonicalGroup(category: string, items: readonly CatalogItem[]): string {
-  const groups = [...new Set(items.map((i) => i.category.trim()).filter(Boolean))];
+  const groups = [...new Set(items.map((i) => (i.category ?? '').trim()).filter(Boolean))];
   const check = groupNameCheck(category, groups);
   return check.kind === 'exact' && check.match ? check.match : category.trim();
 }
@@ -50,7 +50,7 @@ export function createCatalogService(repos: Repos) {
       if (dup) throw new NameTakenError('exact', dup);
       const all = await repos.catalog.list(items[0].clinicId, true);
       for (const item of items) assertNameFree(item.name, all, { hiddenLabel: HIDDEN_SERVICE });
-      for (const item of items) await repos.catalog.put({ ...item, name: item.name.trim(), category: item.category.trim() });
+      for (const item of items) await repos.catalog.put({ ...item, name: item.name.trim(), category: (item.category ?? '').trim() });
     },
 
     async addTreatment(item: TreatmentItem): Promise<void> {
@@ -86,11 +86,11 @@ export function createCatalogService(repos: Repos) {
       const target = to.trim();
       if (!target) throw new Error('Group name is required');
       const all = await repos.catalog.list(clinicId, true);
-      const groups = [...new Set(all.map((i) => i.category.trim()).filter(Boolean))];
+      const groups = [...new Set(all.map((i) => (i.category ?? '').trim()).filter(Boolean))];
       const check = groupNameCheck(target, groups, from.trim());
       const name = check.kind === 'exact' && check.match ? check.match : target;
       const now = new Date().toISOString();
-      const moved = all.filter((i) => i.category.trim() === from.trim()).map((i) => ({ ...i, category: name, updatedAt: now }));
+      const moved = all.filter((i) => (i.category ?? '').trim() === from.trim()).map((i) => ({ ...i, category: name, updatedAt: now }));
       await repos.catalog.bulkPut(moved);
       return name;
     },
@@ -99,7 +99,7 @@ export function createCatalogService(repos: Repos) {
     async removeGroup(clinicId: UUID, group: string): Promise<void> {
       const all = await repos.catalog.list(clinicId, true);
       const now = new Date().toISOString();
-      const moved = all.filter((i) => i.category.trim() === group.trim()).map((i) => ({ ...i, category: '', updatedAt: now }));
+      const moved = all.filter((i) => (i.category ?? '').trim() === group.trim()).map((i) => ({ ...i, category: '', updatedAt: now }));
       await repos.catalog.bulkPut(moved);
     },
 

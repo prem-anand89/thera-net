@@ -73,7 +73,7 @@ function ServiceForm({
   const [name, setName] = useState(editing?.name ?? '');
   const [sessions, setSessions] = useState(editing && editing.sessionCount > 1 ? editing.sessionCount : 5);
   const [pricePaise, setPricePaise] = useState<number | null>(editing?.basePricePaise ?? null);
-  const [group, setGroup] = useState(editing?.category.trim() ?? '');
+  const [group, setGroup] = useState((editing?.category ?? '').trim() ?? '');
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [duration, setDuration] = useState(editing?.durationMinutes != null ? String(editing.durationMinutes) : '');
   const [moreOpen, setMoreOpen] = useState(editing?.durationMinutes != null);

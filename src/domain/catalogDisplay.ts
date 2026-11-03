@@ -56,7 +56,8 @@ export function groupServices<T extends Pick<CatalogItem, 'name' | 'category'>>(
   const named = new Map<string, T[]>();
   const other: T[] = [];
   for (const item of items) {
-    const group = item.category.trim();
+    // `category` can be missing on an old cached row: treat it as no group.
+    const group = (item.category ?? '').trim();
     if (!group) {
       other.push(item);
       continue;

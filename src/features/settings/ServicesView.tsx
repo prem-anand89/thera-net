@@ -44,13 +44,13 @@ export function ServicesView() {
   const all = useMemo(() => items ?? [], [items]);
   const offered = useMemo(() => all.filter((i) => i.active), [all]);
   const query = search.trim().toLowerCase();
-  const matches = (i: CatalogItem) => !query || i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query);
+  const matches = (i: CatalogItem) => !query || i.name.toLowerCase().includes(query) || (i.category ?? '').toLowerCase().includes(query);
   const rows = useMemo(() => orderedServices(offered.filter(matches)), [offered, query]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopped = useMemo(
     () => all.filter((i) => !i.active && matches(i)).sort((a, b) => a.name.localeCompare(b.name)),
     [all, query] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const groupNames = useMemo(() => [...new Set(all.map((i) => i.category.trim()).filter(Boolean))].sort(), [all]);
+  const groupNames = useMemo(() => [...new Set(all.map((i) => (i.category ?? '').trim()).filter(Boolean))].sort(), [all]);
   const showSearch = offered.length > SEARCH_ABOVE || query !== '';
 
   const openAdd = () => setSheet({ kind: 'add' });
@@ -142,7 +142,7 @@ export function ServicesView() {
         <GroupSheet
           key={groupSheet}
           name={groupSheet}
-          count={offered.filter((i) => i.category.trim() === groupSheet).length}
+          count={offered.filter((i) => (i.category ?? '').trim() === groupSheet).length}
           groupNames={groupNames}
           onClose={() => setGroupSheet(null)}
         />

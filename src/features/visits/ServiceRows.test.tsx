@@ -47,6 +47,7 @@ function Harness(props: {
   showAssistant?: boolean;
   quickServices?: CatalogItem[];
   onRows?: (rows: DraftLine[]) => void;
+  catalog?: CatalogItem[];
 }) {
   const [rows, setRows] = useState(props.initial);
   return (
@@ -56,7 +57,7 @@ function Harness(props: {
         setRows(next);
         props.onRows?.(next);
       }}
-      catalog={catalog}
+      catalog={props.catalog ?? catalog}
       openPackages={props.openPackages ?? []}
       therapists={therapists}
       primaryId="t1"
@@ -628,6 +629,42 @@ describe('sharing a service', () => {
     const last = onRows.mock.calls.at(-1)![0] as DraftLine[];
     expect(last).toHaveLength(1);
     expect(last[0].continuation?.packageGroupId).toBe('g2');
+  });
+});
+
+describe('ServiceRows — the same order and headings as Settings → Services', () => {
+  const headingsAndOptions = () => {
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
+    const list = screen.getByRole('listbox');
+    return [...list.querySelectorAll(':scope > li')].map((li) =>
+      li.querySelector('[role="option"]') ? `· ${li.querySelector('[role="option"]')!.getAttribute('aria-label') ?? li.textContent}` : li.textContent
+    );
+  };
+
+  it('named groups first, then ungrouped services under "Other"', () => {
+    const c = [
+      { ...item('h', 'Home visit', 150000), category: '' },
+      { ...item('p', 'Physio session', 80000), category: 'Physiotherapy' },
+      { ...item('f', 'Follow-up', 60000), category: 'Consultation' },
+    ];
+    render(<Harness initial={[row('a')]} catalog={c} />);
+    const shown = headingsAndOptions();
+    const headings = shown.filter((t) => !t?.startsWith('·'));
+    expect(headings).toEqual(['Consultation', 'Physiotherapy', 'Other']);
+    expect(shown.findIndex((t) => t?.includes('Home visit'))).toBeGreaterThan(shown.indexOf('Other'));
+  });
+
+  it('a clinic with no groups gets one flat list with no headings at all', () => {
+    const c = [{ ...item('a', 'Assessment', 80000), category: '' }, { ...item('b', 'Taping', 50000), category: '' }];
+    render(<Harness initial={[row('a')]} catalog={c} />);
+    expect(headingsAndOptions().filter((t) => !t?.startsWith('·'))).toEqual([]);
+  });
+
+  it('shows the package line with a whole-rupee price each', () => {
+    const c = [{ ...item('k', 'Package (3)', 500000, 3), category: '' }];
+    render(<Harness initial={[row('a')]} catalog={c} />);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
+    expect(within(screen.getByRole('listbox')).getByText('3 sessions · ₹1,667 each')).toBeInTheDocument();
   });
 });
 
