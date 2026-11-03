@@ -12,10 +12,12 @@ const svc = (over: Partial<CatalogItem>): CatalogItem => ({
   basePricePaise: 100000, active: true, updatedAt: now, ...over,
 });
 
-function setup(services: CatalogItem[] = [], treatments: TreatmentItem[] = [], sources: ReferringSourceItem[] = []) {
-  const puts = { catalog: vi.fn(), treatment: vi.fn(), source: vi.fn() };
+function setup(services: CatalogItem[] = [], treatments: TreatmentItem[] = [], sources: ReferringSourceItem[] = [], visits: unknown[] = [], lines: unknown[] = []) {
+  const puts = { catalog: vi.fn(), bulk: vi.fn(), treatment: vi.fn(), source: vi.fn() };
   const repos = {
-    catalog: { list: async () => services, put: async (i: CatalogItem) => puts.catalog(i) },
+    catalog: { list: async () => services, put: async (i: CatalogItem) => puts.catalog(i), bulkPut: async (rows: CatalogItem[]) => puts.bulk(rows) },
+    visits: { list: async () => visits },
+    visitItems: { listByClinic: async () => lines },
     treatmentCatalog: { list: async () => treatments, put: async (i: TreatmentItem) => puts.treatment(i) },
     referringSourceCatalog: { list: async () => sources, put: async (i: ReferringSourceItem) => puts.source(i) },
   } as unknown as Repos;
@@ -74,3 +76,44 @@ describe('catalogService name checks (the safety net under every form)', () => {
     expect(c.puts.catalog).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('catalogService groups and usage', () => {
+  it('renames a group in one write, joining an existing group typed with other capitals', async () => {
+    const a = svc({ category: 'Consult' }), b = svc({ name: 'B', category: 'Consult' }), c = svc({ name: 'C', category: 'Consultation' });
+    const { service, puts } = setup([a, b, c]);
+    await expect(service.renameGroup('c1', 'Consult', 'consultation')).resolves.toBe('Consultation');
+    expect(puts.bulk).toHaveBeenCalledTimes(1);
+    expect(puts.bulk.mock.calls[0][0].map((i: CatalogItem) => [i.name, i.category])).toEqual([
+      ['Initial assessment', 'Consultation'],
+      ['B', 'Consultation'],
+    ]);
+    expect(puts.catalog).not.toHaveBeenCalled();
+  });
+
+  it('refuses a blank group name, and removing a group ungroups its services in one write', async () => {
+    const a = svc({ category: 'Consultation' });
+    const { service, puts } = setup([a, svc({ name: 'Other', category: 'Physio' })]);
+    await expect(service.renameGroup('c1', 'Consultation', '  ')).rejects.toThrow('Group name is required');
+    await service.removeGroup('c1', 'Consultation');
+    expect(puts.bulk).toHaveBeenCalledTimes(1);
+    expect(puts.bulk.mock.calls[0][0]).toEqual([expect.objectContaining({ id: a.id, category: '' })]);
+  });
+
+  it('counts each visit once per service, from its lines or (older visits) its own service', async () => {
+    const visits = [
+      { id: 'v1', serviceCatalogId: 's1' },
+      { id: 'v2', serviceCatalogId: 's1' },
+      { id: 'v3', serviceCatalogId: 's2' },
+    ];
+    const lines = [
+      { visitId: 'v1', serviceCatalogId: 's1', deleted: false },
+      { visitId: 'v1', serviceCatalogId: 's1', deleted: false },
+      { visitId: 'v1', serviceCatalogId: 's3', deleted: false },
+      { visitId: 'v2', serviceCatalogId: 's3', deleted: true },
+    ];
+    const { service } = setup([], [], [], visits, lines);
+    const counts = await service.usageCounts('c1');
+    expect(Object.fromEntries(counts)).toEqual({ s1: 2, s2: 1, s3: 1 });
+  });
+});
+

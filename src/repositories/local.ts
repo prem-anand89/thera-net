@@ -109,6 +109,7 @@ const catalog: CatalogRepo = {
   },
   get: (id) => db.service_catalog.get(id),
   put: (item) => putWithOutbox('service_catalog', item),
+  bulkPut: (items) => bulkPutWithOutbox('service_catalog', items),
   removeLocal: async (id) => {
     await db.service_catalog.delete(id);
   },

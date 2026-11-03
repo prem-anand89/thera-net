@@ -86,6 +86,7 @@ function makeFakeRepos() {
       list: async () => catalog,
       get: async (id) => catalog.find((c) => c.id === id),
       put: async () => {},
+      bulkPut: async () => {},
       removeLocal: async () => {},
     },
     noReturnReasonCatalog: {

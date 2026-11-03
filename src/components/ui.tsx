@@ -635,6 +635,60 @@ export function ConfirmDialog({
   );
 }
 
+/**
+ * The shared add / edit sheet: a bottom sheet on phones (rounded top, the middle scrolls, the buttons stay pinned
+ * above the safe area and the keyboard), a centred dialog from `sm:` up. Escape and Tab behave like every dialog
+ * (`useDialogBehavior`). Pass the action buttons as `footer`; a problem shows in `error` right above them, where it
+ * can't be scrolled away. A quiet destructive link (e.g. Delete) goes at the end of `children`.
+ */
+export function SheetDialog({
+  open,
+  title,
+  onClose,
+  children,
+  footer,
+  error,
+  busy = false,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer: ReactNode;
+  error?: string | null;
+  /** While true, Escape and the backdrop don't close it (a save is in flight). */
+  busy?: boolean;
+}) {
+  const panelRef = useDialogBehavior<HTMLDivElement>(open, onClose, () => !busy);
+  const titleId = useId();
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-[var(--ink)]/40 sm:items-center sm:p-4"
+      onClick={() => !busy && onClose()}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="dialog-panel flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-[var(--surface)] sm:max-w-md sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 px-5 pt-2.5 sm:pt-5">
+          <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--border)] sm:hidden" />
+          <h2 id={titleId} className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-3">{children}</div>
+        <div className="shrink-0 space-y-2 border-t border-[var(--border)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <ErrorNote message={error ?? null} />
+          <div className="flex gap-2 [&>*]:flex-1">{footer}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const th =
   'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
 export const td = 'px-3 py-3 text-sm text-[var(--ink)]';

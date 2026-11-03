@@ -78,6 +78,55 @@ export function createCatalogService(repos: Repos) {
     },
 
     /**
+     * Renames a group: every service in it moves, in one write (one transaction, one sync batch), so a failure can't
+     * leave half a group renamed. Typing an existing group's name (capitals ignored) moves them into that group under
+     * its spelling. A blank name is refused.
+     */
+    async renameGroup(clinicId: UUID, from: string, to: string): Promise<string> {
+      const target = to.trim();
+      if (!target) throw new Error('Group name is required');
+      const all = await repos.catalog.list(clinicId, true);
+      const groups = [...new Set(all.map((i) => i.category.trim()).filter(Boolean))];
+      const check = groupNameCheck(target, groups, from.trim());
+      const name = check.kind === 'exact' && check.match ? check.match : target;
+      const now = new Date().toISOString();
+      const moved = all.filter((i) => i.category.trim() === from.trim()).map((i) => ({ ...i, category: name, updatedAt: now }));
+      await repos.catalog.bulkPut(moved);
+      return name;
+    },
+
+    /** "Remove group (keeps the services)": the group's services become ungrouped, in one write. */
+    async removeGroup(clinicId: UUID, group: string): Promise<void> {
+      const all = await repos.catalog.list(clinicId, true);
+      const now = new Date().toISOString();
+      const moved = all.filter((i) => i.category.trim() === group.trim()).map((i) => ({ ...i, category: '', updatedAt: now }));
+      await repos.catalog.bulkPut(moved);
+    },
+
+    /**
+     * How many visits used each service, all time, from local data: a visit counts once per service, from its service
+     * lines (or, for an older visit with no lines, its own service). Shown behind "Show usage" and in the edit sheet.
+     * Deleting stays gated on `visits.countByService`, which also counts history this skips.
+     */
+    async usageCounts(clinicId: UUID): Promise<Map<UUID, number>> {
+      const [visits, items] = await Promise.all([repos.visits.list({ clinicId }), repos.visitItems.listByClinic(clinicId)]);
+      const perVisit = new Map<UUID, Set<UUID>>();
+      for (const it of items) {
+        if (it.deleted || !it.serviceCatalogId) continue;
+        if (!perVisit.has(it.visitId)) perVisit.set(it.visitId, new Set());
+        perVisit.get(it.visitId)!.add(it.serviceCatalogId);
+      }
+      const counts = new Map<UUID, number>();
+      const bump = (id: UUID) => counts.set(id, (counts.get(id) ?? 0) + 1);
+      for (const v of visits) {
+        const lines = perVisit.get(v.id);
+        if (lines) lines.forEach(bump);
+        else if (v.serviceCatalogId) bump(v.serviceCatalogId);
+      }
+      return counts;
+    },
+
+    /**
      * Permanent delete, zero-history services only — enforced server-side
      * by the hard_delete_catalog_item RPC (blocks if any visit references
      * this item). Online-only because deletes don't travel through the

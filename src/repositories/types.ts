@@ -58,6 +58,8 @@ export interface CatalogRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<CatalogItem[]>;
   get(id: UUID): Promise<CatalogItem | undefined>;
   put(item: CatalogItem): Promise<void>;
+  /** Writes every row and queues each for sync, in one transaction (renaming or removing a group). */
+  bulkPut(items: CatalogItem[]): Promise<void>;
   /** Local cache cleanup after the server-side hard_delete_catalog_item
    *  RPC succeeds — deletes don't travel through the offline outbox. */
   removeLocal(id: UUID): Promise<void>;
