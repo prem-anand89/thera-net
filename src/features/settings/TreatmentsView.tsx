@@ -1,82 +1,136 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
-import { repos, catalogService } from '@/services';
+import { catalogService, dashboardService, repos } from '@/services';
 import type { TreatmentItem } from '@/domain/types';
-import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, SectionCard } from '@/components/ui';
+import { btnPrimary, btnSecondary, Field, inputCls, SectionCard, SheetDialog } from '@/components/ui';
 import { nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
-import { CatalogActionButton, CatalogAddCard, CatalogCardShell, InactivePill, NameCheckNote, saveErrorMessage } from './catalogShared';
+import { SwitchRow } from './settingsShared';
+import { HiddenItemsFooter, MiniSwitch, NameCheckNote, saveErrorMessage } from './catalogShared';
+import { useShowUsage } from './useShowUsage';
 
+/** Counts are visits in the last 90 days: the same window the visit screen uses to put the most used first. */
+const USAGE_DAYS = 90;
+
+type TreatmentSheet = { kind: 'add' } | { kind: 'edit'; item: TreatmentItem };
+
+/**
+ * Treatments: what you did in the session. One wrap of chips, most used first (the order the visit screen offers
+ * them). "+ Add" in the header and tapping a chip open the same small sheet; hidden treatments sit in a footer. Counts
+ * only with "Show usage" (a per-device view switch).
+ */
 export function TreatmentCatalog() {
   const clinic = useClinic();
-  const itemsRaw = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
-  const [showInactive, setShowInactive] = useState(false);
-  const visible = useMemo(
+  const items = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const usageRows = useLiveQuery(() => dashboardService.treatmentUsageCounts(clinic.id, USAGE_DAYS), [clinic.id]);
+  const [showUsage, setShowUsage] = useShowUsage('treatments');
+  const [sheet, setSheet] = useState<TreatmentSheet | null>(null);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+
+  const all = useMemo(() => items ?? [], [items]);
+  const counts = useMemo(() => new Map((usageRows ?? []).map((r) => [r.treatmentId, r.count])), [usageRows]);
+  const shown = useMemo(
     () =>
-      [...(itemsRaw ?? [])]
-        .filter((i) => showInactive || i.active)
-        .sort((a, b) => {
-          if (a.active !== b.active) return a.active ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        }),
-    [itemsRaw, showInactive]
+      all
+        .filter((i) => i.active)
+        .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0) || a.name.localeCompare(b.name)),
+    [all, counts]
   );
-  const activeCount = (itemsRaw ?? []).filter((i) => i.active).length;
-  const itemList = itemsRaw ?? [];
+  const hidden = useMemo(() => all.filter((i) => !i.active).sort((a, b) => a.name.localeCompare(b.name)), [all]);
 
   return (
-    <SectionCard id="settings-card-services-treatments" title="Treatments">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        What you did in the session, for your clinical record. Not on the bill. Shown as quick picks on each visit,
-        most used first. Hide a treatment instead of deleting it, so past visits keep showing it.
-      </p>
-      {itemList.length - activeCount > 0 && (
-        <label className="mb-4 flex items-center gap-2 text-xs text-[var(--muted)]">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-          Show hidden ({itemList.length - activeCount})
-        </label>
-      )}
-      {visible.length > 0 ? (
-        <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((item) => (
-            <TreatmentCard key={item.id} item={item} all={itemList} />
-          ))}
+    <div className="max-w-[640px]">
+      <SectionCard
+        id="settings-card-services-treatments"
+        title="Treatments"
+        action={
+          <button type="button" className={`${btnPrimary} min-h-9 px-3 text-sm`} onClick={() => setSheet({ kind: 'add' })}>
+            + Add
+          </button>
+        }
+      >
+        <p className="mb-2 text-xs text-[var(--muted)]">
+          What you did in the session, for your clinical record. Not on the bill. Shown as quick picks on each visit, most
+          used first.
+        </p>
+        <div className="mb-3 flex justify-end">
+          <MiniSwitch label="Show usage" checked={showUsage} onChange={setShowUsage} />
         </div>
-      ) : (
-        <p className="mb-6 text-xs text-[var(--muted)]">No treatments yet.</p>
-      )}
-      <TreatmentAddForm all={itemList} />
-    </SectionCard>
+
+        {shown.length === 0 ? (
+          <p className="py-4 text-sm text-[var(--muted)]">
+            {hidden.length > 0
+              ? 'No treatments shown right now. Show one again under Hidden, or add one with "+ Add".'
+              : 'No treatments yet. Add the first one with "+ Add".'}
+          </p>
+        ) : (
+          <>
+            <ul className="flex flex-wrap gap-2">
+              {shown.map((item) => (
+                <li key={item.id}>
+                  <Chip item={item} count={showUsage ? counts.get(item.id) ?? 0 : undefined} onOpen={() => setSheet({ kind: 'edit', item })} />
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-[var(--muted)]">
+              Tap a treatment to rename or hide it.{showUsage ? ` Counts are visits in the last ${USAGE_DAYS} days.` : ''}
+            </p>
+          </>
+        )}
+
+        <HiddenItemsFooter label="Hidden" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
+          <ul className="flex flex-wrap gap-2 p-3">
+            {hidden.map((item) => (
+              <li key={item.id}>
+                <Chip item={item} dim onOpen={() => setSheet({ kind: 'edit', item })} />
+              </li>
+            ))}
+          </ul>
+        </HiddenItemsFooter>
+      </SectionCard>
+
+      {sheet && <TreatmentForm key={sheet.kind === 'edit' ? sheet.item.id : 'add'} mode={sheet} all={all} onClose={() => setSheet(null)} />}
+    </div>
   );
 }
 
-function TreatmentCard({ item, all }: { item: TreatmentItem; all: TreatmentItem[] }) {
-  const [editing, setEditing] = useState(false);
-  const [nameDraft, setNameDraft] = useState(item.name);
+function Chip({ item, count, dim = false, onOpen }: { item: TreatmentItem; count?: number; dim?: boolean; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Edit ${item.name}`}
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3.5 text-sm text-[var(--ink)] hover:bg-[var(--paper)] active:border-[var(--teal)] active:bg-[var(--paper)] ${
+        dim ? 'opacity-60' : ''
+      }`}
+      onClick={onOpen}
+    >
+      {item.name}
+      {count !== undefined && <span className="text-xs tabular-nums text-[var(--muted)]">{count}</span>}
+    </button>
+  );
+}
+
+/** "Add a treatment" / "Edit treatment": a name (checked as you type) and, when editing, whether it is shown. */
+function TreatmentForm({ mode, all, onClose }: { mode: TreatmentSheet; all: TreatmentItem[]; onClose: () => void }) {
+  const clinic = useClinic();
+  const editing = mode.kind === 'edit' ? mode.item : null;
+  const [name, setName] = useState(editing?.name ?? '');
+  const [active, setActive] = useState(editing?.active ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const check = nameCheck(nameDraft, all, { selfId: item.id });
-
-  useEffect(() => {
-    if (!editing) setNameDraft(item.name);
-  }, [item.name, editing]);
+  const nameId = useId();
+  const check = nameCheck(name, all, { selfId: editing?.id });
 
   async function save() {
-    const trimmed = nameDraft.trim();
-    if (!trimmed) {
-      setError('Name is required');
-      return;
-    }
+    setError(null);
+    if (!name.trim()) return setError('Enter a name.');
     if (nameCheckBlocks(check)) return;
     setSaving(true);
-    setError(null);
     try {
-      await catalogService.updateTreatment({
-        ...item,
-        name: trimmed,
-        updatedAt: new Date().toISOString(),
-      });
-      setEditing(false);
+      const now = new Date().toISOString();
+      if (editing) await catalogService.updateTreatment({ ...editing, name: name.trim(), active, updatedAt: now });
+      else await catalogService.addTreatment({ id: crypto.randomUUID(), clinicId: clinic.id, name: name.trim(), active: true, updatedAt: now });
+      onClose();
     } catch (e) {
       setError(saveErrorMessage(e));
     } finally {
@@ -84,113 +138,70 @@ function TreatmentCard({ item, all }: { item: TreatmentItem; all: TreatmentItem[
     }
   }
 
-  async function toggleActive() {
-    await repos.treatmentCatalog.put({
-      ...item,
-      active: !item.active,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  if (editing) {
-    return (
-      <CatalogCardShell
-        active={item.active}
-        footer={
-          <>
-            <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <Field label="Treatment name">
-          <input className={inputCls} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoFocus />
-          <NameCheckNote result={check} hiddenText="is hidden" onUse={setNameDraft} />
-        </Field>
-        <ErrorNote message={error} />
-      </CatalogCardShell>
-    );
+  /** "Show it again": switches the hidden treatment with this name back on instead of adding a second one. */
+  async function showAgain(match: TreatmentItem) {
+    setSaving(true);
+    setError(null);
+    try {
+      await repos.treatmentCatalog.put({ ...match, active: true, updatedAt: new Date().toISOString() });
+      onClose();
+    } catch (e) {
+      setError(saveErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <CatalogCardShell
-      active={item.active}
+    <SheetDialog
+      open
+      title={editing ? 'Edit treatment' : 'Add a treatment'}
+      onClose={onClose}
+      busy={saving}
+      error={error}
       footer={
         <>
-          <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
-          <CatalogActionButton tone={item.active ? 'rust' : 'teal'} onClick={() => void toggleActive()}>
-            {item.active ? 'Hide' : 'Show'}
-          </CatalogActionButton>
+          <button type="button" className={btnSecondary} disabled={saving} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className={btnPrimary} disabled={saving || nameCheckBlocks(check)} onClick={() => void save()}>
+            {saving ? 'Saving…' : editing ? 'Save' : 'Add'}
+          </button>
         </>
       }
     >
-      <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
-      {!item.active && <InactivePill />}
-    </CatalogCardShell>
-  );
-}
-
-function TreatmentAddForm({ all }: { all: TreatmentItem[] }) {
-  const clinic = useClinic();
-  const [draftName, setDraftName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const check = nameCheck(draftName, all);
-
-  async function addItem() {
-    setError(null);
-    const name = draftName.trim();
-    if (!name) {
-      setError('Name is required');
-      return;
-    }
-    if (nameCheckBlocks(check)) return;
-    try {
-      await catalogService.addTreatment({
-        id: crypto.randomUUID(),
-        clinicId: clinic.id,
-        name,
-        active: true,
-        updatedAt: new Date().toISOString(),
-      });
-      setDraftName('');
-    } catch (e) {
-      setError(saveErrorMessage(e));
-    }
-  }
-
-  /** "Show it again": switches the hidden treatment with this name back on, instead of adding a second one. */
-  async function showAgain(match: TreatmentItem) {
-    try {
-      await repos.treatmentCatalog.put({ ...match, active: true, updatedAt: new Date().toISOString() });
-      setDraftName('');
-    } catch (e) {
-      setError(saveErrorMessage(e));
-    }
-  }
-
-  return (
-    <CatalogAddCard title="Add a treatment" hint="e.g. Manual therapy, Exercise, Electrotherapy.">
-      <div className="flex flex-wrap gap-2">
+      <Field label="Name" htmlFor={nameId}>
         <input
-          className={`${inputCls} min-w-0 flex-1`}
-          placeholder="Treatment name"
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
+          id={nameId}
+          className={inputCls}
+          value={name}
+          placeholder="e.g. Manual therapy"
+          onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') void addItem();
+            if (e.key === 'Enter') void save();
           }}
+          // A one-field sheet: the name is what you came to change, so it takes focus (the dialog does this itself).
+          autoFocus
+          autoComplete="off"
         />
-        <button type="button" className={btnSecondary} disabled={nameCheckBlocks(check)} onClick={() => void addItem()}>
-          + Add
-        </button>
-      </div>
-      <NameCheckNote result={check} hiddenText="is hidden" restoreLabel="Show it again" onRestore={(m) => void showAgain(m)} onUse={setDraftName} />
-      <ErrorNote message={error} />
-    </CatalogAddCard>
+        <NameCheckNote
+          result={check}
+          hiddenText="is hidden"
+          restoreLabel={editing ? undefined : 'Show it again'}
+          onRestore={editing ? undefined : (m) => void showAgain(m)}
+          onUse={setName}
+        />
+      </Field>
+      {editing && (
+        <div className="mt-4 border-t border-[var(--border)] pt-2">
+          <SwitchRow
+            label="Shown"
+            hint="Turn off to hide it from the visit screen. Past visits keep it."
+            checked={active}
+            onChange={setActive}
+          />
+        </div>
+      )}
+    </SheetDialog>
   );
 }
-
