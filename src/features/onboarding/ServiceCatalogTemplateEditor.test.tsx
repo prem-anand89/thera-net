@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { createStarterCatalogDrafts } from '@/domain/onboardingCatalogTemplates';
 import { ServiceCatalogTemplateEditor } from './ServiceCatalogTemplateEditor';
 
@@ -32,30 +32,32 @@ describe('ServiceCatalogTemplateEditor — Step 11 look', () => {
     expect(inputs[0]).toHaveClass('rounded-lg', 'border');
   });
 
-  it('package session box clamps to min 2 and does not flip to a one-visit row', async () => {
+  it('package sessions use a stepper with 5/10 presets and never drop below 2', async () => {
     function StatefulEditor() {
       const [drafts, setDrafts] = useState(() => createStarterCatalogDrafts());
       return <ServiceCatalogTemplateEditor drafts={drafts} onChange={setDrafts} />;
     }
     render(<StatefulEditor />);
 
-    const sessionsInput = screen.getByLabelText('Sessions') as HTMLInputElement;
-    expect(sessionsInput).toHaveAttribute('min', '2');
-    expect(sessionsInput.value).toBe('5');
+    const group = screen.getByRole('group', { name: 'Number of sessions' });
+    const value = () => group.querySelector('output')?.textContent;
+    expect(value()).toBe('5');
 
-    // Setting to 10 works
-    fireEvent.change(sessionsInput, { target: { value: '10' } });
-    expect(sessionsInput.value).toBe('10');
+    await userEvent.click(screen.getByRole('button', { name: '10 sessions' }));
+    expect(value()).toBe('10');
 
-    // Setting below 2 (e.g. 1 or 0 or empty) clamps to 2 and never drops to 1
-    fireEvent.change(sessionsInput, { target: { value: '1' } });
-    expect(sessionsInput.value).toBe('2');
+    await userEvent.click(screen.getByRole('button', { name: 'One more session' }));
+    expect(value()).toBe('11');
 
-    fireEvent.change(sessionsInput, { target: { value: '0' } });
-    expect(sessionsInput.value).toBe('2');
-
-    fireEvent.change(sessionsInput, { target: { value: '' } });
-    expect(sessionsInput.value).toBe('2');
+    await userEvent.click(screen.getByRole('button', { name: '10 sessions' }));
+    for (let i = 0; i < 12; i++) {
+      const fewer = screen.getByRole('button', { name: 'One fewer session' });
+      if (!(fewer as HTMLButtonElement).disabled) await userEvent.click(fewer);
+    }
+    expect(value()).toBe('2');
+    expect(screen.getByRole('button', { name: 'One fewer session' })).toBeDisabled();
+    // Still a package row: the stepper is still there.
+    expect(screen.getByRole('group', { name: 'Number of sessions' })).toBeInTheDocument();
   });
 
   it('flags duplicate row names only among priced drafts that will be saved', () => {

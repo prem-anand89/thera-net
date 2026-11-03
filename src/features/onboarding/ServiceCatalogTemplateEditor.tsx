@@ -10,6 +10,9 @@ import { inputCls, RupeeInput } from '@/components/ui';
 
 type AddKind = 'single' | 'package';
 
+const MIN_SESSIONS = 2;
+const MAX_SESSIONS = 100;
+
 export function ServiceCatalogTemplateEditor({
   drafts,
   onChange,
@@ -155,16 +158,47 @@ function TemplateRow({
 
       <div className="mt-2 flex flex-wrap items-end justify-between gap-3 pl-6">
         {isPackage ? (
-          <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-            Sessions
-            <input
-              type="number"
-              min={2}
-              className="w-16 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--ink)]"
-              value={String(row.sessionCount)}
-              onChange={(e) => onUpdate({ sessionCount: Math.max(2, Number(e.target.value) || 2) })}
-            />
-          </label>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]" role="group" aria-label="Number of sessions">
+            <div className="flex items-center rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+              <button
+                type="button"
+                className="h-9 w-9 text-lg font-semibold text-[var(--teal-strong)] disabled:opacity-40"
+                aria-label="One fewer session"
+                disabled={row.sessionCount <= MIN_SESSIONS}
+                onClick={() => onUpdate({ sessionCount: Math.max(MIN_SESSIONS, row.sessionCount - 1) })}
+              >
+                −
+              </button>
+              <output aria-live="polite" className="min-w-8 text-center text-sm font-semibold tabular-nums text-[var(--ink)]">
+                {row.sessionCount}
+              </output>
+              <button
+                type="button"
+                className="h-9 w-9 text-lg font-semibold text-[var(--teal-strong)] disabled:opacity-40"
+                aria-label="One more session"
+                disabled={row.sessionCount >= MAX_SESSIONS}
+                onClick={() => onUpdate({ sessionCount: Math.min(MAX_SESSIONS, row.sessionCount + 1) })}
+              >
+                +
+              </button>
+            </div>
+            {[5, 10].map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-pressed={row.sessionCount === n}
+                aria-label={`${n} sessions`}
+                className={`min-h-8 rounded-full border px-3 text-xs ${
+                  row.sessionCount === n
+                    ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
+                }`}
+                onClick={() => onUpdate({ sessionCount: n })}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
         ) : (
           <span />
         )}
