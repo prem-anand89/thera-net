@@ -70,7 +70,7 @@ Steps 1–11 changed Settings' words and layout (`Sees patients`, `One visit`, `
 | **12a** | Hide the dead nav during onboarding (`Shell.tsx`); Step 1 single card, code preview, address line breaks (`CreateClinicForm.tsx`) — **built** | Sonnet | Opus |
 | **12b** | Step 2 width, "I see patients", solo hint, full-width button (`OnboardingPage.tsx`, `OnboardingTeamStep.tsx`) — **built** | Sonnet | Opus |
 | **12c** | Step 3 starter editor in the Step 11 look; Step 4 button order (`ServiceCatalogTemplateEditor.tsx`, `OnboardingPage.tsx`) — **built** | Opus | Opus |
-| **12d** | Invited therapist page; `/setup` checklist words and links (`TherapistProfileOnboardingPage.tsx`, `setupGuide.ts`, `sections.ts`) | Sonnet | Opus |
+| **12d** | Invited therapist page; `/setup` checklist words and links (`TherapistProfileOnboardingPage.tsx`, `setupGuide.ts`, `sections.ts`) — **built** | Sonnet | Opus |
 
 #### 12a — Onboarding shell & Step 1 Clinic form (Sonnet)
 - **Hide the dead nav on `/onboarding*` (`Shell.tsx`):** while onboarding, the app redirects every other route back (`Shell.tsx` ~273–305), yet the desktop nav links and the phone bottom bar still show. Make `shouldShowPhoneBottomNav(pathname)` return `false` for `pathname.startsWith('/onboarding')`, and hide the desktop nav links there too, keeping the brand and the account menu (so Sign out stays reachable).
@@ -99,6 +99,8 @@ Steps 1–11 changed Settings' words and layout (`Sees patients`, `One visit`, `
   - `invite-team` / `link-therapist`: link to the Team members view (`teamView: 'members'`).
 - **Linked change — land on the card:** checklist links today open a tab at its top. Extend `SettingsSearch.card` (added for Referral sources in 11a) with `'after-visit'` (and later other cards as needed), so `clinical-notes` opens General and scrolls to After a visit, using the same scroll-and-highlight `SettingsPage` already does.
 - **Tests:** the 11 IDs are unchanged; each new label and link; `?card=after-visit` scrolls to that card.
+- **Built 12d (2026-11-04):** `TherapistProfileOnboardingPage` greets with the clinic name and renders `OnboardingPasswordStep` when the user has no password identity; buttons use `w-full sm:w-auto`; all 11 setup step IDs preserved with refined labels and links (`teamView: 'members'`, `Open services & treatments`, `card: 'after-visit'`); `SettingsPage` anchors directly to `AFTER_VISIT_CARD_ID` with smooth scrolling and ring highlight.
+- **Tests:** `TherapistProfileOnboardingPage.test.tsx` (4 tests), `setupGuide.test.ts` (18 tests), `sections.test.ts` (18 tests), `SetupPage.test.tsx` (3 tests).
 
 ---
 
@@ -194,7 +196,7 @@ Build order: 14a, then 14b (which depends on 14a's "edit this assignment" call),
 
 **Still open**
 - [ ] **Phone check at 360px (the owner):** the Settings tab chips and search, the Hours card, the Partner card with its confirmation, Team views, the Services sheet with the keyboard open, the email box's keyboard, and the static Save bar at the end of a long card.
-- [ ] **Step 12:** a new clinic can sign up, invite or skip a team, check its starter services and finish on a phone without a dead nav bar or a doubled box; the checklist's words and links match the new Settings, and no step ID changed.
+- [x] **Step 12:** a new clinic can sign up, invite or skip a team, check its starter services and finish on a phone without a dead nav bar or a doubled box; the checklist's words and links match the new Settings, and no step ID changed.
 - [ ] **Step 13:** the dots on every other day don't change when another date is clicked.
 - [ ] **Step 14:** unchecking a weekday turns it off without losing a therapist's second shift; split clinic hours count correctly; assigning shows appointments that fall outside the hours; the migration is applied live and committed.
 - [ ] **Step 15:** a downgraded clinic can still print its old invoices; an unlinked therapist at the seat cap can't be sent an invite the plan refuses.

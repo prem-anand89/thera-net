@@ -35,6 +35,13 @@ describe('parseSettingsSearch', () => {
     expect(parseSettingsSearch({ tab: 'services', catalogView: 'referrals', fromSetup: true })).toEqual({ ...landing, fromSetup: true });
   });
 
+  it('sends card=after-visit to the General tab, at the after-visit card', () => {
+    const landing = { tab: 'general', card: 'after-visit' };
+    expect(parseSettingsSearch({ card: 'after-visit' })).toEqual(landing);
+    expect(parseSettingsSearch({ tab: 'general', card: 'after-visit' })).toEqual(landing);
+    expect(parseSettingsSearch({ tab: 'general', card: 'after-visit', fromSetup: true })).toEqual({ ...landing, fromSetup: true });
+  });
+
   it('opens the Team tab on the view asked for, falling back to members', () => {
     expect(parseSettingsSearch({ tab: 'team', teamView: 'shifts' })).toEqual({ tab: 'team', teamView: 'shifts' });
     expect(parseSettingsSearch({ tab: 'team', teamView: 'members' })).toEqual({ tab: 'team', teamView: 'members' });

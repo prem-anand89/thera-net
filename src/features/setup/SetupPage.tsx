@@ -22,7 +22,16 @@ function StepAction({ link, label, primary }: { link: SetupStepLink; label: stri
     );
   }
   return (
-    <Link to="/settings" search={{ tab: link.tab, fromSetup: true }} className={className}>
+    <Link
+      to="/settings"
+      search={{
+        tab: link.tab,
+        card: link.card,
+        teamView: link.teamView,
+        fromSetup: true,
+      }}
+      className={className}
+    >
       {label}
     </Link>
   );

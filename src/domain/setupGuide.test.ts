@@ -50,7 +50,7 @@ describe('setup meta keys', () => {
 describe('summarizeSetup', () => {
   const steps = buildSetupSteps(false, true);
 
-  it('keeps the step ids stored completion depends on', () => {
+  it('keeps the step ids stored completion depends on, with refined labels and links', () => {
     expect(steps.map((s) => s.id)).toEqual([
       'clinic-profile',
       'price-services',
@@ -64,6 +64,29 @@ describe('summarizeSetup', () => {
       'booking',
       'notifications',
     ]);
+
+    const priceServices = steps.find((s) => s.id === 'price-services')!;
+    expect(priceServices.action).toBe('Open services & treatments');
+
+    const clinicalNotes = steps.find((s) => s.id === 'clinical-notes')!;
+    expect(clinicalNotes.action).toBe('Open After a visit');
+    expect(clinicalNotes.link).toEqual({ kind: 'settings', tab: 'general', card: 'after-visit' });
+
+    const billing = steps.find((s) => s.id === 'billing')!;
+    expect(billing.title).toBe('Set up payments & billing');
+    expect(billing.why).toBe('Add your UPI ID for payments, and your GST number if you issue invoices.');
+    expect(billing.action).toBe('Open Payments & billing');
+
+    const booking = steps.find((s) => s.id === 'booking')!;
+    expect(booking.title).toBe('Set hours & online booking');
+    expect(booking.why).toBe('Check your open days and hours, and your booking link.');
+    expect(booking.action).toBe('Open Schedule & Booking');
+
+    const inviteTeam = steps.find((s) => s.id === 'invite-team')!;
+    expect(inviteTeam.link).toEqual({ kind: 'settings', tab: 'team', teamView: 'members' });
+
+    const linkTherapist = steps.find((s) => s.id === 'link-therapist')!;
+    expect(linkTherapist.link).toEqual({ kind: 'settings', tab: 'team', teamView: 'members' });
   });
 
   it('starts a fresh clinic at 0 with the profile as next', () => {

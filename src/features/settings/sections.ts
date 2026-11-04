@@ -38,14 +38,15 @@ const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewK
   referrals: { tab: 'general', card: 'referrals' },
 };
 
-/** A card a link can scroll to on landing (only cards that moved tabs need one). */
-export type SettingsCardKey = 'referrals';
+/** A card a link can scroll to on landing. */
+export type SettingsCardKey = 'referrals' | 'after-visit';
 export const REFERRALS_CARD_ID = 'settings-card-general-referrals';
+export const AFTER_VISIT_CARD_ID = 'settings-card-after-visit';
 
 export interface SettingsSearch {
   tab?: SettingsTab;
   catalogView?: CatalogViewKey;
-  /** Open the tab and scroll to this card: how an old referral-sources link lands on its new home. */
+  /** Open the tab and scroll to this card: lands on the card with a highlight. */
   card?: SettingsCardKey;
   /** Team only: which view opens. Absent means Team members. */
   teamView?: TeamViewKey;
@@ -68,8 +69,11 @@ export function parseSettingsSearch(search: Record<string, unknown>): SettingsSe
   const fromSetup = search.fromSetup === true || search.fromSetup === 'true' ? true : undefined;
   // Referral sources used to be a view of the Services tab: `?catalogView=referrals` (with or without a tab) and the
   // old `?tab=referrals` all land on General at the card.
-  if (search.catalogView === 'referrals' || legacy?.card === 'referrals') {
+  if (search.catalogView === 'referrals' || legacy?.card === 'referrals' || search.card === 'referrals') {
     return fromSetup ? { tab: 'general', card: 'referrals', fromSetup } : { tab: 'general', card: 'referrals' };
+  }
+  if (search.card === 'after-visit') {
+    return fromSetup ? { tab: 'general', card: 'after-visit', fromSetup } : { tab: 'general', card: 'after-visit' };
   }
   if (!tab) return search.fromSetup ? { fromSetup: true } : {};
 

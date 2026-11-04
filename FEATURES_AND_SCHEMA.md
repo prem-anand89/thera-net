@@ -757,7 +757,9 @@ One settings tab with two lists, **Services** and **Treatments** (the same words
 - **Wizard phase** — `localStorage` tracks `team` → `password` (optional) → `catalog`; deep links
   cannot skip ahead of the phase reached. `/onboarding` is **admin-only** (non-admins redirect to workspace).
 - **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row:
-  invoice name, registration no., phone. Completion sets `therapists.profile_confirmed_at` (synced).
+  greets with the clinic name ("Welcome to {clinic.name}"), offers an optional password step via
+  `OnboardingPasswordStep` when the therapist lacks a password identity (`!hasPasswordIdentity`),
+  and confirms invoice name, registration no., and phone. Completion sets `therapists.profile_confirmed_at` (synced).
   RLS `therapists_update_self` plus trigger `therapists_guard_self_update` limit self-updates to safe
   columns only. **The clinic creator never sees this page:** the wizard's Team step ("I see
   patients at this clinic") already asks name on invoices, registration no. and phone, and stamps
@@ -2929,8 +2931,8 @@ Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
 `invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
 
-**Guided setup** (`/setup`, admin-only; replaced the First-Week Checklist card). Eleven steps in three groups. *Essentials:* clinic profile, price services, invite team, link every therapist. *Your first week:* log a visit, wait for Synced, decide on clinical notes, take a backup. *Optional setup:* configure billing, configure online booking, turn on notifications. Optional steps do not count towards progress or completion.
-- Pure logic in `src/domain/setupGuide.ts` (`buildSetupSteps`, `summarizeSetup`, `isSetupNudgeVisible`); live data in `src/features/setup/useSetupProgress.ts`.
+**Guided setup** (`/setup`, admin-only; replaced the First-Week Checklist card). Eleven steps in three groups. *Essentials:* clinic profile, price services ("Open services & treatments"), invite team (`teamView: 'members'`), link every therapist (`teamView: 'members'`). *Your first week:* log a visit, wait for Synced, decide on clinical notes ("Open After a visit", deep linking to `card=after-visit` with highlight), take a backup. *Optional setup:* Set up payments & billing ("Add your UPI ID for payments, and your GST number if you issue invoices"), Set hours & online booking ("Check your open days and hours, and your booking link"), turn on notifications. Optional steps do not count towards progress or completion.
+- Pure logic in `src/domain/setupGuide.ts` (`buildSetupSteps`, `summarizeSetup`, `isSetupNudgeVisible`); live data in `src/features/setup/useSetupProgress.ts`. All 11 step IDs are preserved across iterations.
 - **Six steps detect themselves** from real data: `clinic.address`, catalog length, `seatsUsed > 1` (a `clinic_members` row exists from the moment an invite is issued), no unlinked therapist, any visit, and the `lastBackupExportedAt:${clinicId}` meta key written by Data backup. **Two are ticked by hand** ("Wait for Synced" is a habit; "clinical notes" is a decision where on and off are both valid), stored as a JSON array of step ids in `firstWeekChecklistCompletedSteps:${clinicId}`.
 - **Keys and step ids are unchanged** from the old checklist so finished steps stay finished on real devices. All meta keys are clinic-scoped, since `db.meta` is shared by every clinic on the device.
 - **Progress is drawn as treatment-course ticks** (`SetupTicks`): filled moss for done, a teal ring for next, hollow for pending.

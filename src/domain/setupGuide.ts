@@ -35,7 +35,12 @@ export interface SetupSignals {
 }
 
 export type SetupStepLink =
-  | { kind: 'settings'; tab: 'general' | 'team' | 'services' | 'account' | 'billing' | 'booking' }
+  | {
+      kind: 'settings';
+      tab: 'general' | 'team' | 'services' | 'account' | 'billing' | 'booking';
+      card?: 'referrals' | 'after-visit';
+      teamView?: 'members' | 'shifts';
+    }
   | { kind: 'new-visit' };
 
 export type SetupGroup = 'essentials' | 'first-week' | 'optional';
@@ -74,7 +79,7 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       title: 'Price your services',
       why: 'Visits bill against these prices, so set them before logging visits.',
       link: { kind: 'settings', tab: 'services' },
-      action: 'Open services',
+      action: 'Open services & treatments',
       auto: (s) => s.servicesPriced,
     },
     {
@@ -85,7 +90,7 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       why: seatLimited
         ? 'Your plan has one login for now. Invite teammates after upgrading.'
         : 'Each person needs their own login so revenue is credited to the right therapist.',
-      link: { kind: 'settings', tab: 'team' },
+      link: { kind: 'settings', tab: 'team', teamView: 'members' },
       action: 'Open team',
       auto: (s) => s.teamInvited,
     },
@@ -94,7 +99,7 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       group: 'essentials',
       title: 'Link every therapist to their login',
       why: 'An unlinked therapist sees an empty Workspace.',
-      link: { kind: 'settings', tab: 'team' },
+      link: { kind: 'settings', tab: 'team', teamView: 'members' },
       action: 'Open team',
       auto: (s) => s.therapistsLinked,
     },
@@ -120,8 +125,8 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       group: 'first-week',
       title: 'Decide on clinical notes',
       why: 'Start with one willing therapist rather than the whole team.',
-      link: { kind: 'settings', tab: 'general' },
-      action: 'Open clinic profile',
+      link: { kind: 'settings', tab: 'general', card: 'after-visit' },
+      action: 'Open After a visit',
     },
     {
       id: 'backup',
@@ -135,18 +140,18 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
     {
       id: 'billing',
       group: 'optional',
-      title: 'Configure billing',
-      why: 'Set up GST, tax preferences, and invoice prefixes.',
+      title: 'Set up payments & billing',
+      why: 'Add your UPI ID for payments, and your GST number if you issue invoices.',
       link: { kind: 'settings', tab: 'billing' },
-      action: 'Open billing',
+      action: 'Open Payments & billing',
     },
     {
       id: 'booking',
       group: 'optional',
-      title: 'Configure online booking',
-      why: 'Set up your booking link and availability rules.',
+      title: 'Set hours & online booking',
+      why: 'Check your open days and hours, and your booking link.',
       link: { kind: 'settings', tab: 'booking' },
-      action: 'Open booking',
+      action: 'Open Schedule & Booking',
     },
     {
       id: 'notifications',

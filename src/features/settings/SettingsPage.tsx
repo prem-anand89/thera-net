@@ -9,7 +9,7 @@ import { ConfirmDialog, Segmented } from '@/components/ui';
 import { CatalogSection, ReferralSourcesCard, type CatalogView } from './CatalogSection';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
-import { REFERRALS_CARD_ID, SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab, type TeamViewKey } from './sections';
+import { AFTER_VISIT_CARD_ID, REFERRALS_CARD_ID, SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsCards, type SettingsCard, type SettingsTab, type TeamViewKey } from './sections';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { LockedCard } from './settingsShared';
 import { PlanSection } from './PlanSection';
@@ -229,8 +229,14 @@ export function SettingsPage() {
   // scroll to. Used for tab clicks, search results and the discard dialog.
   type Target = { tab: SettingsTab; catalogView?: CatalogView; teamView?: TeamViewKey; anchor?: string };
   const [pendingTarget, setPendingTarget] = useState<Target | null>(null);
-  // An old referral-sources link (`?catalogView=referrals`) lands on General and scrolls to the card.
-  const [anchor, setAnchor] = useState<string | null>(search.card === 'referrals' ? REFERRALS_CARD_ID : null);
+  // Direct card links (e.g. ?card=referrals or ?card=after-visit) land on the tab and scroll to the card.
+  const [anchor, setAnchor] = useState<string | null>(
+    search.card === 'referrals'
+      ? REFERRALS_CARD_ID
+      : search.card === 'after-visit'
+        ? AFTER_VISIT_CARD_ID
+        : null
+  );
   const [query, setQuery] = useState('');
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -335,12 +341,17 @@ export function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
 
-  // A link (setup step, closed-days sheet) can change ?tab= while Settings is
+  // A link (setup step, closed-days sheet) can change ?tab= or ?card= while Settings is
   // already open; follow it.
   useEffect(() => {
     if (search.tab && search.tab !== activeTab) setActiveTabState(search.tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.tab]);
+
+  useEffect(() => {
+    if (search.card === 'referrals') setAnchor(REFERRALS_CARD_ID);
+    else if (search.card === 'after-visit') setAnchor(AFTER_VISIT_CARD_ID);
+  }, [search.card]);
 
   // Keep the active chip visible in the horizontal strip.
   useEffect(() => {

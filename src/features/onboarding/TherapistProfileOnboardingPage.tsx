@@ -7,6 +7,8 @@ import { useSession } from '@/app/useSession';
 import { repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
+import { hasPasswordIdentity } from '@/domain/onboarding';
+import { OnboardingPasswordStep } from './OnboardingPasswordStep';
 
 export function TherapistProfileOnboardingPage() {
   const clinic = useClinic();
@@ -24,6 +26,9 @@ export function TherapistProfileOnboardingPage() {
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const needsPassword = !hasPasswordIdentity(session?.user?.identities);
+  const [passwordDone, setPasswordDone] = useState(false);
 
   useEffect(() => {
     if (!therapist) return;
@@ -65,13 +70,14 @@ export function TherapistProfileOnboardingPage() {
   if (therapists && !therapist) {
     return (
       <div className="mx-auto max-w-lg space-y-3">
+        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Welcome to {clinic.name}</h1>
         <p className="text-sm text-[var(--muted)]">
           Your login isn&apos;t linked to a service roster row yet. Ask an admin to link you under Settings →
           Team, or continue to Workspace.
         </p>
         <button
           type="button"
-          className={btnPrimary}
+          className={`${btnPrimary} w-full sm:w-auto`}
           onClick={() => void navigate({ to: '/workspace' })}
         >
           Go to Workspace
@@ -80,13 +86,30 @@ export function TherapistProfileOnboardingPage() {
     );
   }
 
+  if (needsPassword && !passwordDone) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4">
+        <div>
+          <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Welcome to {clinic.name}</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Set up your login details and how you appear on patient invoices.
+          </p>
+        </div>
+        <OnboardingPasswordStep
+          onSkip={() => setPasswordDone(true)}
+          onDone={() => setPasswordDone(true)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <div>
-        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">How you appear on bills</h1>
+        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Welcome to {clinic.name}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          This name prints on invoices. Your account display name can be different — change it anytime from
-          the account menu.
+          How you appear on bills. This name prints on invoices. Your account display name can be different —
+          change it anytime from the account menu.
         </p>
       </div>
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3">
@@ -106,7 +129,12 @@ export function TherapistProfileOnboardingPage() {
         </Field>
       </div>
       <ErrorNote message={error} />
-      <button type="button" className={btnPrimary} disabled={busy || !therapist} onClick={() => void save()}>
+      <button
+        type="button"
+        className={`${btnPrimary} w-full sm:w-auto`}
+        disabled={busy || !therapist}
+        onClick={() => void save()}
+      >
         {busy ? 'Saving…' : 'Go to Workspace'}
       </button>
     </div>
