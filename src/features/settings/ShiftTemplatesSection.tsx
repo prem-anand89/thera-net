@@ -5,10 +5,12 @@ import { db } from '@/lib/db';
 import { repos, bookingService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
-import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { Field, SectionCard, SheetDialog, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
 import { toFriendlyMessage } from '@/lib/errors';
 import { formatRange12h, formatShiftSummary, getTemplatePalette, templateUsage } from './shiftUtils';
 import { ShiftTimesEditor } from './ShiftTimesEditor';
+import { HiddenItemsFooter, NameCheckNote } from './catalogShared';
 import {
   DEFAULT_SHIFT_DRAFT,
   STARTER_SHIFTS,
@@ -27,316 +29,28 @@ function describeStarter(shift: (typeof STARTER_SHIFTS)[number]): string {
     : `${formatRange12h(shift.fields.startMinute, shift.fields.endMinute)} · ${shift.fields.breakDurationMinutes}-min break`;
 }
 
-function ShiftTemplateCard({
-  template,
-  usedByTherapistNames,
-}: {
-  template: ShiftTemplate;
-  usedByTherapistNames: string[];
-}) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(template.name);
-  const [draft, setDraft] = useState<ShiftDraft>(() => draftFromTemplate(template));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const problem = draftProblem(name, draft);
-  const validation = { valid: problem === null, error: problem };
-  const shiftInfo = formatShiftSummary(template);
-  const palette = getTemplatePalette(template.id);
-
-  async function save() {
-    if (!validation.valid) {
-      setError(validation.error);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const fields = fieldsFromDraft(draft);
-      await bookingService.updateShiftTemplate({
-        templateId: template.id,
-        name: name.trim(),
-        ...fields,
-        active: template.active,
-      });
-      setEditing(false);
-    } catch (err) {
-      setError(toFriendlyMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function toggleActive() {
-    setSaving(true);
-    setError(null);
-    try {
-      await bookingService.updateShiftTemplate({
-        templateId: template.id,
-        name: template.name,
-        startMinute: template.startMinute,
-        endMinute: template.endMinute,
-        breakDurationMinutes: template.breakDurationMinutes,
-        defaultBreakStartMinute: template.defaultBreakStartMinute,
-        active: !template.active,
-      });
-    } catch (err) {
-      setError(toFriendlyMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (usedByTherapistNames.length > 0) {
-      setError(`Cannot delete template while assigned to ${usedByTherapistNames.join(', ')}.`);
-      return;
-    }
-    const ok = await askConfirm({
-      title: 'Delete this shift template?',
-      message: `Permanently delete "${template.name}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await bookingService.deleteShiftTemplate(template.id);
-      await db.shift_templates.update(template.id, {
-        removedAt: new Date().toISOString(),
-        active: false,
-      });
-    } catch (err) {
-      setError(toFriendlyMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (editing) {
-    return (
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3 shadow-xs">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-[var(--ink)]">Editing {template.name}</span>
-        </div>
-
-        {usedByTherapistNames.length > 0 && (
-          <div className="rounded-xl border border-[var(--amber)] bg-[var(--amber-light)]/40 p-2 text-xs text-[var(--ink)]">
-            ⚠️ <strong>Impact warning:</strong> Currently assigned to {usedByTherapistNames.join(', ')}.
-            Updating this template modifies their scheduled hours immediately.
-          </div>
-        )}
-
-        <Field label="Shift Name">
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-
-        <ShiftTimesEditor draft={draft} onChange={setDraft} />
-
-        <ErrorNote message={error || (!validation.valid ? validation.error : null)} />
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            className={btnSecondary}
-            onClick={() => {
-              setEditing(false);
-              setError(null);
-            }}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={() => void save()}
-            disabled={saving || !validation.valid}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-all shadow-xs ${
-        !template.active ? 'opacity-60 bg-[var(--paper)]' : ''
-      }`}
-    >
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${palette.bg} ${palette.border} border`}
-              aria-hidden
-            />
-            <h3 className="font-semibold text-sm text-[var(--ink)]">{template.name}</h3>
-          </div>
-          <span
-            className={`rounded-full px-2 py-0.5 text-caption font-medium ${
-              usedByTherapistNames.length > 0
-                ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-                : 'bg-[var(--paper)] text-[var(--muted)]'
-            }`}
-          >
-            {usedByTherapistNames.length > 0
-              ? `Used by ${usedByTherapistNames.length}`
-              : 'Unassigned'}
-          </span>
-        </div>
-
-        {shiftInfo.isSplit && shiftInfo.splitDetails ? (
-          <div className="space-y-0.5">
-            <span className="inline-block rounded bg-[var(--teal-light)]/40 px-1.5 py-0.2 text-caption font-semibold text-[var(--teal)]">
-              SPLIT SHIFT
-            </span>
-            <p className="text-xs text-[var(--muted)]">{shiftInfo.splitDetails}</p>
-          </div>
-        ) : (
-          <p className="text-xs text-[var(--muted)]">
-            {formatRange12h(template.startMinute, template.endMinute)}
-            {template.breakDurationMinutes > 0 &&
-              ` · ${template.breakDurationMinutes}-min break`}
-          </p>
-        )}
-
-        {usedByTherapistNames.length > 0 && (
-          <p className="text-hint text-[var(--muted)] truncate">
-            Staff: {usedByTherapistNames.join(', ')}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-2.5 text-xs font-medium">
-        <button
-          type="button"
-          className="text-[var(--teal)] hover:opacity-80 inline-flex min-h-8 items-center px-1"
-          onClick={() => setEditing(true)}
-        >
-          Edit
-        </button>
-        <div className="flex items-center gap-2">
-          {(!template.active || usedByTherapistNames.length === 0) && (
-            <button
-              type="button"
-              className="text-[var(--rust)] hover:opacity-80 inline-flex min-h-8 items-center px-1"
-              onClick={() => void handleDelete()}
-              disabled={saving}
-              title="Delete this template"
-            >
-              Delete
-            </button>
-          )}
-          <button
-            type="button"
-            className={`inline-flex min-h-8 items-center px-1 ${
-              template.active ? 'text-[var(--muted)]' : 'text-[var(--teal)]'
-            } hover:opacity-80`}
-            onClick={() => void toggleActive()}
-            disabled={saving}
-          >
-            {template.active ? 'Deactivate' : 'Reactivate'}
-          </button>
-        </div>
-      </div>
-      <ErrorNote message={error} />
-    </div>
-  );
+function timesLine(template: ShiftTemplate): string {
+  const info = formatShiftSummary(template);
+  if (info.isSplit && info.splitDetails) return info.splitDetails;
+  const range = formatRange12h(template.startMinute, template.endMinute);
+  return template.breakDurationMinutes > 0 ? `${range} · ${template.breakDurationMinutes}-min break` : range;
 }
 
-function ShiftTemplateAddForm({
-  clinicId,
-  isOpen,
-  onClose,
-}: {
-  clinicId: string;
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState('');
-  const [draft, setDraft] = useState<ShiftDraft>(DEFAULT_SHIFT_DRAFT);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type Sheet = { kind: 'add' } | { kind: 'edit'; template: ShiftTemplate };
 
-  if (!isOpen) return null;
-
-  const problem = draftProblem(name, draft);
-  const validation = { valid: problem === null, error: problem };
-
-  async function add() {
-    if (!validation.valid) {
-      setError(validation.error);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await bookingService.createShiftTemplate({ clinicId, name: name.trim(), ...fieldsFromDraft(draft) });
-      setName('');
-      setDraft(DEFAULT_SHIFT_DRAFT);
-      onClose();
-    } catch (err) {
-      setError(toFriendlyMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="rounded-2xl border border-[var(--teal)]/40 bg-[var(--surface)] p-4 space-y-3 shadow-md animate-in fade-in duration-150">
-      <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
-        <h3 className="font-semibold text-sm text-[var(--ink)]">Add new shift template</h3>
-      </div>
-
-      <Field label="Shift Name">
-        <input
-          className={inputCls}
-          placeholder="e.g. Morning Shift, General Shift"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </Field>
-
-      <ShiftTimesEditor draft={draft} onChange={setDraft} />
-
-      <ErrorNote message={error || (!validation.valid ? validation.error : null)} />
-
-      <div className="flex justify-end gap-2 pt-1">
-        <button
-          type="button"
-          className={btnSecondary}
-          onClick={onClose}
-          disabled={saving}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          className={btnPrimary}
-          onClick={() => void add()}
-          disabled={saving || !validation.valid}
-        >
-          {saving ? 'Creating…' : 'Create shift template'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * "Shift types": the reusable shifts a clinic assigns to people (Morning, Evening, Split…). One list card, a row per
+ * type with its times and who uses it; "+ Add" and a tap on a row open the same sheet. Hidden types sit in a footer.
+ */
 export function ShiftTemplatesSection() {
   const clinic = useClinic();
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinic.id, true), [clinic.id]);
   const assignments = useLiveQuery(() => repos.therapistShiftAssignments.listByClinic(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-
   const entitlements = useEntitlements(clinic.id);
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
+
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
   const [starterBusy, setStarterBusy] = useState(false);
   const [starterError, setStarterError] = useState<string | null>(null);
   // Shifts only help a clinic with a team to roster; a one-login plan is not offered the starter set.
@@ -356,114 +70,258 @@ export function ShiftTemplatesSection() {
     }
   }
 
-  const therapistMap = useMemo(
-    () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
-    [therapists]
-  );
-
-  const activeTemplates = useMemo(
-    () => (templates ?? []).filter((t) => t.active),
-    [templates]
-  );
-  const inactiveTemplates = useMemo(
-    () => (templates ?? []).filter((t) => !t.active),
-    [templates]
-  );
+  const therapistMap = useMemo(() => new Map((therapists ?? []).map((t) => [t.id, t.name])), [therapists]);
+  const all = useMemo(() => templates ?? [], [templates]);
+  const shown = useMemo(() => all.filter((t) => t.active), [all]);
+  const hidden = useMemo(() => all.filter((t) => !t.active), [all]);
+  const usedBy = (id: string) => templateUsage(id, assignments ?? []).map((tid) => therapistMap.get(tid) ?? 'Staff');
 
   return (
-    <div className="space-y-4 pt-4 border-t border-[var(--border)]" data-testid="shift-templates-section">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-[var(--ink)]">
-            Shift templates
-          </h2>
-          <p className="text-xs text-[var(--muted)]">
-            Reusable shift hours and break configurations assigned to team members.
-          </p>
-        </div>
-        {!isAddOpen && (
-          <button
-            type="button"
-            className="inline-flex min-h-9 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--ink)] shadow-xs hover:bg-[var(--paper)] transition"
-            onClick={() => setIsAddOpen(true)}
-          >
-            + Add shift template
+    <div data-testid="shift-templates-section" className="mt-4">
+      <SectionCard
+        id="settings-card-team-shift-types"
+        title="Shift types"
+        action={
+          <button type="button" className={`${btnPrimary} min-h-9 px-3 text-sm`} onClick={() => setSheet({ kind: 'add' })}>
+            + Add
           </button>
+        }
+      >
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Reusable shifts you give to your team, like Morning or Evening. Change a type and everyone on it follows.
+        </p>
+
+        {shown.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[var(--border)] p-5 text-center text-xs text-[var(--muted)]">
+            {hidden.length > 0 ? 'No shift types shown right now. Show one again under Hidden, or add one with "+ Add".' : 'No shift types yet. Add the first one with "+ Add".'}
+            {!oneLogin && all.length === 0 && (
+              <div className="mt-3 space-y-2">
+                <p>Or start from three common shifts you can change afterwards:</p>
+                <ul className="mx-auto w-fit text-left">
+                  {STARTER_SHIFTS.map((shift) => (
+                    <li key={shift.name}>
+                      <strong className="text-[var(--ink)]">{shift.name}</strong> · {describeStarter(shift)}
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className={btnSecondary} disabled={starterBusy} onClick={() => void addStarterShifts()}>
+                  {starterBusy ? 'Adding…' : 'Add suggested shifts'}
+                </button>
+                {starterError && <p role="alert" className="text-[var(--rust)]">{starterError}</p>}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-clip rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {shown.map((t) => (
+              <TypeRow key={t.id} template={t} usedBy={usedBy(t.id)} onOpen={() => setSheet({ kind: 'edit', template: t })} />
+            ))}
+          </div>
         )}
-      </div>
 
-      <ShiftTemplateAddForm
-        clinicId={clinic.id}
-        isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
-      />
+        <HiddenItemsFooter label="Hidden" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
+          {hidden.map((t) => (
+            <TypeRow key={t.id} template={t} usedBy={usedBy(t.id)} dim onOpen={() => setSheet({ kind: 'edit', template: t })} />
+          ))}
+        </HiddenItemsFooter>
+      </SectionCard>
 
-      {/* Active Templates Grid */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {activeTemplates.map((template) => {
-          const userIds = templateUsage(template.id, assignments ?? []);
-          const names = userIds.map((id) => therapistMap.get(id) ?? 'Staff');
-          return (
-            <ShiftTemplateCard
-              key={template.id}
-              template={template}
-              usedByTherapistNames={names}
-            />
-          );
-        })}
-      </div>
-
-      {activeTemplates.length === 0 && !isAddOpen && (
-        <div className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center text-xs text-[var(--muted)]">
-          No shift templates created yet. Click &ldquo;+ Add shift template&rdquo; to build your first template.
-          {!oneLogin && (templates ?? []).length === 0 && (
-            <div className="mt-3 space-y-2">
-              <p>Or start from three common shifts you can change afterwards:</p>
-              <ul className="mx-auto w-fit text-left">
-                {STARTER_SHIFTS.map((shift) => (
-                  <li key={shift.name}>
-                    <strong className="text-[var(--ink)]">{shift.name}</strong> · {describeStarter(shift)}
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className={btnSecondary} disabled={starterBusy} onClick={() => void addStarterShifts()}>
-                {starterBusy ? 'Adding…' : 'Add suggested shifts'}
-              </button>
-              <ErrorNote message={starterError} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Inactive Templates Toggle */}
-      {inactiveTemplates.length > 0 && (
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => setShowInactive(!showInactive)}
-            className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] flex items-center gap-1.5"
-          >
-            <span>{showInactive ? '▼' : '▶'}</span>
-            Show inactive templates ({inactiveTemplates.length})
-          </button>
-
-          {showInactive && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mt-3">
-              {inactiveTemplates.map((template) => {
-                const userIds = templateUsage(template.id, assignments ?? []);
-                const names = userIds.map((id) => therapistMap.get(id) ?? 'Staff');
-                return (
-                  <ShiftTemplateCard
-                    key={template.id}
-                    template={template}
-                    usedByTherapistNames={names}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
+      {sheet && (
+        <TypeSheet
+          key={sheet.kind === 'edit' ? sheet.template.id : 'add'}
+          mode={sheet}
+          all={all}
+          clinicId={clinic.id}
+          usedBy={sheet.kind === 'edit' ? usedBy(sheet.template.id) : []}
+          onClose={() => setSheet(null)}
+        />
       )}
     </div>
+  );
+}
+
+function TypeRow({ template, usedBy, dim = false, onOpen }: { template: ShiftTemplate; usedBy: string[]; dim?: boolean; onOpen: () => void }) {
+  const pal = getTemplatePalette(template.id);
+  return (
+    <button
+      type="button"
+      aria-label={`Edit ${template.name}`}
+      onClick={onOpen}
+      className={`flex min-h-11 w-full items-center gap-3 border-t border-[var(--border)] px-3 py-2.5 text-left first:border-t-0 hover:bg-[var(--paper)] active:bg-[var(--paper)] ${dim ? 'opacity-60' : ''}`}
+    >
+      <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border ${pal.bg} ${pal.border}`} />
+      <span className="min-w-0 flex-1">
+        <span className="block break-words text-sm font-medium text-[var(--ink)]">{template.name}</span>
+        <span className="block text-xs text-[var(--muted)]">{timesLine(template)}</span>
+        <span className="block text-xs text-[var(--muted)]">{usedBy.length > 0 ? `Used by ${usedBy.join(', ')}` : 'Not used yet'}</span>
+      </span>
+      <span aria-hidden="true" className="shrink-0 text-lg text-[var(--muted)]">›</span>
+    </button>
+  );
+}
+
+/** "Add a shift type" / "Edit shift type": name (checked as you type), the times, shown or hidden, delete. */
+function TypeSheet({
+  mode,
+  all,
+  clinicId,
+  usedBy,
+  onClose,
+}: {
+  mode: Sheet;
+  all: ShiftTemplate[];
+  clinicId: string;
+  usedBy: string[];
+  onClose: () => void;
+}) {
+  const editing = mode.kind === 'edit' ? mode.template : null;
+  const [name, setName] = useState(editing?.name ?? '');
+  const [draft, setDraft] = useState<ShiftDraft>(() => (editing ? draftFromTemplate(editing) : DEFAULT_SHIFT_DRAFT));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const check = nameCheck(name, all.map((t) => ({ id: t.id, name: t.name, active: t.active })), { selfId: editing?.id });
+  const problem = draftProblem(name, draft);
+  const canSave = !saving && problem === null && !nameCheckBlocks(check);
+
+  async function run(work: () => Promise<void>) {
+    setSaving(true);
+    setError(null);
+    try {
+      await work();
+      onClose();
+    } catch (err) {
+      setError(toFriendlyMessage(err));
+      setSaving(false);
+    }
+  }
+
+  const save = () =>
+    run(async () => {
+      const fields = fieldsFromDraft(draft);
+      if (editing) {
+        await bookingService.updateShiftTemplate({ templateId: editing.id, name: name.trim(), ...fields, active: editing.active });
+      } else {
+        await bookingService.createShiftTemplate({ clinicId, name: name.trim(), ...fields });
+      }
+    });
+
+  const setShown = (active: boolean) =>
+    run(async () => {
+      if (!editing) return;
+      await bookingService.updateShiftTemplate({
+        templateId: editing.id,
+        name: editing.name,
+        startMinute: editing.startMinute,
+        endMinute: editing.endMinute,
+        breakDurationMinutes: editing.breakDurationMinutes,
+        defaultBreakStartMinute: editing.defaultBreakStartMinute,
+        active,
+      });
+    });
+
+  async function remove() {
+    if (!editing) return;
+    if (usedBy.length > 0) {
+      setError(`Can't delete while ${usedBy.join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Hide it instead, or move them to another shift first.`);
+      return;
+    }
+    const ok = await askConfirm({
+      title: 'Delete this shift type?',
+      message: `Permanently delete "${editing.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await run(async () => {
+      await bookingService.deleteShiftTemplate(editing.id);
+      await db.shift_templates.update(editing.id, { removedAt: new Date().toISOString(), active: false });
+    });
+  }
+
+  return (
+    <SheetDialog
+      open
+      title={editing ? 'Edit shift type' : 'Add a shift type'}
+      onClose={onClose}
+      busy={saving}
+      error={error}
+      footer={
+        <div className="flex items-center justify-between gap-2">
+          {editing ? (
+            <button
+              type="button"
+              className="min-h-10 text-sm font-medium text-[var(--muted)] hover:underline disabled:opacity-50"
+              disabled={saving}
+              onClick={() => void setShown(!editing.active)}
+            >
+              {editing.active ? 'Hide' : 'Show again'}
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button type="button" className={btnSecondary} disabled={saving} onClick={onClose}>
+              Cancel
+            </button>
+            <button type="button" className={btnPrimary} disabled={!canSave} onClick={() => void save()}>
+              {saving ? 'Saving…' : editing ? 'Save' : 'Add'}
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {editing && usedBy.length > 0 && (
+          <p className="rounded-xl border border-[var(--amber)] bg-[var(--amber-light)]/40 p-2.5 text-xs text-[var(--ink)]">
+            {usedBy.join(', ')} {usedBy.length === 1 ? 'is' : 'are'} on this shift. Changing the times changes their hours straight away.
+          </p>
+        )}
+        <Field label="Name">
+          <input className={inputCls} value={name} placeholder="e.g. Morning, Evening" autoComplete="off" onChange={(e) => setName(e.target.value)} />
+          <NameCheckNote
+            result={check}
+            hiddenText="is hidden"
+            restoreLabel={editing ? undefined : 'Show it again'}
+            onRestore={
+              editing
+                ? undefined
+                : (match) =>
+                    void run(async () => {
+                      await bookingService.updateShiftTemplate({
+                        templateId: match.id,
+                        name: match.name,
+                        ...(() => {
+                          const t = all.find((x) => x.id === match.id)!;
+                          return {
+                            startMinute: t.startMinute,
+                            endMinute: t.endMinute,
+                            breakDurationMinutes: t.breakDurationMinutes,
+                            defaultBreakStartMinute: t.defaultBreakStartMinute,
+                          };
+                        })(),
+                        active: true,
+                      });
+                    })
+            }
+            onUse={setName}
+          />
+        </Field>
+        <ShiftTimesEditor draft={draft} onChange={setDraft} />
+        {problem && name.trim() !== '' && <p className="text-xs text-[var(--rust)]">{problem}</p>}
+        {editing && (
+          <div className="border-t border-[var(--border)] pt-3">
+            <button
+              type="button"
+              className="min-h-10 text-sm font-medium text-[var(--rust)] hover:underline disabled:opacity-50"
+              disabled={saving}
+              onClick={() => void remove()}
+            >
+              Delete this shift type
+            </button>
+          </div>
+        )}
+      </div>
+    </SheetDialog>
   );
 }

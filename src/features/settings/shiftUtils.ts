@@ -20,15 +20,16 @@ export const WEEKDAY_META: Record<number, { short: string; full: string }> = {
 };
 
 /** Deterministic palette for shift template chips */
+// Written out in full (not built from a number) so Tailwind sees every class name.
 export const SHIFT_PALETTES = [
-  { bg: 'bg-[#e6f4f1]', text: 'text-[#1b5e54]', border: 'border-[#9fd3c7]', hex: '#2c5f63' },
-  { bg: 'bg-[#e8edf9]', text: 'text-[#1e3a8a]', border: 'border-[#a5b4fc]', hex: '#3b82f6' },
-  { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]', border: 'border-[#fcd34d]', hex: '#f59e0b' },
-  { bg: 'bg-[#ecfdf5]', text: 'text-[#065f46]', border: 'border-[#6ee7b7]', hex: '#10b981' },
-  { bg: 'bg-[#f5f3ff]', text: 'text-[#5b21b6]', border: 'border-[#c4b5fd]', hex: '#8b5cf6' },
-  { bg: 'bg-[#fff1f2]', text: 'text-[#9f1239]', border: 'border-[#fda4af]', hex: '#f43f5e' },
-  { bg: 'bg-[#f0f9ff]', text: 'text-[#0369a1]', border: 'border-[#7dd3fc]', hex: '#0ea5e9' },
-  { bg: 'bg-[#fef9c3]', text: 'text-[#854d0e]', border: 'border-[#fde047]', hex: '#eab308' },
+  { bg: 'bg-[var(--shift-1-bg)]', text: 'text-[var(--shift-1-ink)]', border: 'border-[var(--shift-1-line)]' },
+  { bg: 'bg-[var(--shift-2-bg)]', text: 'text-[var(--shift-2-ink)]', border: 'border-[var(--shift-2-line)]' },
+  { bg: 'bg-[var(--shift-3-bg)]', text: 'text-[var(--shift-3-ink)]', border: 'border-[var(--shift-3-line)]' },
+  { bg: 'bg-[var(--shift-4-bg)]', text: 'text-[var(--shift-4-ink)]', border: 'border-[var(--shift-4-line)]' },
+  { bg: 'bg-[var(--shift-5-bg)]', text: 'text-[var(--shift-5-ink)]', border: 'border-[var(--shift-5-line)]' },
+  { bg: 'bg-[var(--shift-6-bg)]', text: 'text-[var(--shift-6-ink)]', border: 'border-[var(--shift-6-line)]' },
+  { bg: 'bg-[var(--shift-7-bg)]', text: 'text-[var(--shift-7-ink)]', border: 'border-[var(--shift-7-line)]' },
+  { bg: 'bg-[var(--shift-8-bg)]', text: 'text-[var(--shift-8-ink)]', border: 'border-[var(--shift-8-line)]' },
 ];
 
 export function getTemplatePalette(indexOrId: number | string) {
