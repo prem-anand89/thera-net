@@ -96,6 +96,7 @@ export function TherapistProfileOnboardingPage() {
           </p>
         </div>
         <OnboardingPasswordStep
+          nested
           onSkip={() => setPasswordDone(true)}
           onDone={() => setPasswordDone(true)}
         />

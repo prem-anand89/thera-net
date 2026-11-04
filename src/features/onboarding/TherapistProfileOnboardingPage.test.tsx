@@ -78,7 +78,10 @@ describe('TherapistProfileOnboardingPage', () => {
     render(<TherapistProfileOnboardingPage />);
 
     expect(screen.getByRole('heading', { name: 'Welcome to Elite Physio' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Add a password' })).toBeInTheDocument();
+    // One main heading on the page; the password step's own heading is level 2 and does not claim Google.
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Add a password', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText(/signed up with Google/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Save password' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip for now' })).toBeInTheDocument();
 

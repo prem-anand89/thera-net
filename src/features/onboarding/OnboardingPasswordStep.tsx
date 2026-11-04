@@ -6,10 +6,14 @@ import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/componen
 export function OnboardingPasswordStep({
   onSkip,
   onDone,
+  nested = false,
 }: {
   onSkip: () => void;
   onDone: () => void;
+  /** True when the page around it already has its own main heading: this one then becomes a level-2 heading. */
+  nested?: boolean;
 }) {
+  const Heading = nested ? 'h2' : 'h1';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -38,10 +42,10 @@ export function OnboardingPasswordStep({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Add a password</h1>
+        <Heading className={`font-display font-semibold leading-tight text-[var(--ink)] ${nested ? 'text-lg' : 'text-2xl'}`}>Add a password</Heading>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Optional. You signed up with Google. A password lets you sign in with email too, for example on a shared
-          clinic computer or when Google isn&apos;t available.
+          Optional. A password lets you sign in with your email too, for example on a shared clinic computer or when
+          Google isn&apos;t available.
         </p>
       </div>
       <div className="rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)]/40 p-3 text-xs text-[var(--muted)]">
