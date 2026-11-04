@@ -191,12 +191,14 @@ function ServiceRow({
 }: {
   item: CatalogItem;
   usage?: number;
-  /** Replaces the usage part (the "No longer offered" footer always shows usage). */
+  /** Replaces the usage chip's text (the "No longer offered" footer always shows usage). */
   note?: string;
   flash: boolean;
   onOpen: () => void;
 }) {
-  const sub = [serviceSubline(item, usage), note].filter(Boolean).join(' · ');
+  const sub = serviceSubline(item);
+  // How much it is used is a different kind of fact from what the service is: its own chip on its own line.
+  const usageText = note ?? (usage !== undefined ? usageLabel(usage) : null);
   const subId = useId();
   return (
     <button
@@ -211,6 +213,9 @@ function ServiceRow({
       <span className="min-w-0 flex-1">
         <span className="block break-words text-sm font-medium text-[var(--ink)]">{item.name}</span>
         {sub && <span id={subId} className="block text-xs text-[var(--muted)]">{sub}</span>}
+        {usageText && (
+          <span className="mt-1 inline-block rounded-full bg-[var(--slate-light)] px-2 py-0.5 text-[11px] font-medium text-[var(--slate)]">{usageText}</span>
+        )}
       </span>
       <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--ink)]">{formatINR(item.basePricePaise)}</span>
       <span aria-hidden="true" className="shrink-0 text-lg text-[var(--muted)]">›</span>

@@ -19,9 +19,9 @@ describe('per-session price and the line under a service', () => {
   });
 
   it('adds usage only when it is given', () => {
-    expect(serviceSubline(s('Session'), 412)).toBe('412 visits');
-    expect(serviceSubline(s('Pkg', '', 3, 500000), 1)).toBe('3 sessions · ₹1,667 each · 1 visit');
-    expect(serviceSubline(s('New'), 0)).toBe('not used yet');
+    expect(usageLabel(412)).toBe('Used in 412 visits');
+    expect(usageLabel(1)).toBe('Used in 1 visit');
+    expect(usageLabel(0)).toBe('Not used yet');
     expect(usageLabel(0)).toBe('Not used yet');
   });
 });

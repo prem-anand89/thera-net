@@ -399,7 +399,7 @@ function ServiceForm({
             />
             <p className="text-hint text-[var(--muted)]">
               {used > 0
-                ? `Used on ${usageLabel(used)}, so it can't be deleted.`
+                ? `${usageLabel(used)}, so it can't be deleted.`
                 : editing.active
                   ? 'Not used yet. To delete it, stop offering it first.'
                   : 'Not used yet.'}

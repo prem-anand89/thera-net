@@ -21,21 +21,19 @@ export function perSessionLabel(item: Pick<CatalogItem, 'basePricePaise' | 'sess
 /** "412 visits" / "1 visit" / "Not used yet". */
 export function usageLabel(count: number): string {
   if (count <= 0) return 'Not used yet';
-  return `${count} visit${count === 1 ? '' : 's'}`;
+  return `Used in ${count} visit${count === 1 ? '' : 's'}`;
 }
 
 /**
- * The line under a service's name: "10 sessions · ₹1,000 each · 45 min", plus " · 86 visits" when `usage` is given.
- * Parts that don't apply are left out; a single visit with no length and no usage has no line (empty string).
+ * The line under a service's name: "10 sessions · ₹1,000 each · 45 min". What the service is, never how
+ * much it is used (`usageLabel` shows that apart). Parts that don't apply are left out; it can be an empty string.
  */
 export function serviceSubline(
-  item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount' | 'durationMinutes'>,
-  usage?: number
+  item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount' | 'durationMinutes'>
 ): string {
   const parts: string[] = [];
   if (item.sessionCount > 1) parts.push(`${item.sessionCount} sessions`, perSessionLabel(item));
   if (item.durationMinutes != null) parts.push(`${item.durationMinutes} min`);
-  if (usage !== undefined) parts.push(usage > 0 ? usageLabel(usage) : 'not used yet');
   return parts.join(' · ');
 }
 

@@ -80,7 +80,7 @@ describe('Services list — phone', () => {
     const toggle = screen.getByRole('switch', { name: 'Show usage' });
     expect(toggle).not.toBeChecked();
     fireEvent.click(toggle);
-    expect(await screen.findByText('2 visits')).toBeInTheDocument();
+    expect(await screen.findByText('Used in 2 visits')).toBeInTheDocument();
   });
 
   it('shows the package line with a whole-rupee per-session price', () => {
@@ -213,7 +213,7 @@ describe('Edit a service', () => {
     expect(dialog()).toHaveAccessibleName('Edit service');
     expect(within(dialog()).getByRole('textbox', { name: 'Name' })).toHaveValue('Follow-up');
     expect(within(dialog()).queryByRole('alert')).toBeNull();
-    expect(await within(dialog()).findByText("Used on 1 visit, so it can't be deleted.")).toBeInTheDocument();
+    expect(await within(dialog()).findByText("Used in 1 visit, so it can't be deleted.")).toBeInTheDocument();
     fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price' }), { target: { value: '700' } });
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
@@ -356,7 +356,7 @@ describe('Edit a service — form refinements', () => {
     const used = item({ name: 'Rehab', sessionCount: 5, basePricePaise: 500000 });
     visits = [{ id: 'v1', serviceCatalogId: used.id }];
     open(used);
-    await within(dialog()).findByText(/Used on 1 visit/);
+    await within(dialog()).findByText(/Used in 1 visit/);
     expect(within(dialog()).queryByText(/Visits logged from now on/)).toBeNull();
     fireEvent.click(within(dialog()).getByRole('button', { name: 'One more session' }));
     expect(within(dialog()).getByText(/Visits logged from now on/)).toHaveTextContent('Visits logged from now on use 6 sessions. Packages already started keep their own count.');
