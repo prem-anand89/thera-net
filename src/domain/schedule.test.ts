@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, clinicGaps, clinicIntervals, closureOverlapping, clockTextMinutes, requestedSlotTime, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, clinicGaps, clinicIntervals, closureOverlapping, clockTextMinutes, requestedSlotTime, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, visitPrefillFromAppointment, appointmentSetsTherapist, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, monthDayState, toLocalDateStr, weekDays } from './schedule';
+import { loadDots } from '@/components/schedule/loadDots';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -807,5 +808,174 @@ describe('clinic hours with a midday closure', () => {
     expect(taken(720, 60, split)).toBe(false); // 12:00-1:00 fits before it closes
     expect(taken(960, 60, split)).toBe(false); // 4 PM
     expect(taken(840, 60, { startHour: 9, endHour: 20 })).toBe(false); // no operating hours: unchanged
+  });
+});
+
+describe('monthDayState', () => {
+  const clinicHours = { startHour: 9, endHour: 18 };
+  const slotMinutes = 30;
+  const noClosure = () => ({ closed: false, kind: 'weekday' as const, label: null });
+  const holiday = (label: string) => () => ({ closed: true, kind: 'holiday' as const, label });
+
+  const t1 = { id: 't1', active: true };
+  const t2 = { id: 't2', active: true };
+  const t3 = { id: 't3', active: true };
+
+  // Working setup:
+  // Tuesday (2026-11-03): only t1 works (9am–1pm)
+  // Saturday (2026-11-07): t1, t2, and t3 all work (9am–5pm)
+  // Wednesday (2026-11-04): only t2 works (9am–6pm)
+  const workingSchedule = (id: string, day: string) => {
+    if (day === '2026-11-03' && id === 't1') return [{ start: 540, end: 780 }];
+    if (day === '2026-11-04' && id === 't2') return [{ start: 540, end: 1080 }];
+    if (day === '2026-11-07') return [{ start: 540, end: 1020 }];
+    return [];
+  };
+
+  const appointments: Appointment[] = [
+    // Tuesday: 1 appt for t1
+    appt({ id: 'a1', therapistId: 't1', scheduledAt: at('2026-11-03', '10:00') }),
+    // Wednesday: 4 appts for t2
+    appt({ id: 'a2', therapistId: 't2', scheduledAt: at('2026-11-04', '09:30') }),
+    appt({ id: 'a3', therapistId: 't2', scheduledAt: at('2026-11-04', '11:00') }),
+    appt({ id: 'a4', therapistId: 't2', scheduledAt: at('2026-11-04', '14:00') }),
+    appt({ id: 'a5', therapistId: 't2', scheduledAt: at('2026-11-04', '16:00') }),
+    // Wednesday cancelled appt (should not be counted)
+    appt({ id: 'a6', therapistId: 't2', scheduledAt: at('2026-11-04', '17:00'), status: 'cancelled' }),
+    // Saturday: 7 appts across t1, t2, t3
+    appt({ id: 'a7', therapistId: 't1', scheduledAt: at('2026-11-07', '09:00') }),
+    appt({ id: 'a8', therapistId: 't1', scheduledAt: at('2026-11-07', '10:00') }),
+    appt({ id: 'a9', therapistId: 't2', scheduledAt: at('2026-11-07', '11:00') }),
+    appt({ id: 'a10', therapistId: 't2', scheduledAt: at('2026-11-07', '14:00') }),
+    appt({ id: 'a11', therapistId: 't3', scheduledAt: at('2026-11-07', '10:00') }),
+    appt({ id: 'a12', therapistId: 't3', scheduledAt: at('2026-11-07', '12:00') }),
+    appt({ id: 'a13', therapistId: 't3', scheduledAt: at('2026-11-07', '15:00') }),
+  ];
+
+  it('keeps booked counts and dot counts identical across the month regardless of which date is viewed', () => {
+    // Build the month's appointment map as the component does from explicitSelectedIds
+    const monthByDate = new Map<string, Appointment[]>();
+    for (const a of appointments) {
+      if (a.status === 'cancelled') continue;
+      const d = a.scheduledAt.slice(0, 10);
+      monthByDate.set(d, [...(monthByDate.get(d) ?? []), a]);
+    }
+
+    const baseOpts = {
+      monthByDate,
+      therapists: [t1, t2, t3],
+      workingFor: workingSchedule,
+      closedFor: noClosure,
+      today: '2026-11-01',
+      clinicHours,
+      slotMinutes,
+    };
+
+    // Regardless of whether an admin clicked Tuesday (1 therapist working) or Saturday (3 therapists working),
+    // calculating monthDayState for every day in the month yields the exact same booked counts:
+    const tue = monthDayState('2026-11-03', baseOpts);
+    const wed = monthDayState('2026-11-04', baseOpts);
+    const sat = monthDayState('2026-11-07', baseOpts);
+
+    expect(tue.booked).toBe(1);
+    expect(wed.booked).toBe(4); // ignores cancelled a6
+    expect(sat.booked).toBe(7);
+
+    expect(loadDots(tue.booked)).toBe(1);
+    expect(loadDots(wed.booked)).toBe(2);
+    expect(loadDots(sat.booked)).toBe(3);
+  });
+
+  it('scopes dots and booked counts to the explicitly selected therapist when filtered', () => {
+    // When filtered to t1 only:
+    const t1Appointments = appointments.filter((a) => a.therapistId === 't1' && a.status !== 'cancelled');
+    const monthByDate = new Map<string, Appointment[]>();
+    for (const a of t1Appointments) {
+      const d = a.scheduledAt.slice(0, 10);
+      monthByDate.set(d, [...(monthByDate.get(d) ?? []), a]);
+    }
+
+    const t1Opts = {
+      monthByDate,
+      therapists: [t1],
+      workingFor: workingSchedule,
+      closedFor: noClosure,
+      today: '2026-11-01',
+      clinicHours,
+      slotMinutes,
+    };
+
+    const tue = monthDayState('2026-11-03', t1Opts);
+    const wed = monthDayState('2026-11-04', t1Opts);
+    const sat = monthDayState('2026-11-07', t1Opts);
+
+    // Tuesday: t1 has 1 appt
+    expect(tue.booked).toBe(1);
+    expect(loadDots(tue.booked)).toBe(1);
+
+    // Wednesday: t1 has 0 appts (t2 has 4, but t1 is isolated)
+    expect(wed.booked).toBe(0);
+    expect(loadDots(wed.booked)).toBe(0);
+
+    // Saturday: t1 has 2 appts
+    expect(sat.booked).toBe(2);
+    expect(loadDots(sat.booked)).toBe(1);
+  });
+
+  it('marks closed days with closed: true, hasFreeTime: false, while keeping booked count', () => {
+    const res = monthDayState('2026-11-03', {
+      appointments,
+      therapists: [t1, t2, t3],
+      workingFor: workingSchedule,
+      closedFor: holiday('Diwali'),
+      today: '2026-11-01',
+      clinicHours,
+      slotMinutes,
+    });
+    expect(res.closed.closed).toBe(true);
+    expect(res.closed.label).toBe('Diwali');
+    expect(res.hasFreeTime).toBe(false);
+    expect(res.booked).toBe(1);
+  });
+
+  it('marks past days with hasFreeTime: false', () => {
+    const res = monthDayState('2026-11-03', {
+      appointments,
+      therapists: [t1, t2, t3],
+      workingFor: workingSchedule,
+      closedFor: noClosure,
+      today: '2026-11-05', // November 5th -> Nov 3rd is in the past
+      clinicHours,
+      slotMinutes,
+    });
+    expect(res.hasFreeTime).toBe(false);
+    expect(res.booked).toBe(1);
+  });
+
+  it('evaluates hasFreeTime based on working therapists for that day', () => {
+    // On Tuesday, t1 works 9:00-13:00 (540-780).
+    // With 1 appointment 10:00-10:30, free gaps remain (9:00-10:00, 10:30-13:00).
+    const freeRes = monthDayState('2026-11-03', {
+      appointments,
+      therapists: [t1, t2, t3],
+      workingFor: workingSchedule,
+      closedFor: noClosure,
+      today: '2026-11-01',
+      clinicHours,
+      slotMinutes,
+    });
+    expect(freeRes.hasFreeTime).toBe(true);
+
+    // If a day has no working therapists (e.g. Sunday 2026-11-08)
+    const sundayRes = monthDayState('2026-11-08', {
+      appointments,
+      therapists: [t1, t2, t3],
+      workingFor: () => [],
+      closedFor: noClosure,
+      today: '2026-11-01',
+      clinicHours,
+      slotMinutes,
+    });
+    expect(sundayRes.hasFreeTime).toBe(false);
   });
 });

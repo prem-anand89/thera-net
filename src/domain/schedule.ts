@@ -939,3 +939,66 @@ export function dayLoad(
   const when = first.start - now < slotMinutes ? 'now' : `from ${minutesLabel(first.start)}`;
   return result(`${freeSlots} free ${when}`);
 }
+
+export interface MonthDayStateOptions {
+  /** Map of day string ("YYYY-MM-DD") to uncancelled appointments, or array/Map of appointments. */
+  appointments?: Appointment[] | Map<string, Appointment[]>;
+  monthByDate?: Map<string, Appointment[]>;
+  /** Candidate therapists (filtered by explicit selection if any, active !== false). */
+  therapists: readonly { id: string; active?: boolean }[];
+  /** Working intervals for therapist on day. */
+  workingFor: (therapistId: string, day: string) => Interval[];
+  /** Closure info for the day. */
+  closedFor: (day: string) => ClosedDayInfo;
+  /** Today's date string ("YYYY-MM-DD"). */
+  today: string;
+  /** Current time in minutes from midnight (used for clipping free gaps on today). */
+  nowMinutes?: number;
+  /** Clinic operating hours. */
+  clinicHours: { startHour: number; endHour: number };
+  /** Slot duration in minutes (e.g. 15, 30, 45, 60). */
+  slotMinutes: number;
+}
+
+/**
+ * Per-day state for the schedule's mini-month calendar (dots and free-time status).
+ * Pure and decoupled from the Day grid's column filtering so that selecting a date
+ * never alters the dot counts or free-time indicators of other dates in the month.
+ */
+export function monthDayState(
+  day: string,
+  options: MonthDayStateOptions
+): { closed: ClosedDayInfo; hasFreeTime: boolean; booked: number } {
+  const {
+    therapists,
+    workingFor,
+    closedFor,
+    today,
+    nowMinutes,
+    clinicHours,
+    slotMinutes,
+  } = options;
+
+  const closed = closedFor(day);
+  const map = options.monthByDate ?? (options.appointments instanceof Map ? options.appointments : undefined);
+  const list = map
+    ? (map.get(day) ?? [])
+    : Array.isArray(options.appointments)
+      ? options.appointments.filter((a) => dateForAppointment(a) === day)
+      : [];
+  const booked = list.filter((a) => a.status !== 'cancelled').length;
+
+  if (closed.closed || day < today) {
+    return { closed, hasFreeTime: false, booked };
+  }
+
+  const notBefore = day === today ? nowMinutes : undefined;
+  const workingTherapists = therapists.filter(
+    (t) => t.active !== false && workingFor(t.id, day).length > 0
+  );
+  const hasFreeTime = workingTherapists.some(
+    (t) => freeGaps(list, t.id, day, clinicHours, slotMinutes, { notBefore, working: workingFor(t.id, day) }).length > 0
+  );
+
+  return { closed, hasFreeTime, booked };
+}

@@ -1,7 +1,7 @@
 # Settings Refinement — Plan (v5)
 
-**Date:** 2026-11-03 · **Status:** Steps 1–11 and the phone layout pass are built and pushed. **Open: Step 12 (Onboarding & first-week setup), Step 13 (Schedule mini-calendar dots fix), Step 14 (Shifts & coverage refinement), Step 15 (Lite tier & Settings refinements), and the 360px phone check.** When all are done, delete this file and update the docs, per the housekeeping rule.
-**Process:** Work on `main`, one commit per step, never push without asking. Before each commit that touches `src/`: `npm run typecheck && npm run lint && npm run test`, plus `npm run build` when shared components, routing or Tailwind config change. Per `CLAUDE.md`: no new npm dependencies, CSS variables only, every `<button>` has an explicit `type`, errors inside dialogs via `<ErrorNote>`, update `FEATURES_AND_SCHEMA.md` (every copy) in the same commit. (There is no `THERA_NET.md`; `CLAUDE.md` is the rule file.) **Migrations:** none through Step 13. **14a needs one** (the `assign_shift` RPC): apply it live and commit the matching `supabase/migrations/` file in the same change, per `CLAUDE.md`.
+**Date:** 2026-11-03 · **Status:** Steps 1–11 and the phone layout pass are built and pushed. **Open: Step 12 (Onboarding & first-week setup), Step 13 (Schedule mini-calendar dots fix), Step 14 (Shifts & coverage refinement), Step 15 (Lite tier & Settings refinements), Step 16 (Faster visit logging & package expiry), and the 360px phone check.** When all are done, delete this file and update the docs, per the housekeeping rule.
+**Process:** Work on `main`, one commit per step, never push without asking. Before each commit that touches `src/`: `npm run typecheck && npm run lint && npm run test`, plus `npm run build` when shared components, routing or Tailwind config change. Per `CLAUDE.md`: no new npm dependencies, CSS variables only, every `<button>` has an explicit `type`, errors inside dialogs via `<ErrorNote>`, update `FEATURES_AND_SCHEMA.md` (every copy) in the same commit. (There is no `THERA_NET.md`; `CLAUDE.md` is the rule file.) **Migrations:** none through Step 13. **14a needs one** (the `assign_shift` RPC) and **16c needs one** (package expiry columns): apply it live and commit the matching `supabase/migrations/` file in the same change, per `CLAUDE.md`.
 **Models:** only Opus and Sonnet. Each step names who builds it and who reviews it. Opus builds and reviews anything that touches money or the shared form state every card uses.
 
 ---
@@ -53,9 +53,10 @@ Settings should feel like a normal form: click a field, type, press Save. Each s
 | Step | What | Builds | Reviews |
 |---|---|---|---|
 | 12 | Onboarding & first-week setup polish (12a–12d) | Sonnet / Opus | Opus |
-| 13 | Schedule mini-calendar dots fix (decouple `implicitSelection` from month `dayState`) | Sonnet | Opus |
+| 13 | Schedule mini-calendar dots fix (decouple `implicitSelection` from month `dayState`) — **built** | Sonnet | Opus |
 | 14 | Shifts & coverage refinement (bugs incl. one `assign_shift` migration, SheetDialog, phone cards, palette tokens) | Sonnet / Opus | Opus |
 | 15 | Lite tier & Settings refinements (past invoices stay printable with a note, Team seat cap on unlinked therapists, banner wording) | Sonnet | Opus |
+| 16 | Faster visit logging & optional package expiry (16a add a service from the visit, 16b "Used most" first, 16c optional package expiry, 16d usage for admin and front desk) | Sonnet / Opus (16c) | Opus |
 | — | Phone check at 360px (the owner), then the final review | owner / Opus | Opus |
 
 ---
@@ -111,6 +112,8 @@ Steps 1–11 changed Settings' words and layout (`Sees patients`, `One visit`, `
 - **Month data from the explicit selection:** `monthByDate` filtered by `explicitSelectedIds` and not-cancelled; `dayState(day)` counts from it, and `hasFreeTime` checks the explicitly selected (or all active) therapists who work on **that** day (`workingFor(t.id, day)`).
 - **Make it testable:** move the per-day calculation into a pure helper (e.g. `monthDayState(day, { appointments, therapists, workingFor, closedFor, today, … })` in `src/domain/` or `components/schedule/`) and call it from the component; today it is a `useCallback` inside a 1,400-line view, which the plan's unit test can't reach.
 - **Tests:** for an admin, the helper's `booked` and dot counts for every day of the month are identical whichever date is selected (e.g. a Tuesday with 1 therapist on vs a Saturday with 3); a therapist's own view is unchanged; Day-view columns still collapse off-duty therapists.
+- **Built 13 (2026-11-04):** `ScheduleBookingsView.tsx` decouples `explicitSelectedIds` (from URL `?therapist=` or the therapist's own ID) from `implicitSelection` (Day view off-duty column hiding); month appointments and `monthByDate` are derived from the explicit selection so month dot counts and free-time status never mutate on clicking another date; extracted pure `monthDayState` in `src/domain/schedule.ts`; `MiniCalendarStrip` uses month uncancelled appointments.
+- **Tests:** `src/domain/schedule.test.ts` (85 tests, including `monthDayState` suite with identical counts across dates, scoped therapist filter, closed days, past days, free-time checking).
 
 ---
 
@@ -179,9 +182,42 @@ Build order: 14a, then 14b (which depends on 14a's "edit this assignment" call),
 
 ---
 
+### Step 16 — Faster visit logging & package expiry (Sonnet builds, Opus reviews; 16c needs one migration)
+
+**Who can change the catalog (owner rule, 2026-11-04):** only the admin. This is already true in the database (`catalog_insert/update/delete` need `is_clinic_admin`) and in the app (`canEditSettings = isAdmin`). Nothing here widens it. A therapist or front desk never sees an edit control for services, prices, expiry or usage settings. Every new control below is behind `canEditSettings`, and a non-admin sees a plain "Ask your admin" line instead.
+
+#### 16a — Add a service from the visit screen (Sonnet)
+- **Where:** the service picker in `ServiceRows.tsx`. At the foot of the list, for an admin only: "+ Add a new service". It opens the existing `ServiceFormSheet` (no second form) and selects the new service when it saves.
+- **Others:** a therapist or front desk sees "Not listed? Ask your admin to add it." No button.
+- **Names:** the sheet already checks names and `catalogService.addService` refuses a taken one, so no new rule. A treatment is only a name, so the same inline add goes in the visit's treatment picker **if** that picker lists catalog treatments (check first; if it is free text, leave it).
+- **Tests:** admin sees the button and the new service is selected after save; therapist and front desk do not see it; a taken name is refused.
+
+#### 16b — "Used most" first in the visit picker (Sonnet)
+- **Rule:** the three services this device logged most in the last 60 days sit in a "Used most" block at the top of the picker (needs at least 5 visits of history, otherwise nothing changes). The grouped list below stays as it is. No schema, no setting, nothing synced.
+- **Where:** a pure helper in `catalogDisplay.ts` (`mostUsedServiceIds(visits, today)`), used by `ServiceRows.tsx`. Hidden services never appear.
+- **Tests:** helper with ties and under-threshold history; picker shows the block and does not repeat the service below (or repeats it, but say which); hidden service excluded.
+
+#### 16c — Optional package expiry (Opus: touches package tracking; one migration)
+- **Setting:** on a package service (2+ sessions), an optional "Valid for (days)" box in `ServiceFormSheet`. Blank means no expiry. Quick choices 30 / 60 / 90 / 180. Admin only.
+- **Storage:** `service_catalog.validity_days smallint null check (validity_days between 1 and 730)`. Packages in this app are not sold as records; they are grouped visits (`packageGroupId`). So the expiry date is **copied onto the first visit** of the package when it is logged: `visits.package_valid_until date null`. Later sessions read the first visit's date. Changing the catalog days later therefore never moves a package a patient already holds. Existing packages have no date and never expire.
+- **Soft, never blocking:** nothing refuses a session after the date. After it, the visit screen shows a quiet note "This package expired on 12 Dec. Log the session anyway or start a new package?"; the therapist chooses.
+- **Where it shows:** the date on the visit's package line and on the invoice line ("valid until 12 Dec 2026"); Workspace → Follow up → Packages gets an "Expiring soon" chip (within 14 days) and an "Expired" marker, using the existing staleness rows (`groupOpenPackages` gains `validUntil`); the service form shows "Valid for 90 days".
+- **Migration:** both columns, nullable, no backfill. The sync pushes the new columns, so apply the migration before the client is deployed, as with the follow-up feature. Add the file in `supabase/migrations/`, update both copies of the schema docs.
+- **Tests:** date is set once on session 1 and not on later sessions; editing the catalog days leaves existing packages alone; blank means no date; chip windows (14 days, today, past); note appears after expiry and does not block saving; invoice line.
+
+#### 16d — Service usage for admin and front desk (Sonnet) *(open question, see below)*
+- **Owner rule:** usage counts are clinic-wide numbers ("used by 14 patients", "last used 3 Nov") and are shown to admin and front desk. Therapists don't set anything.
+- **Recommended:** for the **admin**, the usage line is on by default on the Services and Treatments lists (this reverses the Step 11 "off by default" rule for admins; keep the "Show usage" switch so it can be hidden on a device). The counts already come from the whole clinic, not the signed-in person.
+- **Front desk:** has no Settings access today. Recommended: do not open Settings to them. If they need to see usage, put a read-only "Services in use" list on Reports (they already see Reports), with no edit controls. **Confirm with the owner before building this part.**
+- **Tests:** admin sees usage by default and can switch it off; a therapist has no route to the lists; the counts are clinic-wide whoever is signed in.
+
+**Order:** 16a, 16b, 16c, 16d. One commit each. 16c is the only migration.
+
+---
+
 ## Parked (not in this plan)
 
-- **From Step 11:** price history, package expiry, custom ordering of services, adding a service from the visit screen, moving the other 26 hand-made dialogs to `SheetDialog`. Considered and dropped: starter-set buttons for empty lists (every clinic is seeded at setup), usage shown by default, a clinic-wide usage setting, "≈"/"about" before prices, a side panel for editing on desktop, an inline add box for treatments.
+- **From Step 11:** price history (past bills keep their price; the edit form shows "Was ₹X"), drag-to-reorder services (replaced by 16b), and moving the other hand-made dialogs to `SheetDialog` (only the phone-critical ones, after a read-only list the owner approves: take payment, record advance, issue invoice, edit visit, follow-up). Moved into Step 16: package expiry (optional field), adding a service from the visit screen, usage for admin and front desk. Considered and dropped: starter-set buttons for empty lists (every clinic is seeded at setup), a clinic-wide usage *setting* (usage by default for the admin is now 16d), "≈"/"about" before prices, a side panel for editing on desktop, an inline add box for treatments on the Settings list (the visit-screen add in 16a covers it).
 
 - Short descriptions under card titles: the tab header already explains each tab.
 - One shared image-upload component for logo / partner logo / signature / UPI QR: nice tidy-up, no user-facing bug.
@@ -197,7 +233,8 @@ Build order: 14a, then 14b (which depends on 14a's "edit this assignment" call),
 **Still open**
 - [ ] **Phone check at 360px (the owner):** the Settings tab chips and search, the Hours card, the Partner card with its confirmation, Team views, the Services sheet with the keyboard open, the email box's keyboard, and the static Save bar at the end of a long card.
 - [x] **Step 12:** a new clinic can sign up, invite or skip a team, check its starter services and finish on a phone without a dead nav bar or a doubled box; the checklist's words and links match the new Settings, and no step ID changed.
-- [ ] **Step 13:** the dots on every other day don't change when another date is clicked.
+- [x] **Step 13:** the dots on every other day don't change when another date is clicked.
 - [ ] **Step 14:** unchecking a weekday turns it off without losing a therapist's second shift; split clinic hours count correctly; assigning shows appointments that fall outside the hours; the migration is applied live and committed.
 - [ ] **Step 15:** a downgraded clinic can still print its old invoices; an unlinked therapist at the seat cap can't be sent an invite the plan refuses.
+- [ ] **Step 16:** an admin can add a service from the visit and it is selected; a therapist and front desk cannot; the three most-used services lead the picker; a package service can carry an optional validity, the date is set once on session 1, changing it later leaves held packages alone, and an expired package warns but never blocks; migration applied live and committed.
 - [ ] `FEATURES_AND_SCHEMA.md` updated in each commit; then delete this file.

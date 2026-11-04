@@ -17,7 +17,6 @@ import {
   addWeeks,
   appointmentMinutes,
   formatMinutes,
-  freeGaps,
   getWeekStart,
   groupClosedRanges,
   isClosedDay,
@@ -32,6 +31,7 @@ import {
   slotHoursStatus,
   displayHoursFor,
   dateForAppointment,
+  monthDayState,
   type SlotHoursStatus,
   type ClosedRange,
   dayLoad,
@@ -260,8 +260,44 @@ export function ScheduleBookingsView({
       roster.map((t) => t.id)
     );
   }, [scope.role, myTherapistId, therapistParam, roster]);
+
+  // Explicit therapist selection from URL ?therapist= or therapist's own ID (never implicitSelection).
+  // Decoupled from the Day grid's column filtering so selecting a date never alters other dates' dots.
+  const explicitSelectedIds = useMemo(() => {
+    return selectedTherapistIds(
+      scope.role,
+      myTherapistId,
+      search.therapist,
+      roster.map((t) => t.id)
+    );
+  }, [scope.role, myTherapistId, search.therapist, roster]);
   const [showCancelled, setShowCancelled] = useState(false);
   const scopedAppointments = useMemo(() => allAppointments ?? [], [allAppointments]);
+  const monthAppointments = useMemo(
+    () =>
+      scopedAppointments.filter(
+        (a) =>
+          a.status !== 'cancelled' &&
+          (!explicitSelectedIds.length || (a.therapistId !== null && explicitSelectedIds.includes(a.therapistId)))
+      ),
+    [scopedAppointments, explicitSelectedIds]
+  );
+  const monthByDate = useMemo(() => {
+    const map = new Map<string, Appointment[]>();
+    for (const appointment of monthAppointments) {
+      const key = dateForAppointment(appointment);
+      map.set(key, [...(map.get(key) ?? []), appointment]);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    return map;
+  }, [monthAppointments]);
+  const monthRoster = useMemo(
+    () =>
+      explicitSelectedIds.length
+        ? roster.filter((t) => explicitSelectedIds.includes(t.id) && t.active !== false)
+        : roster.filter((t) => t.active !== false),
+    [explicitSelectedIds, roster]
+  );
   const historyList = useMemo(
     () => historyAppointments(allAppointments ?? [], scope.role, myTherapistId),
     [allAppointments, scope.role, myTherapistId]
@@ -757,18 +793,18 @@ export function ScheduleBookingsView({
   }
 
   const dayState = useCallback(
-    (day: string) => {
-      const closed = closedFor(day);
-      const list = byDate.get(day) ?? [];
-      const booked = list.filter((a) => a.status !== 'cancelled').length;
-      if (closed.closed || day < today) return { closed, hasFreeTime: false, booked };
-      const notBefore = day === today ? now.minutes : undefined;
-      const hasFreeTime = visibleRoster.some(
-        (t) => freeGaps(list, t.id, day, hours, slotMinutes, { notBefore, working: workingFor(t.id, day) }).length > 0
-      );
-      return { closed, hasFreeTime, booked };
-    },
-    [closedFor, today, byDate, now.minutes, visibleRoster, hours, slotMinutes, workingFor]
+    (day: string) =>
+      monthDayState(day, {
+        monthByDate,
+        therapists: monthRoster,
+        workingFor,
+        closedFor,
+        today,
+        nowMinutes: now.minutes,
+        clinicHours: hours,
+        slotMinutes,
+      }),
+    [monthByDate, monthRoster, workingFor, closedFor, today, now.minutes, hours, slotMinutes]
   );
 
   if (scope.role === 'unknown') {
@@ -1027,7 +1063,7 @@ export function ScheduleBookingsView({
                 rangeDays={isPhone && phoneView === '3day' ? threeDays : undefined}
                 selectedDate={date}
                 onSelectDate={(selected) => setSchedule({ date: selected })}
-                appointmentDates={visibleAppointments.filter((a) => a.status !== 'cancelled').map(dateForAppointment)}
+                appointmentDates={monthAppointments.map(dateForAppointment)}
                 closedFor={closedFor}
               />
             </div>
