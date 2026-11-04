@@ -806,6 +806,10 @@ Files: `ServicesView.tsx` (list, desktop table, group sheet), `ServiceFormSheet.
 - Therapist comparison chart (no toggle: admin + revenue-split plan + 2+ active therapists)
 - Billing staff restriction (on by default)
 
+### Service worker cache safety
+
+A missing code file must never be stored as a web page: that leaves a device on a blank page with no code running to report it, and refreshing can't fix it. Three layers: `vercel.json` no longer rewrites `/assets/*` to `index.html`, so a missing file is a 404; the precache refuses any HTML response for a non-HTML URL (`cacheWillUpdate` in `src/sw.ts`), which fails that install and keeps the working version; and an inline script in `index.html` catches the app's script failing to load on an empty page, drops the service worker and its file cache (never IndexedDB, so unsynced work is safe), and reloads, at most once a minute. To repair a bad cache across devices, bump `PRECACHE_SUFFIX` and `PROTOCOL_CACHE` together in `src/sw.ts`: every file is downloaded again and the worker takes over by itself, as a blank page can't tap Refresh.
+
 ### 9. Patient Communications (Phase 0–5, plus Phase 9's Business API)
 
 Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),

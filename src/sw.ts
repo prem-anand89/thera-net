@@ -1,9 +1,28 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { setCacheNameDetails } from 'workbox-core';
+import { addPlugins, cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
 };
+
+// A new name forces every file to be downloaded again: it heals a phone whose cache holds a web page saved as code
+// (see below). Bump only to repair a bad cache; old ones are deleted on activate.
+const PRECACHE_SUFFIX = 'v3';
+setCacheNameDetails({ suffix: PRECACHE_SUFFIX });
+
+// Never store a web page as a code file. During a deploy a missing file can be answered with index.html and a 200
+// (older deployments still do), and a stored one breaks the app on that device for good: the page stays blank, with
+// no code running to report it. Refusing it fails this install, so the working version stays until the next try.
+addPlugins([
+  {
+    cacheWillUpdate: async ({ request, response }) => {
+      const isHtml = (response.headers.get('content-type') ?? '').includes('text/html');
+      const wantsHtml = new URL(request.url).pathname.endsWith('.html');
+      return isHtml && !wantsHtml ? null : response;
+    },
+  },
+]);
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
@@ -19,7 +38,8 @@ cleanupOutdatedCaches();
 // tab closes (days, for an installed phone app). A worker that finds no
 // protocol marker therefore takes over at once, and leaves the marker for the
 // next deploy, which waits for the banner as designed.
-const PROTOCOL_CACHE = 'thera-sw-protocol-2';
+// Bumped to 3 with PRECACHE_SUFFIX: a blank page has no code to tap Refresh, so this one worker must take over by itself.
+const PROTOCOL_CACHE = 'thera-sw-protocol-3';
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.has(PROTOCOL_CACHE).then((known) => {
@@ -31,7 +51,17 @@ self.addEventListener('message', (event) => {
   if ((event.data as { type?: string } | null)?.type === 'SKIP_WAITING') void self.skipWaiting();
 });
 self.addEventListener('activate', (event) => {
-  event.waitUntil(Promise.all([self.clients.claim(), caches.open(PROTOCOL_CACHE)]));
+  event.waitUntil(
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(
+        names
+          .filter((name) => (name.includes('precache') && !name.endsWith(PRECACHE_SUFFIX)) || (name.startsWith('thera-sw-protocol') && name !== PROTOCOL_CACHE))
+          .map((name) => caches.delete(name))
+      );
+      await Promise.all([self.clients.claim(), caches.open(PROTOCOL_CACHE)]);
+    })()
+  );
 });
 
 interface PushData {
