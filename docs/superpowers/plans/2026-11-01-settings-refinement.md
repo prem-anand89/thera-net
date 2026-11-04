@@ -56,7 +56,7 @@ Settings should feel like a normal form: click a field, type, press Save. Each s
 | 13 | Schedule mini-calendar dots fix (decouple `implicitSelection` from month `dayState`) — **built** | Sonnet | Opus |
 | 14 | Shifts refinement v2 (14a bugs + one `assign_shift` migration, 14b one person sheet, 14c Weekly shifts + phone cards, 14d Shift types + tokens, 14e one-therapist clinics) | Sonnet / Opus | Opus |
 | 15 | Lite tier & Settings refinements (past invoices stay printable with a note, Team seat cap on unlinked therapists, banner wording) | Sonnet | Opus |
-| 16 | Faster visit logging & optional package expiry (16a add a service from the visit, 16b "Used most" first, 16c optional package expiry, 16d usage for admin and front desk) | Sonnet / Opus (16c) | Opus |
+| 16 | Faster visit logging & optional package expiry (16a add a service from the visit, 16c optional package expiry, 16d usage for the admin; 16b dropped, already built) | Sonnet / Opus (16c) | Opus |
 | — | Phone check at 360px (the owner), then the final review | owner / Opus | Opus |
 
 ---
@@ -207,16 +207,17 @@ Build order: 14a, 14b, then 14c/14d, then 14e.
 | **15a** | Invoices on a plan without invoicing: keep past invoices printable, make the state clear | Sonnet | Opus |
 | **15b** | Team seat cap on unlinked therapists; the unlinked banner at the cap | Sonnet | Opus |
 
-#### 15a — Invoices on a plan without invoicing (Sonnet) *(corrected)*
-- **Don't block printing past invoices.** A Lite clinic can't create invoices (server and UI), so the only Lite clinic that has any is one that **downgraded**, and it still needs to reprint and re-share invoices it already issued (GST records, patient requests). Gating `InvoicePrintPage` on `can('invoicing')` would lock those away and protects nothing today (0 Lite invoices).
-- **Instead:** on `InvoicePrintPage` for a clinic without invoicing, keep print and PDF, and show one quiet line above the invoice: "Your plan doesn't issue new invoices. Invoices you already issued stay here to print or share." Issuing stays blocked as now.
-- **`IssueInvoiceDialog`:** every caller already opens it only when `usePermissions().canBill` (which includes `can('invoicing')`), and the server refuses anyway; add no second guard. *(dropped)*
-- **Tests:** a downgraded clinic can open and print an existing invoice and sees the note; a clinic with invoicing sees no note.
+#### 15a — Invoices on a plan without invoicing (Sonnet) *(revised 2026-11-05)*
+- **Keep past invoices findable, not just printable.** The Ledger's Invoices tab is hidden when `canBill` is false (`filterLedgerTabs`, `LedgerPage.tsx`), so a downgraded clinic can't reach them. Show the tab read-only for a clinic on a plan without invoicing **only if it already has invoices**. A therapist hidden by `invoicingAccess: 'billing_staff'` stays hidden.
+- **`InvoicePrintPage`:** keep print and PDF, with one quiet line: "Your plan doesn't issue new invoices. Invoices you already issued stay here to print or share." Void and amend stay hidden (already behind `canBill`). Issuing stays blocked; no second guard in `IssueInvoiceDialog`.
+- **Tests:** downgraded clinic with invoices sees the tab and note, can open one, sees no void/amend; with no invoices no tab; a clinic with invoicing sees no note; a billing-staff therapist still sees no tab.
 
-#### 15b — Team seat cap & unlinked banner (Sonnet) (checked, accurate)
-- **Unlinked therapist at the seat cap (`TeamSection.tsx`):** `Therapists` already computes `atSeatCap` and `loginsHint` and passes them to the Add form only. Pass them to `TeamMemberCard` too: for a roster therapist with no login, when at the cap, disable "Email address (link to login)" and show the hint, instead of letting the admin trigger an invite the plan refuses.
-- **Banner (`SettingsPage.tsx`, Team tab):** below the cap keep "N therapists not linked to a login. Open them below and add their email…"; at the cap say "N therapists are on the schedule without a login. Your plan's logins are all in use; upgrade to invite them." (no instruction the plan forbids).
-- **Tests:** the email box is disabled with the hint at the cap and enabled below it; the banner wording at and below the cap.
+#### 15b — Team seat cap & unlinked banner (Sonnet) *(revised 2026-11-05)*
+- **Email box:** pass `atSeatCap` and `loginsHint` to `TeamMemberCard`; for a therapist with no login at the cap, disable "Email for login" and show the hint.
+- **Banner:** move it from `SettingsPage` into `Therapists`, where `atSeatCap` is known. Below the cap keep today's wording; at the cap: "N therapists are on the schedule without a login. Your plan's logins are all in use; upgrade to invite them."
+- **Landing tab:** at the cap, unlinked therapists no longer send Settings to the Team tab (`SettingsPage`, `landedOnDefault`).
+- **Setup checklist:** at the cap, `link-therapist` says it needs an upgrade and doesn't block essentials. Keep the step ID.
+- **Tests:** email box and banner at and below the cap; landing tab; checklist step.
 
 ---
 
@@ -224,32 +225,30 @@ Build order: 14a, 14b, then 14c/14d, then 14e.
 
 **Who can change the catalog (owner rule, 2026-11-04):** only the admin. This is already true in the database (`catalog_insert/update/delete` need `is_clinic_admin`) and in the app (`canEditSettings = isAdmin`). Nothing here widens it. A therapist or front desk never sees an edit control for services, prices, expiry or usage settings. Every new control below is behind `canEditSettings`, and a non-admin sees a plain "Ask your admin" line instead.
 
-#### 16a — Add a service from the visit screen (Sonnet)
-- **Where:** the service picker in `ServiceRows.tsx`. At the foot of the list, for an admin only: "+ Add a new service". It opens the existing `ServiceFormSheet` (no second form) and selects the new service when it saves.
-- **Others:** a therapist or front desk sees "Not listed? Ask your admin to add it." No button.
-- **Names:** the sheet already checks names and `catalogService.addService` refuses a taken one, so no new rule. A treatment is only a name, so the same inline add goes in the visit's treatment picker **if** that picker lists catalog treatments (check first; if it is free text, leave it).
-- **Tests:** admin sees the button and the new service is selected after save; therapist and front desk do not see it; a taken name is refused.
+#### 16a — Add a service from the visit screen (Sonnet) *(revised)*
+- **Where:** when a search in the New Visit service picker finds nothing, an admin sees "+ Add 'Dry needling'", opening `ServiceFormSheet` with the name filled in; saving selects the new service. Needs a no-results slot on `SearchableSelect` and an initial name on the sheet. New Visit only, not Edit visit.
+- **Others:** a therapist or front desk sees "Ask your admin to add it" in the same place.
+- **Treatments:** the same add in the visit's treatment picker (it lists catalog treatments), admin only.
+- **Tests:** admin adds and it is selected with the draft intact; non-admins see no button; a taken name is refused.
 
-#### 16b — "Used most" first in the visit picker (Sonnet)
-- **Rule:** the three services this device logged most in the last 60 days sit in a "Used most" block at the top of the picker (needs at least 5 visits of history, otherwise nothing changes). The grouped list below stays as it is. No schema, no setting, nothing synced.
-- **Where:** a pure helper in `catalogDisplay.ts` (`mostUsedServiceIds(visits, today)`), used by `ServiceRows.tsx`. Hidden services never appear.
-- **Tests:** helper with ties and under-threshold history; picker shows the block and does not repeat the service below (or repeats it, but say which); hidden service excluded.
+#### 16b — dropped (2026-11-05)
+Already built: `quickServices` (`rankServicesByUsage`) shows the top 3 services of the last 90 days as one-tap chips on the visit.
 
-#### 16c — Optional package expiry (Opus: touches package tracking; one migration)
-- **Setting:** on a package service (2+ sessions), an optional "Valid for (days)" box in `ServiceFormSheet`. Blank means no expiry. Quick choices 30 / 60 / 90 / 180. Admin only.
-- **Storage:** `service_catalog.validity_days smallint null check (validity_days between 1 and 730)`. Packages in this app are not sold as records; they are grouped visits (`packageGroupId`). So the expiry date is **copied onto the first visit** of the package when it is logged: `visits.package_valid_until date null`. Later sessions read the first visit's date. Changing the catalog days later therefore never moves a package a patient already holds. Existing packages have no date and never expire.
-- **Soft, never blocking:** nothing refuses a session after the date. After it, the visit screen shows a quiet note "This package expired on 12 Dec. Log the session anyway or start a new package?"; the therapist chooses.
-- **Where it shows:** the date on the visit's package line and on the invoice line ("valid until 12 Dec 2026"); Workspace → Follow up → Packages gets an "Expiring soon" chip (within 14 days) and an "Expired" marker, using the existing staleness rows (`groupOpenPackages` gains `validUntil`); the service form shows "Valid for 90 days".
-- **Migration:** both columns, nullable, no backfill. The sync pushes the new columns, so apply the migration before the client is deployed, as with the follow-up feature. Add the file in `supabase/migrations/`, update both copies of the schema docs.
-- **Tests:** date is set once on session 1 and not on later sessions; editing the catalog days leaves existing packages alone; blank means no date; chip windows (14 days, today, past); note appears after expiry and does not block saving; invoice line.
+#### 16c — Optional package expiry (Opus; one migration) *(revised)*
+- **Setting:** on a package service, optional "Valid for (days)" in `ServiceFormSheet`; blank means no expiry; quick choices 30 / 60 / 90 plus a typed value. Admin only. (Live data: 20 packages, median 7 days to finish, 90% within 44, longest 66.)
+- **Storage:** `service_catalog.validity_days` and `visits.package_validity_days` (smallint, nullable, 1–730, no backfill). Copy the days onto every session; the date is the package's first visit date + days, worked out in `packageTracking.ts`. Correcting the first visit's date moves the expiry, deleting that visit doesn't lose it, and editing the catalog never changes a package already held. Existing packages never expire.
+- **Never blocks:** after the date, a quiet note on the visit: "This package expired on 12 Dec." Saving still works.
+- **Shows on:** the picker's continue row ("session 3 of 5 (expired 12 Dec)"); Workspace → Packages: "Expiring soon" (within 7 days) and "Expired", which replaces the 14-day stale marker so a row never shows both; the service form.
+- **Not on invoices for now** (fixed records); add if clinics ask.
+- **Migration:** file in `supabase/migrations/`, applied by the owner **before** the client deploys (the sync pushes the new columns); both schema doc copies.
+- **Tests:** days copied to each session; date moves with the first visit; catalog edit leaves held packages alone; blank means none; chip windows; note doesn't block; never both Expired and stale.
 
-#### 16d — Service usage for admin and front desk (Sonnet) *(open question, see below)*
-- **Owner rule:** usage counts are clinic-wide numbers ("used by 14 patients", "last used 3 Nov") and are shown to admin and front desk. Therapists don't set anything.
-- **Recommended:** for the **admin**, the usage line is on by default on the Services and Treatments lists (this reverses the Step 11 "off by default" rule for admins; keep the "Show usage" switch so it can be hidden on a device). The counts already come from the whole clinic, not the signed-in person.
-- **Front desk:** has no Settings access today. Recommended: do not open Settings to them. If they need to see usage, put a read-only "Services in use" list on Reports (they already see Reports), with no edit controls. **Confirm with the owner before building this part.**
-- **Tests:** admin sees usage by default and can switch it off; a therapist has no route to the lists; the counts are clinic-wide whoever is signed in.
+#### 16d — Service usage for the admin only (Sonnet) *(owner decision 2026-11-05)*
+- Usage shows on by default for the admin on the Services and Treatments lists; the "Show usage" switch stays so it can be turned off on a device. This reverses Step 11's "off by default".
+- **Front desk and therapists get no usage view.** No Reports list.
+- **Tests:** on by default; switching off is remembered; counts are clinic-wide.
 
-**Order:** 16a, 16b, 16c, 16d. One commit each. 16c is the only migration.
+**Order:** 15a, 15b, 16a, 16d, then 16c last (its migration comes first). One commit each.
 
 ---
 
@@ -274,5 +273,5 @@ Build order: 14a, 14b, then 14c/14d, then 14e.
 - [x] **Step 13:** the dots on every other day don't change when another date is clicked.
 - [ ] **Step 14:** unchecking a weekday turns it off without losing a therapist's second shift; one sheet sets hours from both the Shifts card and the Team card; phone cards show full names with no cut words; a one-therapist clinic sees one Working hours card; split clinic hours count correctly; assigning shows appointments that fall outside the hours; the migration is applied live and committed.
 - [ ] **Step 15:** a downgraded clinic can still print its old invoices; an unlinked therapist at the seat cap can't be sent an invite the plan refuses.
-- [ ] **Step 16:** an admin can add a service from the visit and it is selected; a therapist and front desk cannot; the three most-used services lead the picker; a package service can carry an optional validity, the date is set once on session 1, changing it later leaves held packages alone, and an expired package warns but never blocks; migration applied live and committed.
+- [ ] **Step 16:** an admin can add a service from the visit and it is selected; a therapist and front desk cannot; usage is on by default for the admin only; a package service can carry an optional validity, changing it later leaves held packages alone, and an expired package warns but never blocks; migration applied live and committed.
 - [ ] `FEATURES_AND_SCHEMA.md` updated in each commit; then delete this file.
