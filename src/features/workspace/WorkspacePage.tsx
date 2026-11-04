@@ -1130,27 +1130,34 @@ export function WorkspacePage() {
         )}
         {followOpen && (
           <>
-        <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="Follow up">
-          {(
-            [
-              { key: 'reviews', label: `Reviews (${followUp.due.length})` },
-              { key: 'packages', label: `Packages (${scopedPackages.length})` },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={followTab === tab.key}
-              onClick={() => chooseFollowTab(tab.key)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                followTab === tab.key ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-          <span className="ml-auto flex items-center gap-1 text-xs text-[var(--muted)]" role="group" aria-label="Rows to show">
+        <div className="mb-3.5 flex items-center justify-between gap-2">
+          <div role="tablist" aria-label="Follow up" className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
+            {(
+              [
+                { key: 'reviews', label: `Reviews (${followUp.due.length})` },
+                { key: 'packages', label: `Packages (${scopedPackages.length})` },
+              ] as const
+            ).map((tab) => {
+              const active = followTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => chooseFollowTab(tab.key)}
+                  className={`min-h-8 rounded-md px-3 text-xs transition-colors ${
+                    active
+                      ? 'bg-[var(--surface)] text-[var(--teal-strong)] font-semibold shadow-sm'
+                      : 'text-[var(--muted)] hover:text-[var(--ink)] font-medium'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="flex items-center gap-1 text-xs text-[var(--muted)]" role="group" aria-label="Rows to show">
             Rows
             {([5, 10] as const).map((size) => (
               <button
@@ -1171,6 +1178,7 @@ export function WorkspacePage() {
             pageSize={followPageSize}
             clinicName={clinic.name}
             canMessage={Boolean(clinic.enablePatientComms)}
+            showTherapist={scope.isClinicWideView}
             therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
             onBook={setBookingFollowUp}
           />

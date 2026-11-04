@@ -46,6 +46,14 @@ function setup(over: Partial<Parameters<typeof ReviewsPanel>[0]> = {}) {
 
 describe('ReviewsPanel', () => {
   beforeEach(() => localStorage.clear());
+  it('names the therapist clinic-wide, but not on a therapist\'s own list', () => {
+    setup();
+    expect(screen.getAllByText('Dr Asha').length).toBeGreaterThan(0);
+    cleanup();
+    setup({ showTherapist: false });
+    expect(screen.queryByText('Dr Asha')).toBeNull();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

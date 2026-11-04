@@ -9,6 +9,7 @@ import { notify } from '@/lib/notify';
 import { toFriendlyMessage } from '@/lib/errors';
 import { bookingService, patientService } from '@/services';
 import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
+import { TherapistPill } from '@/components/ui';
 import type { FollowUpData } from './useFollowUpData';
 
 type Filter = 'due' | 'missed' | 'no_shows';
@@ -43,6 +44,7 @@ export function ReviewsPanel({
   clinicName,
   canMessage,
   therapistNameFor,
+  showTherapist = true,
   onBook,
 }: {
   data: FollowUpData;
@@ -52,6 +54,8 @@ export function ReviewsPanel({
   /** The clinic has patient messaging on. */
   canMessage: boolean;
   therapistNameFor: (id: UUID | null) => string | null;
+  /** False for a therapist's own list: every row would repeat their own name. */
+  showTherapist?: boolean;
   onBook: (target: BookFollowUp) => void;
 }) {
   const today = toLocalDateStr(new Date());
@@ -113,19 +117,24 @@ export function ReviewsPanel({
   const reviewRow = (row: FollowUpRow, kind: 'due' | 'missed') => {
     const p = row.patient;
     const therapistId = p.followUpTherapistId ?? null;
+    const therapistName = showTherapist ? therapistNameFor(therapistId) : null;
     return (
-      <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2.5">
-        <div className="min-w-0">
-          <Link to="/patients/$patientId" params={{ patientId: p.id }} search={{ from: '/workspace' }} className="font-display text-sm font-medium text-[var(--ink)] hover:underline">
+      <li key={p.id} className="py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <Link to="/patients/$patientId" params={{ patientId: p.id }} search={{ from: '/workspace' }} className="min-w-0 break-words font-display text-sm font-medium text-[var(--ink)] hover:underline">
             {p.name}
           </Link>
-          <p className={`text-xs ${row.daysFromDue < 0 && kind === 'due' ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
-            {kind === 'missed' ? `Missed · was due ${formatDateDMY(row.dueOn)}` : `${dueLine(row)} · ${formatDateDMY(row.dueOn)}`}
-            {therapistNameFor(therapistId) ? ` · ${therapistNameFor(therapistId)}` : ''}
-          </p>
-          {p.followUpNote && <p className="text-xs text-[var(--ink)]">{p.followUpNote}</p>}
+          {therapistName ? (
+            <div className="shrink-0">
+              <TherapistPill>{therapistName}</TherapistPill>
+            </div>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <p className={`mt-0.5 text-xs ${row.daysFromDue < 0 && kind === 'due' ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
+          {kind === 'missed' ? `Missed · was due ${formatDateDMY(row.dueOn)}` : `${dueLine(row)} · ${formatDateDMY(row.dueOn)}`}
+        </p>
+        {p.followUpNote && <p className="mt-0.5 text-xs text-[var(--ink)]">{p.followUpNote}</p>}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {messageButton(kind, p, therapistId, row.dueOn)}
           <button
             type="button"
@@ -146,16 +155,21 @@ export function ReviewsPanel({
     const a = row.appointment;
     const day = toLocalDateStr(new Date(a.scheduledAt));
     const patient = row.patient ?? { id: a.patientId ?? a.id, name: a.patientName, phone: a.patientPhone };
+    const therapistName = showTherapist ? therapistNameFor(a.therapistId) : null;
     return (
-      <li key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2.5">
-        <div className="min-w-0">
-          <p className="font-display text-sm font-medium text-[var(--ink)]">{a.patientName}</p>
-          <p className="text-xs text-[var(--muted)]">
-            No-show · {formatDateDMY(day)}
-            {therapistNameFor(a.therapistId) ? ` · ${therapistNameFor(a.therapistId)}` : ''}
-          </p>
+      <li key={a.id} className="py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 break-words font-display text-sm font-medium text-[var(--ink)]">{a.patientName}</p>
+          {therapistName ? (
+            <div className="shrink-0">
+              <TherapistPill>{therapistName}</TherapistPill>
+            </div>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <p className="mt-0.5 text-xs text-[var(--muted)]">
+          No-show · {formatDateDMY(day)}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {messageButton('no_show', patient, a.therapistId, day)}
           {row.patient && (
             <button
@@ -185,15 +199,17 @@ export function ReviewsPanel({
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Reviews filter">
+      <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Reviews filter">
         {chips.map((chip) => (
           <button
             key={chip.key}
             type="button"
             aria-pressed={filter === chip.key}
             onClick={() => setFilter(chip.key)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              filter === chip.key ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+              filter === chip.key
+                ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
             }`}
           >
             {chip.label}
