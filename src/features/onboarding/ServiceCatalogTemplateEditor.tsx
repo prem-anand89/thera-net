@@ -21,7 +21,7 @@ export function ServiceCatalogTemplateEditor({
   onChange: (next: CatalogTemplateDraft[]) => void;
 }) {
   const groups = useMemo(
-    () => [...groupCatalogDrafts(drafts).entries()].sort(([a], [b]) => a.localeCompare(b)),
+    () => [...groupCatalogDrafts(drafts).entries()],
     [drafts]
   );
 
@@ -52,12 +52,18 @@ export function ServiceCatalogTemplateEditor({
   return (
     <div className="space-y-2">
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+        <div className="flex items-center gap-1.5 border-b border-[var(--border)] bg-[var(--paper)] px-2.5 py-2 text-[11px] sm:gap-2 sm:px-3 font-semibold uppercase tracking-wider text-[var(--muted)]">
+          <span className="w-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1">Service name</span>
+          <span className="w-[5.25rem] shrink-0 text-right sm:w-28">Price (₹)</span>
+        </div>
+
         {groups.map(([group, rows], gIdx) => (
           <div key={group} className={gIdx === 0 ? '' : 'border-t border-[var(--border)]'}>
-            <div className="bg-[var(--paper)] px-3 py-2 text-[11.5px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+            <div className="bg-[var(--paper)]/70 px-3 py-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-[var(--muted)]">
               {group}
             </div>
-            <div className="divide-y divide-[var(--border)]">
+            <div className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
               {rows.map((row) => (
                 <TemplateRow
                   key={row.key}
@@ -113,6 +119,14 @@ function TemplateRow({
       : null;
 
   const willBeSaved = isPricedDraft(row);
+  // A ticked row with no price or no name is left out at Finish: say so on the row, not silently. ₹0 is a real price.
+  const missing = !row.enabled
+    ? null
+    : row.basePricePaise == null
+      ? "Add a price to include this (₹0 if it's free)."
+      : !row.name.trim()
+        ? 'Add a name to include this.'
+        : null;
   const check =
     willBeSaved && row.name.trim()
       ? nameCheck(row.name, otherSavedItems)
@@ -121,28 +135,44 @@ function TemplateRow({
   const hasSimilarDuplicate = check.kind === 'similar';
 
   return (
-    <div className={`p-3 ${row.enabled ? '' : 'opacity-50'}`}>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className={`px-2.5 py-2.5 sm:px-3 ${row.enabled ? '' : 'opacity-50'}`}>
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <input
           type="checkbox"
-          className="h-4 w-4 rounded accent-[var(--teal)]"
+          className="h-4 w-4 shrink-0 rounded accent-[var(--teal)]"
           checked={row.enabled}
           onChange={(e) => onUpdate({ enabled: e.target.checked })}
           aria-label="Include this service"
         />
         <input
-          className={`${inputCls} min-w-[140px] flex-1 py-1.5 text-sm ${hasExactDuplicate ? '!border-[var(--rust)]' : ''}`}
+          className={`${inputCls} min-w-0 flex-1 !px-2 py-1.5 sm:!px-3 ${hasExactDuplicate ? '!border-[var(--rust)]' : ''}`}
           value={row.name}
           onChange={(e) => onUpdate({ name: e.target.value })}
           placeholder="Service name on visits & invoices"
           aria-label="Service name"
         />
-        {isPackage && (
-          <span className="shrink-0 rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[11px] font-semibold text-[var(--teal-strong)]">
-            {perSession ? `${row.sessionCount} sessions · ${perSession}` : `${row.sessionCount} sessions`}
+        <div className="relative w-[5.25rem] shrink-0 sm:w-28">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]"
+          >
+            ₹
           </span>
-        )}
+          <RupeeInput
+            valuePaise={row.basePricePaise}
+            onChange={(p) => onUpdate({ basePricePaise: p })}
+            ariaLabel="Price in rupees"
+            placeholder="–"
+            className={`font-num ${inputCls} !py-1.5 !pl-4 !pr-1.5 text-right sm:!pl-5 sm:!pr-2 font-semibold tabular-nums text-[var(--ink)]`}
+          />
+        </div>
       </div>
+
+      {missing && (
+        <p className="mt-1 pl-6 text-xs text-[var(--amber-strong)]" data-testid="row-not-saved">
+          {missing}
+        </p>
+      )}
 
       {hasExactDuplicate && check.match && (
         <p className="mt-1 pl-6 text-xs text-[var(--rust)]">
@@ -156,25 +186,25 @@ function TemplateRow({
         </p>
       )}
 
-      <div className="mt-2 flex flex-wrap items-end justify-between gap-3 pl-6">
-        {isPackage ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]" role="group" aria-label="Number of sessions">
+      {isPackage && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 pl-6">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]" role="group" aria-label="Number of sessions">
             <div className="flex items-center rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
               <button
                 type="button"
-                className="h-9 w-9 text-lg font-semibold text-[var(--teal-strong)] disabled:opacity-40"
+                className="h-10 w-10 text-base font-semibold text-[var(--teal-strong)] disabled:opacity-40"
                 aria-label="One fewer session"
                 disabled={row.sessionCount <= MIN_SESSIONS}
                 onClick={() => onUpdate({ sessionCount: Math.max(MIN_SESSIONS, row.sessionCount - 1) })}
               >
                 −
               </button>
-              <output aria-live="polite" className="min-w-8 text-center text-sm font-semibold tabular-nums text-[var(--ink)]">
+              <output aria-live="polite" className="min-w-7 text-center text-xs font-semibold tabular-nums text-[var(--ink)]">
                 {row.sessionCount}
               </output>
               <button
                 type="button"
-                className="h-9 w-9 text-lg font-semibold text-[var(--teal-strong)] disabled:opacity-40"
+                className="h-10 w-10 text-base font-semibold text-[var(--teal-strong)] disabled:opacity-40"
                 aria-label="One more session"
                 disabled={row.sessionCount >= MAX_SESSIONS}
                 onClick={() => onUpdate({ sessionCount: Math.min(MAX_SESSIONS, row.sessionCount + 1) })}
@@ -188,9 +218,9 @@ function TemplateRow({
                 type="button"
                 aria-pressed={row.sessionCount === n}
                 aria-label={`${n} sessions`}
-                className={`min-h-8 rounded-full border px-3 text-xs ${
+                className={`min-h-10 min-w-10 rounded-full border px-2.5 text-xs ${
                   row.sessionCount === n
-                    ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                    ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
                 }`}
                 onClick={() => onUpdate({ sessionCount: n })}
@@ -199,15 +229,11 @@ function TemplateRow({
               </button>
             ))}
           </div>
-        ) : (
-          <span />
-        )}
-        <RupeeInput
-          valuePaise={row.basePricePaise}
-          onChange={(p) => onUpdate({ basePricePaise: p })}
-          className="w-32 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-base font-semibold text-[var(--ink)]"
-        />
-      </div>
+          <span className="shrink-0 rounded-full bg-[var(--teal-light)] px-2.5 py-1 text-[11px] font-semibold text-[var(--teal-strong)]">
+            {perSession ? `${row.sessionCount} sessions · ${perSession}` : `${row.sessionCount} sessions`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

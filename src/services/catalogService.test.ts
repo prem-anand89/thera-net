@@ -75,6 +75,13 @@ describe('catalogService name checks (the safety net under every form)', () => {
     await c.service.addServices([svc({ name: 'Session' }), svc({ name: 'Package' })]);
     expect(c.puts.catalog).toHaveBeenCalledTimes(2);
   });
+
+  it('addServices re-saves rows it already holds ("← Edit services" in onboarding) instead of calling them taken', async () => {
+    const existing = svc({ id: 's-1', name: 'Session', basePricePaise: 50000 });
+    const d = setup([existing]);
+    await d.service.addServices([{ ...existing, basePricePaise: 60000 }]);
+    expect(d.puts.catalog).toHaveBeenCalledWith(expect.objectContaining({ id: 's-1', basePricePaise: 60000 }));
+  });
 });
 
 describe('catalogService groups and usage', () => {

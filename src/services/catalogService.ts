@@ -49,7 +49,9 @@ export function createCatalogService(repos: Repos) {
       const dup = firstDuplicateName(items.map((i) => i.name));
       if (dup) throw new NameTakenError('exact', dup);
       const all = await repos.catalog.list(items[0].clinicId, true);
-      for (const item of items) assertNameFree(item.name, all, { hiddenLabel: HIDDEN_SERVICE });
+      const batchIds = new Set(items.map((i) => i.id));
+      const others = all.filter((i) => !batchIds.has(i.id));
+      for (const item of items) assertNameFree(item.name, others, { hiddenLabel: HIDDEN_SERVICE });
       for (const item of items) await repos.catalog.put({ ...item, name: item.name.trim(), category: (item.category ?? '').trim() });
     },
 

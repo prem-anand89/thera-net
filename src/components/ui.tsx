@@ -124,12 +124,16 @@ export function RupeeInput({
   disabled,
   className,
   id,
+  ariaLabel,
+  placeholder,
 }: {
   valuePaise: Paise | null;
   onChange: (paise: Paise | null) => void;
   disabled?: boolean;
   className?: string;
   id?: string;
+  ariaLabel?: string;
+  placeholder?: string;
 }) {
   return (
     <input
@@ -138,6 +142,8 @@ export function RupeeInput({
       min={0}
       step="1"
       inputMode="decimal"
+      aria-label={ariaLabel}
+      placeholder={placeholder}
       className={className ?? `font-num ${inputCls}`}
       disabled={disabled}
       value={valuePaise == null ? '' : paiseToRupees(valuePaise)}

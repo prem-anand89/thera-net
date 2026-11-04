@@ -193,7 +193,7 @@ export function OnboardingTeamStep({
       </div>
 
       <div className="grid gap-4 tab:grid-cols-2 tab:gap-6">
-        <section aria-labelledby="onboarding-you" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+        <section aria-labelledby="onboarding-you" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-6">
           <h2 id="onboarding-you" className="font-display text-base font-semibold text-[var(--ink)]">
             You
           </h2>
@@ -242,7 +242,7 @@ export function OnboardingTeamStep({
         </section>
 
         {entitlements.loading ? null : seatLimited ? (
-        <section aria-labelledby="onboarding-colleague" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-5 sm:p-6">
+        <section aria-labelledby="onboarding-colleague" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-4 sm:p-6">
           <h2 id="onboarding-colleague" className="font-display text-base font-semibold text-[var(--ink)]">
             Add a colleague without a login
           </h2>
@@ -292,12 +292,17 @@ export function OnboardingTeamStep({
           </p>
         </section>
         ) : (
-        <section aria-labelledby="onboarding-invite" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-5 sm:p-6">
-          <h2 id="onboarding-invite" className="font-display text-base font-semibold text-[var(--ink)]">
-            Invite a therapist
-          </h2>
+        <section aria-labelledby="onboarding-invite" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="onboarding-invite" className="font-display text-base font-semibold text-[var(--ink)]">
+              Invite a therapist
+            </h2>
+            <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+              Optional
+            </span>
+          </div>
           <p className="text-xs text-[var(--muted)]">
-            Optional — skip if it&apos;s just you. You can invite people later in Settings → Team.
+            Working alone? Leave this blank and tap Continue. You can invite people later in Settings → Team.
           </p>
           {sentInvites.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Invites sent">

@@ -131,6 +131,12 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
         updatedAt: now,
       }));
       await catalogService.addServices(items);
+      const savedIds = new Set(items.map((i) => i.id));
+      for (const existing of catalogRows ?? []) {
+        if (existing.active && !savedIds.has(existing.id) && catalogDrafts.some((d) => d.key === existing.id)) {
+          await repos.catalog.put({ ...existing, active: false, updatedAt: now });
+        }
+      }
       setOnboardingWizardPhase(clinic.id, 'done');
       void syncEngine.schedule(0);
       void navigate({ to: '/onboarding', search: { step: 'done' } });
@@ -155,8 +161,8 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
     <div
       className={
         clampedStep === 2
-          ? 'mx-auto max-w-xl tab:max-w-3xl space-y-6'
-          : 'mx-auto max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-8'
+          ? 'mx-auto max-w-xl tab:max-w-3xl space-y-4 sm:space-y-6'
+          : 'mx-auto max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-8'
       }
     >
       {clampedStep !== 'password' && <OnboardingProgress step={progressStep} />}
@@ -205,7 +211,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
           <div>
             <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Services you bill for</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              We&apos;ve filled in common templates — edit group names, session counts, and prices. Uncheck
+              We&apos;ve filled in common templates — edit names, session counts, and prices. Uncheck
               anything you don&apos;t offer. You need a price on at least one item to continue.
             </p>
             <button

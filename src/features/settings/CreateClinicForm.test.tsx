@@ -103,4 +103,16 @@ describe('CreateClinicForm', () => {
     expect(renderedAddress).toBeInTheDocument();
     expect(renderedAddress?.textContent).toBe('12 Main Street\nBangalore, KA — 560001');
   });
+
+  it('on phones shows the invoice and Patient ID numbering inside the form, above Continue', () => {
+    const { container } = render(<CreateClinicForm onSuccess={vi.fn()} variant="page" />);
+    expect(screen.queryByTestId('invoice-code-preview-mobile')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('e.g., Sunrise Physiotherapy'), { target: { value: 'Beyond Mechanics' } });
+    const line = screen.getByTestId('invoice-code-preview-mobile');
+    expect(container.querySelector('form')).toContainElement(line);
+    expect(line).toHaveClass('tab:hidden');
+    expect(line.textContent).toMatch(/Invoices BM\/.*\/0001 · Patient IDs BM.*-0001/);
+    const submit = screen.getByRole('button', { name: 'Continue' });
+    expect(line.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

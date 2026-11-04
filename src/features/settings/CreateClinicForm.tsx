@@ -279,6 +279,12 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         />
       </Field>
       <p className="-mt-2 text-xs text-[var(--muted)]">Printed on bills and receipts. Add it now or later in Settings.</p>
+      {variant === 'page' && code ? (
+        // Phones: the full preview sits below the buttons, so show the numbering here, where the name was typed.
+        <p className="rounded-lg bg-[var(--paper)] px-3 py-2 font-mono text-xs text-[var(--muted)] tab:hidden" data-testid="invoice-code-preview-mobile">
+          Invoices {formatInvoiceNo(code, fyLabel, 1)} · Patient IDs {formatWalkInMrno(code, yy, 1)}
+        </p>
+      ) : null}
       <ErrorNote message={error} />
       <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
         {busy ? 'Creating clinic…' : variant === 'page' ? 'Continue' : 'Create clinic'}
@@ -298,12 +304,12 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
   if (variant === 'dialog') return formEl;
 
   return (
-    <div className="mx-auto mt-10 max-w-md px-4 tab:max-w-4xl">
+    <div className="mx-auto mt-4 sm:mt-10 max-w-md px-4 tab:max-w-4xl">
       <div className="mx-auto max-w-md tab:max-w-none">
         <OnboardingProgress step={1} />
       </div>
       <div className="tab:grid tab:grid-cols-2 tab:items-stretch tab:gap-6">
-        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7">
+        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7">
           <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Create your clinic</h1>
           <p className="mb-6 mt-2 text-sm text-[var(--muted)]">
             This is what patients see on invoices. GST can wait until Settings.
@@ -312,7 +318,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         </div>
         <aside
           aria-label="Invoice header preview"
-          className="mt-6 flex flex-col rounded-[20px] bg-[var(--teal-deep)] p-6 text-white tab:mt-0 sm:p-7"
+          className="mt-6 flex flex-col rounded-[20px] bg-[var(--teal-deep)] p-5 text-white tab:mt-0 sm:p-7"
         >
           <p className="text-xs font-medium text-white/60">Invoice header preview</p>
           {logoPreview && (

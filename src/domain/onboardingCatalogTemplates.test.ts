@@ -3,15 +3,31 @@ import {
   catalogDraftsReadyToSave,
   zeroCatalogDrafts,
   createStarterCatalogDrafts,
-  renameCatalogDraftGroup,
+  groupCatalogDrafts,
 } from './onboardingCatalogTemplates';
 
 describe('onboardingCatalogTemplates', () => {
-  it('starter template includes single-session and package rows', () => {
+  it('starter template includes single-session and package rows without a hardcoded session count in the package name', () => {
     const drafts = createStarterCatalogDrafts();
     expect(drafts.some((d) => d.sessionCount === 1)).toBe(true);
-    expect(drafts.some((d) => d.sessionCount > 1)).toBe(true);
+    const pkg = drafts.find((d) => d.sessionCount > 1);
+    expect(pkg?.name).toBe('Physiotherapy Package');
     expect(drafts.every((d) => d.enabled)).toBe(true);
+  });
+
+  it('groupCatalogDrafts preserves template and insertion order instead of sorting alphabetically', () => {
+    const drafts = createStarterCatalogDrafts();
+    const groups = groupCatalogDrafts(drafts);
+    expect(groups.get('Consultation')?.map((d) => d.name)).toEqual([
+      'Initial Consultation',
+      'Follow-up Consultation',
+    ]);
+    expect(groups.get('Physiotherapy')?.map((d) => d.name)).toEqual([
+      'Physiotherapy Session',
+      'Physiotherapy Package',
+      'Manual Therapy Session',
+      'Exercise Therapy Session',
+    ]);
   });
 
   it('starter groups are only Consultation and Physiotherapy: none is named after a treatment', () => {
@@ -35,11 +51,5 @@ describe('onboardingCatalogTemplates', () => {
     const blank = createStarterCatalogDrafts().map((d) => ({ ...d, basePricePaise: null as number | null }));
     expect(catalogDraftsReadyToSave(zeroCatalogDrafts(blank))).toBe(true);
     expect(zeroCatalogDrafts(blank).every((d) => d.basePricePaise === 0)).toBe(true);
-  });
-
-  it('renames group on all drafts in that group', () => {
-    const drafts = createStarterCatalogDrafts();
-    const next = renameCatalogDraftGroup(drafts, 'Consultation', 'Consult');
-    expect(next.filter((d) => d.group === 'Consult').length).toBe(2);
   });
 });

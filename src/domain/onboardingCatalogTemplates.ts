@@ -26,7 +26,7 @@ export const STARTER_CATALOG_TEMPLATE: readonly Omit<CatalogTemplateDraft, 'key'
   { group: 'Consultation', name: 'Initial Consultation', sessionCount: 1, basePricePaise: 50000 },
   { group: 'Consultation', name: 'Follow-up Consultation', sessionCount: 1, basePricePaise: 30000 },
   { group: 'Physiotherapy', name: 'Physiotherapy Session', sessionCount: 1, basePricePaise: 80000 },
-  { group: 'Physiotherapy', name: 'Physiotherapy Package (5)', sessionCount: 5, basePricePaise: 350000 },
+  { group: 'Physiotherapy', name: 'Physiotherapy Package', sessionCount: 5, basePricePaise: 350000 },
   { group: 'Physiotherapy', name: 'Manual Therapy Session', sessionCount: 1, basePricePaise: 100000 },
   { group: 'Physiotherapy', name: 'Exercise Therapy Session', sessionCount: 1, basePricePaise: 70000 },
 ];
@@ -46,9 +46,6 @@ export function groupCatalogDrafts(drafts: CatalogTemplateDraft[]): Map<string, 
     if (!map.has(g)) map.set(g, []);
     map.get(g)!.push(row);
   }
-  for (const [, list] of map) {
-    list.sort((a, b) => a.name.localeCompare(b.name));
-  }
   return map;
 }
 
@@ -67,12 +64,3 @@ export function zeroCatalogDrafts(drafts: CatalogTemplateDraft[]): CatalogTempla
   return drafts.map((d) => ({ ...d, basePricePaise: 0 }));
 }
 
-export function renameCatalogDraftGroup(
-  drafts: CatalogTemplateDraft[],
-  fromGroup: string,
-  toGroup: string
-): CatalogTemplateDraft[] {
-  const trimmed = toGroup.trim();
-  if (!trimmed || trimmed === fromGroup) return drafts;
-  return drafts.map((d) => (d.group === fromGroup ? { ...d, group: trimmed } : d));
-}

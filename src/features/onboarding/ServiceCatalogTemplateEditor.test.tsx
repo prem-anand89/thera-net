@@ -25,11 +25,54 @@ describe('ServiceCatalogTemplateEditor — Step 11 look', () => {
     expect(screen.queryByText('Single visit')).toBeNull();
   });
 
-  it('renders editable name inputs with inputCls styling', () => {
+  it('renders editable name inputs with inputCls styling and labelled rupee price inputs', () => {
     render(<ServiceCatalogTemplateEditor drafts={createStarterCatalogDrafts()} onChange={vi.fn()} />);
+    expect(screen.getByText('Service name')).toBeInTheDocument();
+    expect(screen.getByText('Price (₹)')).toBeInTheDocument();
     const inputs = screen.getAllByRole('textbox', { name: 'Service name' });
     expect(inputs.length).toBeGreaterThan(0);
     expect(inputs[0]).toHaveClass('rounded-lg', 'border');
+    const prices = screen.getAllByRole('spinbutton', { name: 'Price in rupees' });
+    expect(prices.length).toBe(inputs.length);
+  });
+
+  it('keeps rows in template order and adds a new row at the bottom', async () => {
+    function StatefulEditor() {
+      const [drafts, setDrafts] = useState(() => createStarterCatalogDrafts());
+      return <ServiceCatalogTemplateEditor drafts={drafts} onChange={setDrafts} />;
+    }
+    render(<StatefulEditor />);
+    const namesBefore = screen.getAllByRole('textbox', { name: 'Service name' }).map((el) => (el as HTMLInputElement).value);
+    expect(namesBefore[0]).toBe('Initial Consultation');
+    expect(namesBefore[1]).toBe('Follow-up Consultation');
+
+    // Adding a new service appends it at the bottom instead of jumping to the top of the group
+    await userEvent.click(screen.getByRole('button', { name: 'One visit' }));
+    const inputsAfterAdd = screen.getAllByRole('textbox', { name: 'Service name' }) as HTMLInputElement[];
+    expect(inputsAfterAdd[inputsAfterAdd.length - 1].value).toBe('');
+  });
+
+  it('says on the row when a ticked service would be left out, and treats a blank price as blank, not ₹0', () => {
+    const drafts = createStarterCatalogDrafts();
+    drafts[0].basePricePaise = null;
+    drafts[1].name = '  ';
+    render(<ServiceCatalogTemplateEditor drafts={drafts} onChange={vi.fn()} />);
+    const notes = screen.getAllByTestId('row-not-saved').map((n) => n.textContent);
+    expect(notes).toContain("Add a price to include this (₹0 if it's free).");
+    expect(notes).toContain('Add a name to include this.');
+    expect(screen.getAllByRole('spinbutton', { name: 'Price in rupees' })[0]).toHaveAttribute('placeholder', '–');
+  });
+
+  it('name and price boxes stay 16px on phones: no text-sm on top of inputCls, so iOS does not zoom on focus', () => {
+    render(<ServiceCatalogTemplateEditor drafts={createStarterCatalogDrafts()} onChange={vi.fn()} />);
+    const boxes = [
+      screen.getAllByRole('textbox', { name: 'Service name' })[0],
+      screen.getAllByRole('spinbutton', { name: 'Price in rupees' })[0],
+    ];
+    for (const box of boxes) {
+      expect(box).toHaveClass('text-base');
+      expect(box).not.toHaveClass('text-sm');
+    }
   });
 
   it('package sessions use a stepper with 5/10 presets and never drop below 2', async () => {

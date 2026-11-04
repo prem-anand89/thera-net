@@ -85,7 +85,7 @@ describe('OnboardingPage layout and buttons', () => {
     mockPhase = 'catalog';
     const { container } = render(<OnboardingPage step={3} />);
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper).toHaveClass('max-w-xl', 'rounded-2xl', 'border', 'bg-[var(--surface)]', 'p-5', 'sm:p-8');
+    expect(wrapper).toHaveClass('max-w-xl', 'rounded-2xl', 'border', 'bg-[var(--surface)]', 'p-4', 'sm:p-8');
     expect(wrapper).not.toHaveClass('tab:max-w-3xl');
     expect(screen.getByText('Services you bill for')).toBeInTheDocument();
   });
@@ -114,7 +114,7 @@ describe('OnboardingPage layout and buttons', () => {
     mockPhase = 'done';
     const { container } = render(<OnboardingPage step="done" />);
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper).toHaveClass('max-w-xl', 'rounded-2xl', 'border', 'bg-[var(--surface)]', 'p-5', 'sm:p-8');
+    expect(wrapper).toHaveClass('max-w-xl', 'rounded-2xl', 'border', 'bg-[var(--surface)]', 'p-4', 'sm:p-8');
     expect(screen.getByText('You’re set up')).toBeInTheDocument();
 
     const primaryBtn = screen.getByRole('button', { name: 'Go to Workspace' });

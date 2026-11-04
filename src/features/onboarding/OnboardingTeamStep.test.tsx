@@ -87,7 +87,7 @@ describe('OnboardingTeamStep', () => {
     plan.maxMembers = 5;
     render(<OnboardingTeamStep onContinue={vi.fn()} />);
     expect(
-      screen.getByText("Optional — skip if it's just you. You can invite people later in Settings → Team.")
+      screen.getByText('Working alone? Leave this blank and tap Continue. You can invite people later in Settings → Team.')
     ).toBeInTheDocument();
   });
 
