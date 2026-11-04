@@ -1,6 +1,6 @@
 # Awaiting Appointments Implementation Plan (v2)
 
-**Date:** 2026-11-05 · **Status:** Rewritten after a code review; not started. Build after Step 16 of the settings plan, unless the owner says otherwise.
+**Date:** 2026-11-05 · **Status:** Rewritten after a code review; the comms-switch split (Task 1) is approved. Not started: the owner is holding the order of work. Task 1 is for Opus.
 
 **Goal:** When a patient calls or walks in and there is no slot, staff log them in 10 seconds on Workspace, see who is waiting, and book them when something opens. No more paper or WhatsApp notes.
 
@@ -21,7 +21,7 @@
 
 `clinics.enable_patient_comms` shows in Settings only as **"Ask patients for feedback"** (General → After a visit), but it also controls much more: the online booking page, the Workspace Appointments card and Book button, Book on the Patients list, Requests, and follow-up and package messages. Result: 13 of 16 clinics have it off, so they have no Appointments card and their booking link doesn't work, and a clinic that turns off feedback loses online booking. The Settings card still shows that link.
 
-**Recommended (owner to confirm):** the app's core stops depending on it.
+**Approved by the owner (2026-11-05):** the app's core stops depending on it.
 - The Appointments card, Book buttons and Awaiting show for every clinic.
 - WhatsApp messages stay available: they are `wa.me` links the staff tap. `patients.do_not_message` still applies.
 - New `clinics.online_booking_enabled`, with a switch on the Online booking page card. Backfill from `enable_patient_comms`, so no clinic's public page changes on the day. The public RPCs check the new column.
