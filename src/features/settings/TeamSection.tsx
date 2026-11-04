@@ -231,8 +231,10 @@ export function TeamMemberCard({
     }
     setSaving(true);
     setError(null);
+    // The plan can fill up while this form is open: a box that now shows locked must not still send what was typed.
+    const inviteEmail = loginsLocked ? '' : emailDraft.trim();
     try {
-      if (!member && therapist && emailDraft.trim()) {
+      if (!member && therapist && inviteEmail) {
         const supabase = getSupabase();
         if (!supabase) throw new Error('No Supabase connection');
         const { data: result, error: invokeError } = await supabase.functions.invoke(
@@ -241,7 +243,7 @@ export function TeamMemberCard({
             body: {
               action: 'invite',
               clinicId,
-              email: emailDraft.trim(),
+              email: inviteEmail,
               name: nameDraft.trim(),
               role: roleDraft,
               redirectOrigin: window.location.origin,
@@ -274,7 +276,7 @@ export function TeamMemberCard({
         // Switching a team member without a login back on needs room in the plan. Refuse here, in plain words, so a
         // write the server would reject never gets stuck in the sync queue. (Adding an email invites them to a login of
         // their own, so they stop counting as a team member without one and this check does not apply.)
-        if (therapist.active === false && !therapist.userId && !emailDraft.trim() && shouldBeBookable && rosterAddBlocked(clinicRoster ?? [], rosterLimit, therapist.id)) {
+        if (therapist.active === false && !therapist.userId && !inviteEmail && shouldBeBookable && rosterAddBlocked(clinicRoster ?? [], rosterLimit, therapist.id)) {
           setError(rosterLimitMessage(rosterLimit!));
           return;
         }

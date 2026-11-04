@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterLedgerTabs } from './LedgerPage';
+import { filterLedgerTabs, shouldLeaveInvoicesTab } from './LedgerPage';
 
 describe('filterLedgerTabs', () => {
   it('shows all four tabs (Visits, Patients, Invoices, Daybook) when billing is allowed', () => {
@@ -25,5 +25,14 @@ describe('filterLedgerTabs', () => {
   it('shows Invoices read-only to a plan that no longer issues them, only when asked to', () => {
     expect(filterLedgerTabs({ canBill: false, canViewPastInvoices: true, entitlementsLoading: false }).map((t) => t.key)).toContain('invoices');
     expect(filterLedgerTabs({ canBill: false, canViewPastInvoices: false, entitlementsLoading: false }).map((t) => t.key)).not.toContain('invoices');
+  });
+
+  it('does not bounce off the Invoices tab while the check is still loading', () => {
+    const base = { canBill: false, canViewPastInvoices: false };
+    expect(shouldLeaveInvoicesTab({ ...base, anyInvoices: undefined })).toBe(false);
+    expect(shouldLeaveInvoicesTab({ ...base, anyInvoices: false })).toBe(true);
+    expect(shouldLeaveInvoicesTab({ ...base, anyInvoices: null })).toBe(true);
+    expect(shouldLeaveInvoicesTab({ canBill: false, canViewPastInvoices: true, anyInvoices: true })).toBe(false);
+    expect(shouldLeaveInvoicesTab({ canBill: true, canViewPastInvoices: false, anyInvoices: null })).toBe(false);
   });
 });

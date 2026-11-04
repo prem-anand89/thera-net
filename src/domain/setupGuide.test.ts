@@ -194,7 +194,9 @@ describe('the clinic profile step without invoicing', () => {
     const invite = full.find((s) => s.id === 'invite-team')!;
     expect(invite.group).toBe('optional');
     expect(invite.why).toBe('All the logins on your plan are in use. Invite more people after upgrading.');
-    expect(full.find((s) => s.id === 'link-therapist')!.why).toMatch(/Upgrade to link them/);
+    const link = full.find((s) => s.id === 'link-therapist')!;
+    expect(link.why).toMatch(/Upgrade to link them/);
+    expect(link.group).toBe('optional');
     // Below the limit nothing changes.
     expect(buildSetupSteps(false, true).find((s) => s.id === 'invite-team')!.group).toBe('essentials');
   });

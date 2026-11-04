@@ -99,6 +99,11 @@ export function filterLedgerTabs({
 }
 
 
+/** Off the Invoices tab only once it's known they can't see it: `anyInvoices` undefined means the check hasn't finished. */
+export function shouldLeaveInvoicesTab(input: { canBill: boolean; canViewPastInvoices: boolean; anyInvoices: boolean | null | undefined }): boolean {
+  return !input.canBill && !input.canViewPastInvoices && input.anyInvoices !== undefined;
+}
+
 // Local Y/M/D components, not toISOString() — that converts to UTC first,
 // which puts "today" a day behind for roughly the first ~5.5 hours of the
 // local day for an India-based clinic (UTC+5:30).
@@ -272,8 +277,12 @@ export function LedgerPage() {
   const { canBill, invoicingOnPlan, invoiceRoleOk, canCollectPayment, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
   // Past invoices of a plan that no longer issues them: findable, read-only. Only when there are some to find.
-  const anyInvoices = useLiveQuery(async () => (await repos.invoices.list(clinic.id)).length > 0, [clinic.id]) ?? false;
-  const canViewPastInvoices = !invoicingOnPlan && invoiceRoleOk && anyInvoices;
+  // Asked only on such a plan. undefined = still loading, so a deep link to the tab isn't bounced before the answer.
+  const anyInvoices = useLiveQuery(
+    async () => (invoicingOnPlan ? null : (await repos.invoices.list(clinic.id)).length > 0),
+    [clinic.id, invoicingOnPlan]
+  );
+  const canViewPastInvoices = !invoicingOnPlan && invoiceRoleOk && anyInvoices === true;
   const { myTherapistId, isClinicWideView, isFrontDesk } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
@@ -305,9 +314,9 @@ export function LedgerPage() {
   // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
     if (entitlementsLoading) return;
-    if (recordsView === 'invoices' && !canBill && !canViewPastInvoices) setRecordsView('visits');
+    if (recordsView === 'invoices' && shouldLeaveInvoicesTab({ canBill, canViewPastInvoices, anyInvoices })) setRecordsView('visits');
     if (recordsView === 'daybook' && !canBill && !canCollectPayment) setRecordsView('visits');
-  }, [recordsView, canBill, canViewPastInvoices, canCollectPayment, entitlementsLoading, setRecordsView]);
+  }, [recordsView, canBill, canViewPastInvoices, anyInvoices, canCollectPayment, entitlementsLoading, setRecordsView]);
   // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
   // (or a patient deep link) always wins and never overwrites what was remembered.
   const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));

@@ -338,11 +338,11 @@ export function SettingsPage() {
   // Services while the catalog is empty (the week-one blocker), else General.
   const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
-    if (landedOnDefault || therapists === undefined || catalog === undefined) return;
+    if (landedOnDefault || therapists === undefined || catalog === undefined || entitlements.loading) return;
     setActiveTab(unlinkedCount > 0 && !seatsFull ? 'team' : catalogEmpty ? 'services' : 'general');
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landedOnDefault, therapists, catalog, unlinkedCount, seatsFull, catalogEmpty]);
+  }, [landedOnDefault, therapists, catalog, unlinkedCount, seatsFull, catalogEmpty, entitlements.loading]);
 
   // A link (setup step, closed-days sheet) can change ?tab= or ?card= while Settings is
   // already open; follow it.

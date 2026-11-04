@@ -98,7 +98,7 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean, login
     },
     {
       id: 'link-therapist',
-      group: 'essentials',
+      group: loginsFull ? 'optional' : 'essentials',
       title: 'Link every therapist to their login',
       why: loginsFull
         ? 'All the logins on your plan are in use, so others stay on the schedule without one. Upgrade to link them.'
