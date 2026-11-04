@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCoverage, calculateDailyCoverage, clinicSessionsOn, describeSchedule, hoursAfterShiftAssign } from './shiftUtils';
+import { buildCoverage, calculateDailyCoverage, clinicSessionsOn, describeSchedule, hoursAfterShiftAssign, uncoveredSessions } from './shiftUtils';
 import type { ShiftTemplate, Therapist, TherapistShiftAssignment } from '@/domain/types';
 
 const splitClinic = {
@@ -87,5 +87,26 @@ describe('hoursAfterShiftAssign', () => {
       breakStartMinute: null,
     });
     expect(Object.keys(hours)).toEqual(['2']);
+  });
+});
+
+describe('uncoveredSessions', () => {
+  const t1 = { id: 't1', clinicId: 'c1', name: 'Asha', active: true, updatedAt: '', workingHours: null } as Therapist;
+  const morningOnly: ShiftTemplate = {
+    id: 'mo', clinicId: 'c1', name: 'Morning', startMinute: 540, endMinute: 780,
+    breakDurationMinutes: 0, defaultBreakStartMinute: null, active: true, updatedAt: '',
+  };
+
+  it('flags the evening session when the only shift ends at lunch', () => {
+    const map = buildCoverage([t1], [row('a', 'mo', [1])], [morningOnly], splitClinic);
+    expect(uncoveredSessions(1, map, splitClinic)).toEqual(['Evening']);
+  });
+
+  it('is empty when someone covers both sessions, on a one-session clinic, and on a closed day', () => {
+    const covered = buildCoverage([t1], [], [], splitClinic); // clinic hours = both sessions
+    expect(uncoveredSessions(1, covered, splitClinic)).toEqual([]);
+    const plain = { bookingStartHour: 9, bookingEndHour: 17, closedWeekdays: [0] };
+    expect(uncoveredSessions(1, buildCoverage([t1], [], [], plain), plain)).toEqual([]);
+    expect(uncoveredSessions(0, covered, splitClinic)).toEqual([]);
   });
 });

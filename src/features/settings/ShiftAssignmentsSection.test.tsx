@@ -234,12 +234,12 @@ describe('ShiftAssignmentsSection', () => {
 
     clinic.closedWeekdays = [6, 0];
     render(<ShiftAssignmentsSection />);
-    expect(screen.getByText('Weekly coverage')).toBeInTheDocument();
+    expect(screen.getByText('Weekly shifts')).toBeInTheDocument();
     expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThanOrEqual(1);
 
     // 5 shifts * 7h = 35h
     expect(screen.getAllByText('35h').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('5 shifts').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('5 days').length).toBeGreaterThanOrEqual(1);
   });
 
   it('opens the person sheet on clicking Edit next to therapist name', () => {

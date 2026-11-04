@@ -495,7 +495,7 @@ export function SettingsPage() {
                 label="Team view"
                 options={[
                   { value: 'members', label: 'Team members' },
-                  { value: 'shifts', label: 'Shifts & coverage', badge: pendingShiftCount },
+                  { value: 'shifts', label: 'Shifts', badge: pendingShiftCount },
                 ]}
                 value={teamView}
                 onChange={setTeamView}

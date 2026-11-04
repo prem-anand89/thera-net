@@ -787,3 +787,43 @@ export function hoursAfterShiftAssign(input: {
   for (const day of weekdays) hours[String(day)] = intervals;
   return hours as WorkingHours;
 }
+
+/** A cell's working intervals on its day, as [start, end] minute pairs (empty for off / closed). */
+function cellIntervals(cell: CoverageCell): [number, number][] {
+  if (cell.type === 'template') {
+    return cell.templates.flatMap(({ template, assignment }) =>
+      shiftIntervals(
+        template.startMinute,
+        template.endMinute,
+        assignment.breakStartMinute ?? template.defaultBreakStartMinute ?? null,
+        template.breakDurationMinutes
+      )
+    );
+  }
+  if (cell.type === 'custom' || cell.type === 'clinic_default') return (cell.customIntervals ?? []) as [number, number][];
+  return [];
+}
+
+/**
+ * For a clinic that opens in two sessions on a weekday (9–1 and 4–8): which sessions no one on shift covers, by name
+ * ("Morning" for the first, "Evening" for the last). Empty for a one-session day, a closed day, or full cover.
+ */
+export function uncoveredSessions(
+  weekday: number,
+  coverageMap: Map<string, Map<number, CoverageCell>>,
+  clinic: Parameters<typeof clinicSessionsOn>[0]
+): ('Morning' | 'Evening')[] {
+  const sessions = clinicSessionsOn(clinic, weekday);
+  if (sessions.length < 2) return [];
+  const worked: [number, number][] = [];
+  for (const dayMap of coverageMap.values()) {
+    const cell = dayMap.get(weekday);
+    if (cell) worked.push(...cellIntervals(cell));
+  }
+  const names: ('Morning' | 'Evening')[] = [];
+  sessions.forEach(([start, end], i) => {
+    const covered = worked.some(([a, b]) => Math.min(b, end) - Math.max(a, start) > 0);
+    if (!covered) names.push(i === 0 ? 'Morning' : 'Evening');
+  });
+  return names;
+}

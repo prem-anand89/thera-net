@@ -30,6 +30,37 @@ const therapist: Therapist = {
 };
 
 describe('ShiftCoverageGrid', () => {
+  it('is a "Weekly shifts" card with a phone card per therapist showing full name, hours and schedule line', () => {
+    render(<ShiftCoverageGrid therapists={[therapist]} templates={[]} approvedAssignments={[]} clinic={baseClinic} />);
+    expect(screen.getByRole('heading', { name: 'Weekly shifts' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Assign shift' })).toBeInTheDocument();
+    // The phone card (below tab:) shows the whole name and a readable schedule line, no cut words.
+    expect(screen.getAllByText('Dr Anita Desai').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('48h / wk')).toBeInTheDocument();
+    expect(screen.getByText('Mon–Sat 9–5')).toBeInTheDocument();
+    expect(screen.queryByText('Cust')).toBeNull();
+    expect(screen.queryByText('Close')).toBeNull();
+  });
+
+  it('notes a session no one covers on a clinic that closes at midday', () => {
+    const splitClinic = {
+      ...baseClinic,
+      bookingEndHour: 20,
+      operatingHours: Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [[540, 780], [960, 1200]]])),
+    } as Clinic;
+    const morningTemplate = {
+      id: 'mo', clinicId: 'c1', name: 'Morning', startMinute: 540, endMinute: 780,
+      breakDurationMinutes: 0, defaultBreakStartMinute: null, active: true, updatedAt: '',
+    };
+    const row = {
+      id: 'a1', clinicId: 'c1', therapistId: 't1', shiftTemplateId: 'mo', customHours: null, weekdays: [1, 2, 3, 4, 5, 6],
+      breakStartMinute: null, status: 'approved', createdAt: '2026-10-01', updatedAt: '2026-10-01',
+    } as never;
+    render(<ShiftCoverageGrid therapists={[therapist]} templates={[morningTemplate]} approvedAssignments={[row]} clinic={splitClinic} />);
+    expect(screen.getByTestId('gap-note')).toHaveTextContent('Mon evening');
+    expect(screen.getAllByText('Evening gap').length).toBeGreaterThan(0);
+  });
+
   it('renders dynamic clinic default hours label based on clinic settings', () => {
     render(
       <ShiftCoverageGrid
