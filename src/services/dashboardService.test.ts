@@ -586,6 +586,11 @@ describe('dashboardService.monthlyCollection', () => {
     expect(summary.partnerCollectedPaise).toBe(rs(1000));
     expect(summary.partnerCollectedVisitCount).toBe(1);
     expect(summary.collectedPaise).toBe(rs(1500));
+    // Who holds each visit's money, for the partner settlement.
+    expect(summary.settlementVisits.map((v) => [v.billPaise, v.partnerHeldPaise, v.clinicHeldPaise])).toEqual([
+      [rs(1000), rs(1000), 0],
+      [rs(500), 0, rs(500)],
+    ]);
   });
 
   it('returns null collectionRatePct when nothing was billed that month', async () => {

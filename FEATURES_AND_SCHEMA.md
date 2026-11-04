@@ -2242,6 +2242,8 @@ first tranche (migration `20260912070000_settlement_payments.sql`).
 `settlementService.get`/`.save` still read/write it for backward
 compatibility, but no UI writes new rows to it anymore.
 
+**Who owes whom (`domain/partnerSettlement.ts`, `settlementBalance`):** `partner_collects` is only the usual arrangement, because any visit can be settled the other way. The settlement card starts from the usual figure (partner share to pay, or post-tax share expected), then each visit held the unusual way moves it by that fraction of (partner share + post-tax share): one side stops owing and the other starts. It shows the adjustment and one net figure, and the direction can flip ("Net due from {partner}"), which also flips the payment form and the Still to pay / Variance line. A month with nothing crossing shows exactly the usual figure and no net lines.
+
 #### `settlement_payments`
 ```sql
 id                     uuid PRIMARY KEY
@@ -4245,6 +4247,8 @@ and its rows were backfilled into `settlement_payments` as each period's
 first tranche (migration `20260912070000_settlement_payments.sql`).
 `settlementService.get`/`.save` still read/write it for backward
 compatibility, but no UI writes new rows to it anymore.
+
+**Who owes whom (`domain/partnerSettlement.ts`, `settlementBalance`):** `partner_collects` is only the usual arrangement, because any visit can be settled the other way. The settlement card starts from the usual figure (partner share to pay, or post-tax share expected), then each visit held the unusual way moves it by that fraction of (partner share + post-tax share): one side stops owing and the other starts. It shows the adjustment and one net figure, and the direction can flip ("Net due from {partner}"), which also flips the payment form and the Still to pay / Variance line. A month with nothing crossing shows exactly the usual figure and no net lines.
 
 #### `settlement_payments`
 ```sql

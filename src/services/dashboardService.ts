@@ -1,3 +1,4 @@
+import type { SettlementVisit } from '@/domain/partnerSettlement';
 import { toLocalDateStr } from '@/domain/schedule';
 import {
   REFERRING_SOURCE_LABELS,
@@ -105,6 +106,8 @@ export interface MonthlyCollection {
   /** Of the month's visits, what the partner collected at its own counter (`partner` payments) — not in the clinic's hands. */
   partnerCollectedPaise: Paise;
   partnerCollectedVisitCount: number;
+  /** Each paid visit's money and shares, for working out who owes whom (`settlementBalance`). */
+  settlementVisits: SettlementVisit[];
 }
 
 export interface RepeatVisitStats {
@@ -599,9 +602,20 @@ export function createDashboardService(repos: Repos) {
       let collectedPaise = 0;
       let partnerCollectedPaise = 0;
       let partnerCollectedVisitCount = 0;
+      const settlementVisits: SettlementVisit[] = [];
       for (const v of visits) {
         billedPaise += v.actualBillPaise;
         const byPartner = partnerByVisitId.get(v.id) ?? 0;
+        const paid = directByVisitId.get(v.id) ?? 0;
+        if (paid !== 0) {
+          settlementVisits.push({
+            billPaise: v.actualBillPaise,
+            partnerHeldPaise: byPartner,
+            clinicHeldPaise: paid - byPartner,
+            partnerSharePaise: v.partnerSharePaise,
+            postTaxPaise: v.postTaxPaise,
+          });
+        }
         if (byPartner > 0) {
           partnerCollectedPaise += byPartner;
           partnerCollectedVisitCount += 1;
@@ -622,6 +636,7 @@ export function createDashboardService(repos: Repos) {
           billedPaise > 0 ? Math.round((collectedPaise / billedPaise) * 100) : null,
         partnerCollectedPaise,
         partnerCollectedVisitCount,
+        settlementVisits,
       };
     },
 

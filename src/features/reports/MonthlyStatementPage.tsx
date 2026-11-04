@@ -1,3 +1,4 @@
+import { settlementBalance, type SettlementBalance } from '@/domain/partnerSettlement';
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -287,8 +288,15 @@ export function MonthlyStatementPage() {
         <SettlementCard
           clinicId={clinic.id}
           month={selected}
-          expectedPaise={
-            clinic.partnerCollects ? (report?.total.postTaxPaise ?? null) : (report?.total.partnerSharePaise ?? null)
+          balance={
+            report && collection
+              ? settlementBalance({
+                  partnerCollects: Boolean(clinic.partnerCollects),
+                  totalPartnerSharePaise: report.total.partnerSharePaise,
+                  totalPostTaxPaise: report.total.postTaxPaise,
+                  visits: collection.settlementVisits,
+                })
+              : null
           }
           partnerCollects={Boolean(clinic.partnerCollects)}
           partnerCollectedPaise={collection?.partnerCollectedPaise ?? 0}
@@ -314,7 +322,7 @@ export function MonthlyStatementPage() {
 function SettlementCard({
   clinicId,
   month,
-  expectedPaise,
+  balance,
   partnerCollects,
   partnerCollectedPaise,
   partnerCollectedVisits,
@@ -323,7 +331,8 @@ function SettlementCard({
 }: {
   clinicId: string;
   month: FyMonth;
-  expectedPaise: Paise | null;
+  /** Who owes whom this month, from who actually holds each visit's money. Null while it loads. */
+  balance: SettlementBalance | null;
   /** The partner collects patients' payments and owes the clinic its share; otherwise the clinic collects and owes the partner theirs. */
   partnerCollects: boolean;
   partnerCollectedPaise: Paise;
@@ -343,13 +352,12 @@ function SettlementCard({
   const [error, setError] = useState<string | null>(null);
 
   const totalReceivedPaise = (payments ?? []).reduce((sum, p) => sum + p.amountReceivedPaise, 0);
-  // Received from the partner: positive variance = they paid more than expected. Paid to the partner: what is still to pay.
+  // Normally partnerCollects decides the direction; visits settled the other way can flip it.
+  const clinicPays = balance ? balance.clinicPays : !partnerCollects;
+  const crossing = (balance?.crossVisitCount ?? 0) > 0;
+  // Receiving: positive variance = they paid more than expected. Paying: what is still to pay.
   const variancePaise =
-    payments && expectedPaise != null
-      ? partnerCollects
-        ? totalReceivedPaise - expectedPaise
-        : expectedPaise - totalReceivedPaise
-      : null;
+    payments && balance ? (clinicPays ? balance.duePaise - totalReceivedPaise : totalReceivedPaise - balance.duePaise) : null;
   const partner = partnerName(useClinic());
 
   async function remove(id: string) {
@@ -368,7 +376,7 @@ function SettlementCard({
           ? `Expected from ${partner} (computed ${showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`}):`
           : `${labels.partner} share to pay (computed):`}{' '}
         <span className="font-medium text-[var(--ink)]">
-          {expectedPaise != null ? formatINR(expectedPaise) : '—'}
+          {balance ? formatINR(balance.usualPaise) : '—'}
         </span>
       </p>
       {partnerCollectedPaise > 0 && (
@@ -377,6 +385,25 @@ function SettlementCard({
           <span className="font-medium text-[var(--ink)]">{formatINR(partnerCollectedPaise)}</span> (
           {partnerCollectedVisits} visit{partnerCollectedVisits === 1 ? '' : 's'})
         </p>
+      )}
+      {balance && crossing && (
+        <div data-testid="settlement-net">
+          {partnerCollects && (
+            <p className="text-sm text-[var(--muted)]">
+              Collected at your desk this month:{' '}
+              <span className="font-medium text-[var(--ink)]">{formatINR(balance.crossCollectedPaise)}</span> ({balance.crossVisitCount} visit
+              {balance.crossVisitCount === 1 ? '' : 's'})
+            </p>
+          )}
+          <p className="text-sm text-[var(--muted)]">
+            Adjustment for {balance.crossVisitCount} visit{balance.crossVisitCount === 1 ? '' : 's'}{' '}
+            {partnerCollects ? 'you collected' : `${partner} collected`}:{' '}
+            <span className="font-medium text-[var(--ink)]">−{formatINR(balance.adjustmentPaise)}</span>
+          </p>
+          <p className="mt-1 text-sm font-medium text-[var(--ink)]">
+            {clinicPays ? `Net to pay ${partner}` : `Net due from ${partner}`}: {formatINR(balance.duePaise)}
+          </p>
+        </div>
       )}
 
       {payments && payments.length > 0 && (
@@ -414,14 +441,14 @@ function SettlementCard({
       )}
 
       <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-        {partnerCollects ? 'Total received' : `Total paid to ${partner}`}: {formatINR(totalReceivedPaise as Paise)}
+        {clinicPays ? `Total paid to ${partner}` : 'Total received'}: {formatINR(totalReceivedPaise as Paise)}
       </p>
       {variancePaise != null && (
         <p
           className={`text-sm font-medium ${variancePaise === 0 ? 'text-[var(--moss)]' : 'text-[var(--rust)]'}`}
         >
-          {partnerCollects ? 'Variance' : 'Still to pay'}:{' '}
-          {partnerCollects && variancePaise >= 0 ? '+' : ''}
+          {clinicPays ? 'Still to pay' : 'Variance'}:{' '}
+          {!clinicPays && variancePaise >= 0 ? '+' : ''}
           {formatINR(variancePaise as Paise)}
         </p>
       )}
@@ -432,7 +459,7 @@ function SettlementCard({
             clinicId={clinicId}
             month={month}
             existing={editing}
-            paying={!partnerCollects}
+            paying={clinicPays}
             onDone={() => {
               setAdding(false);
               setEditing(null);
