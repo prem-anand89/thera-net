@@ -155,6 +155,27 @@ export function formatWeekdays(weekdays: number[]): string {
     .join('/');
 }
 
+/**
+ * The clinic's open sessions on a weekday, as [start, end] minute pairs: that weekday's entry in
+ * `operatingHours` (a clinic that closes at midday has two), else the one block `bookingStartHour`–`bookingEndHour`.
+ * Empty on a closed weekday. The one place the Team screens read clinic hours, so 9–1 and 4–8 counts as 8 hours.
+ */
+export function clinicSessionsOn(
+  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'> & Partial<Pick<Clinic, 'operatingHours'>>,
+  weekday: number
+): [number, number][] {
+  if ((clinic.closedWeekdays ?? []).includes(weekday)) return [];
+  const stored: unknown = (clinic.operatingHours as Record<string, unknown> | null | undefined)?.[String(weekday)];
+  const sessions = Array.isArray(stored)
+    ? stored
+        .filter((p): p is [number, number] => Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number')
+        .map(([a, b]) => [a, b] as [number, number])
+        .sort((a, b) => a[0] - b[0])
+    : [];
+  if (sessions.length > 0) return sessions;
+  return [[(clinic.bookingStartHour ?? 9) * 60, (clinic.bookingEndHour ?? 17) * 60]];
+}
+
 export type CoverageCell = {
   therapistId: string;
   weekday: number;
@@ -173,7 +194,7 @@ export function buildCoverage(
   therapists: Therapist[],
   assignments: TherapistShiftAssignment[],
   templates: ShiftTemplate[],
-  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'>
+  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'> & Partial<Pick<Clinic, 'operatingHours'>>
 ): Map<string, Map<number, CoverageCell>> {
   const templateById = new Map<string, ShiftTemplate>(templates.map((t) => [t.id, t]));
   const approvedByTherapist = new Map<string, TherapistShiftAssignment[]>();
@@ -186,9 +207,6 @@ export function buildCoverage(
   }
 
   const result = new Map<string, Map<number, CoverageCell>>();
-  const clinicStart = (clinic.bookingStartHour ?? 9) * 60;
-  const clinicEnd = (clinic.bookingEndHour ?? 18) * 60;
-  const clinicDefaultMinutes = Math.max(0, clinicEnd - clinicStart);
   const closedDays = new Set(clinic.closedWeekdays ?? []);
 
   for (const therapist of therapists) {
@@ -300,15 +318,16 @@ export function buildCoverage(
           workingMinutes: 0,
         });
       } else {
+        const sessions = clinicSessionsOn(clinic, weekday);
         dayMap.set(weekday, {
           therapistId: therapist.id,
           weekday,
           type: 'clinic_default',
           templates: [],
-          customIntervals: null,
-          label: 'Clinic default',
-          tooltip: `Using clinic default hours (${formatRange12h(clinicStart, clinicEnd)})`,
-          workingMinutes: clinicDefaultMinutes,
+          customIntervals: sessions,
+          label: sessions.map(([a, b]) => formatCompactRange(a, b)).join(' & '),
+          tooltip: `Clinic hours: ${sessions.map(([a, b]) => formatRange12h(a, b)).join(' & ')}`,
+          workingMinutes: sessions.reduce((sum, [a, b]) => sum + Math.max(0, b - a), 0),
         });
       }
     }
@@ -632,10 +651,6 @@ export function describeSchedule(
   templates: ShiftTemplate[],
   clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'> & Partial<Pick<Clinic, 'operatingHours'>>
 ): ScheduleDescription {
-  const closedDays = new Set(clinic.closedWeekdays ?? []);
-  const clinicStart = (clinic.bookingStartHour ?? 9) * 60;
-  const clinicEnd = (clinic.bookingEndHour ?? 17) * 60;
-
   const hasCustomWh =
     therapist.workingHours !== null &&
     therapist.workingHours !== undefined &&
@@ -648,13 +663,9 @@ export function describeSchedule(
     let intervals: [number, number][] = [];
     if (wh) {
       intervals = wh[String(d)] ?? [];
-    } else if (!closedDays.has(d)) {
+    } else {
       // The clinic's own sessions that weekday (a clinic that closes at midday has two), else its one block.
-      const stored: unknown = (clinic.operatingHours as Record<string, unknown> | null | undefined)?.[String(d)];
-      const sessions = Array.isArray(stored)
-        ? stored.filter((p): p is [number, number] => Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number')
-        : [];
-      intervals = sessions.length > 0 ? sessions : [[clinicStart, clinicEnd]];
+      intervals = clinicSessionsOn(clinic, d);
     }
 
     if (intervals.length === 0) continue;
@@ -730,3 +741,49 @@ export function describeSchedule(
 }
 
 
+
+/** One shift's intervals on a day: start–end, split around the break when it has one (the server's `derive_working_hours`). */
+function shiftIntervals(start: number, end: number, breakStart: number | null, breakMinutes: number): [number, number][] {
+  return breakMinutes > 0 && breakStart !== null ? [[start, breakStart], [breakStart + breakMinutes, end]] : [[start, end]];
+}
+
+/**
+ * The therapist's working hours after `assign_shift` saves, worked out on the device so the admin can be warned about
+ * appointments that would fall outside them before saving. Mirrors the server (`apply_shift_hours`): an approved
+ * custom-hours row is dropped and the shift starts from nothing; otherwise the other approved shift rows are kept,
+ * minus the days the new shift takes (and minus `replacesId`, the row being edited, when the server is told which one).
+ */
+export function hoursAfterShiftAssign(input: {
+  therapistId: string;
+  approved: TherapistShiftAssignment[];
+  templates: ShiftTemplate[];
+  template: Pick<ShiftTemplate, 'startMinute' | 'endMinute' | 'breakDurationMinutes' | 'defaultBreakStartMinute'>;
+  weekdays: number[];
+  breakStartMinute: number | null;
+  replacesId?: string | null;
+}): WorkingHours {
+  const { therapistId, approved, templates, template, weekdays, breakStartMinute, replacesId } = input;
+  const mine = approved.filter((a) => a.therapistId === therapistId && a.status === 'approved');
+  const hours: Record<string, [number, number][]> = {};
+  const taken = new Set(weekdays);
+  if (!mine.some((a) => !a.shiftTemplateId)) {
+    const byId = new Map(templates.map((t) => [t.id, t]));
+    const rows = mine
+      .filter((a) => a.shiftTemplateId && a.id !== replacesId)
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || a.id.localeCompare(b.id));
+    for (const row of rows) {
+      const t = byId.get(row.shiftTemplateId!);
+      if (!t) continue;
+      const intervals = shiftIntervals(t.startMinute, t.endMinute, row.breakStartMinute ?? t.defaultBreakStartMinute ?? null, t.breakDurationMinutes);
+      for (const day of row.weekdays ?? []) if (!taken.has(day)) hours[String(day)] = intervals;
+    }
+  }
+  const intervals = shiftIntervals(
+    template.startMinute,
+    template.endMinute,
+    breakStartMinute ?? template.defaultBreakStartMinute ?? null,
+    template.breakDurationMinutes
+  );
+  for (const day of weekdays) hours[String(day)] = intervals;
+  return hours as WorkingHours;
+}

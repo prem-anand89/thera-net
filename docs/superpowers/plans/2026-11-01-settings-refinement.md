@@ -1,6 +1,6 @@
 # Settings Refinement — Plan (v5)
 
-**Date:** 2026-11-03 · **Status:** Steps 1–11 and the phone layout pass are built and pushed. **Open: Step 12 (Onboarding & first-week setup), Step 13 (Schedule mini-calendar dots fix), Step 14 (Shifts & coverage refinement), Step 15 (Lite tier & Settings refinements), Step 16 (Faster visit logging & package expiry), and the 360px phone check.** When all are done, delete this file and update the docs, per the housekeeping rule.
+**Date:** 2026-11-03 · **Status:** Steps 1–13 and the phone layout pass are built and pushed. **Open: Step 14 (Shifts refinement v2), Step 15 (Lite tier & Settings refinements), Step 16 (Faster visit logging & package expiry), and the 360px phone check.** When all are done, delete this file and update the docs, per the housekeeping rule.
 **Process:** Work on `main`, one commit per step, never push without asking. Before each commit that touches `src/`: `npm run typecheck && npm run lint && npm run test`, plus `npm run build` when shared components, routing or Tailwind config change. Per `CLAUDE.md`: no new npm dependencies, CSS variables only, every `<button>` has an explicit `type`, errors inside dialogs via `<ErrorNote>`, update `FEATURES_AND_SCHEMA.md` (every copy) in the same commit. (There is no `THERA_NET.md`; `CLAUDE.md` is the rule file.) **Migrations:** none through Step 13. **14a needs one** (the `assign_shift` RPC) and **16c needs one** (package expiry columns): apply it live and commit the matching `supabase/migrations/` file in the same change, per `CLAUDE.md`.
 **Models:** only Opus and Sonnet. Each step names who builds it and who reviews it. Opus builds and reviews anything that touches money or the shared form state every card uses.
 
@@ -54,7 +54,7 @@ Settings should feel like a normal form: click a field, type, press Save. Each s
 |---|---|---|---|
 | 12 | Onboarding & first-week setup polish (12a–12d) | Sonnet / Opus | Opus |
 | 13 | Schedule mini-calendar dots fix (decouple `implicitSelection` from month `dayState`) — **built** | Sonnet | Opus |
-| 14 | Shifts & coverage refinement (bugs incl. one `assign_shift` migration, SheetDialog, phone cards, palette tokens) | Sonnet / Opus | Opus |
+| 14 | Shifts refinement v2 (14a bugs + one `assign_shift` migration, 14b one person sheet, 14c Weekly shifts + phone cards, 14d Shift types + tokens, 14e one-therapist clinics) | Sonnet / Opus | Opus |
 | 15 | Lite tier & Settings refinements (past invoices stay printable with a note, Team seat cap on unlinked therapists, banner wording) | Sonnet | Opus |
 | 16 | Faster visit logging & optional package expiry (16a add a service from the visit, 16b "Used most" first, 16c optional package expiry, 16d usage for admin and front desk) | Sonnet / Opus (16c) | Opus |
 | — | Phone check at 360px (the owner), then the final review | owner / Opus | Opus |
@@ -117,44 +117,82 @@ Steps 1–11 changed Settings' words and layout (`Sees patients`, `One visit`, `
 
 ---
 
-### Step 14 — Shifts & coverage refinement (Sonnet builds, Opus reviews)
+### Step 14 — Shifts refinement (v2, revised 2026-11-04; Opus builds 14a, Sonnet the rest, Opus reviews)
+
+**Live data (2026-11-04):** 15 clinics; **10 have one therapist**; only **2 use shift types** (2 with assignments, 3 custom-hours rows, 6 requests ever, 1 pending); **no therapist has two shift types** today. So: make the one-therapist clinic simple first, keep the team tools tidy, and don't build for multi-shift complexity nobody uses yet (the model still supports it).
+
+**How professional apps do it (what we copy, what we don't):**
+- Rostering apps (Deputy, When I Work, Homebase, 7shifts) are built for dated weekly rosters: shifts on dates, "publish", open shifts, swaps. Clinic apps (Jane, Cliniko, Practo) use a **recurring weekly pattern per practitioner** ("working hours"/"availability", breaks) plus **one-off exceptions** (time off, an extra day). Our model is the clinic one: keep it. No "publish", no open shifts, no swaps.
+- Copy: **person-first editing** (tap a person, see their week, change it in one sheet); **reusable shift types** (Deputy/When I Work call them "shift templates"; plain words for a clinic owner are "shift types"); **conflict warning** before saving (appointments outside the new hours); **staff can ask for a change, the admin approves** (we have it); **the person is told** when their hours change (we show it in My working hours; a push is parked).
+- Don't copy: day-by-day dated shifts, drag-to-roster, labour cost, clock-in.
+
+**Words (owner to confirm; the database and code names stay):**
+| Now | Proposed | Why |
+|---|---|---|
+| Team view "Shifts & coverage" | **Shifts** | shorter chip; coverage is one card in it |
+| "Weekly coverage" | **Weekly shifts** | says what it shows |
+| "Shift templates" | **Shift types** | a clinic says "morning shift", not "template" |
+| "Clinic Default" / "Set Clinic Default Hours" / 🏢 | **Clinic hours** | same words as Settings → Hours; no emoji |
+| "Custom hours (individual)" | **Own hours** | one person's own days and times |
+| "Staff Member" (table) | **Therapist** | only therapists are on the roster |
+| "Daily capacity" · "3 staff 21h" | **On shift** · "3 · 21h" | plain |
+| "Active Weekdays", "+Add / −Removed / Active" on each day | **Days**, and one line under the days: "Adds Sat · Removes Mon" | the day buttons show on/off only |
+
+**Who can change shifts:** the admin (Settings is admin-only). The RPCs also allow front desk, but front desk has no route to Settings, so in practice it is admin-only; keep it that way (owner rule: therapists never set these; a therapist only *requests*). Document this; no change.
 
 | Sub-step | Scope | Build | Review |
 |---|---|---|---|
 | **14a** | Bugs: removed weekdays, split clinic hours in coverage, appointment conflicts (**one migration**) | Opus | Opus |
-| **14b** | One assign sheet on `SheetDialog` with `Shift template \| Custom hours \| Clinic hours`; several templates per therapist | Sonnet | Opus |
-| **14c** | Coverage card, clickable desktop rows, readable phone cards, session-gap note | Sonnet | Opus |
-| **14d** | Templates list + sheet + name check + Hidden footer; palette colours as tokens | Sonnet | Opus |
+| **14b** | One person sheet (`SheetDialog`): Shift type \| Own hours \| Clinic hours; used from the Shifts card **and** the Team member card | Sonnet | Opus |
+| **14c** | Weekly shifts card: clickable rows on desktop, real phone cards, session-gap note, `tab:` breakpoint | Sonnet | Opus |
+| **14d** | Shift types list + sheet + name check + Hidden footer; palette tokens | Sonnet | Opus |
+| **14e** | One-therapist clinics: a simple "Working hours" card instead of the roster tools | Sonnet | Opus |
 
-Build order: 14a, then 14b (which depends on 14a's "edit this assignment" call), then 14c and 14d.
+Build order: 14a, 14b, then 14c/14d, then 14e.
 
-#### 14a — Bug fixes (Opus, one migration)
-1. **Unchecked weekdays stay on (confirmed):** `supersede_overlapping_weekdays` keeps an older assignment's days that the new one doesn't cover, so editing Mon–Sat down to Mon–Fri leaves Saturday on in the old row, and `rebuild_working_hours_from_shifts` keeps it. *(corrected)* Don't fix it by superseding **all** of the therapist's assignments: that would wipe the second template of a therapist on Morning Mon/Wed + Evening Tue/Thu, which 14b supports. Instead, when the admin **edits** an existing assignment, pass its id (`assign_shift(…, p_replaces uuid default null)`): the RPC supersedes that row entirely, supersedes overlaps on other rows as today, and rebuilds working hours. A new assignment (no id) behaves as now. Migration: drop/recreate `assign_shift` with the new defaulted parameter, re-grant, and add the file to `supabase/migrations/`.
-2. **Split clinic hours in coverage (confirmed):** `ShiftCoverageGrid` (~line 50) and `buildCoverage` take clinic hours as one block from `bookingStartHour` to `bookingEndHour`. Read the clinic's per-weekday sessions instead, through the same helper `describeSchedule` and the hours editor use (`domain/operatingHours.ts`), so 9–1 and 4–8 is 8 hours, not 11.
-3. **Appointments outside the new hours:** reuse `appointmentsOutsideHours` (`features/schedule/hoursConflicts.ts`) and the existing confirm pattern in `SetWorkingHoursFlow` ("with conflicts, confirm appears; Cancel does not save, Save anyway does"): "3 upcoming appointments fall outside these hours." with **Save anyway** / Cancel. No emoji.
-- **Tests:** editing Mon–Sat to Mon–Fri turns Saturday off; a therapist with two templates keeps both when one is edited; a new assignment without `p_replaces` behaves as before (SQL test); split hours give 8h; the conflict count and Save anyway.
+#### 14a — Bug fixes (Opus, one migration) (unchanged)
+1. **Unchecked weekdays stay on (confirmed):** `supersede_overlapping_weekdays` keeps an older assignment's days that the new one doesn't cover, so editing Mon–Sat down to Mon–Fri leaves Saturday on. Don't supersede **all** of a therapist's assignments (that would wipe a second shift type). When the admin **edits** an existing assignment, pass its id (`assign_shift(…, p_replaces uuid default null)`): the RPC supersedes that row entirely, supersedes overlaps on other rows as today, and rebuilds working hours. A new assignment behaves as now. Drop/recreate `assign_shift`, re-grant, add the file to `supabase/migrations/`, apply live.
+2. **Split clinic hours in coverage:** `ShiftCoverageGrid` and `buildCoverage` read clinic hours as one block (`bookingStartHour`–`bookingEndHour`). Use the per-weekday sessions from `domain/operatingHours.ts` (the helper `describeSchedule` and the Hours editor use), so 9–1 and 4–8 is 8 hours, not 11. Same for the "Clinic hours" label (today "9–5" is built from the two numbers).
+3. **Appointments outside the new hours:** reuse `appointmentsOutsideHours` and the `SetWorkingHoursFlow` confirm: "3 upcoming appointments fall outside these hours." **Save anyway** / Cancel. Applies to Shift type, Own hours and Clinic hours alike.
+- **Tests:** Mon–Sat → Mon–Fri turns Saturday off; a two-shift-type therapist keeps both when one is edited; no `p_replaces` behaves as before (SQL); split hours give 8h; conflict count and Save anyway.
+- **Status (2026-11-04):** 2 and 3 built (`clinicSessionsOn`, `hoursAfterShiftAssign`, Save-anyway confirm in `AssignShiftDialog`). 1: migration file `supabase/migrations/20261104100000_assign_shift_replaces.sql` written but **not applied** (owner declined the live apply for now; not committed, to avoid drift). After it is applied live, commit the file and have the 14b sheet pass `p_replaces` (`bookingService.assignShift` gains `replacesId`; `hoursAfterShiftAssign` already takes it).
 
-#### 14b — One assign sheet (Sonnet)
-- `AssignShiftDialog` on the shared `SheetDialog` (pinned buttons), with a `Segmented` **Shift template | Custom hours | Clinic hours** at the top; Custom hours shows the hours editor inline instead of opening a second dialog.
-- Remove the `initialWeekday` branch: confirmed unused (no caller passes it).
-- `getTherapistScheduleInfo` lists every active template for a therapist with several, not just the first.
-- Editing an existing assignment passes its id to `assign_shift` (14a).
-- **Tests:** the sheet renders on `SheetDialog`; Custom hours is inline (one dialog); a two-template therapist shows both names; editing passes the id.
+#### 14b — One person sheet (Sonnet)
+- **Replace** `AssignShiftDialog` (centred modal, ~900 lines, native select with an emoji, a second dialog for custom hours) with `ShiftSheet` on `SheetDialog` (bottom sheet on phones, pinned Cancel/Save).
+- **Opened for one person** (tap a row/card, or "Edit shifts" on the Team member card — this replaces the separate "Set working hours" flow there, so there is one way to set hours):
+  - Top: the person's name and current line (`describeSchedule`), and their week as a 7-day strip.
+  - `Segmented` **Shift type | Own hours | Clinic hours**.
+  - Shift type: the types as radio rows with their times ("Morning · 8:00–4:30 · 30m lunch"), then **Days** (7 chips, 44px, fit 360px) with three quick chips **Open days · Mon–Fri · Clear**, then one line "Adds Sat · Removes Mon". Break override stays behind "Change lunch time" (only for a type with a break).
+  - Own hours: the hours editor inline (`ShiftTimesEditor`/the `SetWorkingHoursFlow` body), no second dialog.
+  - Clinic hours: one line "Uses the clinic's opening hours (Mon–Sat 9:00–1:00, 4:00–8:00)."
+  - Save runs 14a's conflict check first.
+- **Opened from "+ Assign shift"** (header): same sheet with a person picker (chips, several allowed) — Shift type and Clinic hours only; Own hours needs one person (say so instead of a disabled option).
+- `getTherapistScheduleInfo` lists every active shift type for a therapist (not just the first). Editing passes the assignment id (14a). Remove the unused `initialWeekday` branch.
+- **Tests:** renders on `SheetDialog`; Own hours inline (one dialog); the Team member card opens the same sheet; days summary line; bulk assign to two people; editing passes the id.
 
-#### 14c — Coverage grid & phone cards (Sonnet)
-- Wrap in `SectionCard` "Weekly coverage" with "+ Assign shift" in the header.
-- **Desktop:** drop the inline Edit button that cuts names at ~80px; the row is focusable and clickable, with a faint "Edit ›" on hover/focus (the `ServicesView` table pattern).
-- **Phones** *(corrected: the app's breakpoints are `tab:` and `desktop:`, not `md:`)*: below `tab:`, one card per therapist instead of the 7-column micro-grid: colour dot, full name, weekly hours ("40h / wk"), the `describeSchedule` line, and a quiet M T W T F S S strip (on / off / clinic closed). The whole card opens the therapist's sheet.
-- **Session gap note:** when a day has two clinic sessions and the people on shift only cover one, an amber "Evening gap" (or "Morning gap") in that day's footer. Uses 14a's per-session hours.
-- **Tests:** a row click opens that therapist's sheet; the phone card shows the full name and schedule line; a gap day shows the note.
+#### 14c — Weekly shifts card & phone cards (Sonnet)
+- `SectionCard` "Weekly shifts", "+ Assign shift" in the header; subtitle "Who works which days. Tap a therapist to change their shifts."
+- **Breakpoint:** the table/cards split uses `tab:` (744px), not `md:` (768px) (the app rule in `index.css`).
+- **Desktop/tablet table:** no inline Edit button (it cut names at 80px); the row is a button-like focusable row with a faint "Edit ›"; full names (wrap, don't truncate); header "Therapist"; footer "On shift" ("3 · 21h", amber "No one" on an open day).
+- **Phones (below `tab:`):** one card per therapist: colour dot, **full name**, "40h / wk", the `describeSchedule` line ("Morning · Mon–Fri"), and a quiet **M T W T F S S** strip of dots (filled = on, ring = off, grey = clinic closed) — no cut words like "Mornin", "Cust", "Close". The whole card opens the sheet.
+- **Session gap note:** when a day has two clinic sessions and no one on shift covers one, an amber "Evening gap"/"Morning gap" in that day's footer (desktop) or in the card list header (phones: "Sat evening: no one on shift"). Uses 14a's per-session hours.
+- **Tests:** row click and card tap open that therapist's sheet; full name and schedule line on the card; gap note; split at `tab:`.
 
-#### 14d — Shift templates & palette tokens (Sonnet)
-- `SectionCard` "Shift templates" with "+ Add" in the header; a calm list instead of the 3-column card grid and the inline add form; add/edit on `SheetDialog`.
-- **Name check:** template names use `nameCheck` (no database `unique` constraint here, so a near or exact match only warns unless the team wants it to block; decide in the build).
-- Inactive templates in `HiddenItemsFooter` ("Inactive (N)").
-- "Delete template" as a quiet red link at the bottom of the edit sheet (the services sheet pattern), behind the existing confirm.
-- **Palette as tokens** *(corrected)*: `SHIFT_PALETTES` has 8 palettes × 4 values. They must stay 8 *distinct* colours, so don't map them onto the few theme tokens (`--teal`, `--amber`, `--moss`), which would make templates look alike. Define 8 palette tokens in `index.css` (e.g. `--shift-1-bg`, `--shift-1-ink`, `--shift-1-line`) with dark-theme values, and have `SHIFT_PALETTES` use `var(--shift-n-…)`.
-- **Tests:** add/edit in the sheet; name check; inactive in the footer; no hex literals left in `shiftUtils.ts`.
+#### 14d — Shift types & palette tokens (Sonnet)
+- `SectionCard` "Shift types" with "+ Add"; a calm list (name, times, "Used by Asha, Ravi") instead of the 3-column card grid and the inline add form; add/edit on `SheetDialog` with the existing `ShiftTimesEditor` (Continuous | Split).
+- **Names:** `nameCheck` — an exact match blocks (two "Morning" types is always a mistake), a near match only notes (no `unique` in the database here; the check is app-side).
+- Inactive types in `HiddenItemsFooter` ("Hidden (N)"); "Delete" only for a type never assigned, as a quiet red link behind the existing confirm; otherwise "Hide".
+- "Add suggested shifts" stays for an empty list (team clinics only).
+- **Palette:** 8 distinct palettes as tokens in `index.css` (`--shift-1-bg/-ink/-line` … `--shift-8-*`, with dark values); `SHIFT_PALETTES` uses `var(--shift-n-*)`. No hex literals in `shiftUtils.ts`; therapist dot colour fallback `#2c5f63` → `var(--teal)`.
+- **Tests:** add/edit in the sheet; exact name blocks, near name notes; hidden in the footer; no hex in `shiftUtils.ts`.
+
+#### 14e — One-therapist clinics (Sonnet)
+- When the clinic has **one active therapist** (10 of 15 today), the Team → Shifts view shows a single **"Working hours"** card instead of requests, Weekly shifts and Shift types: the person's week (the same 7-day strip and hours lines), and "Edit hours" opening the 14b sheet straight on Own hours | Clinic hours (no Shift type tab unless the clinic already has types).
+- Existing shift types and assignments keep working and stay visible under "Shift types (N)" if any exist, so nothing is hidden from a clinic that used them.
+- The `Segmented` chip keeps the name **Shifts** (search still finds "working hours", "shift").
+- **Tests:** one therapist → one card, no roster tools; two therapists → the full view; a one-therapist clinic with an existing type still sees it.
+
+**Parked (Step 14):** a push to the therapist when an admin changes their shifts (in-app notice exists in My working hours); one-off exceptions ("off this Thursday", "extra Saturday") — belongs with Leave (other plan, P13); dated rosters, shift swaps, open shifts.
 
 ---
 
@@ -234,7 +272,7 @@ Build order: 14a, then 14b (which depends on 14a's "edit this assignment" call),
 - [ ] **Phone check at 360px (the owner):** the Settings tab chips and search, the Hours card, the Partner card with its confirmation, Team views, the Services sheet with the keyboard open, the email box's keyboard, and the static Save bar at the end of a long card.
 - [x] **Step 12:** a new clinic can sign up, invite or skip a team, check its starter services and finish on a phone without a dead nav bar or a doubled box; the checklist's words and links match the new Settings, and no step ID changed.
 - [x] **Step 13:** the dots on every other day don't change when another date is clicked.
-- [ ] **Step 14:** unchecking a weekday turns it off without losing a therapist's second shift; split clinic hours count correctly; assigning shows appointments that fall outside the hours; the migration is applied live and committed.
+- [ ] **Step 14:** unchecking a weekday turns it off without losing a therapist's second shift; one sheet sets hours from both the Shifts card and the Team card; phone cards show full names with no cut words; a one-therapist clinic sees one Working hours card; split clinic hours count correctly; assigning shows appointments that fall outside the hours; the migration is applied live and committed.
 - [ ] **Step 15:** a downgraded clinic can still print its old invoices; an unlinked therapist at the seat cap can't be sent an invite the plan refuses.
 - [ ] **Step 16:** an admin can add a service from the visit and it is selected; a therapist and front desk cannot; the three most-used services lead the picker; a package service can carry an optional validity, the date is set once on session 1, changing it later leaves held packages alone, and an expired package warns but never blocks; migration applied live and committed.
 - [ ] `FEATURES_AND_SCHEMA.md` updated in each commit; then delete this file.

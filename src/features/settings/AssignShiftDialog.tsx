@@ -1,7 +1,10 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useMemo, useState } from 'react';
-import { bookingService } from '@/services';
-import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { bookingService, repos } from '@/services';
+import { ConfirmDialog, ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { appointmentsOutsideHours } from '@/features/schedule/hoursConflicts';
+import { toLocalDateStr } from '@/domain/schedule';
 import { toFriendlyMessage } from '@/lib/errors';
 import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
 import {
@@ -9,6 +12,7 @@ import {
   WEEKDAY_ORDER,
   formatRange12h,
   formatWeekdays,
+  hoursAfterShiftAssign,
   minutesToTimeInput,
   previewAssign,
   sortWeekdays,
@@ -142,6 +146,9 @@ export function AssignShiftDialog({
   }, [initialTherapistId, initialWeekday, approvedAssignments]);
 
   const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, onClose, () => !saving);
+  const allAppointments = useLiveQuery(() => repos.appointments.listByClinic(clinic.id), [clinic.id]);
+  // "N upcoming appointments fall outside these hours": asked once before saving, never blocks.
+  const [outsideCount, setOutsideCount] = useState<number | null>(null);
   const [selectedTherapistIds, setSelectedTherapistIds] = useState<string[]>(() =>
     initialTherapistId ? [initialTherapistId] : []
   );
@@ -376,10 +383,52 @@ export function AssignShiftDialog({
   }
 
   // Submit action
-  async function handleSubmit() {
+  /** Upcoming appointments of the selected people that the new hours would leave outside working time. */
+  function countOutsideHours(): number {
+    const todayIso = toLocalDateStr(new Date());
+    const clinicHours = {
+      startHour: clinic.bookingStartHour ?? 9,
+      endHour: clinic.bookingEndHour ?? 17,
+      operating: clinic.operatingHours ?? null,
+    };
+    let count = 0;
+    for (const tId of selectedTherapistIds) {
+      const hours = isClinicDefault
+        ? null
+        : pickedTemplate
+          ? hoursAfterShiftAssign({
+              therapistId: tId,
+              approved: approvedAssignments,
+              templates,
+              template: pickedTemplate,
+              weekdays: selectedWeekdays,
+              breakStartMinute: parsedBreakStart,
+            })
+          : undefined;
+      if (hours === undefined) continue;
+      count += appointmentsOutsideHours({
+        appointments: allAppointments ?? [],
+        therapistId: tId,
+        hours,
+        clinicHours,
+        slotMinutes: clinic.slotDurationMinutes || 30,
+        todayIso,
+      }).length;
+    }
+    return count;
+  }
+
+  async function handleSubmit(confirmed = false) {
     if (selectedTherapistIds.length === 0) return;
     if (!isClinicDefault && selectedWeekdays.length === 0) return;
     if (breakOverrideError) return;
+    if (!confirmed) {
+      const outside = countOutsideHours();
+      if (outside > 0) {
+        setOutsideCount(outside);
+        return;
+      }
+    }
 
     setSaving(true);
     setError(null);
@@ -893,6 +942,22 @@ export function AssignShiftDialog({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={outsideCount !== null}
+        title="Save these hours anyway?"
+        message={
+          outsideCount
+            ? `${outsideCount} upcoming appointment${outsideCount === 1 ? '' : 's'} fall${outsideCount === 1 ? 's' : ''} outside these hours. They stay booked; you can move them on the Schedule.`
+            : ''
+        }
+        confirmLabel="Save anyway"
+        onCancel={() => setOutsideCount(null)}
+        onConfirm={() => {
+          setOutsideCount(null);
+          void handleSubmit(true);
+        }}
+      />
 
       {showCustomHoursFlow && selectedTherapist && (
         <SetWorkingHoursFlow

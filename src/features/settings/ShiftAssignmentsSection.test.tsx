@@ -27,6 +27,7 @@ vi.mock('@/services', () => ({
     therapists: { list: () => therapists },
     shiftTemplates: { list: () => templates },
     therapistShiftAssignments: { listByClinic: () => assignments },
+    appointments: { listByClinic: () => [] },
   },
   bookingService: {
     assignShift: (...a: unknown[]) => assignShift(...a),

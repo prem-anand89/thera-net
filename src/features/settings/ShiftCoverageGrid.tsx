@@ -45,15 +45,6 @@ export function ShiftCoverageGrid({
     [clinic.closedWeekdays]
   );
 
-  // Short, compact label e.g. "9–5" instead of verbose "Default (9–5)"
-  const defaultHourLabel = useMemo(() => {
-    const start = clinic.bookingStartHour ?? 9;
-    const end = clinic.bookingEndHour ?? 17;
-    const start12 = start % 12 || 12;
-    const end12 = end % 12 || 12;
-    return `${start12}–${end12}`;
-  }, [clinic.bookingStartHour, clinic.bookingEndHour]);
-
   // Build the complete coverage matrix
   const coverageMap = useMemo(
     () => buildCoverage(activeTherapists, approvedAssignments, templates, clinic),
@@ -226,7 +217,7 @@ export function ShiftCoverageGrid({
 
                             {cell.type === 'clinic_default' && (
                               <span className="inline-block truncate rounded px-1 py-0.5 text-caption font-medium text-[var(--muted)] w-full text-center">
-                                {defaultHourLabel}
+                                {cell.label}
                               </span>
                             )}
                           </div>
@@ -339,7 +330,7 @@ export function ShiftCoverageGrid({
                     const cell = dayMap?.get(weekday);
                     const meta = WEEKDAY_META[weekday];
 
-                    let pillContent = defaultHourLabel;
+                    let pillContent = cell?.label ?? '';
                     let pillStyle = 'border-transparent text-[var(--muted)] bg-transparent';
 
                     if (cell) {
