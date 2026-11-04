@@ -5,6 +5,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { PendingShiftRequestsStrip } from './PendingShiftRequestsStrip';
 import { ShiftCoverageGrid } from './ShiftCoverageGrid';
+import { SoloWorkingHours } from './SoloWorkingHours';
 
 export function ShiftAssignmentsSection() {
   const clinic = useClinic();
@@ -44,13 +45,22 @@ export function ShiftAssignmentsSection() {
         />
       )}
 
-      {/* 2. Weekly Coverage Grid & Direct Assignment */}
-      <ShiftCoverageGrid
-        therapists={activeTherapists}
-        templates={templates}
-        approvedAssignments={approvedAssignments}
-        clinic={clinic}
-      />
+      {/* 2. One therapist: just their week. Otherwise the Weekly shifts card. */}
+      {activeTherapists.length === 1 ? (
+        <SoloWorkingHours
+          therapist={activeTherapists[0]}
+          templates={templates}
+          approvedAssignments={approvedAssignments}
+          clinic={clinic}
+        />
+      ) : (
+        <ShiftCoverageGrid
+          therapists={activeTherapists}
+          templates={templates}
+          approvedAssignments={approvedAssignments}
+          clinic={clinic}
+        />
+      )}
     </div>
   );
 }

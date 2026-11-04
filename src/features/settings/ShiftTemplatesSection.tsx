@@ -76,6 +76,10 @@ export function ShiftTemplatesSection() {
   const hidden = useMemo(() => all.filter((t) => !t.active), [all]);
   const usedBy = (id: string) => templateUsage(id, assignments ?? []).map((tid) => therapistMap.get(tid) ?? 'Staff');
 
+  // A one-therapist clinic with no shift types doesn't need the card: their hours are set on the Working hours card.
+  const soloWithoutTypes = (therapists ?? []).filter((t) => t.active !== false).length === 1 && all.length === 0;
+  if (soloWithoutTypes && !sheet) return null;
+
   return (
     <div data-testid="shift-templates-section" className="mt-4">
       <SectionCard

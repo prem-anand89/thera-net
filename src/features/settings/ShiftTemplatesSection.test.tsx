@@ -197,6 +197,24 @@ describe('ShiftTemplatesSection — Shift types card', () => {
   });
 });
 
+describe('ShiftTemplatesSection — one-therapist clinics', () => {
+  const solo = () => {
+    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Dr Prem', active: true, updatedAt: '' } as Therapist];
+  };
+  it('is not shown to a one-therapist clinic that has no shift types', () => {
+    solo();
+    templates = [];
+    render(<ShiftTemplatesSection />);
+    expect(screen.queryByRole('heading', { name: 'Shift types' })).toBeNull();
+  });
+  it('is still shown when that clinic already has a shift type', () => {
+    solo();
+    templates = [tpl()];
+    render(<ShiftTemplatesSection />);
+    expect(screen.getByRole('heading', { name: 'Shift types' })).toBeInTheDocument();
+  });
+});
+
 describe('ShiftTemplatesSection dual-mode editor', () => {
   const open = () => {
     templates = [];

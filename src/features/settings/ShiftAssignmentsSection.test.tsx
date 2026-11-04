@@ -100,7 +100,7 @@ describe('ShiftAssignmentsSection', () => {
   });
 
   it('shows no pending strip when there are no pending requests', () => {
-    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Priya', active: true, userId: null, updatedAt: '' } as Therapist];
+    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Priya', active: true, userId: null, updatedAt: '' } as Therapist, { id: 'th-extra', clinicId: 'c1', name: 'Dr Extra', active: true, userId: null, updatedAt: '' } as Therapist];
     templates = [];
     assignments = [];
 
@@ -111,7 +111,7 @@ describe('ShiftAssignmentsSection', () => {
 
   it('hides the pending strip from non-admins even when requests exist', () => {
     isAdmin = false;
-    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Priya', active: true, userId: null, updatedAt: '' } as Therapist];
+    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Priya', active: true, userId: null, updatedAt: '' } as Therapist, { id: 'th-extra', clinicId: 'c1', name: 'Dr Extra', active: true, userId: null, updatedAt: '' } as Therapist];
     templates = [];
     assignments = [{ id: 'a1', clinicId: 'c1', therapistId: 'th1', shiftTemplateId: null, customHours: null, weekdays: [1], breakStartMinute: null, status: 'pending', note: null, decisionNote: null, requestedBy: null, decidedBy: null, decidedAt: null, createdAt: '', updatedAt: '' }];
 
@@ -198,6 +198,7 @@ describe('ShiftAssignmentsSection', () => {
   it('renders weekly coverage grid with therapist rows and weekly total hours', () => {
     therapists = [
       { id: 'th1', clinicId: 'c1', name: 'Priya Sharma', active: true, updatedAt: '' } as Therapist,
+      { id: 'th-extra', clinicId: 'c1', name: 'Dr Extra', active: true, userId: null, updatedAt: '' } as Therapist,
     ];
     templates = [
       {
@@ -245,6 +246,7 @@ describe('ShiftAssignmentsSection', () => {
   it('opens the person sheet on clicking Edit next to therapist name', () => {
     therapists = [
       { id: 'th1', clinicId: 'c1', name: 'Dr Prem', active: true, updatedAt: '' } as Therapist,
+      { id: 'th-extra', clinicId: 'c1', name: 'Dr Extra', active: true, userId: null, updatedAt: '' } as Therapist,
     ];
     templates = [
       {
@@ -270,5 +272,36 @@ describe('ShiftAssignmentsSection', () => {
     // The person sheet opens for Dr Prem
     expect(screen.getByRole('dialog', { name: 'Working hours · Dr Prem' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Clinic hours' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('one therapist: a Working hours card with their week, not the roster tools', () => {
+    therapists = [{ id: 'th1', clinicId: 'c1', name: 'Dr Prem', active: true, updatedAt: '' } as Therapist];
+    templates = [];
+    assignments = [];
+    render(<ShiftAssignmentsSection />);
+    expect(screen.getByRole('heading', { name: 'Working hours' })).toBeInTheDocument();
+    expect(screen.queryByText('Weekly shifts')).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ Assign shift' })).toBeNull();
+    const week = screen.getByTestId('solo-working-hours');
+    expect(week).toHaveTextContent('Monday');
+    expect(week).toHaveTextContent('Sunday');
+    expect(week).toHaveTextContent('Clinic closed');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit hours' }));
+    expect(screen.getByRole('dialog', { name: 'Working hours · Dr Prem' })).toBeInTheDocument();
+    // No shift types yet: only Own hours | Clinic hours.
+    expect(screen.queryByRole('radio', { name: 'Shift type' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Own hours' })).toBeInTheDocument();
+  });
+
+  it('two therapists: the full Weekly shifts card', () => {
+    therapists = [
+      { id: 'th1', clinicId: 'c1', name: 'Dr Prem', active: true, updatedAt: '' } as Therapist,
+      { id: 'th2', clinicId: 'c1', name: 'Dr Kiran', active: true, updatedAt: '' } as Therapist,
+    ];
+    templates = [];
+    assignments = [];
+    render(<ShiftAssignmentsSection />);
+    expect(screen.getByText('Weekly shifts')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Working hours' })).toBeNull();
   });
 });
