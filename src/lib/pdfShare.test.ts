@@ -1,5 +1,6 @@
 import { noticeStore } from '@/lib/notify';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setClinicRuntime } from '@/domain/clinicRuntime';
 import {
   buildWhatsAppSendUrl,
   normalizePhoneForWaMe,
@@ -24,6 +25,39 @@ describe('normalizePhoneForWaMe', () => {
 
   it('strips leading 00 international call prefix', () => {
     expect(normalizePhoneForWaMe('00919876543210')).toBe('919876543210');
+  });
+
+  it('a bare 10-digit Indian mobile starting with 91 still gets its 91', () => {
+    expect(normalizePhoneForWaMe('9198765432')).toBe('919198765432');
+  });
+
+  it('a stored number keeps its own code whatever its length (it used to get 91 added)', () => {
+    expect(normalizePhoneForWaMe('+65 91234567')).toBe('6591234567');
+    expect(normalizePhoneForWaMe('+971 501234567')).toBe('971501234567');
+    expect(normalizePhoneForWaMe('+1 212 555 1234')).toBe('12125551234');
+    expect(normalizePhoneForWaMe('006591234567')).toBe('6591234567');
+  });
+
+  describe('a clinic outside India', () => {
+    afterEach(() => setClinicRuntime({}));
+
+    it('bare numbers take its code, and a trunk 0 is dropped', () => {
+      setClinicRuntime({ countryCode: '+971' });
+      expect(normalizePhoneForWaMe('501234567')).toBe('971501234567');
+      expect(normalizePhoneForWaMe('0501234567')).toBe('971501234567');
+      setClinicRuntime({ countryCode: '+44' });
+      expect(normalizePhoneForWaMe('07123456789')).toBe('447123456789');
+    });
+
+    it('an Indian number stored with its code stays Indian', () => {
+      setClinicRuntime({ countryCode: '+44' });
+      expect(normalizePhoneForWaMe('+91 98765 43210')).toBe('919876543210');
+    });
+  });
+
+  it('nothing to dial gives nothing', () => {
+    expect(normalizePhoneForWaMe('')).toBe('');
+    expect(normalizePhoneForWaMe(' - ')).toBe('');
   });
 });
 

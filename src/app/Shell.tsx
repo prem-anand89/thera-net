@@ -21,6 +21,8 @@ import { useClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
+import { setClinicRuntime } from '@/domain/clinicRuntime';
+import { clinicCountryCode } from '@/domain/clinicRegion';
 import { activePhoneTab, isNavActive } from './navActive';
 import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -358,6 +360,9 @@ export function Shell() {
       />
     );
   }
+
+  // WhatsApp links are built in plain code with no context: tell it this clinic's country. Idempotent.
+  setClinicRuntime(clinic ? { countryCode: clinicCountryCode(clinic) } : {});
 
   if (!clinic) {
     // `clinics`/`activeClinicId` are undefined until Dexie's own async

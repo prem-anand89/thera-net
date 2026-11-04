@@ -17,6 +17,8 @@
  * not they ever click Share.
  */
 import { notify } from '@/lib/notify';
+import { activeCountryCode } from '@/domain/clinicRuntime';
+import { splitPhone } from '@/domain/countryCodes';
 export async function renderElementToPdf(
   element: HTMLElement,
   fileName: string,
@@ -117,18 +119,16 @@ export function openPatientWhatsAppChat(
   openWhatsAppUrl(url, text);
 }
 
-/** Same normalization as visit-row payment reminders and Meta's `to` field. */
-export function normalizePhoneForWaMe(phone: string): string {
-  let digits = phone.replace(/\D/g, '');
-  // Strip international call prefix 00 (e.g., 0091...)
-  if (digits.startsWith('00')) {
-    digits = digits.slice(2);
-  }
-  // Strip single leading trunk 0 for 11-digit numbers (e.g. 09876543210 -> 9876543210)
-  if (digits.length === 11 && digits.startsWith('0')) {
-    digits = digits.slice(1);
-  }
-  return digits.length === 10 ? `91${digits}` : digits;
+/**
+ * Digits for a wa.me link; the same normalization as visit-row payment reminders and Meta's `to` field. A number
+ * that carries its own code ("+65 91234567", or "0065..." typed with the international prefix) keeps it, whatever
+ * its length; a bare number takes the clinic's country code. `splitPhone` is the one place stored numbers are read.
+ */
+export function normalizePhoneForWaMe(phone: string, defaultCountryCode: string = activeCountryCode()): string {
+  const compact = phone.trim().replace(/[\s\-()]/g, '');
+  if (!/\d/.test(compact)) return '';
+  const { code, national } = splitPhone(compact.replace(/^00/, '+'), defaultCountryCode);
+  return `${code}${national}`.replace(/\D/g, '');
 }
 
 export function buildWhatsAppSendUrl(text: string, toPhone?: string | null): string {
