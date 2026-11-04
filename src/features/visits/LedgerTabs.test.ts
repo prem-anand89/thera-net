@@ -21,4 +21,9 @@ describe('filterLedgerTabs', () => {
     const tabs = filterLedgerTabs({ canBill: false, canCollectPayment: true, entitlementsLoading: false });
     expect(tabs.map((t) => t.key)).toEqual(['visits', 'patients', 'daybook']);
   });
+
+  it('shows Invoices read-only to a plan that no longer issues them, only when asked to', () => {
+    expect(filterLedgerTabs({ canBill: false, canViewPastInvoices: true, entitlementsLoading: false }).map((t) => t.key)).toContain('invoices');
+    expect(filterLedgerTabs({ canBill: false, canViewPastInvoices: false, entitlementsLoading: false }).map((t) => t.key)).not.toContain('invoices');
+  });
 });

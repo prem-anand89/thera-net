@@ -23,6 +23,10 @@ export interface Permissions {
    * real boundary is `issue_invoice()`'s own check on the same two fields.
    */
   canBill: boolean;
+  /** The plan includes invoicing at all (false on a plan that never issues invoices, or after a downgrade). */
+  invoicingOnPlan: boolean;
+  /** Who may see invoices at all under the clinic's `invoicingAccess` preference (admin, front desk, or everyone). */
+  invoiceRoleOk: boolean;
   /**
    * True until the plan-tier fetch (or its Dexie cache) has resolved at
    * least once. `canBill`/`canViewPayouts` read fail-closed (false) for
@@ -92,6 +96,8 @@ export function usePermissions(): Permissions {
     canBill:
       entitlements.can('invoicing') &&
       (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
+    invoicingOnPlan: entitlements.can('invoicing'),
+    invoiceRoleOk: invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk,
     entitlementsLoading: entitlements.loading,
     canPrintNotes: entitlements.can('notePrinting'),
     canViewMonthlyStatement: scope.isAdmin,

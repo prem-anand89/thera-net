@@ -342,7 +342,7 @@ function LineItemsTable({
 
 export function InvoicePrintPage() {
   const clinic = useClinic();
-  const { canBill, role } = usePermissions();
+  const { canBill, invoicingOnPlan, entitlementsLoading, role } = usePermissions();
   // Voiding is admin / front desk only on the server (void_invoice()), whatever
   // invoicing access says; a therapist can issue and amend but not void.
   const canVoid = canBill && (role === 'admin' || role === 'front_desk');
@@ -540,6 +540,14 @@ export function InvoicePrintPage() {
       {shareError && (
         <div className="no-print mx-auto max-w-3xl px-4">
           <ErrorNote message={shareError} />
+        </div>
+      )}
+
+      {!entitlementsLoading && !invoicingOnPlan && (
+        <div className="no-print mx-auto max-w-3xl px-4" data-testid="no-invoicing-note">
+          <p className="mb-3 rounded-md bg-[var(--paper)] p-3 text-xs text-[var(--muted)]">
+            Your plan doesn&apos;t issue new invoices. Invoices you already issued stay here to print or share.
+          </p>
         </div>
       )}
 

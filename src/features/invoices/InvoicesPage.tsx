@@ -32,7 +32,8 @@ const INVOICE_COMPARATORS = {
   status: byString<Invoice>(() => ''),
 };
 
-export function InvoicesPage() {
+/** `canIssue` false: a plan that no longer issues invoices. Past invoices stay (view, print, collect); nothing new is issued. */
+export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   const clinic = useClinic();
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
@@ -229,7 +230,7 @@ export function InvoicesPage() {
 
   const noneIssued = (invoices?.length ?? 0) === 0;
   const invoicesEmpty = noneIssued ? (
-    <EmptyState title="No invoices issued yet" hint="Issue one from a visit in the Visits tab." />
+    <EmptyState title="No invoices issued yet" hint={canIssue ? "Issue one from a visit in the Visits tab." : undefined} />
   ) : (
     <EmptyState
       title="No invoices in this date range"
@@ -295,7 +296,7 @@ export function InvoicesPage() {
         </div>
       </div>
 
-      {needsReceipt && needsReceipt.length > 0 && (
+      {canIssue && needsReceipt && needsReceipt.length > 0 && (
         <SectionCard title={`Needs receipt (${needsReceipt.length})`}>
           <div className="space-y-2">
             <p className="text-xs text-[var(--muted)]">

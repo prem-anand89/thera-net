@@ -79,17 +79,20 @@ export const LEDGER_TAB_ITEMS = [
 
 export function filterLedgerTabs({
   canBill,
+  canViewPastInvoices = false,
   canCollectPayment = false,
   entitlementsLoading,
 }: {
   canBill: boolean;
+  /** A clinic whose plan no longer issues invoices still finds the ones it already issued (read-only). */
+  canViewPastInvoices?: boolean;
   /** Daybook is a register of payments received, not of invoices: anyone who can collect sees it. */
   canCollectPayment?: boolean;
   entitlementsLoading: boolean;
 }) {
   return LEDGER_TAB_ITEMS.filter((v) => {
     if (entitlementsLoading) return true;
-    if (v.key === 'invoices') return canBill;
+    if (v.key === 'invoices') return canBill || canViewPastInvoices;
     if (v.key === 'daybook') return canBill || canCollectPayment;
     return true;
   });
@@ -266,8 +269,11 @@ function DueToggle({
 
 export function LedgerPage() {
   const clinic = useClinic();
-  const { canBill, canCollectPayment, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
+  const { canBill, invoicingOnPlan, invoiceRoleOk, canCollectPayment, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
+  // Past invoices of a plan that no longer issues them: findable, read-only. Only when there are some to find.
+  const anyInvoices = useLiveQuery(async () => (await repos.invoices.list(clinic.id)).length > 0, [clinic.id]) ?? false;
+  const canViewPastInvoices = !invoicingOnPlan && invoiceRoleOk && anyInvoices;
   const { myTherapistId, isClinicWideView, isFrontDesk } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
@@ -299,9 +305,9 @@ export function LedgerPage() {
   // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
     if (entitlementsLoading) return;
-    if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
+    if (recordsView === 'invoices' && !canBill && !canViewPastInvoices) setRecordsView('visits');
     if (recordsView === 'daybook' && !canBill && !canCollectPayment) setRecordsView('visits');
-  }, [recordsView, canBill, canCollectPayment, entitlementsLoading, setRecordsView]);
+  }, [recordsView, canBill, canViewPastInvoices, canCollectPayment, entitlementsLoading, setRecordsView]);
   // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
   // (or a patient deep link) always wins and never overwrites what was remembered.
   const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));
@@ -775,7 +781,7 @@ export function LedgerPage() {
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
-          {filterLedgerTabs({ canBill, canCollectPayment, entitlementsLoading }).map((v) => (
+          {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, entitlementsLoading }).map((v) => (
             <button
               key={v.key}
               type="button"
@@ -789,7 +795,7 @@ export function LedgerPage() {
               onClick={() => setRecordsView(v.key)}
             >
               {v.label}
-              {v.key === 'invoices' && (
+              {v.key === 'invoices' && canBill && (
                 <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
               )}
             </button>
@@ -1320,7 +1326,7 @@ export function LedgerPage() {
       )}
 
       {recordsView === 'patients' && <PatientsList />}
-      {recordsView === 'invoices' && <InvoicesPage />}
+      {recordsView === 'invoices' && <InvoicesPage canIssue={canBill} />}
       {recordsView === 'daybook' && <DaybookPage />}
 
       {invoicing && (

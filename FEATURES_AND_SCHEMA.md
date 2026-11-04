@@ -183,6 +183,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Visits tab — all-time visit history, URL-addressable (`/ledger?tab=visits`)
   - Patients tab — patient roster list (`/ledger?tab=patients`), visible to all roles, with All and My patients chips (replaces standalone `/patients` route; redundant "Needs invoice" chip removed)
   - Invoices tab — issued invoice records, billing-access-gated, URL-addressable (`/ledger?tab=invoices`)
+    A clinic whose plan no longer issues invoices (a downgrade) still gets the tab, read-only, **only when it already has invoices** (`canViewPastInvoices` in `LedgerPage`: `!invoicingOnPlan && invoiceRoleOk && anyInvoices`, with `usePermissions().invoicingOnPlan` / `.invoiceRoleOk`): no "Needs receipt" queue, no badge, no issuing; viewing, printing, collecting payment and reminders stay. `InvoicePrintPage` keeps print/PDF/WhatsApp and adds one quiet line: "Your plan doesn't issue new invoices. Invoices you already issued stay here to print or share." A therapist under `invoicingAccess: 'billing_staff'` still sees no tab.
   - Daybook tab — end-of-day cash reconciliation log tracking payments, advances, and discounts (`/ledger?tab=daybook`)
 - **Shared Date Preset Bar** — unified `DatePresetBar` control (`This week`, `This month`, `Last month`, `All time`, `Custom`) across Visits and Invoices tabs, preserving tab defaults (Visits = This week, Invoices = This month)
 - **Filtering** — therapist dropdown, date range search, consistent segmented control styling
