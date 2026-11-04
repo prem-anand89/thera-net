@@ -72,7 +72,7 @@ export function TherapistProfileOnboardingPage() {
       <div className="mx-auto max-w-lg space-y-3">
         <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Welcome to {clinic.name}</h1>
         <p className="text-sm text-[var(--muted)]">
-          Your login isn&apos;t linked to a service roster row yet. Ask an admin to link you under Settings →
+          Your login isn&apos;t linked to a team member yet. Ask an admin to link you under Settings →
           Team, or continue to Workspace.
         </p>
         <button

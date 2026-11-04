@@ -68,7 +68,7 @@ describe('TherapistProfileOnboardingPage', () => {
     mockTherapists = [];
     render(<TherapistProfileOnboardingPage />);
     expect(screen.getByRole('heading', { name: 'Welcome to Elite Physio' })).toBeInTheDocument();
-    expect(screen.getByText(/Your login isn't linked to a service roster row yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Your login isn't linked to a team member yet/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go to Workspace' })).toBeInTheDocument();
   });
 

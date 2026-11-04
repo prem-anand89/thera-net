@@ -100,10 +100,10 @@ describe('OnboardingTeamStep', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('skipping "I see patients" does not touch the roster', async () => {
+  it('skipping "I treat patients" does not touch the roster', async () => {
     const onContinue = vi.fn();
     render(<OnboardingTeamStep onContinue={onContinue} />);
-    const checkbox = screen.getByRole('checkbox', { name: 'I see patients at this clinic' });
+    const checkbox = screen.getByRole('checkbox', { name: 'I treat patients at this clinic' });
     expect(checkbox).toBeInTheDocument();
     expect(checkbox).toBeChecked();
     await userEvent.click(checkbox);

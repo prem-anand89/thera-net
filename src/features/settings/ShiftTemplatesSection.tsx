@@ -313,6 +313,11 @@ function TypeSheet({
         </Field>
         <ShiftTimesEditor draft={draft} onChange={setDraft} />
         {problem && name.trim() !== '' && <p className="text-xs text-[var(--rust)]">{problem}</p>}
+        {editing?.active && (
+          <p className="text-xs text-[var(--muted)]">
+            Making it inactive takes it off the list for new assignments. Anyone on it keeps their hours until you change them.
+          </p>
+        )}
         {editing && (
           <div className="border-t border-[var(--border)] pt-3">
             <button

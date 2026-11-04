@@ -121,6 +121,7 @@ describe('ShiftTemplatesSection — Shift types card', () => {
     templates = [tpl()];
     render(<ShiftTemplatesSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Morning' }));
+    expect(screen.getByText(/Anyone on it keeps their hours until you change them/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Make inactive' }));
     expect(updateShiftTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateId: 't1', active: false }));
   });

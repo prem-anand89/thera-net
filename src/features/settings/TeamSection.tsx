@@ -782,7 +782,7 @@ export function AddTeamMemberForm({
     if (!name.trim()) return setError('Name is required');
     if (needsLogin && !email.trim()) return setError('Email is required for login');
     const effectiveBookable = role === 'front_desk' ? false : bookable;
-    if (!needsLogin && !effectiveBookable) return setError('Must either need a login or see patients');
+    if (!needsLogin && !effectiveBookable) return setError('Must either need a login or treat patients');
     if (!needsLogin && rosterLocked) return setError(rosterHint);
 
     setBusy(true);
@@ -1307,7 +1307,7 @@ export function Therapists() {
         <ConfirmDialog
           open={true}
           title="Deactivate therapist"
-          message={`${deactivateTarget.therapist.name} will no longer see patients or appear in the schedule. Past records stay intact; you can reactivate anytime.${
+          message={`${deactivateTarget.therapist.name} will no longer treat patients or appear in the schedule. Past records stay intact; you can reactivate anytime.${
             deactivateTarget.upcoming > 0
               ? ` They still have ${deactivateTarget.upcoming} upcoming appointment(s) — reassign or cancel those separately.`
               : ''

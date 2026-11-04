@@ -187,8 +187,8 @@ export function OnboardingTeamStep({
         <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Your team</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
           {seatLimited
-            ? 'Your plan has one login. If you see patients, add yourself to the roster; you can add a colleague without a login too.'
-            : 'Invite colleagues now or from Settings later. If you see patients, add yourself to the service roster with this login.'}
+            ? 'Your plan has one login. If you treat patients, add yourself to the team; you can add a colleague without a login too.'
+            : 'Invite colleagues now or from Settings later. If you treat patients, add yourself to the team with this login.'}
         </p>
       </div>
 
@@ -204,7 +204,7 @@ export function OnboardingTeamStep({
               checked={iTreat}
               onChange={(e) => setITreat(e.target.checked)}
             />
-            I see patients at this clinic
+            I treat patients at this clinic
           </label>
           {iTreat ? (
             <>
@@ -230,7 +230,7 @@ export function OnboardingTeamStep({
               <p className="text-xs text-[var(--muted)]">
                 {selfRow
                   ? 'Linked to your login. You can change these anytime in Settings → Team.'
-                  : 'We will add you to the roster and link this login when you continue.'}
+                  : 'We will add you to the team and link this login when you continue.'}
               </p>
             </>
           ) : (
