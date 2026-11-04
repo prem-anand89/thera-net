@@ -12,7 +12,7 @@ import { lastBackupMetaKey } from '@/domain/setupGuide';
 
 export function HistoricalData() {
   return (
-    <SectionCard id="settings-card-account-historical" title="Historical data">
+    <SectionCard id="settings-card-account-historical" title="Import Historical Data">
       <p className="mb-3 text-xs text-[var(--muted)]">
         One-time import of visits logged before go-live in the Excel ledger.
       </p>
@@ -276,7 +276,7 @@ export function DangerZone() {
           disabled={busy}
           onClick={wipeAll}
         >
-          {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
+          {busy ? 'Deleting…' : 'Delete all clinic data…'}
         </button>
         <button
           type="button"
@@ -310,7 +310,7 @@ export function DangerZone() {
       />
       <ConfirmDialog
         open={confirmingWipe}
-        title="Wipe ALL clinic data?"
+        title="Delete all clinic data?"
         message={`This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone.`}
         confirmLabel="Wipe clinic data"
         destructive

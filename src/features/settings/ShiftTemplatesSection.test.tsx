@@ -112,7 +112,7 @@ describe('ShiftTemplatesSection — Shift types card', () => {
     render(<ShiftTemplatesSection />);
     fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. Morning, Evening/i), { target: { value: 'Night' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Show it again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Make it active again' }));
     await vi.waitFor(() => expect(updateShiftTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateId: 'old', active: true })));
     expect(createShiftTemplate).not.toHaveBeenCalled();
   });
@@ -121,18 +121,18 @@ describe('ShiftTemplatesSection — Shift types card', () => {
     templates = [tpl()];
     render(<ShiftTemplatesSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Morning' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Make inactive' }));
     expect(updateShiftTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateId: 't1', active: false }));
   });
 
-  it('keeps hidden types in a Hidden footer, and shows one again', () => {
+  it('keeps inactive types in an Inactive footer, and makes one active again', () => {
     templates = [tpl({ id: 'old', name: 'Old Shift', active: false })];
     render(<ShiftTemplatesSection />);
     expect(screen.queryByText('Old Shift')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Hidden/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     expect(screen.getByText('Old Shift')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit Old Shift' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Show again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Make active' }));
     expect(updateShiftTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateId: 'old', active: true }));
   });
 
@@ -151,7 +151,7 @@ describe('ShiftTemplatesSection — Shift types card', () => {
     updateShiftTemplate.mockRejectedValueOnce(new Error('offline'));
     render(<ShiftTemplatesSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Morning' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Make inactive' }));
     expect(await screen.findByText('offline')).toBeInTheDocument();
   });
 

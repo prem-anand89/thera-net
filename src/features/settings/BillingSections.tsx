@@ -37,8 +37,8 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         <Field
           label={
             <>
-              GST / Tax ID (optional)
-              <InfoTip text="Your clinic's tax registration number, printed on invoices. Not the same as the Tax/TDS % under Partner & split, which is a revenue-share percentage." />
+              GST number (optional)
+              <InfoTip text="Your clinic's tax registration number, printed on invoices. Not the same as the Tax/TDS % under Partner revenue share, which is a revenue-share percentage." />
             </>
           }
         >
@@ -120,7 +120,7 @@ export function partnerSplitChanged(
 }
 
 /**
- * Payments & billing → "Partner & split": every partner setting in one card — whether the clinic works with a partner (a hospital
+ * Payments & billing → "Partner revenue share": every partner setting in one card — whether the clinic works with a partner (a hospital
  * or a centre it shares revenue with), the partner's name and logo, who collects patient payments, the share labels,
  * the split %, tax % and TDS basis. These all feed clinicBillingConfig() / computeVisitSplit(), so they save together.
  *
@@ -268,7 +268,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
   // Below the plan that includes the partner split: nothing to edit, only a way out for a clinic that still has it on.
   if (!allowed) {
     return (
-      <SectionCard id="settings-card-billing-partner" title="Partner & split">
+      <SectionCard id="settings-card-billing-partner" title="Partner revenue share">
         {clinic.hasPartner ? (
           <div className="space-y-3">
             <p className="text-sm text-[var(--ink)]">
@@ -303,7 +303,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
   return (
     <SectionCard
       id="settings-card-billing-partner"
-      title="Partner & split"
+      title="Partner revenue share"
     >
       <fieldset disabled={busy} className="contents">
         <SwitchRow
@@ -420,9 +420,9 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
                 >
                   <select className={inputCls} value={form.tdsBasis} onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}>
                     <option value="gross_bill">
-                      {form.taxPct}% of gross bill (matches {labels.partner} sheet)
+                      {form.taxPct}% on the full bill (matches {labels.partner} sheet)
                     </option>
-                    <option value="clinic_share">On clinic share only</option>
+                    <option value="clinic_share">On your share only</option>
                   </select>
                 </Field>
               )}

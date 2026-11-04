@@ -28,14 +28,14 @@ describe('After a visit', () => {
   it('holds the clinical notes prompt and the feedback request as two switches', () => {
     render(<AfterVisitSection onDirtyChange={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'After a visit' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Prompt for clinical notes after each visit' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Ask for a clinical note after each visit' })).not.toBeChecked();
     expect(screen.getByRole('switch', { name: 'Ask patients for feedback' })).not.toBeChecked();
     expect(screen.queryByPlaceholderText('https://g.page/r/…/review')).toBeNull();
   });
 
   it('saves both switches and the Google review link, which shows only while feedback is on', async () => {
     render(<AfterVisitSection onDirtyChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('switch', { name: 'Prompt for clinical notes after each visit' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Ask for a clinical note after each visit' }));
     fireEvent.click(screen.getByRole('switch', { name: 'Ask patients for feedback' }));
     fireEvent.change(screen.getByPlaceholderText('https://g.page/r/…/review'), { target: { value: 'https://g.page/r/abc/review' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

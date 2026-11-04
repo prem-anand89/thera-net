@@ -5,7 +5,7 @@ import { assertNameFree, firstDuplicateName, groupNameCheck, NameTakenError } fr
 
 /** How a hidden match is described for each list (shown in {@link NameTakenError}). */
 const HIDDEN_SERVICE = 'is inactive';
-const HIDDEN_ITEM = 'is hidden';
+const HIDDEN_ITEM = 'is inactive';
 
 /** The existing spelling of a group the name matches (capitals and spaces ignored), else the name as typed. */
 function canonicalGroup(category: string, items: readonly CatalogItem[]): string {

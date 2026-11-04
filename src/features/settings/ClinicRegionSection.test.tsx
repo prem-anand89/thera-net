@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('Region and agenda', () => {
+describe('Region and daily email', () => {
   it('reads as one line, with the fields tucked away until Change', () => {
     render(<ClinicRegionSection onDirtyChange={vi.fn()} />);
     expect(screen.getByTestId('region-summary')).toHaveTextContent('India (+91) · India Standard Time (UTC+5:30) · Financial year from April');

@@ -334,7 +334,7 @@ function ShiftSheetForm({
                 <legend className="mb-1.5 text-label font-medium text-[var(--muted)]">Shift type</legend>
                 {hiddenTypeName && !template && (
                   <p className="mb-2 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]" data-testid="hidden-type-note">
-                    On {hiddenTypeName}, which is hidden. Pick a shift type to move them, or show it again under Shift types.
+                    On {hiddenTypeName}, which is inactive. Pick a shift type to move them, or make it active under Shift types.
                   </p>
                 )}
                 <div className="overflow-hidden rounded-xl border border-[var(--border)]">

@@ -37,25 +37,25 @@ function renderCard() {
   );
 }
 
-describe('"Sees patients" wording', () => {
-  it('the member card badge says Sees patients', () => {
+describe('"Treats patients" wording', () => {
+  it('the member card badge says Treats patients', () => {
     renderCard();
-    expect(screen.getByText('Sees patients')).toBeInTheDocument();
+    expect(screen.getByText('Treats patients')).toBeInTheDocument();
     expect(screen.queryByText('Bookable')).toBeNull();
   });
 
-  it('the edit checkbox says Sees patients, with its hint, and is still on for an active therapist', () => {
+  it('the edit checkbox says Treats patients, with its hint, and is still on for an active therapist', () => {
     renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    const box = screen.getByRole('checkbox', { name: 'Sees patients' });
+    const box = screen.getByRole('checkbox', { name: 'Treats patients' });
     expect(box).toBeChecked();
     expect(screen.getByText('Appears in the schedule and can be chosen on visits.')).toBeInTheDocument();
     expect(screen.queryByText('Bookable in schedule')).toBeNull();
   });
 
-  it('the Add form says Sees patients, with the same hint', () => {
+  it('the Add form says Treats patients, with the same hint', () => {
     render(<AddTeamMemberForm clinicId="c1" onAdded={vi.fn()} />);
-    expect(screen.getByRole('checkbox', { name: /Sees patients/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Treats patients/ })).toBeChecked();
     expect(screen.getByText('Appears in the schedule and can be chosen on visits.')).toBeInTheDocument();
     expect(screen.queryByText(/Bookable/)).toBeNull();
   });

@@ -218,7 +218,7 @@ describe('ShiftSheet — replacing what the person is on', () => {
     templates = [{ ...morning, active: false }, evening];
     assignments = [row('r1', [1, 2])];
     render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
-    expect(screen.getByTestId('hidden-type-note')).toHaveTextContent('On Morning, which is hidden');
+    expect(screen.getByTestId('hidden-type-note')).toHaveTextContent('On Morning, which is inactive');
     expect(screen.getByRole('radio', { name: /Evening/ })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     fireEvent.click(screen.getByRole('radio', { name: /Evening/ }));

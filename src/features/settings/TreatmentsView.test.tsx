@@ -71,11 +71,11 @@ describe('Treatments — chips', () => {
     expect(screen.getByRole('switch', { name: 'Show usage' })).toBeChecked();
   });
 
-  it('hidden treatments sit in a collapsed "Hidden (N)" footer', () => {
+  it('hidden treatments sit in a collapsed "Inactive (N)" footer', () => {
     treatments = [t('Shown'), t('Old', { active: false })];
     render(<TreatmentCatalog />);
     expect(chipNames()).toEqual(['Shown']);
-    fireEvent.click(screen.getByRole('button', { name: /Hidden/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     expect(chipNames()).toEqual(['Shown', 'Old']);
   });
 });
@@ -116,7 +116,7 @@ describe('Treatments — the sheet', () => {
     expect(within(dialog()).getByRole('status')).toHaveTextContent('Use that?');
     expect(within(dialog()).getByRole('button', { name: 'Add' })).not.toBeDisabled();
     fireEvent.change(name, { target: { value: 'matrix rhythm' } });
-    fireEvent.click(within(dialog()).getByRole('button', { name: 'Show it again' }));
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Make it active again' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Matrix Rhythm', active: true });
   });
@@ -135,19 +135,19 @@ describe('Treatments — the sheet', () => {
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Manual Therapy', name: 'Manual therapy (hands-on)', active: true });
   });
 
-  it('turning "Shown" off hides the treatment, and a hidden one can be shown again from its chip', async () => {
+  it('turning "Active" off hides the treatment, and a hidden one can be shown again from its chip', async () => {
     treatments = [t('Taping'), t('Old', { active: false })];
     render(<TreatmentCatalog />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Taping' }));
-    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Shown' }));
+    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Active' }));
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Taping', active: false });
     put.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: /Hidden/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Old' }));
-    expect(within(dialog()).getByRole('switch', { name: 'Shown' })).not.toBeChecked();
-    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Shown' }));
+    expect(within(dialog()).getByRole('switch', { name: 'Active' })).not.toBeChecked();
+    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Active' }));
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Old', active: true });

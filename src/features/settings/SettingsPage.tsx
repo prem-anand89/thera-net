@@ -246,7 +246,7 @@ export function SettingsPage() {
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
-  // Partner & split shows on every plan: below the tier with `revenueSplit` its switch is disabled and names the plan
+  // Partner revenue share shows on every plan: below the tier with `revenueSplit` its switch is disabled and names the plan
   // that has it (and a clinic that still has partner mode on can turn it off). Billing stays visible but locked:
   // hiding a paid feature is how you get zero upgrades.
   const canSeePartner = entitlements.can('revenueSplit');
@@ -495,7 +495,7 @@ export function SettingsPage() {
                 label="Team view"
                 options={[
                   { value: 'members', label: 'Team members' },
-                  { value: 'shifts', label: 'Shifts', badge: pendingShiftCount },
+                  { value: 'shifts', label: 'Working hours', badge: pendingShiftCount },
                 ]}
                 value={teamView}
                 onChange={setTeamView}

@@ -60,7 +60,7 @@ export function TreatmentCatalog() {
         {shown.length === 0 ? (
           <p className="py-4 text-sm text-[var(--muted)]">
             {hidden.length > 0
-              ? 'No treatments shown right now. Show one again under Hidden, or add one with "+ Add".'
+              ? 'No active treatments. Turn one back on under Inactive, or add one with "+ Add".'
               : 'No treatments yet. Add the first one with "+ Add".'}
           </p>
         ) : (
@@ -78,7 +78,7 @@ export function TreatmentCatalog() {
           </>
         )}
 
-        <HiddenItemsFooter label="Hidden" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
+        <HiddenItemsFooter label="Inactive" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
           <ul className="flex flex-wrap gap-2 p-3">
             {hidden.map((item) => (
               <li key={item.id}>
@@ -138,7 +138,7 @@ function TreatmentForm({ mode, all, onClose }: { mode: TreatmentSheet; all: Trea
     }
   }
 
-  /** "Show it again": switches the hidden treatment with this name back on instead of adding a second one. */
+  /** "Make it active again": switches the hidden treatment with this name back on instead of adding a second one. */
   async function showAgain(match: TreatmentItem) {
     setSaving(true);
     setError(null);
@@ -186,8 +186,8 @@ function TreatmentForm({ mode, all, onClose }: { mode: TreatmentSheet; all: Trea
         />
         <NameCheckNote
           result={check}
-          hiddenText="is hidden"
-          restoreLabel={editing ? undefined : 'Show it again'}
+          hiddenText="is inactive"
+          restoreLabel={editing ? undefined : 'Make it active again'}
           onRestore={editing ? undefined : (m) => void showAgain(m)}
           onUse={setName}
         />
@@ -195,8 +195,8 @@ function TreatmentForm({ mode, all, onClose }: { mode: TreatmentSheet; all: Trea
       {editing && (
         <div className="mt-4 border-t border-[var(--border)] pt-2">
           <SwitchRow
-            label="Shown"
-            hint="Turn off to hide it from the visit screen. Past visits keep it."
+            label="Active"
+            hint="Turn off to stop using it on new visits. Past visits keep it."
             checked={active}
             onChange={setActive}
           />

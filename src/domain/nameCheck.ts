@@ -94,7 +94,7 @@ export function groupNameCheck(name: string, groups: readonly string[], current?
 export class NameTakenError extends Error {
   readonly kind: 'exact' | 'hidden';
   readonly matchName: string;
-  constructor(kind: 'exact' | 'hidden', matchName: string, hiddenLabel = 'is hidden') {
+  constructor(kind: 'exact' | 'hidden', matchName: string, hiddenLabel = 'is inactive') {
     super(kind === 'exact' ? `You already have ${matchName}.` : `${matchName} ${hiddenLabel}.`);
     this.name = 'NameTakenError';
     this.kind = kind;

@@ -357,12 +357,12 @@ export function TeamMemberCard({
               )}
               {isBookable && (
                 <span className="inline-block rounded-full bg-[var(--sky-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--sky)]">
-                  Sees patients
+                  Treats patients
                 </span>
               )}
               {therapist && therapist.publicBookable === false && (
                 <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-caption font-semibold text-[var(--muted)]" title="Not offered on the public online-booking page">
-                  Hidden online
+                  Not on online booking
                 </span>
               )}
               {!member && therapist && (
@@ -563,7 +563,7 @@ export function TeamMemberCard({
                 )}
 
                 {!member && therapist && (
-                  <Field label="Email address (Link to login)">
+                  <Field label="Email for login">
                     <input
                       type="email"
                       className={inputCls}
@@ -579,7 +579,7 @@ export function TeamMemberCard({
                     <div className="flex items-center justify-between">
                       <div className="pr-2">
                         <label htmlFor="member-bookable-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
-                          Sees patients
+                          Treats patients
                         </label>
                         <p className="text-hint text-[var(--muted)] leading-tight">
                           Appears in the schedule and can be chosen on visits.
@@ -902,7 +902,7 @@ export function AddTeamMemberForm({
               onChange={(e) => setBookable(e.target.checked)}
             />
             <span>
-              Sees patients
+              Treats patients
               <span className="block text-hint text-[var(--muted)]">Appears in the schedule and can be chosen on visits.</span>
             </span>
           </label>
@@ -1212,7 +1212,7 @@ export function Therapists() {
                 color: filter === f ? 'var(--teal)' : 'var(--muted)',
               }}
             >
-              {f === 'bookable' ? 'Sees patients' : f}
+              {f === 'bookable' ? 'Treats patients' : f}
               {f === 'unlinked' && unlinkedCount > 0 && (
                 <span className="ml-1.5 rounded-full bg-[var(--rust)] px-1.5 py-0.5 text-caption text-white">
                   {unlinkedCount}
@@ -1293,8 +1293,8 @@ export function Therapists() {
       {deleteTarget && (
         <ConfirmDialog
           open={true}
-          title="Delete service roster record"
-          message={`Are you sure you want to delete ${deleteTarget.name} from the service roster? This cannot be undone.`}
+          title="Remove from team"
+          message={`Are you sure you want to remove ${deleteTarget.name} from the team? This cannot be undone.`}
           confirmLabel="Delete"
           cancelLabel="Keep record"
           destructive

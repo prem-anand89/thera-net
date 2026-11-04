@@ -58,7 +58,7 @@ describe('catalogService name checks (the safety net under every form)', () => {
       [{ id: 'r1', clinicId: 'c1', name: 'Walk-in', detailLabel: null, active: false, updatedAt: now }]
     );
     await expect(service.addTreatment({ id: 't2', clinicId: 'c1', name: 'manual therapy', active: true, updatedAt: now })).rejects.toThrow(NameTakenError);
-    await expect(service.addReferralSource({ id: 'r2', clinicId: 'c1', name: 'WALK-IN', detailLabel: null, active: true, updatedAt: now })).rejects.toThrow('Walk-in is hidden.');
+    await expect(service.addReferralSource({ id: 'r2', clinicId: 'c1', name: 'WALK-IN', detailLabel: null, active: true, updatedAt: now })).rejects.toThrow('Walk-in is inactive.');
     await expect(service.updateTreatment({ id: 't1', clinicId: 'c1', name: 'Manual Therapy', active: true, updatedAt: now })).resolves.toBeUndefined();
     expect(puts.treatment).toHaveBeenCalledTimes(1);
     expect(puts.source).not.toHaveBeenCalled();

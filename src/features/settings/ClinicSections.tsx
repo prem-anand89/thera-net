@@ -47,7 +47,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
     );
   const [previewOpen, setPreviewOpen] = useState(false);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
-  // Partner name and logo are edited in Payments & billing → Partner & split; the letterhead preview shows the saved ones.
+  // Partner name and logo are edited in Payments & billing → Partner revenue share; the letterhead preview shows the saved ones.
   const partnerLogoPreviewUrl = clinic.hasPartner ? publicLogoUrl(clinic.partnerHospitalLogoPath) : null;
   const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
@@ -329,7 +329,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
     <div>
       <SectionCard
         id="settings-card-region"
-        title="Region and agenda"
+        title="Region and daily email"
       >
         <fieldset disabled={busy} className="contents">
           <div className="flex items-start justify-between gap-3">
@@ -544,7 +544,7 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
             <Field
               label={
                 <>
-                  Default appointment duration
+                  Appointment length
                   <InfoTip text="The length of a standard appointment. Online booking offers patients start times at this interval." />
                 </>
               }
@@ -628,7 +628,7 @@ export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: bo
         <fieldset disabled={busy} className="contents">
           <div className="space-y-3">
             <SwitchRow
-              label="Prompt for clinical notes after each visit"
+              label="Ask for a clinical note after each visit"
               hint="When off, therapists can still open a patient's notes from their profile."
               checked={form.clinicalDocsEnabled ?? false}
               onChange={(v) => set({ clinicalDocsEnabled: v })}
@@ -675,7 +675,7 @@ type PaymentsFields = Pick<Clinic, 'upiVpa' | 'upiPayeeName' | 'upiQrPath' | 'up
  * How the clinic collects by UPI: show-QR switch, UPI ID, payee name, QR image. New visit and Take payment show a Scan to
  * pay sheet from it, and Lite can collect by UPI, so it is on every plan. (There is no default payment method setting:
  * payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last,
- * else UPI. Who collects is set in Payments & billing → Partner & split.)
+ * else UPI. Who collects is set in Payments & billing → Partner revenue share.)
  */
 export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError, showSaveBar } = useClinicSectionForm<PaymentsFields>(
@@ -736,7 +736,7 @@ export function PaymentsSection({ onDirtyChange }: { onDirtyChange: (dirty: bool
             </div>
             {form.upiQrEnabled && (
               <>
-                <Field label="UPI ID (VPA)">
+                <Field label="UPI ID">
                   <input
                     className={inputCls}
                     placeholder="clinic@okaxis"

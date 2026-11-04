@@ -200,7 +200,7 @@ export function LockedSectionNotice({
 /**
  * The compact stand-in for a card whose feature is above the clinic's plan: the card itself, with its title and one
  * line saying which plan has it. Keeps the card in the page (so Settings search still lands on it) without a large
- * empty box. Partner & split uses the same wording for its disabled state.
+ * empty box. Partner revenue share uses the same wording for its disabled state.
  */
 export function LockedCard({ id, title, feature }: { id: string; title: string; feature: PlanFeature }) {
   return (

@@ -41,7 +41,7 @@ export function ReferralSourcesCard() {
       {shown.length === 0 ? (
         <p className="py-4 text-sm text-[var(--muted)]">
           {hidden.length > 0
-            ? 'No sources shown right now. Show one again under Hidden, or add one with "+ Add".'
+            ? 'No active sources. Turn one back on under Inactive, or add one with "+ Add".'
             : 'No sources yet. Add the first one with "+ Add".'}
         </p>
       ) : (
@@ -51,7 +51,7 @@ export function ReferralSourcesCard() {
           ))}
         </div>
       )}
-      <HiddenItemsFooter label="Hidden" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
+      <HiddenItemsFooter label="Inactive" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
         {hidden.map((item) => (
           <SourceRow key={item.id} item={item} dim onOpen={() => setSheet({ kind: 'edit', item })} />
         ))}
@@ -115,7 +115,7 @@ function SourceForm({ mode, all, onClose }: { mode: SourceSheet; all: ReferringS
     }
   }
 
-  /** "Show it again": switches the hidden source with this name back on instead of adding a second one. */
+  /** "Make it active again": switches the hidden source with this name back on instead of adding a second one. */
   async function showAgain(match: ReferringSourceItem) {
     setSaving(true);
     setError(null);
@@ -159,8 +159,8 @@ function SourceForm({ mode, all, onClose }: { mode: SourceSheet; all: ReferringS
         />
         <NameCheckNote
           result={check}
-          hiddenText="is hidden"
-          restoreLabel={editing ? undefined : 'Show it again'}
+          hiddenText="is inactive"
+          restoreLabel={editing ? undefined : 'Make it active again'}
           onRestore={editing ? undefined : (m) => void showAgain(m)}
           onUse={setName}
         />
@@ -184,7 +184,7 @@ function SourceForm({ mode, all, onClose }: { mode: SourceSheet; all: ReferringS
       </div>
       {editing && (
         <div className="mt-3 border-t border-[var(--border)] pt-1">
-          <SwitchRow label="Shown" hint="Turn off to hide this source from new patients. Existing patients keep it." checked={active} onChange={setActive} />
+          <SwitchRow label="Active" hint="Turn off to stop using it for new patients. Existing patients keep it." checked={active} onChange={setActive} />
         </div>
       )}
     </SheetDialog>

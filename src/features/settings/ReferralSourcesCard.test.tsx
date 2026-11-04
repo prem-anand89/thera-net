@@ -55,11 +55,11 @@ describe('Referral sources (General)', () => {
     expect(screen.getByRole('button', { name: 'Edit Walk-in' })).not.toHaveTextContent('Then asks');
   });
 
-  it('hidden sources sit in a collapsed "Hidden (N)" footer', () => {
+  it('hidden sources sit in a collapsed "Inactive (N)" footer', () => {
     sources = [source(), source({ name: 'Old ad', active: false, detailLabel: null })];
     render(<ReferralSourcesCard />);
     expect(screen.queryByRole('button', { name: 'Edit Old ad' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Hidden/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     expect(screen.getByRole('button', { name: 'Edit Old ad' })).toBeInTheDocument();
   });
 });
@@ -105,18 +105,18 @@ describe('Referral sources — the sheet', () => {
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Doctor referral', detailLabel: null });
   });
 
-  it('"Shown" off hides the source; a hidden one can be shown again from its row', async () => {
+  it('"Active" off hides the source; a hidden one can be shown again from its row', async () => {
     sources = [source(), source({ name: 'Old ad', active: false, detailLabel: null })];
     render(<ReferralSourcesCard />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Doctor referral' }));
-    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Shown' }));
+    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Active' }));
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Doctor referral', active: false });
     put.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: /Hidden/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Old ad' }));
-    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Shown' }));
+    fireEvent.click(within(dialog()).getByRole('switch', { name: 'Active' }));
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Old ad', active: true });
@@ -131,7 +131,7 @@ describe('Referral sources — the sheet', () => {
     expect(within(dialog()).getByRole('alert')).toHaveTextContent('You already have Doctor referral.');
     expect(within(dialog()).getByRole('button', { name: 'Add' })).toBeDisabled();
     fireEvent.change(name, { target: { value: 'old ad' } });
-    fireEvent.click(within(dialog()).getByRole('button', { name: 'Show it again' }));
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Make it active again' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: 'Old ad', active: true });
   });

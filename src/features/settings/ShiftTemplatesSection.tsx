@@ -97,7 +97,7 @@ export function ShiftTemplatesSection() {
 
         {shown.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[var(--border)] p-5 text-center text-xs text-[var(--muted)]">
-            {hidden.length > 0 ? 'No shift types shown right now. Show one again under Hidden, or add one with "+ Add".' : 'No shift types yet. Add the first one with "+ Add".'}
+            {hidden.length > 0 ? 'No active shift types. Turn one back on under Inactive, or add one with "+ Add".' : 'No shift types yet. Add the first one with "+ Add".'}
             {!oneLogin && all.length === 0 && (
               <div className="mt-3 space-y-2">
                 <p>Or start from three common shifts you can change afterwards:</p>
@@ -123,7 +123,7 @@ export function ShiftTemplatesSection() {
           </div>
         )}
 
-        <HiddenItemsFooter label="Hidden" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
+        <HiddenItemsFooter label="Inactive" count={hidden.length} open={hiddenOpen} onToggle={() => setHiddenOpen((v) => !v)}>
           {hidden.map((t) => (
             <TypeRow key={t.id} template={t} usedBy={usedBy(t.id)} dim onOpen={() => setSheet({ kind: 'edit', template: t })} />
           ))}
@@ -227,7 +227,7 @@ function TypeSheet({
   async function remove() {
     if (!editing) return;
     if (usedBy.length > 0) {
-      setError(`Can't delete while ${usedBy.join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Hide it instead, or move them to another shift first.`);
+      setError(`Can't delete while ${usedBy.join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Make it inactive instead, or move them to another shift first.`);
       return;
     }
     const ok = await askConfirm({
@@ -259,7 +259,7 @@ function TypeSheet({
               disabled={saving}
               onClick={() => void setShown(!editing.active)}
             >
-              {editing.active ? 'Hide' : 'Show again'}
+              {editing.active ? 'Make inactive' : 'Make active'}
             </button>
           ) : (
             <span />
@@ -285,8 +285,8 @@ function TypeSheet({
           <input className={inputCls} value={name} placeholder="e.g. Morning, Evening" autoComplete="off" onChange={(e) => setName(e.target.value)} />
           <NameCheckNote
             result={check}
-            hiddenText="is hidden"
-            restoreLabel={editing ? undefined : 'Show it again'}
+            hiddenText="is inactive"
+            restoreLabel={editing ? undefined : 'Make it active again'}
             onRestore={
               editing
                 ? undefined
