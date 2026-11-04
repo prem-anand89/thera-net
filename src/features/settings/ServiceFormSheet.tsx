@@ -147,7 +147,7 @@ function ServiceForm({
     }
   }
 
-  /** "Offer it again": switches the stopped service with this name back on instead of adding a second one. */
+  /** "Make it active again": switches the stopped service with this name back on instead of adding a second one. */
   async function offerAgain(match: CatalogItem) {
     setSaving(true);
     setError(null);
@@ -230,8 +230,8 @@ function ServiceForm({
           />
           <NameCheckNote
             result={check}
-            hiddenText="is in No longer offered"
-            restoreLabel={editing ? undefined : 'Offer it again'}
+            hiddenText="is inactive"
+            restoreLabel={editing ? undefined : 'Make it active again'}
             onRestore={editing ? undefined : (m) => void offerAgain(m)}
             onUse={setName}
           />
@@ -392,8 +392,8 @@ function ServiceForm({
         {editing && (
           <div className="space-y-2 border-t border-[var(--border)] pt-3">
             <SwitchRow
-              label="Offered"
-              hint="Turn off to hide it from the visit picker. Past visits keep it."
+              label="Active"
+              hint="Turn off to stop using it on new visits. Past visits keep it."
               checked={active}
               onChange={setActive}
             />
@@ -401,7 +401,7 @@ function ServiceForm({
               {used > 0
                 ? `${usageLabel(used)}, so it can't be deleted.`
                 : editing.active
-                  ? 'Not used yet. To delete it, stop offering it first.'
+                  ? 'Not used yet. To delete it, make it inactive first.'
                   : 'Not used yet.'}
             </p>
             {canDelete && (

@@ -308,7 +308,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       <div className="mx-auto max-w-md tab:max-w-none">
         <OnboardingProgress step={1} />
       </div>
-      <div className="tab:grid tab:grid-cols-2 tab:items-stretch tab:gap-6">
+      <div className="tab:grid tab:grid-cols-2 tab:items-start tab:gap-6">
         <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7">
           <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Create your clinic</h1>
           <p className="mb-6 mt-2 text-sm text-[var(--muted)]">
@@ -316,29 +316,39 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           </p>
           {formEl}
         </div>
-        <aside
-          aria-label="Invoice header preview"
-          className="mt-6 flex flex-col rounded-[20px] bg-[var(--teal-deep)] p-5 text-white tab:mt-0 sm:p-7"
-        >
-          <p className="text-xs font-medium text-white/60">Invoice header preview</p>
-          {logoPreview && (
-            <img src={logoPreview} alt="" className="mt-4 h-12 w-12 rounded-lg border border-white/20 bg-white object-contain p-1" />
-          )}
-          <p className={`font-display text-2xl font-semibold leading-tight ${logoPreview ? 'mt-3' : 'mt-8'}`}>
-            {form.name.trim() || 'Your clinic name'}
-          </p>
-          <p className="mt-2 text-sm text-white/75 whitespace-pre-line">{form.address.trim() || 'Street, city'}</p>
-          <p className="mt-1 text-sm text-white/75">
-            {[form.phone.trim(), form.email.trim()].filter(Boolean).join(' · ') || 'Phone and email'}
-          </p>
-          {code ? (
-            <p className="mt-3 text-xs text-white/75 font-mono" data-testid="invoice-code-preview">
-              Invoices {formatInvoiceNo(code, fyLabel, 1)} · Patient IDs {formatWalkInMrno(code, yy, 1)}
-            </p>
-          ) : null}
-          <p className="mt-auto border-t border-white/15 pt-6 text-xs text-white/60">
-            Each invoice is numbered in sequence, so the number never skips.
-          </p>
+        {/* A sheet of paper, sized to its content: what this form turns into. Blank fields are simply left out. */}
+        <aside aria-label="Invoice header preview" className="mt-6 tab:mt-0 tab:self-start">
+          <p className="mb-2 text-xs font-medium text-[var(--muted)]">How your bills will look</p>
+          <div className="rounded-lg border border-[var(--border)] bg-white p-5 text-[var(--ink)] shadow-sm sm:p-6">
+            <div className="flex items-start gap-3 border-b border-[var(--border)] pb-3">
+              {logoPreview && (
+                <img src={logoPreview} alt="" className="h-12 w-12 shrink-0 rounded object-contain" />
+              )}
+              <div className="min-w-0">
+                <p className={`break-words font-display text-lg font-semibold leading-tight ${form.name.trim() ? '' : 'text-[var(--muted)]'}`}>
+                  {form.name.trim() || 'Your clinic name'}
+                </p>
+                {form.address.trim() && <p className="mt-1 whitespace-pre-line text-xs text-[var(--muted)]">{form.address.trim()}</p>}
+                {(form.phone.trim() || form.email.trim()) && (
+                  <p className="mt-0.5 break-words text-xs text-[var(--muted)]">
+                    {[form.phone.trim(), form.email.trim()].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="mt-3 text-center text-xs font-semibold uppercase tracking-wide">Bill cum receipt</p>
+            {code ? (
+              <p className="mt-2 flex flex-wrap justify-between gap-x-3 font-mono text-[11px] text-[var(--muted)]" data-testid="invoice-code-preview">
+                <span>Bill No {formatInvoiceNo(code, fyLabel, 1)}</span>
+                <span>Patient ID {formatWalkInMrno(code, yy, 1)}</span>
+              </p>
+            ) : null}
+            <div aria-hidden="true" className="mt-3 space-y-1.5 text-xs text-[var(--muted)]">
+              <p className="flex justify-between border-t border-[var(--border)] pt-2"><span>Sample service</span><span className="font-num">₹800</span></p>
+              <p className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--ink)]"><span>Total</span><span className="font-num">₹800</span></p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-[var(--muted)]">Sample amounts. Bill numbers run in sequence and never skip.</p>
         </aside>
       </div>
     </div>

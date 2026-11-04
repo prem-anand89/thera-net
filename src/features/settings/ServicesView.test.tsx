@@ -121,11 +121,11 @@ describe('Services list — phone', () => {
     expect(screen.queryByRole('button', { name: /^Edit S1,/ })).toBeNull();
   });
 
-  it('keeps stopped services in a collapsed "No longer offered" footer that says which can be deleted', () => {
+  it('keeps stopped services in a collapsed "Inactive" footer that says which can be deleted', () => {
     catalogItems = [item(), item({ name: 'Old', active: false })];
     render(<ServicesView />);
     expect(screen.queryByRole('button', { name: /^Edit Old/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /No longer offered/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     expect(screen.getByRole('button', { name: /^Edit Old/ })).toHaveTextContent('Not used yet · can be deleted');
   });
 });
@@ -180,7 +180,7 @@ describe('Add a service', () => {
     expect(within(dialog()).getByRole('alert')).toHaveTextContent('You already have Initial assessment.');
     expect(within(dialog()).getByRole('button', { name: 'Add' })).toBeDisabled();
     fireEvent.change(name, { target: { value: 'dry needling' } });
-    fireEvent.click(within(dialog()).getByRole('button', { name: 'Offer it again' }));
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Make it active again' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ id: stopped.id, active: true });
   });
@@ -226,7 +226,7 @@ describe('Edit a service', () => {
     history = { [used.id]: 3 };
     catalogItems = [item(), unused, used];
     render(<ServicesView />);
-    fireEvent.click(screen.getByRole('button', { name: /No longer offered/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Edit Used,/ }));
     expect(within(dialog()).queryByRole('button', { name: 'Delete this service' })).toBeNull();
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Cancel' }));
@@ -323,7 +323,7 @@ describe('Services list — review fixes', () => {
   it('says so when every service is stopped, instead of "No services yet"', () => {
     catalogItems = [item({ name: 'Old', active: false })];
     render(<ServicesView />);
-    expect(screen.getByText(/No services offered right now/)).toBeInTheDocument();
+    expect(screen.getByText(/No active services/)).toBeInTheDocument();
     expect(screen.queryByText(/No services yet/)).toBeNull();
   });
 });

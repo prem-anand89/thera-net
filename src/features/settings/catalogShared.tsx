@@ -21,7 +21,7 @@ export function NameCheckNote<T extends NamedItem>({
   onUse,
 }: {
   result: NameCheckResult<T>;
-  /** e.g. "is in No longer offered" / "is hidden". */
+  /** e.g. "is inactive" / "is hidden". */
   hiddenText: string;
   restoreLabel?: string;
   onRestore?: (match: T) => void;
@@ -98,7 +98,7 @@ export function MiniSwitch({ label, checked, onChange }: { label: string; checke
   );
 }
 
-/** The collapsed footer at the bottom of a list: "› No longer offered (3)" / "› Hidden (1)". */
+/** The collapsed footer at the bottom of a list: "› Inactive (3)" / "› Hidden (1)". */
 export function HiddenItemsFooter({ label, count, open, onToggle, children }: {
   label: string;
   count: number;

@@ -199,8 +199,9 @@ export function ShiftCoverageGrid({ therapists, templates, approvedAssignments, 
                           ) : (
                             <div className="flex flex-col items-center leading-tight">
                               <span className="text-caption font-semibold text-[var(--teal)]">
-                                {daily.staffCount} · {daily.capacityHours}h
+                                {daily.staffCount} {daily.staffCount === 1 ? 'person' : 'people'}
                               </span>
+                              <span className="text-caption text-[var(--muted)]">{daily.capacityHours}h total</span>
                               {gap && (
                                 <span className="mt-0.5 rounded bg-[var(--amber-light)]/50 px-1 text-caption font-semibold text-[var(--amber-strong)]">
                                   {gap.missing.join(' + ')} gap

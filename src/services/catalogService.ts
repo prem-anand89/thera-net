@@ -4,7 +4,7 @@ import { getSupabase } from '@/lib/supabase';
 import { assertNameFree, firstDuplicateName, groupNameCheck, NameTakenError } from '@/domain/nameCheck';
 
 /** How a hidden match is described for each list (shown in {@link NameTakenError}). */
-const HIDDEN_SERVICE = 'is in No longer offered';
+const HIDDEN_SERVICE = 'is inactive';
 const HIDDEN_ITEM = 'is hidden';
 
 /** The existing spelling of a group the name matches (capitals and spaces ignored), else the name as typed. */

@@ -33,7 +33,7 @@ describe('catalogService name checks (the safety net under every form)', () => {
 
   it('refuses the name of a stopped service and says where it is', async () => {
     const { service, puts } = setup([svc({ name: 'Dry Needling', active: false })]);
-    await expect(service.addService(svc({ name: 'dry needling' }))).rejects.toThrow('Dry Needling is in No longer offered.');
+    await expect(service.addService(svc({ name: 'dry needling' }))).rejects.toThrow('Dry Needling is inactive.');
     expect(puts.catalog).not.toHaveBeenCalled();
   });
 

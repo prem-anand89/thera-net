@@ -21,7 +21,7 @@ const FLASH_MS = 1600;
  * Services and prices. One list card on phones (group names as small sticky headings inside it), a table from the
  * `desktop:` width up; every row opens the same sheet. Named groups first, ungrouped last under "Other"
  * (`orderedServices`, the same rule as the visit picker). Usage counts sit behind "Show usage" (off by default, per
- * device), except where they decide something: the edit sheet and the "No longer offered" footer.
+ * device), except where they decide something: the edit sheet and the "Inactive" footer.
  */
 export function ServicesView() {
   const clinic = useClinic();
@@ -99,7 +99,7 @@ export function ServicesView() {
           {query
             ? `No services match "${search.trim()}".`
             : stopped.length > 0
-              ? 'No services offered right now. Offer one again under No longer offered, or add one with "+ Add".'
+              ? 'No active services. Turn one back on under Inactive, or add one with "+ Add".'
               : 'No services yet. Add the first one with "+ Add".'}
         </p>
       ) : isDesktop ? (
@@ -128,7 +128,7 @@ export function ServicesView() {
         </div>
       )}
 
-      <HiddenItemsFooter label="No longer offered" count={stopped.length} open={footerOpen || query !== ''} onToggle={() => setFooterOpen((v) => !v)}>
+      <HiddenItemsFooter label="Inactive" count={stopped.length} open={footerOpen || query !== ''} onToggle={() => setFooterOpen((v) => !v)}>
         {stopped.map((item) => {
           const used = usage.get(item.id) ?? 0;
           return (
@@ -191,7 +191,7 @@ function ServiceRow({
 }: {
   item: CatalogItem;
   usage?: number;
-  /** Replaces the usage chip's text (the "No longer offered" footer always shows usage). */
+  /** Replaces the usage chip's text (the "Inactive" footer always shows usage). */
   note?: string;
   flash: boolean;
   onOpen: () => void;
