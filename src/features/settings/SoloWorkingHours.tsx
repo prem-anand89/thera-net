@@ -41,7 +41,7 @@ export function SoloWorkingHours({
       <div data-testid="solo-working-hours">
         <p className="text-sm font-medium text-[var(--ink)]">{desc.headline}</p>
         <p className="mb-3 text-xs text-[var(--muted)]">
-          {desc.summary} · {weekly.totalHours}h a week. Online booking and the Schedule only offer these times.
+          {desc.summary} · {weekly.totalHours}h a week. Online booking only offers these times.
         </p>
         <ul className="overflow-hidden rounded-xl border border-[var(--border)]">
           {WEEKDAY_ORDER.map((day) => {

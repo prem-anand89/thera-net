@@ -57,7 +57,7 @@ describe('ShiftCoverageGrid', () => {
       breakStartMinute: null, status: 'approved', createdAt: '2026-10-01', updatedAt: '2026-10-01',
     } as never;
     render(<ShiftCoverageGrid therapists={[therapist]} templates={[morningTemplate]} approvedAssignments={[row]} clinic={splitClinic} />);
-    expect(screen.getByTestId('gap-note')).toHaveTextContent('Mon evening');
+    expect(screen.getByTestId('gap-note')).toHaveTextContent('No one on shift: Mon–Sat evening');
     expect(screen.getAllByText('Evening gap').length).toBeGreaterThan(0);
   });
 

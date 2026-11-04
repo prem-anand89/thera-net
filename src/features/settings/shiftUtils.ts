@@ -434,121 +434,6 @@ export function templateUsage(
 }
 
 /**
- * Previews consequences before assigning a shift or resetting to clinic default.
- */
-export function previewAssign({
-  therapists,
-  weekdays,
-  template,
-  isClinicDefault,
-  existingApproved,
-  existingPending,
-  clinic,
-}: {
-  therapists: Therapist[];
-  weekdays: number[];
-  template?: ShiftTemplate | null;
-  isClinicDefault?: boolean;
-  existingApproved: TherapistShiftAssignment[];
-  existingPending: TherapistShiftAssignment[];
-  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour'>;
-}): {
-  replaces: string[];
-  closesPending: string[];
-  workingTime: string;
-} {
-  const replaces: string[] = [];
-  const closesPending: string[] = [];
-  const weekdaySet = new Set(weekdays);
-
-  for (const therapist of therapists) {
-    // Check pending requests
-    const pending = existingPending.find((p) => p.therapistId === therapist.id);
-    if (pending) {
-      closesPending.push(`Closes ${therapist.name}'s pending request`);
-    }
-
-    // If resetting to clinic default
-    if (isClinicDefault) {
-      const approved = existingApproved.filter((a) => a.therapistId === therapist.id);
-      if (approved.length > 0) {
-        replaces.push(`Replaces all assigned shifts for ${therapist.name}`);
-      }
-      if (therapist.workingHours) {
-        replaces.push(`Replaces custom hours for ${therapist.name}`);
-      }
-      continue;
-    }
-
-    // If assigning a template
-    if (template) {
-      const approved = existingApproved.filter(
-        (a) =>
-          a.therapistId === therapist.id &&
-          a.weekdays?.some((w) => weekdaySet.has(w))
-      );
-      for (const a of approved) {
-        if (a.shiftTemplateId && a.shiftTemplateId !== template.id) {
-          const overlapDays = a.weekdays?.filter((w) => weekdaySet.has(w)) ?? [];
-          if (overlapDays.length > 0) {
-            replaces.push(
-              `Replaces ${formatWeekdays(overlapDays)} on ${therapist.name}'s schedule`
-            );
-          }
-        }
-      }
-
-      // Check if custom hours exist for any chosen weekdays that are not already covered by an approved template
-      if (therapist.workingHours) {
-        const daysWithApprovedTemplate = new Set(
-          existingApproved
-            .filter((a) => a.therapistId === therapist.id && a.shiftTemplateId)
-            .flatMap((a) => a.weekdays ?? [])
-        );
-        const customDays = weekdays.filter(
-          (w) =>
-            !daysWithApprovedTemplate.has(w) &&
-            String(w) in (therapist.workingHours ?? {}) &&
-            (therapist.workingHours as Record<string, unknown>)[String(w)] != null &&
-            ((therapist.workingHours as Record<string, [number, number][]>)[String(w)] ?? []).length > 0
-        );
-        if (customDays.length > 0) {
-          replaces.push(
-            `Supersedes custom hours for ${formatWeekdays(customDays)} on ${therapist.name}`
-          );
-        }
-      }
-    }
-  }
-
-  let workingTime = '';
-  if (isClinicDefault) {
-    const start = (clinic.bookingStartHour ?? 9) * 60;
-    const end = (clinic.bookingEndHour ?? 18) * 60;
-    const hrs = Math.max(0, end - start) / 60;
-    workingTime = `Clinic hours: ${hrs}h/day (${formatRange12h(start, end)})`;
-  } else if (template) {
-    const shift = formatShiftSummary(template);
-    const hrs = (shift.workingMinutes / 60).toFixed(
-      shift.workingMinutes % 60 === 0 ? 0 : 1
-    );
-    const totalHrs = ((template.endMinute - template.startMinute) / 60).toFixed(
-      (template.endMinute - template.startMinute) % 60 === 0 ? 0 : 1
-    );
-    if (template.breakDurationMinutes > 0) {
-      const breakHrs = (template.breakDurationMinutes / 60).toFixed(
-        template.breakDurationMinutes % 60 === 0 ? 0 : 1
-      );
-      workingTime = `Working time: ${hrs}h/day (${totalHrs}h − ${breakHrs}h break)`;
-    } else {
-      workingTime = `Working time: ${hrs}h/day`;
-    }
-  }
-
-  return { replaces, closesPending, workingTime };
-}
-
-/**
  * Validates template inputs client-side
  */
 export function validateShiftTemplate(
@@ -752,7 +637,7 @@ function shiftIntervals(start: number, end: number, breakStart: number | null, b
  * The therapist's working hours after `assign_shift` saves, worked out on the device so the admin can be warned about
  * appointments that would fall outside them before saving. Mirrors the server (`apply_shift_hours`): an approved
  * custom-hours row is dropped and the shift starts from nothing; otherwise the other approved shift rows are kept,
- * minus the days the new shift takes (and minus `replacesId`, the row being edited, when the server is told which one).
+ * minus the days the new shift takes and minus `replacesIds`, the rows being edited.
  */
 export function hoursAfterShiftAssign(input: {
   therapistId: string;
@@ -761,16 +646,16 @@ export function hoursAfterShiftAssign(input: {
   template: Pick<ShiftTemplate, 'startMinute' | 'endMinute' | 'breakDurationMinutes' | 'defaultBreakStartMinute'>;
   weekdays: number[];
   breakStartMinute: number | null;
-  replacesId?: string | null;
+  replacesIds?: readonly string[];
 }): WorkingHours {
-  const { therapistId, approved, templates, template, weekdays, breakStartMinute, replacesId } = input;
+  const { therapistId, approved, templates, template, weekdays, breakStartMinute, replacesIds = [] } = input;
   const mine = approved.filter((a) => a.therapistId === therapistId && a.status === 'approved');
   const hours: Record<string, [number, number][]> = {};
   const taken = new Set(weekdays);
   if (!mine.some((a) => !a.shiftTemplateId)) {
     const byId = new Map(templates.map((t) => [t.id, t]));
     const rows = mine
-      .filter((a) => a.shiftTemplateId && a.id !== replacesId)
+      .filter((a) => a.shiftTemplateId && !replacesIds.includes(a.id))
       .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || a.id.localeCompare(b.id));
     for (const row of rows) {
       const t = byId.get(row.shiftTemplateId!);

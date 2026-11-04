@@ -86,7 +86,7 @@ describe('ShiftSheet — one person', () => {
     expect(screen.getByTestId('days-change')).toHaveTextContent('Removes Sat');
     save();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(assignShift).toHaveBeenCalledWith({ therapistId: 'th1', shiftTemplateId: 't1', weekdays: [1, 2, 3, 4, 5], breakStartMinute: null });
+    expect(assignShift).toHaveBeenCalledWith({ therapistId: 'th1', shiftTemplateId: 't1', weekdays: [1, 2, 3, 4, 5], breakStartMinute: null, replacesId: 'a1' });
   });
 
   it('quick chips set the days', () => {
@@ -148,6 +148,83 @@ describe('ShiftSheet — one person', () => {
     fireEvent.change(screen.getByLabelText(/Lunch starts at/), { target: { value: '13:45' } });
     expect(screen.getByText(/Lunch must fit inside/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+});
+
+describe('ShiftSheet — replacing what the person is on', () => {
+  const row = (id: string, weekdays: number[], templateId = 't1') => ({ ...approvedRow(weekdays, templateId), id });
+
+  it('a new assignment replaces nothing', async () => {
+    render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Shift type' }));
+    save();
+    await waitFor(() => expect(assignShift).toHaveBeenCalledTimes(1));
+    expect(assignShift.mock.calls[0][0].replacesId).toBeNull();
+  });
+
+  it('two rows of the same type: both are replaced, so no removed day survives', async () => {
+    assignments = [row('r1', [1, 2, 3]), row('r2', [4, 5])];
+    render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Friday' }));
+    expect(screen.getByTestId('days-change')).toHaveTextContent('Removes Fri');
+    save();
+    await waitFor(() => expect(assignShift).toHaveBeenCalledTimes(2));
+    expect(assignShift.mock.calls.map((c) => c[0].replacesId)).toEqual(['r1', 'r2']);
+    expect(assignShift.mock.calls.every((c) => c[0].weekdays.join() === '1,2,3,4')).toBe(true);
+  });
+
+  it('switching to a type they are not on replaces the rows the sheet opened on', async () => {
+    assignments = [row('r1', [1, 2, 3])];
+    render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: /Evening/ }));
+    save();
+    await waitFor(() => expect(assignShift).toHaveBeenCalledTimes(1));
+    expect(assignShift.mock.calls[0][0]).toMatchObject({ shiftTemplateId: 't2', replacesId: 'r1', weekdays: [1, 2, 3] });
+  });
+
+  it('picking a second type they are already on loads its days and touches only that type', async () => {
+    assignments = [row('r1', [1, 2, 3]), row('r2', [4, 5], 't2')];
+    render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: /Evening/ }));
+    expect(screen.getByRole('button', { name: 'Thursday' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Monday' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Friday' }));
+    save();
+    await waitFor(() => expect(assignShift).toHaveBeenCalledTimes(1));
+    expect(assignShift.mock.calls[0][0]).toMatchObject({ shiftTemplateId: 't2', replacesId: 'r2', weekdays: [4] });
+  });
+
+  it('assigning to several people replaces nothing: other days are only trimmed', async () => {
+    assignments = [row('r1', [1, 2, 3])];
+    render(<ShiftSheet open therapistId={null} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Dr Prem/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await waitFor(() => expect(assignShift).toHaveBeenCalledTimes(1));
+    expect(assignShift.mock.calls[0][0].replacesId).toBeNull();
+  });
+
+  it('an inactive therapist still gets their own sheet, but is not offered in the picker', () => {
+    therapists = [{ ...therapists[0], active: false }, therapists[1]];
+    render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: 'Working hours · Dr Prem' })).toBeInTheDocument();
+    cleanup();
+    render(<ShiftSheet open therapistId={null} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /Dr Prem/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Dr Kiran/ })).toBeInTheDocument();
+  });
+
+  it('someone on a hidden type: nothing is picked, a note says why, picking one replaces the hidden rows', async () => {
+    templates = [{ ...morning, active: false }, evening];
+    assignments = [row('r1', [1, 2])];
+    render(<ShiftSheet open therapistId="th1" onClose={vi.fn()} />);
+    expect(screen.getByTestId('hidden-type-note')).toHaveTextContent('On Morning, which is hidden');
+    expect(screen.getByRole('radio', { name: /Evening/ })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: /Evening/ }));
+    save();
+    await waitFor(() => expect(assignShift).toHaveBeenCalledTimes(1));
+    expect(assignShift.mock.calls[0][0]).toMatchObject({ shiftTemplateId: 't2', replacesId: 'r1', weekdays: [1, 2] });
   });
 });
 

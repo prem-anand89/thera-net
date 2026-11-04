@@ -73,8 +73,8 @@ describe('hoursAfterShiftAssign', () => {
   it('drops the edited row entirely when told which one it replaces (Saturday goes off)', () => {
     const approved = [row('a1', 'm', [1, 2, 3, 4, 5, 6])];
     const base = { therapistId: 't1', approved, templates: [morning], template: morning, weekdays: [1, 2, 3, 4, 5], breakStartMinute: null };
-    expect((hoursAfterShiftAssign(base) as Record<string, unknown>)['6']).toBeDefined(); // what the server does today
-    expect((hoursAfterShiftAssign({ ...base, replacesId: 'a1' }) as Record<string, unknown>)['6']).toBeUndefined();
+    expect((hoursAfterShiftAssign(base) as Record<string, unknown>)['6']).toBeDefined(); // a new assignment only trims overlaps
+    expect((hoursAfterShiftAssign({ ...base, replacesIds: ['a1'] }) as Record<string, unknown>)['6']).toBeUndefined();
   });
 
   it('starts from nothing when the therapist is on own hours', () => {

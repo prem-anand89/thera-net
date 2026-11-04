@@ -8,7 +8,6 @@ import {
   formatShiftSummary,
   formatWeekdays,
   getTemplatePalette,
-  previewAssign,
   sortWeekdays,
   templateUsage,
   validateShiftTemplate,
@@ -241,62 +240,6 @@ describe('shiftUtils', () => {
     it('computes template usage accurately', () => {
       const usage = templateUsage('tmpl-morning', assignments);
       expect(usage).toEqual(['th-1']);
-    });
-  });
-
-  describe('previewAssign', () => {
-    it('generates clear impact and preview messages before assigning', () => {
-      const therapist: Therapist = {
-        id: 'th-1',
-        clinicId: 'c1',
-        name: 'Prem',
-        active: true,
-        workingHours: { '3': [[540, 780]] }, // Wed custom
-        updatedAt: '',
-      };
-      const existingApproved: TherapistShiftAssignment[] = [
-        {
-          id: 'a1',
-          clinicId: 'c1',
-          therapistId: 'th-1',
-          shiftTemplateId: 't-old',
-          customHours: null,
-          weekdays: [1, 2], // Mon, Tue
-          breakStartMinute: null,
-          status: 'approved',
-          note: null,
-          decisionNote: null,
-          requestedBy: null,
-          decidedBy: null,
-          decidedAt: null,
-          createdAt: '',
-          updatedAt: '',
-        },
-      ];
-      const template: ShiftTemplate = {
-        id: 't-new',
-        clinicId: 'c1',
-        name: 'New Shift',
-        startMinute: 540,
-        endMinute: 1020,
-        breakDurationMinutes: 60,
-        defaultBreakStartMinute: 780,
-        active: true,
-        updatedAt: '',
-      };
-
-      const preview = previewAssign({
-        therapists: [therapist],
-        weekdays: [1, 3], // Mon (replaces t-old), Wed (supersedes custom)
-        template,
-        existingApproved,
-        existingPending: [],
-        clinic: { bookingStartHour: 9, bookingEndHour: 18 },
-      });
-
-      expect(preview.replaces).toContain("Replaces Mon on Prem's schedule");
-      expect(preview.replaces).toContain('Supersedes custom hours for Wed on Prem');
-      expect(preview.workingTime).toBe('Working time: 7h/day (8h − 1h break)');
     });
   });
 

@@ -399,6 +399,8 @@ export const bookingService = {
     shiftTemplateId: UUID;
     weekdays: number[];
     breakStartMinute?: number | null;
+    /** The approved shift row being edited: superseded whole, so a day the admin unticked goes off. */
+    replacesId?: UUID | null;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('assign_shift', {
@@ -406,6 +408,7 @@ export const bookingService = {
       p_shift_template_id: params.shiftTemplateId,
       p_weekdays: params.weekdays,
       p_break_start_minute: params.breakStartMinute ?? null,
+      p_replaces: params.replacesId ?? null,
     });
     if (error) throw new Error(`Could not assign shift: ${error.message}`);
     syncEngine.schedule(0);

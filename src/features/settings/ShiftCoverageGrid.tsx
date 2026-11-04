@@ -7,6 +7,7 @@ import {
   calculateDailyCoverage,
   calculateWeeklyTotal,
   describeSchedule,
+  formatDayRanges,
   getTemplatePalette,
   uncoveredSessions,
 } from './shiftUtils';
@@ -43,6 +44,13 @@ export function ShiftCoverageGrid({ therapists, templates, approvedAssignments, 
       }),
     [coverageMap, clinic, closedDays, activeTherapists.length]
   );
+
+  // Phones: "Mon–Sat evening · Sun morning", one phrase per session, however many days.
+  const gapSummary = (['Morning', 'Evening'] as const)
+    .map((session) => ({ session, days: gaps.filter((g) => g.missing.includes(session)).map((g) => g.day) }))
+    .filter((x) => x.days.length > 0)
+    .map((x) => `${formatDayRanges(x.days)} ${x.session.toLowerCase()}`)
+    .join(' · ');
 
   return (
     <SectionCard
@@ -107,7 +115,7 @@ export function ShiftCoverageGrid({ therapists, templates, approvedAssignments, 
                           >
                             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: therapist.color ?? 'var(--teal)' }} aria-hidden />
                             <span className="min-w-0 flex-1 break-words text-hint font-medium text-[var(--ink)]">{therapist.name}</span>
-                            <span aria-hidden className="shrink-0 text-caption text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100">
+                            <span aria-hidden className="hidden shrink-0 text-caption text-[var(--muted)] opacity-0 transition-opacity group-hover:opacity-100 desktop:inline">
                               Edit ›
                             </span>
                           </button>
@@ -129,7 +137,7 @@ export function ShiftCoverageGrid({ therapists, templates, approvedAssignments, 
                                       return (
                                         <span
                                           key={template.id}
-                                          className={`inline-block w-full truncate rounded border px-1 py-0.5 text-center text-caption font-semibold leading-tight ${pal.bg} ${pal.text} ${pal.border}`}
+                                          className={`inline-block w-full break-words rounded border px-1 py-0.5 text-center text-caption font-semibold leading-tight ${pal.bg} ${pal.text} ${pal.border}`}
                                         >
                                           {template.name}
                                         </span>
@@ -213,7 +221,7 @@ export function ShiftCoverageGrid({ therapists, templates, approvedAssignments, 
             <div className="space-y-2.5 tab:hidden">
               {gaps.length > 0 && (
                 <p className="rounded-lg bg-[var(--amber-light)]/50 px-3 py-2 text-xs text-[var(--amber-strong)]" data-testid="gap-note">
-                  {gaps.map((g) => `${WEEKDAY_META[g.day].short} ${g.missing.join(' + ').toLowerCase()}`).join(' · ')}: no one on shift.
+                  No one on shift: {gapSummary}.
                 </p>
               )}
               {activeTherapists.map((therapist) => {

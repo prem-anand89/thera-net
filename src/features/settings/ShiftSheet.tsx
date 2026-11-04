@@ -62,7 +62,7 @@ export function ShiftSheet({
       key={therapistId ?? 'bulk'}
       clinic={clinic}
       therapistId={therapistId}
-      therapists={therapists.filter((t) => t.active !== false)}
+      therapists={therapists}
       templates={templates}
       approved={assignments.filter((a) => a.status === 'approved')}
       appointments={appointments ?? []}
@@ -101,7 +101,9 @@ function ShiftSheetForm({
   onSaved?: () => void;
 }) {
   const bulk = therapistId === null;
+  // Any roster row, active or not: an inactive therapist's card can still set their hours. The picker lists active only.
   const person = bulk ? null : therapists.find((t) => t.id === therapistId) ?? null;
+  const pickable = therapists.filter((t) => t.active !== false);
   const activeTemplates = useMemo(() => templates.filter((t) => t.active), [templates]);
   const clinicHours = useMemo(() => clinicHoursOf(clinic), [clinic]);
   const closedDays = clinicHours.closedWeekdays;
@@ -112,22 +114,26 @@ function ShiftSheetForm({
     () => (person ? approved.filter((a) => a.therapistId === person.id && a.shiftTemplateId) : []),
     [approved, person]
   );
+  const rowsOf = (id: string | null) => myRows.filter((a) => a.shiftTemplateId === id);
+  const daysOf = (rows: TherapistShiftAssignment[]) => sortWeekdays(Array.from(new Set(rows.flatMap((a) => a.weekdays ?? []))));
   const firstActiveRow = myRows.find((a) => activeTemplates.some((t) => t.id === a.shiftTemplateId)) ?? null;
+  // The type the sheet opens on. A person on a hidden type starts on that type's rows, with nothing picked yet.
+  const startTypeId = firstActiveRow?.shiftTemplateId ?? myRows[0]?.shiftTemplateId ?? null;
+  const onHiddenType = myRows.length > 0 && !firstActiveRow;
+  const hiddenTypeName = onHiddenType ? templates.find((t) => t.id === startTypeId)?.name ?? null : null;
   const initialKind: ShiftKind = person
     ? myRows.length > 0
-      ? 'shift'
+      ? activeTemplates.length > 0
+        ? 'shift'
+        : 'own'
       : person.workingHours
         ? 'own'
         : 'clinic'
     : activeTemplates.length > 0
       ? 'shift'
       : 'clinic';
-  const initialTemplateId = firstActiveRow?.shiftTemplateId ?? activeTemplates[0]?.id ?? '';
-  const initialDays = sortWeekdays(
-    firstActiveRow
-      ? Array.from(new Set(myRows.filter((a) => a.shiftTemplateId === initialTemplateId).flatMap((a) => a.weekdays ?? [])))
-      : [...openDays]
-  );
+  const initialTemplateId = firstActiveRow?.shiftTemplateId ?? (onHiddenType ? '' : activeTemplates[0]?.id ?? '');
+  const startDays = startTypeId ? daysOf(rowsOf(startTypeId)) : sortWeekdays([...openDays]);
   const initialBreak = firstActiveRow?.breakStartMinute ?? null;
   const initialOwn = useMemo<WorkingHours>(
     () => (person?.workingHours ? person.workingHours : defaultWorkingHours(clinicHours)),
@@ -137,7 +143,7 @@ function ShiftSheetForm({
   const [people, setPeople] = useState<string[]>(person ? [person.id] : []);
   const [kind, setKind] = useState<ShiftKind>(initialKind);
   const [templateId, setTemplateId] = useState(initialTemplateId);
-  const [days, setDays] = useState<number[]>(initialDays);
+  const [days, setDays] = useState<number[]>(startDays);
   const [breakTime, setBreakTime] = useState<string>(initialBreak !== null ? minutesToTimeInput(initialBreak) : '');
   const [breakOpen, setBreakOpen] = useState(initialBreak !== null);
   const [own, setOwn] = useState<WorkingHours>(initialOwn);
@@ -163,11 +169,16 @@ function ShiftSheetForm({
 
   const ownProblem = kind === 'own' ? workingHoursProblem(own) : null;
 
+  // The rows this save replaces: the picked type's own rows, or (switching to a new type) the rows the sheet opened on.
+  const heldRows = rowsOf(templateId);
+  const replacedRows = bulk ? [] : heldRows.length > 0 ? heldRows : rowsOf(startTypeId);
+  const baselineDays = heldRows.length > 0 ? daysOf(heldRows) : startDays;
+  const baselineBreak = heldRows[0]?.breakStartMinute ?? null;
+
   const changed =
     bulk ||
     kind !== initialKind ||
-    (kind === 'shift' &&
-      (templateId !== initialTemplateId || days.join() !== initialDays.join() || (breakStart ?? null) !== initialBreak)) ||
+    (kind === 'shift' && (heldRows.length === 0 || days.join() !== baselineDays.join() || (breakStart ?? null) !== baselineBreak)) ||
     (kind === 'own' && JSON.stringify(own) !== JSON.stringify(initialOwn));
 
   const canSave =
@@ -177,8 +188,9 @@ function ShiftSheetForm({
     (kind !== 'shift' || (template !== null && days.length > 0 && !breakProblem)) &&
     (kind !== 'own' || !ownProblem);
 
-  const added = person && initialKind === 'shift' && kind === 'shift' ? days.filter((d) => !initialDays.includes(d)) : [];
-  const removed = person && initialKind === 'shift' && kind === 'shift' ? initialDays.filter((d) => !days.includes(d)) : [];
+  const comparing = Boolean(person && startTypeId && kind === 'shift');
+  const added = comparing ? days.filter((d) => !baselineDays.includes(d)) : [];
+  const removed = comparing ? baselineDays.filter((d) => !days.includes(d)) : [];
 
   function hoursFor(id: string): WorkingHours | null {
     if (kind === 'clinic') return null;
@@ -190,6 +202,7 @@ function ShiftSheetForm({
       template: template!,
       weekdays: days,
       breakStartMinute: breakStart,
+      replacesIds: replacedRows.map((a) => a.id),
     });
   }
 
@@ -224,10 +237,14 @@ function ShiftSheetForm({
       try {
         if (kind === 'clinic') await bookingService.assignCustomHours(id, null);
         else if (kind === 'own') await bookingService.assignCustomHours(id, own);
-        else
-          // When the assign_shift p_replaces migration is live, pass the edited row (firstActiveRow) here so an
-          // unticked weekday goes off; `hoursAfterShiftAssign` already takes `replacesId`.
-          await bookingService.assignShift({ therapistId: id, shiftTemplateId: template!.id, weekdays: days, breakStartMinute: breakStart });
+        else {
+          // One call per replaced row (the RPC takes one id): each supersedes its row and drops the previous call's
+          // row, because the days overlap, so exactly one row is left. Usually there is just one.
+          const replaces: (string | null)[] = replacedRows.length > 0 ? replacedRows.map((a) => a.id) : [null];
+          for (const replacesId of replaces) {
+            await bookingService.assignShift({ therapistId: id, shiftTemplateId: template!.id, weekdays: days, breakStartMinute: breakStart, replacesId });
+          }
+        }
       } catch (e) {
         failed.push(id);
         lastError = toFriendlyMessage(e);
@@ -250,7 +267,7 @@ function ShiftSheetForm({
   const saveLabel = saving ? 'Saving…' : bulk ? (people.length > 1 ? `Assign to ${people.length} people` : 'Assign') : 'Save';
   const clinicSummary = describeSchedule({ workingHours: null }, [], [], clinic).summary;
   const otherTypes = person
-    ? Array.from(new Set(myRows.map((a) => a.shiftTemplateId))).filter((id) => id && id !== templateId)
+    ? Array.from(new Set(myRows.map((a) => a.shiftTemplateId))).filter((id) => id && !replacedRows.some((a) => a.shiftTemplateId === id))
     : [];
 
   return (
@@ -279,7 +296,7 @@ function ShiftSheetForm({
             <fieldset>
               <legend className="mb-1.5 text-label font-medium text-[var(--muted)]">Who</legend>
               <div className="flex flex-wrap gap-1.5">
-                {therapists.map((t) => {
+                {pickable.map((t) => {
                   const on = people.includes(t.id);
                   return (
                     <button
@@ -315,6 +332,11 @@ function ShiftSheetForm({
             <div className="space-y-4">
               <fieldset>
                 <legend className="mb-1.5 text-label font-medium text-[var(--muted)]">Shift type</legend>
+                {hiddenTypeName && !template && (
+                  <p className="mb-2 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]" data-testid="hidden-type-note">
+                    On {hiddenTypeName}, which is hidden. Pick a shift type to move them, or show it again under Shift types.
+                  </p>
+                )}
                 <div className="overflow-hidden rounded-xl border border-[var(--border)]">
                   {activeTemplates.map((t) => (
                     <label
@@ -328,8 +350,12 @@ function ShiftSheetForm({
                         checked={templateId === t.id}
                         onChange={() => {
                           setTemplateId(t.id);
-                          setBreakOpen(false);
-                          setBreakTime('');
+                          // A type this person is already on opens on its own days and lunch.
+                          const held = rowsOf(t.id);
+                          if (held.length > 0) setDays(daysOf(held));
+                          const heldBreak = held[0]?.breakStartMinute ?? null;
+                          setBreakOpen(heldBreak !== null);
+                          setBreakTime(heldBreak !== null ? minutesToTimeInput(heldBreak) : '');
                         }}
                       />
                       <span className="min-w-0 flex-1">
@@ -341,15 +367,15 @@ function ShiftSheetForm({
                 </div>
                 {otherTypes.length > 0 && (
                   <p className="mt-1.5 text-xs text-[var(--muted)]">
-                    Also on {otherTypes.map((id) => activeTemplates.find((t) => t.id === id)?.name ?? 'another shift').join(', ')} on other days.
+                    Also on {otherTypes.map((id) => templates.find((t) => t.id === id)?.name ?? 'another shift').join(', ')} on other days.
                     Saving changes only the days you pick here.
                   </p>
                 )}
               </fieldset>
 
               <fieldset>
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <legend className="text-label font-medium text-[var(--muted)]">Days</legend>
+                <legend className="text-label font-medium text-[var(--muted)]">Days</legend>
+                <div className="mb-1.5 mt-1 flex flex-wrap items-center gap-2">
                   <div className="flex gap-1.5">
                     <QuickChip label="Open days" onClick={() => setDays([...openDays])} />
                     <QuickChip label="Mon–Fri" onClick={() => setDays([1, 2, 3, 4, 5])} />
@@ -429,7 +455,7 @@ function ShiftSheetForm({
 
           {kind === 'clinic' && (
             <p className="text-sm text-[var(--muted)]">
-              Uses the clinic&apos;s opening hours: {clinicSummary}. Changes to Settings → Hours apply automatically.
+              Uses the clinic&apos;s opening hours: {clinicSummary}. Changes under Schedule &amp; Booking apply automatically.
             </p>
           )}
 
