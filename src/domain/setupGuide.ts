@@ -60,7 +60,7 @@ export interface SetupStep {
   auto?: (signals: SetupSignals) => boolean;
 }
 
-export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): SetupStep[] {
+export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean, loginsFull = false): SetupStep[] {
   return [
     {
       id: 'clinic-profile',
@@ -85,10 +85,12 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
     {
       id: 'invite-team',
       // A one-login plan cannot invite anyone, so this is optional there: setup can reach 100% without it.
-      group: seatLimited ? 'optional' : 'essentials',
+      group: seatLimited || loginsFull ? 'optional' : 'essentials',
       title: 'Invite your team',
       why: seatLimited
         ? 'Your plan has one login for now. Invite teammates after upgrading.'
+        : loginsFull
+          ? 'All the logins on your plan are in use. Invite more people after upgrading.'
         : 'Each person needs their own login so revenue is credited to the right therapist.',
       link: { kind: 'settings', tab: 'team', teamView: 'members' },
       action: 'Open team',
@@ -98,7 +100,9 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       id: 'link-therapist',
       group: 'essentials',
       title: 'Link every therapist to their login',
-      why: 'An unlinked therapist sees an empty Workspace.',
+      why: loginsFull
+        ? 'All the logins on your plan are in use, so others stay on the schedule without one. Upgrade to link them.'
+        : 'An unlinked therapist sees an empty Workspace.',
       link: { kind: 'settings', tab: 'team', teamView: 'members' },
       action: 'Open team',
       auto: (s) => s.therapistsLinked,

@@ -187,4 +187,21 @@ describe('the clinic profile step without invoicing', () => {
     const s = { ...established, clinicProfileSet: false };
     expect(summarizeSetup(lite, s, new Set(['wait-synced', 'clinical-notes'])).allDone).toBe(true);
   });
+
+  it('with every login in use, inviting is optional and the copy says to upgrade; the steps keep their ids', () => {
+    const full = buildSetupSteps(false, true, true);
+    expect(full.map((s) => s.id)).toEqual(buildSetupSteps(false, true).map((s) => s.id));
+    const invite = full.find((s) => s.id === 'invite-team')!;
+    expect(invite.group).toBe('optional');
+    expect(invite.why).toBe('All the logins on your plan are in use. Invite more people after upgrading.');
+    expect(full.find((s) => s.id === 'link-therapist')!.why).toMatch(/Upgrade to link them/);
+    // Below the limit nothing changes.
+    expect(buildSetupSteps(false, true).find((s) => s.id === 'invite-team')!.group).toBe('essentials');
+  });
+
+  it('therapist signals treat a full plan like a one-login plan: only the owner has to be linked', () => {
+    const team = [{ userId: 'u1' }, { userId: null }];
+    expect(therapistSignals(team, 'u1', true)).toEqual({ therapistsLinked: true, unlinkedTherapistCount: 0 });
+    expect(therapistSignals(team, 'u1', false)).toEqual({ therapistsLinked: false, unlinkedTherapistCount: 1 });
+  });
 });

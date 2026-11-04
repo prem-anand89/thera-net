@@ -4,6 +4,7 @@ import { PhoneField } from '@/components/PhoneField';
 import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { atSeatCap as seatCapReached } from '@/domain/seatCap';
 import { repos, therapistService } from '@/services';
 import { colorClashes, nextUnusedColor, therapistColor } from '@/components/schedule/scheduleColors';
 import { useClinic } from '@/app/clinicContext';
@@ -154,6 +155,10 @@ export type TeamMemberCardProps = {
   clinic: Clinic;
   /** Team members with no login the plan includes; null = no limit. Switching one back on is refused past it. */
   rosterLimit?: number | null;
+  /** Every login the plan includes is in use: a team member without a login can't be given one (an invite would be refused). */
+  loginsLocked?: boolean;
+  /** "Clinic includes 5 logins": which plan has room, shown with the locked email box. */
+  loginsHint?: string;
 };
 
 export function TeamMemberCard({
@@ -172,6 +177,8 @@ export function TeamMemberCard({
   templates,
   clinic,
   rosterLimit = null,
+  loginsLocked = false,
+  loginsHint = '',
 }: TeamMemberCardProps) {
   const { member, therapist } = person;
   const displayName = member?.displayName || therapist?.name || member?.email || 'Unknown';
@@ -566,11 +573,18 @@ export function TeamMemberCard({
                   <Field label="Email for login">
                     <input
                       type="email"
+                      aria-label="Email for login"
                       className={inputCls}
-                      placeholder="Optional"
-                      value={emailDraft}
+                      placeholder={loginsLocked ? 'No logins left on your plan' : 'Optional'}
+                      value={loginsLocked ? '' : emailDraft}
+                      disabled={loginsLocked}
                       onChange={(e) => setEmailDraft(e.target.value)}
                     />
+                    {loginsLocked && (
+                      <p className="mt-1 text-hint text-[var(--muted)]">
+                        Your plan&apos;s logins are all in use{loginsHint ? `; ${loginsHint}` : ''}. They stay on the schedule without a login.
+                      </p>
+                    )}
                   </Field>
                 )}
 
@@ -1008,11 +1022,7 @@ export function Therapists() {
 
   const unlinkedCount = teamList.filter(p => p.therapist && p.therapist.active !== false && !p.member).length;
 
-  const atSeatCap =
-    entitlements.enforcementEnabled &&
-    !entitlements.loading &&
-    members !== null &&
-    members.length >= entitlements.maxMembers;
+  const atSeatCap = members !== null && seatCapReached(entitlements, members.length);
 
   // Team members without a login: the plan's own limit (null = none, including while it is unknown), checked here
   // first so the server's trigger is only a backstop.
@@ -1226,6 +1236,21 @@ export function Therapists() {
         </p>
       </div>
 
+      {unlinkedCount > 0 && (
+        <div className="mb-3 rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]" data-testid="unlinked-banner">
+          {atSeatCap ? (
+            <>
+              {unlinkedCount} therapist{unlinkedCount === 1 ? ' is' : 's are'} on the schedule without a login. Your plan&apos;s logins are all in use
+              {loginsHint ? `; ${loginsHint}` : ''}, so they can&apos;t be invited yet.
+            </>
+          ) : (
+            <>
+              {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login. Open them below and add their email to invite them, so their Workspace isn’t empty.
+            </>
+          )}
+        </div>
+      )}
+
       <ColorClashNotice therapists={rawTherapists ?? []} />
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 mb-6 items-start">
@@ -1252,6 +1277,8 @@ export function Therapists() {
                 if (p.member) void resendInvite(p.member.userId);
               }}
               onSaved={() => void refetchMembers()}
+              loginsLocked={Boolean(atSeatCap)}
+              loginsHint={loginsHint}
               onDelete={() => {
                 if (p.therapist) void startDeleteTherapist(p.therapist);
               }}

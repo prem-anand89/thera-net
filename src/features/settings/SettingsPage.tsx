@@ -5,6 +5,7 @@ import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
+import { atSeatCap } from '@/domain/seatCap';
 import { ConfirmDialog, Segmented } from '@/components/ui';
 import { CatalogSection, ReferralSourcesCard, type CatalogView } from './CatalogSection';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
@@ -246,6 +247,8 @@ export function SettingsPage() {
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
+  // At the cap an unlinked therapist can't be invited, so they are no reason to land on Team.
+  const seatsFull = atSeatCap(entitlements, entitlements.seatsUsed);
   // Partner revenue share shows on every plan: below the tier with `revenueSplit` its switch is disabled and names the plan
   // that has it (and a clinic that still has partner mode on can turn it off). Billing stays visible but locked:
   // hiding a paid feature is how you get zero upgrades.
@@ -336,10 +339,10 @@ export function SettingsPage() {
   const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
     if (landedOnDefault || therapists === undefined || catalog === undefined) return;
-    setActiveTab(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'general');
+    setActiveTab(unlinkedCount > 0 && !seatsFull ? 'team' : catalogEmpty ? 'services' : 'general');
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
+  }, [landedOnDefault, therapists, catalog, unlinkedCount, seatsFull, catalogEmpty]);
 
   // A link (setup step, closed-days sheet) can change ?tab= or ?card= while Settings is
   // already open; follow it.
@@ -500,12 +503,6 @@ export function SettingsPage() {
                 value={teamView}
                 onChange={setTeamView}
               />
-              {teamView === 'members' && unlinkedCount > 0 && (
-                <div className="rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
-                  {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login.
-                  Open them below and add their email to invite them, so their Workspace isn’t empty.
-                </div>
-              )}
               {teamView === 'members' ? (
                 <Therapists />
               ) : (

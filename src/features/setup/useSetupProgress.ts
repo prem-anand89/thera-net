@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { repos } from '@/services';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useSession } from '@/app/useSession';
+import { atSeatCap } from '@/domain/seatCap';
 import {
   buildSetupSteps,
   completedStepsKey,
@@ -62,7 +63,9 @@ export function useSetupProgress(clinicId: string): SetupState | undefined {
   }
 
   const seatLimited = entitlements.enforcementEnabled && entitlements.maxMembers <= 1;
-  const { therapistsLinked, unlinkedTherapistCount } = therapistSignals(therapists, session?.user?.id, seatLimited);
+  // One login, or every login in use: colleagues without a login stay that way, so only the owner's own row has to be linked.
+  const loginsFull = atSeatCap(entitlements, entitlements.seatsUsed);
+  const { therapistsLinked, unlinkedTherapistCount } = therapistSignals(therapists, session?.user?.id, seatLimited || loginsFull);
   const signals: SetupSignals = {
     clinicProfileSet: Boolean(clinic?.address?.trim()),
     servicesPriced: catalog.length > 0,
@@ -75,7 +78,7 @@ export function useSetupProgress(clinicId: string): SetupState | undefined {
     unlinkedTherapistCount,
     catalogEmpty: catalog.length === 0,
   };
-  const steps = buildSetupSteps(seatLimited, entitlements.can('invoicing'));
+  const steps = buildSetupSteps(seatLimited, entitlements.can('invoicing'), loginsFull);
   const completed = parseCompletedSteps(metaRows.completed);
   const progress = summarizeSetup(steps, signals, completed);
 
