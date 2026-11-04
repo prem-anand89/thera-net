@@ -211,6 +211,16 @@ export function TeamMemberCard({
   );
   const [publicBookableDraft, setPublicBookableDraft] = useState(therapist ? therapist.publicBookable !== false : true);
   const [bookableDraft, setBookableDraft] = useState(therapist ? therapist.active !== false : role !== 'front_desk');
+  // Only an admin chooses: a therapist always treats patients (taking one off the schedule is Deactivate, so an inactive
+  // one stays inactive here), and front desk never does.
+  const treatsDraft =
+    roleDraft === 'front_desk'
+      ? false
+      : roleDraft === 'admin'
+        ? bookableDraft
+        : role === 'therapist' && therapist
+          ? therapist.active !== false
+          : true;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -258,7 +268,7 @@ export function TeamMemberCard({
       }
 
       const isNowFrontDesk = roleDraft === 'front_desk';
-      const shouldBeBookable = !isNowFrontDesk && bookableDraft;
+      const shouldBeBookable = treatsDraft;
 
       if (therapist) {
         // Switching a team member without a login back on needs room in the plan. Refuse here, in plain words, so a
@@ -588,7 +598,7 @@ export function TeamMemberCard({
                   </Field>
                 )}
 
-                {roleDraft !== 'front_desk' && (
+                {roleDraft === 'admin' && (
                   <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 p-3 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="pr-2">
@@ -610,7 +620,7 @@ export function TeamMemberCard({
                   </div>
                 )}
 
-                {bookableDraft && roleDraft !== 'front_desk' && (
+                {treatsDraft && (
                   <>
                     <Field label="Registration no.">
                       <input
@@ -791,11 +801,13 @@ export function AddTeamMemberForm({
     }
   }, [role]);
 
+  // Only an admin login chooses. A therapist treats patients; so does someone added to the schedule without a login.
+  const effectiveBookable = role === 'front_desk' ? false : role === 'admin' && needsLogin ? bookable : true;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return setError('Name is required');
     if (needsLogin && !email.trim()) return setError('Email is required for login');
-    const effectiveBookable = role === 'front_desk' ? false : bookable;
     if (!needsLogin && !effectiveBookable) return setError('Must either need a login or treat patients');
     if (!needsLogin && rosterLocked) return setError(rosterHint);
 
@@ -907,7 +919,7 @@ export function AddTeamMemberForm({
             {rosterHint}
           </p>
         )}
-        {role !== 'front_desk' && (
+        {role === 'admin' && needsLogin && (
           <label className="flex items-start gap-2 text-sm text-[var(--ink)]">
             <input
               type="checkbox"
@@ -927,7 +939,7 @@ export function AddTeamMemberForm({
         <button
           type="submit"
           className={btnPrimary}
-          disabled={busy || (!needsLogin && (role === 'front_desk' || !bookable || rosterLocked))}
+          disabled={busy || (!needsLogin && (!effectiveBookable || rosterLocked))}
         >
           {busy ? 'Adding…' : 'Add member'}
         </button>
