@@ -36,7 +36,6 @@ describe('ShiftCoverageGrid', () => {
         therapists={[therapist]}
         templates={[]}
         approvedAssignments={[]}
-        pendingAssignments={[]}
         clinic={baseClinic}
       />
     );
@@ -52,7 +51,6 @@ describe('ShiftCoverageGrid', () => {
         therapists={[therapist]}
         templates={[]}
         approvedAssignments={[]}
-        pendingAssignments={[]}
         clinic={baseClinic}
       />
     );
@@ -72,7 +70,6 @@ describe('ShiftCoverageGrid', () => {
         therapists={[therapist]}
         templates={[]}
         approvedAssignments={[]}
-        pendingAssignments={[]}
         clinic={baseClinic}
       />
     );
@@ -109,7 +106,6 @@ describe('ShiftCoverageGrid', () => {
         therapists={[customTherapist]}
         templates={[]}
         approvedAssignments={[]}
-        pendingAssignments={[]}
         clinic={baseClinic}
       />
     );

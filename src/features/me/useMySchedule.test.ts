@@ -71,7 +71,7 @@ describe('computeMySchedule', () => {
       templates: [],
       clinic,
     });
-    expect(customSchedule.headline).toBe('Custom hours');
+    expect(customSchedule.headline).toBe('Own hours');
     expect(customSchedule.summary).toBe('Tue, Sat 10–1');
 
     const defaultSchedule = computeMySchedule({
@@ -80,7 +80,7 @@ describe('computeMySchedule', () => {
       templates: [],
       clinic,
     });
-    expect(defaultSchedule.headline).toBe('Clinic default hours');
+    expect(defaultSchedule.headline).toBe('Clinic hours');
     expect(defaultSchedule.summary).toBe('Mon–Sat 9–5');
   });
 

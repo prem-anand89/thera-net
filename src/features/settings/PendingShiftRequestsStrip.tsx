@@ -40,7 +40,7 @@ function summarizePending(
             .join(' & ');
     parts.push(`${formatWeekdays([day])}: ${ranges}`);
   }
-  return `Custom hours — ${parts.join(', ')}`;
+  return `Own hours — ${parts.join(', ')}`;
 }
 
 export function PendingShiftRequestsStrip({

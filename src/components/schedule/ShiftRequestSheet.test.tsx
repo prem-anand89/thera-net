@@ -217,7 +217,7 @@ describe('ShiftRequestSheet', () => {
       />
     );
 
-    expect(screen.getByText('Clinic default hours')).toBeInTheDocument();
+    expect(screen.getByText('Clinic hours')).toBeInTheDocument();
     expect(screen.queryByText(/Request pending:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Declined:/)).not.toBeInTheDocument();
   });

@@ -242,7 +242,7 @@ describe('ShiftAssignmentsSection', () => {
     expect(screen.getAllByText('5 shifts').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('opens assign dialog on clicking Edit next to therapist name', () => {
+  it('opens the person sheet on clicking Edit next to therapist name', () => {
     therapists = [
       { id: 'th1', clinicId: 'c1', name: 'Dr Prem', active: true, updatedAt: '' } as Therapist,
     ];
@@ -267,8 +267,8 @@ describe('ShiftAssignmentsSection', () => {
     const editBtn = screen.getAllByLabelText(/Edit Dr Prem's schedule/i)[0]!;
     fireEvent.click(editBtn);
 
-    // Dialog should be open
-    expect(screen.getByRole('dialog', { name: /Assign shift/i })).toBeInTheDocument();
-    expect(screen.getByText('Assign to 1 therapist')).toBeInTheDocument();
+    // The person sheet opens for Dr Prem
+    expect(screen.getByRole('dialog', { name: 'Working hours · Dr Prem' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Clinic hours' })).toHaveAttribute('aria-checked', 'true');
   });
 });

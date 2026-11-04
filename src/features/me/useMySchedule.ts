@@ -90,7 +90,7 @@ export function computeMySchedule({
 
   if (pendingRows.length > 0) {
     const p = pendingRows[0];
-    let title = 'Custom hours';
+    let title = 'Own hours';
     if (p.shiftTemplateId) {
       const tmpl = templates.find((t) => t.id === p.shiftTemplateId);
       const name = tmpl?.name ?? 'Assigned Shift';
@@ -124,7 +124,7 @@ export function computeMySchedule({
     const pendingSent = pending?.sentAt || '';
     // Show only if decided after the newest pending row was sent (or if no pending request)
     if (!pending || decidedTimestamp > pendingSent) {
-      let title = 'Custom hours';
+      let title = 'Own hours';
       if (d.shiftTemplateId) {
         const tmpl = templates.find((t) => t.id === d.shiftTemplateId);
         const name = tmpl?.name ?? 'Assigned Shift';

@@ -7,7 +7,7 @@ import {
   calculateWeeklyTotal,
   getTemplatePalette,
 } from './shiftUtils';
-import { AssignShiftDialog } from './AssignShiftDialog';
+import { ShiftSheet } from './ShiftSheet';
 import type {
   Clinic,
   ShiftTemplate,
@@ -19,7 +19,6 @@ export type ShiftCoverageGridProps = {
   therapists: Therapist[];
   templates: ShiftTemplate[];
   approvedAssignments: TherapistShiftAssignment[];
-  pendingAssignments: TherapistShiftAssignment[];
   clinic: Clinic;
 };
 
@@ -27,7 +26,6 @@ export function ShiftCoverageGrid({
   therapists,
   templates,
   approvedAssignments,
-  pendingAssignments,
   clinic,
 }: ShiftCoverageGridProps) {
   const activeTherapists = useMemo(
@@ -372,18 +370,11 @@ export function ShiftCoverageGrid({
         )}
       </div>
 
-      {/* Assign Shift Dialog */}
       {dialogState.isOpen && (
-        <AssignShiftDialog
-          key={dialogState.therapistId ?? 'all'}
-          isOpen={dialogState.isOpen}
+        <ShiftSheet
+          open
+          therapistId={dialogState.therapistId ?? null}
           onClose={() => setDialogState({ isOpen: false })}
-          initialTherapistId={dialogState.therapistId}
-          therapists={activeTherapists}
-          templates={templates}
-          approvedAssignments={approvedAssignments}
-          pendingAssignments={pendingAssignments}
-          clinic={clinic}
         />
       )}
     </div>

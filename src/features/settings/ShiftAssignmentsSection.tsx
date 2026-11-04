@@ -49,7 +49,6 @@ export function ShiftAssignmentsSection() {
         therapists={activeTherapists}
         templates={templates}
         approvedAssignments={approvedAssignments}
-        pendingAssignments={pendingRequests}
         clinic={clinic}
       />
     </div>

@@ -20,7 +20,7 @@ import { memberOnboardingStatus, MEMBER_ONBOARDING_LABELS, type MemberOnboarding
 import { Field, inputCls, btnPrimary, ErrorNote, SectionCard, ConfirmDialog, InfoTip } from '@/components/ui';
 import { describeSchedule } from './shiftUtils';
 import { countTherapistLinkedRecords } from './therapistLinks';
-import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
+import { ShiftSheet } from './ShiftSheet';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Accent, ACCENT_VARS } from './settingsShared';
 
@@ -450,7 +450,7 @@ export function TeamMemberCard({
                 setShowHoursFlow(true);
               }}
             >
-              Set working hours
+              Edit hours
             </button>
           )}
           
@@ -680,9 +680,9 @@ export function TeamMemberCard({
         )}
 
         {showHoursFlow && therapist && roleDraft !== 'front_desk' && (
-          <SetWorkingHoursFlow
+          <ShiftSheet
             open={showHoursFlow}
-            therapist={therapist}
+            therapistId={therapist.id}
             onClose={() => setShowHoursFlow(false)}
             onSaved={() => onSaved()}
           />

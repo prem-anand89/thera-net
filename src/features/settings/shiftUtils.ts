@@ -282,7 +282,7 @@ export function buildCoverage(
             templates: [],
             customIntervals: intervals,
             label: spanLabel,
-            tooltip: `Custom hours: ${formatted}`,
+            tooltip: `Own hours: ${formatted}`,
             workingMinutes: mins,
           });
         }
@@ -640,7 +640,7 @@ export function formatDayRanges(days: number[]): string {
 
 export type ScheduleDescription = {
   type: 'template' | 'custom' | 'clinic_default' | 'off';
-  headline: string; // 'General Shift (Mon–Fri)' | 'Custom hours' | 'Clinic default hours' | 'No working days'
+  headline: string; // 'General Shift (Mon–Fri)' | 'Own hours' | 'Clinic hours' | 'No working days'
   groups: { days: number[]; label: string }[]; // days Monday-first; label like '9–5' or '9–1 & 2–5'
   summary: string; // one line: first two groups as `${formatDayRanges(days)} ${label}` joined ', ', then ' +N more' if more groups
 };
@@ -714,11 +714,11 @@ export function describeSchedule(
       headline = 'No working days';
     } else {
       type = 'custom';
-      headline = 'Custom hours';
+      headline = 'Own hours';
     }
   } else {
     type = 'clinic_default';
-    headline = 'Clinic default hours';
+    headline = 'Clinic hours';
   }
 
   // Summary

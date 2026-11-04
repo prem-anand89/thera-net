@@ -407,7 +407,7 @@ describe('shiftUtils', () => {
       );
 
       expect(desc.type).toBe('custom');
-      expect(desc.headline).toBe('Custom hours');
+      expect(desc.headline).toBe('Own hours');
       expect(desc.groups).toEqual([
         { days: [2, 6], label: '10–1' },
       ]);
@@ -442,7 +442,7 @@ describe('shiftUtils', () => {
       );
 
       expect(desc.type).toBe('clinic_default');
-      expect(desc.headline).toBe('Clinic default hours');
+      expect(desc.headline).toBe('Clinic hours');
       expect(desc.groups).toEqual([
         { days: [1, 2, 3, 4, 5, 6], label: '9–5' },
       ]);
@@ -509,14 +509,14 @@ describe('shiftUtils', () => {
       );
 
       expect(desc.type).toBe('clinic_default');
-      expect(desc.headline).toBe('Clinic default hours');
+      expect(desc.headline).toBe('Clinic hours');
     });
   });
 });
 
 
 describe('describeSchedule for a clinic that closes at midday', () => {
-  it('says "Clinic default hours" and lists the clinic sessions, not one long block across the closure', () => {
+  it('says "Clinic hours" and lists the clinic sessions, not one long block across the closure', () => {
     const therapist = { workingHours: null };
     const clinic = {
       bookingStartHour: 9,
@@ -526,7 +526,7 @@ describe('describeSchedule for a clinic that closes at midday', () => {
     };
     const plain = describeSchedule(therapist, [], [], { bookingStartHour: 9, bookingEndHour: 20, closedWeekdays: [0] });
     const split = describeSchedule(therapist, [], [], clinic);
-    expect(split.headline).toBe('Clinic default hours');
+    expect(split.headline).toBe('Clinic hours');
     expect(split.summary).not.toBe(plain.summary);
     expect(split.summary).toContain('&');
     expect(plain.summary).not.toContain('&');
