@@ -38,7 +38,6 @@ import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedul
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { AwaitingOpenedStrip, useAwaitingOpening } from '@/components/schedule/AwaitingOpenedStrip';
 import { awaitingMessage } from '@/domain/awaiting';
-import { addDays } from '@/domain/schedule';
 import { lastTenDigits } from '@/domain/phoneDigits';
 import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -862,7 +861,7 @@ export function WorkspacePage() {
       <AddToWaitlistSheet
         open={addAwaitingOpen}
         clinicId={clinic.id}
-        initialDate={addDays(toLocalDateStr(new Date()), 1)}
+        initialDate={toLocalDateStr(new Date())}
         therapists={(workspaceTherapists ?? []).filter((t) => t.active !== false)}
         onClose={() => setAddAwaitingOpen(false)}
       />
