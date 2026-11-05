@@ -36,6 +36,8 @@ export interface OpenPackageRow {
   patientId: UUID;
   patientName: string;
   phone: string | null;
+  /** Asked not to be messaged: no "Send reminder". */
+  doNotMessage?: boolean;
   mrno: string;
   serviceName: string;
   sessionsLogged: number;
@@ -300,6 +302,8 @@ export interface SingleVisitPatientRow {
   noReturnReasonId: UUID | null;
   noReturnReasonName: string | null;
   noReturnReasonClosed: boolean;
+  /** Asked not to be messaged: no "Send reminder". */
+  doNotMessage?: boolean;
 }
 
 /** Groups a clinic-wide visit list by patient, skipping deleted rows. */
@@ -363,6 +367,7 @@ export function createDashboardService(repos: Repos) {
             patientId: g.patientId,
             patientName: patient?.name ?? 'Unknown',
             phone: patient?.phone ?? null,
+            doNotMessage: patient?.doNotMessage,
             mrno: patient?.mrno ?? '—',
             serviceName: serviceName.get(g.serviceCatalogId) ?? 'Unknown',
             sessionsLogged: g.sessionsLogged,
@@ -1066,6 +1071,7 @@ export function createDashboardService(repos: Repos) {
           noReturnReasonId: reason?.id ?? null,
           noReturnReasonName: reason?.name ?? null,
           noReturnReasonClosed: reason?.isClosed ?? false,
+          doNotMessage: patient?.doNotMessage,
         });
       }
       return rows.sort((a, b) => b.daysSince - a.daysSince);

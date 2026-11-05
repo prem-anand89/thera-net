@@ -279,7 +279,7 @@ export function WorkspacePage() {
   // (scope.scopeTherapistId already resolves to undefined for the
   // clinic-wide roles — see useWorkspaceScope's own doc comment).
   const workspaceAppointments = useLiveQuery(
-    // Loaded even with patient comms off: a walk-in started from "Start a note
+    // A walk-in started from "Start a note
     // first" is an arrived appointment, and it has to be completable here.
     () => repos.appointments.listByClinic(clinic.id),
     [clinic.id]
@@ -324,16 +324,8 @@ export function WorkspacePage() {
         (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
       );
     });
-    // Patient comms off: no bookings to show, only visits in progress.
-    const todays = clinic.enablePatientComms
-      ? expectedToday
-      : expectedToday.filter((a) => a.status === 'arrived' && !a.visitId);
-    return [...olderOpen, ...todays];
-  }, [workspaceAppointments, expectedToday, scope.scopeTherapistId, clinic.enablePatientComms]);
-  const toCompleteCount = todayAppointments.filter((a) => a.status === 'arrived' && !a.visitId).length;
-  // The Appointments card: always with patient comms; otherwise only while a
-  // walk-in visit is in progress.
-  const showAppointmentsCard = Boolean(clinic.enablePatientComms) || toCompleteCount > 0;
+    return [...olderOpen, ...expectedToday];
+  }, [workspaceAppointments, expectedToday, scope.scopeTherapistId]);
   // "Next up": the first still-to-come appointment (15 minutes' grace for late arrivals).
   const nextUpId = expectedToday.find(
     (a) => (a.status === 'confirmed' || a.status === 'rescheduled') && minutesOfDay(a.scheduledAt) >= nowMinutes - 15
@@ -367,10 +359,8 @@ export function WorkspacePage() {
   // Today → Appointments for admin / front desk, oldest first.
   const appointmentRequests = useLiveQuery(
     () =>
-      canManageBookings && clinic.enablePatientComms
-        ? repos.appointmentRequests.listByClinic(clinic.id)
-        : undefined,
-    [clinic.id, clinic.enablePatientComms, canManageBookings]
+      canManageBookings ? repos.appointmentRequests.listByClinic(clinic.id) : undefined,
+    [clinic.id, canManageBookings]
   );
   const pendingRequests = useMemo(
     () =>
@@ -882,7 +872,7 @@ export function WorkspacePage() {
             </span>
           </div>
           <div className="flex shrink-0 gap-2">
-            {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (
+            {(canManageBookings || scope.myTherapistId) && (
               <button type="button" className={`${btnSecondary} hidden gap-1.5 sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
                 <IconBook className="h-4 w-4" />
                 Book
@@ -953,7 +943,6 @@ export function WorkspacePage() {
         <SplitChangeBanner clinicId={clinic.id} changedAt={clinic.lastSplitChangeAt} />
       )}
 
-      {showAppointmentsCard && (
         <SectionCard
           title={
             appointmentsLeft > 0
@@ -1015,7 +1004,6 @@ export function WorkspacePage() {
             }
           />
         </SectionCard>
-      )}
 
       <SectionCard
         title={today ? `Today's visits · ${today.visits.length}` : "Today's visits"}
@@ -1183,7 +1171,6 @@ export function WorkspacePage() {
             data={followUp}
             pageSize={followPageSize}
             clinicName={clinic.name}
-            canMessage={Boolean(clinic.enablePatientComms)}
             showTherapist={scope.isClinicWideView}
             therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
             onBook={setBookingFollowUp}
@@ -1277,7 +1264,7 @@ export function WorkspacePage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {p.stale && clinic.enablePatientComms && (
+                      {p.stale && !p.doNotMessage && (
                         <button
                           type="button"
                           className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
@@ -1353,7 +1340,7 @@ export function WorkspacePage() {
                       </td>
                       <td className={td}>
                         <div className="flex items-center gap-2">
-                          {p.stale && clinic.enablePatientComms && (
+                          {p.stale && !p.doNotMessage && (
                             <button
                               type="button"
                               className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"

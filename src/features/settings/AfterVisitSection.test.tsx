@@ -19,7 +19,7 @@ import { AfterVisitSection } from './ClinicSections';
 import { PatientCommsSection } from './BookingSections';
 
 beforeEach(() => {
-  clinicRef.current = { id: 'c1', name: 'Physio Clinic', clinicalDocsEnabled: false, enablePatientComms: false, googleReviewUrl: null, bookingSlug: 'physio' };
+  clinicRef.current = { id: 'c1', name: 'Physio Clinic', clinicalDocsEnabled: false, enablePatientComms: false, googleReviewUrl: null, bookingSlug: 'physio', onlineBookingEnabled: true };
   put.mockClear();
 });
 afterEach(cleanup);
@@ -84,11 +84,34 @@ describe('Booking link', () => {
     expect(put.mock.calls[0][0]).toMatchObject({ bookingSlug: 'physio-care' });
   });
 
-  it('clearing an existing link asks too', () => {
+  it('with booking on, an empty link cannot be saved: it says to add one or turn booking off', () => {
     render(<PatientCommsSection onDirtyChange={vi.fn()} />);
     fireEvent.change(linkInput(), { target: { value: '' } });
+    expect(screen.getByText('Add a booking link, or turn online booking off.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('turning booking off asks first, hides the link and keeps it for next time', async () => {
+    render(<PatientCommsSection onDirtyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('switch', { name: 'Let patients book online' }));
+    expect(screen.queryByPlaceholderText('my-clinic-name')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('Turn off the booking link?');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Turn off online booking?');
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({ onlineBookingEnabled: false, bookingSlug: 'physio' });
+  });
+
+  it('turning booking on is its own switch and never touches feedback', async () => {
+    clinicRef.current = { ...clinicRef.current, onlineBookingEnabled: false, enablePatientComms: false };
+    render(<PatientCommsSection onDirtyChange={vi.fn()} />);
+    expect(screen.queryByPlaceholderText('my-clinic-name')).toBeNull();
+    fireEvent.click(screen.getByRole('switch', { name: 'Let patients book online' }));
+    expect(linkInput()).toHaveValue('physio');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(put.mock.calls[0][0]).toMatchObject({ onlineBookingEnabled: true, enablePatientComms: false });
   });
 
   it('setting a link for the first time saves without asking', async () => {

@@ -137,12 +137,13 @@ export interface Clinic {
   /** Clinic-local hour (0-23) the agenda email goes out. Absent = 20 (8 pm). */
   agendaHour?: number;
   /**
-   * Patient communications module (booking requests, feedback capture,
-   * Google review nudges, re-engagement reminders). Off by default — see
-   * docs/HANDOFF-patient-comms.md. Optional so older cached rows default
-   * to false (module doesn't exist for them yet).
+   * "Ask patients for feedback": feedback requests and Google review nudges, nothing else. Off by default. The
+   * column keeps its old name; it no longer controls bookings, the Appointments card or staff WhatsApp messages.
+   * Optional so older cached rows default to false.
    */
   enablePatientComms?: boolean;
+  /** The public booking page (`/book/:slug`) is open. Off by default; the public booking RPCs check it. */
+  onlineBookingEnabled?: boolean;
   /** Where "Leave a Google review" / "Ask for a Google review" point to —
    *  unset means neither ever shows, even for a 5* response (Slice 3 of
    *  the same doc). Plain URL, not validated beyond what the Settings

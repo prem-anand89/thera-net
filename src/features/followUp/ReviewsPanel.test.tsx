@@ -35,7 +35,6 @@ function setup(over: Partial<Parameters<typeof ReviewsPanel>[0]> = {}) {
         noShows: [{ appointment: noShow, patient: patient({ id: 'p2', name: 'Meera', phone: '9811111111', followUpOn: null }) }],
       }}
       clinicName="BM Physio"
-      canMessage
       therapistNameFor={(id) => (id === 't1' ? 'Dr Asha' : null)}
       onBook={onBook}
       {...over}
@@ -135,8 +134,4 @@ describe('ReviewsPanel', () => {
     expect(screen.queryByText(/Showing/)).toBeNull();
   });
 
-  it('hides Message when the clinic has patient messaging off', () => {
-    setup({ canMessage: false });
-    expect(screen.queryByRole('button', { name: 'Message patient' })).toBeNull();
-  });
 });

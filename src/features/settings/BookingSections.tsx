@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { type Clinic, type UUID } from '@/domain/types';
 import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
-import { useClinicSectionForm, SectionSaveBar } from './settingsShared';
+import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
 
-type PatientCommsFields = Pick<Clinic, 'bookingSlug'>;
+type PatientCommsFields = Pick<Clinic, 'bookingSlug' | 'onlineBookingEnabled'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
@@ -12,8 +12,8 @@ type PatientCommsFields = Pick<Clinic, 'bookingSlug'>;
 const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /**
- * The public booking page: the booking link (slug) patients use to request an appointment, plus the optional
- * WhatsApp Business sub-block. The feedback switch and Google review link now live in General → After a visit.
+ * The public booking page: its own on/off switch and the booking link (slug) patients use to request an appointment,
+ * plus the optional WhatsApp Business sub-block. Switching off keeps the link, so switching back on restores it. The feedback switch and Google review link now live in General → After a visit.
  */
 export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const clinic = useClinic();
@@ -21,6 +21,7 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
     useClinicSectionForm<PatientCommsFields>(
       (c) => ({
         bookingSlug: c.bookingSlug ?? null,
+        onlineBookingEnabled: c.onlineBookingEnabled ?? false,
       }),
       _onDirtyChange
     );
@@ -28,9 +29,12 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
   // Changing or clearing a link that already exists breaks the old one for anyone who has it, so it asks first.
   // Setting a link for the first time just saves.
   const [confirmingLink, setConfirmingLink] = useState(false);
-  const linkChanges = Boolean(clinic.bookingSlug) && (form.bookingSlug ?? null) !== clinic.bookingSlug;
+  const bookingOn = form.onlineBookingEnabled ?? false;
+  const turningOff = Boolean(clinic.onlineBookingEnabled) && !bookingOn;
+  const linkChanges = bookingOn && Boolean(clinic.bookingSlug) && (form.bookingSlug ?? null) !== clinic.bookingSlug;
   const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
-  const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug as string);
+  const slugInvalid = bookingOn && !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug as string);
+  const slugMissing = bookingOn && !form.bookingSlug;
 
   async function copyBookingUrl() {
     if (!bookingUrl) return;
@@ -50,12 +54,19 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
         title="Online booking page"
       >
         <fieldset disabled={busy} className="contents">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SwitchRow
+            label="Let patients book online"
+            hint="Patients can request an appointment from your booking link. You confirm each request."
+            checked={bookingOn}
+            onChange={(v) => set({ onlineBookingEnabled: v })}
+          />
+          {bookingOn && (
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={
                 <>
                   Booking link
-                  <InfoTip text="A short web address patients use to request an appointment — safe to put on Google, your website, or social media. Front desk confirms each request into a scheduled appointment; there's no live slot picker yet. Leave blank to keep public booking off." />
+                  <InfoTip text="A short web address patients use to request an appointment — safe to put on Google, your website, or social media. Front desk confirms each request into a scheduled appointment; there's no live slot picker yet." />
                 </>
               }
             >
@@ -90,25 +101,30 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
               </div>
             )}
           </div>
+          )}
         </fieldset>
         {showSaveBar && (
           <SectionSaveBar
             dirty={dirty}
             saved={saved}
             busy={busy}
-            onSave={() => (linkChanges ? setConfirmingLink(true) : void save())}
+            onSave={() => (linkChanges || turningOff ? setConfirmingLink(true) : void save())}
             onCancel={() => {
               cancel();
             }}
-            error={slugInvalid ? 'Fix the booking link before saving.' : error}
-            saveDisabled={slugInvalid}
+            error={slugInvalid ? 'Fix the booking link before saving.' : slugMissing ? 'Add a booking link, or turn online booking off.' : error}
+            saveDisabled={slugInvalid || slugMissing}
           />
         )}
         <ConfirmDialog
           open={confirmingLink}
-          title={form.bookingSlug ? 'Change the booking link?' : 'Turn off the booking link?'}
-          message="Anyone using the old link will no longer reach your booking page."
-          confirmLabel={form.bookingSlug ? 'Change link' : 'Turn off link'}
+          title={turningOff ? 'Turn off online booking?' : 'Change the booking link?'}
+          message={
+            turningOff
+              ? 'Anyone using your link will see that the page is not available. Requests you already have stay on Workspace.'
+              : 'Anyone using the old link will no longer reach your booking page.'
+          }
+          confirmLabel={turningOff ? 'Turn off' : 'Change link'}
           onCancel={() => setConfirmingLink(false)}
           onConfirm={() => {
             setConfirmingLink(false);

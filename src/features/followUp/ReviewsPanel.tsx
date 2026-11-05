@@ -42,7 +42,6 @@ export function ReviewsPanel({
   data,
   pageSize = 5,
   clinicName,
-  canMessage,
   therapistNameFor,
   showTherapist = true,
   onBook,
@@ -52,7 +51,6 @@ export function ReviewsPanel({
   pageSize?: number;
   clinicName: string;
   /** The clinic has patient messaging on. */
-  canMessage: boolean;
   therapistNameFor: (id: UUID | null) => string | null;
   /** False for a therapist's own list: every row would repeat their own name. */
   showTherapist?: boolean;
@@ -91,7 +89,6 @@ export function ReviewsPanel({
     therapistId: UUID | null,
     date: string
   ) => {
-    if (!canMessage) return null;
     const blocked = Boolean(patient.doNotMessage) || !patient.phone;
     const sent = wasMessagedToday(patient.id, today);
     return (

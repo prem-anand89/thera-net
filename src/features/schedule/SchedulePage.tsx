@@ -282,7 +282,7 @@ export function SchedulePage() {
         isAdmin &&
         (!clinic.enablePatientComms ? (
           <p className="text-sm text-[var(--muted)]">
-            Patient communications is off. Turn it on in Settings to collect feedback.
+            Feedback is off. Turn on &ldquo;Ask patients for feedback&rdquo; in Settings → General to collect it.
           </p>
         ) : (
           <SectionCard

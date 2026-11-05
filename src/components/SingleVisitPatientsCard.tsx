@@ -16,7 +16,6 @@ export interface SingleVisitPatientsCardProps {
   onSetPatientReason: (patientId: string, reasonId: string) => Promise<void>;
   onToggleReasonActive: (item: NoReturnReasonItem) => Promise<void>;
   onAddReason: (name: string, isClosed: boolean) => Promise<void>;
-  enablePatientComms?: boolean;
   clinicId: string;
   clinicName: string;
   sectionRefCallback?: (el: HTMLDivElement | null) => void;
@@ -32,7 +31,6 @@ export function SingleVisitPatientsCard({
   onSetPatientReason,
   onToggleReasonActive,
   onAddReason,
-  enablePatientComms = false,
   clinicId,
   clinicName,
   sectionRefCallback,
@@ -504,7 +502,7 @@ export function SingleVisitPatientsCard({
                             <span className="text-xs text-[var(--muted)]">No phone</span>
                           )}
 
-                          {enablePatientComms && p.phone && (
+                          {!p.doNotMessage && p.phone && (
                             <button
                               type="button"
                               className="rounded-full bg-[var(--teal-light)] px-2.5 py-1 text-xs font-semibold text-[var(--teal-strong)] hover:bg-[var(--teal)] hover:text-white transition-colors"
@@ -611,7 +609,7 @@ export function SingleVisitPatientsCard({
                         </div>
                       )}
 
-                      {enablePatientComms && p.phone && (
+                      {!p.doNotMessage && p.phone && (
                         <button
                           type="button"
                           className="flex-1 min-h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[var(--teal-light)] px-3 py-1.5 text-xs font-semibold text-[var(--teal-strong)] shadow-2xs hover:bg-[var(--teal)] hover:text-white active:bg-[var(--teal-strong)] active:text-white transition-colors whitespace-nowrap cursor-pointer"

@@ -668,7 +668,6 @@ export function ReportsOverviewPage() {
               updatedAt: new Date().toISOString(),
             });
           }}
-          enablePatientComms={clinic.enablePatientComms}
           clinicId={clinic.id}
           clinicName={clinic.name}
           expanded={singleVisitExpanded}

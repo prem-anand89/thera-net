@@ -827,12 +827,9 @@ configures it in Settings with a genuine Meta phone number ID, access
 token, and at least one approved template name; until then every send
 still falls through to the existing share sheet, unchanged.
 
-- **`clinics.enable_patient_comms`** — module gate, off by default, same
-  pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
-  refuse to resolve when a clinic hasn't turned this on. Toggled from
-  Settings → **General → After a visit** (the "Ask patients for feedback" switch; admin-only —
-  just the on/off switch for now; slug, Google review URL, message
-  templates, and WhatsApp Business fields arrive with later phases).
+- **`clinics.enable_patient_comms`** — feedback only, off by default: Settings → **General → After a visit** ("Ask patients for feedback"). It controls feedback requests, the feedback token routes and Google review nudges. The column keeps its old name.
+- **`clinics.online_booking_enabled`** — the public booking page, off by default: Settings → **Schedule & Booking → Online booking page** ("Let patients book online"). The five public RPCs (`get_booking_availability`, `get_booking_clinic_info`, `get_booking_clinic_name`, `list_booking_therapists`, `submit_appointment_request`) check it. Switching on needs a booking link; switching off asks first and keeps the link. Migration `20261105110000` backfilled it from `enable_patient_comms`, so no public page changed that day.
+- **Neither switch gates the app's core:** the Workspace Appointments card, Book buttons, booking requests and staff WhatsApp messages (reminders, follow-ups) show for every clinic. `patients.do_not_message` hides the reminder buttons and disables "Message patient".
 - **`patients.do_not_message`** — opt-out flag, staff-settable, no automated
   detection. **Not actually checked anywhere client-side** — every send
   action (share-sheet and the Phase 9 Business API path alike) fires
@@ -994,7 +991,7 @@ still falls through to the existing share sheet, unchanged.
   - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s where
     `stale` is already `true`, in Workspace's Packages section at the bottom
     of the page (mobile card + desktop table; Stale filter). Ledger no longer
-    duplicates a separate follow-up list. Gated on `clinic.enablePatientComms`.
+    duplicates a separate follow-up list. Hidden for a patient with `do_not_message`.
   - **Single-visit patients** — a "Send reminder" button next to the
     existing `tel:` call link on Reports' single-visit-patients list
     (`dashboardService.singleVisitPatients`), gated the same way plus
@@ -1009,7 +1006,7 @@ still falls through to the existing share sheet, unchanged.
     patient's own `visitStatsByPatient` entry is stale
     (`isStale(lastVisitOn)`, the same `STALE_PACKAGE_DAYS` threshold as
     the package follow-up queue) and they have a phone on file, gated on
-    `clinic.enablePatientComms` same as everywhere else. Lets front desk
+    `do_not_message`. Lets front desk
     nudge a patient they're already looking at without a detour through
     Reports; package-specific wording (`sendStalePackageReminder`) stays
     Ledger/Workspace-only since this view doesn't carry a per-patient
@@ -1037,7 +1034,7 @@ still falls through to the existing share sheet, unchanged.
   staff should act on.
 - **"Remind to pay" (Invoices page)** — a seventh `message_log` kind,
   `payment_reminder`, alongside a "Remind to pay" action next to "Record
-  payment" on any outstanding invoice, gated on `clinic.enablePatientComms`
+  payment" on any outstanding invoice
   same as the reminders above. Unlike those, this is staff-initiated on a
   specific invoice rather than driven by a staleness signal, so
   `feedbackService.sendPaymentReminder()` takes the amount due and invoice
@@ -1289,7 +1286,7 @@ still falls through to the existing share sheet, unchanged.
     (phone stays editable — some patients predate having one on file) and
     defaults Therapist to whoever ran their last visit, since "book with
     the same therapist" is the common case. Gated on
-    `clinic.enablePatientComms` **and** admin-or-front_desk (`canBook` in
+    admin-or-front_desk (`canBook` in
     `PatientsPage.tsx`) — the RPC itself rejects any other role, so the
     role check isn't optional the way the comms-flag check is; a plain
     therapist never sees the button at all, same as Requests → Bookings'
@@ -3011,7 +3008,7 @@ Team's Invite form locks (with the same informational-only copy) once
   - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s where
     `stale` is already `true`, in Workspace's Packages section at the bottom
     of the page (mobile card + desktop table; Stale filter). Ledger no longer
-    duplicates a separate follow-up list. Gated on `clinic.enablePatientComms`.
+    duplicates a separate follow-up list. Hidden for a patient with `do_not_message`.
   - **Single-visit patients** — a "Send reminder" button next to the
     existing `tel:` call link on Reports' single-visit-patients list
     (`dashboardService.singleVisitPatients`), gated the same way plus
@@ -3026,7 +3023,7 @@ Team's Invite form locks (with the same informational-only copy) once
     patient's own `visitStatsByPatient` entry is stale
     (`isStale(lastVisitOn)`, the same `STALE_PACKAGE_DAYS` threshold as
     the package follow-up queue) and they have a phone on file, gated on
-    `clinic.enablePatientComms` same as everywhere else. Lets front desk
+    `do_not_message`. Lets front desk
     nudge a patient they're already looking at without a detour through
     Reports; package-specific wording (`sendStalePackageReminder`) stays
     Ledger/Workspace-only since this view doesn't carry a per-patient
@@ -3054,7 +3051,7 @@ Team's Invite form locks (with the same informational-only copy) once
   staff should act on.
 - **"Remind to pay" (Invoices page)** — a seventh `message_log` kind,
   `payment_reminder`, alongside a "Remind to pay" action next to "Record
-  payment" on any outstanding invoice, gated on `clinic.enablePatientComms`
+  payment" on any outstanding invoice
   same as the reminders above. Unlike those, this is staff-initiated on a
   specific invoice rather than driven by a staleness signal, so
   `feedbackService.sendPaymentReminder()` takes the amount due and invoice
@@ -3297,7 +3294,7 @@ Team's Invite form locks (with the same informational-only copy) once
     (phone stays editable — some patients predate having one on file) and
     defaults Therapist to whoever ran their last visit, since "book with
     the same therapist" is the common case. Gated on
-    `clinic.enablePatientComms` **and** admin-or-front_desk (`canBook` in
+    admin-or-front_desk (`canBook` in
     `PatientsPage.tsx`) — the RPC itself rejects any other role, so the
     role check isn't optional the way the comms-flag check is; a plain
     therapist never sees the button at all, same as Requests → Bookings'

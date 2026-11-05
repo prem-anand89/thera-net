@@ -79,7 +79,7 @@ export function PatientsList() {
   // Requests → Bookings' own "New booking" card is gated on
   // (`canSeeBookings` there). Without this, a therapist saw a live-looking
   // Book button that always failed with "Not authorized."
-  const canBook = clinic.enablePatientComms && (isAdmin || isFrontDesk);
+  const canBook = isAdmin || isFrontDesk;
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<'all' | 'mine'>('all');
   const [showHidden, setShowHidden] = useState(false);
@@ -483,7 +483,7 @@ export function PatientsList() {
                   onHide={() => void hide(p)}
                   onBook={canBook ? () => setBooking(p) : undefined}
                   onRemind={
-                    clinic.enablePatientComms &&
+                    !p.doNotMessage &&
                     p.phone &&
                     visitStatsByPatient.get(p.id) &&
                     isStale(visitStatsByPatient.get(p.id)!.lastVisitOn)
@@ -649,7 +649,7 @@ export function PatientsList() {
                               queue (STALE_PACKAGE_DAYS) — no visits yet
                               never qualifies, there's nothing to follow up
                               on. */}
-                          {clinic.enablePatientComms &&
+                          {!p.doNotMessage &&
                             p.phone &&
                             stats &&
                             isStale(stats.lastVisitOn) && (
@@ -775,11 +775,10 @@ function PatientCard({
   therapistName: Map<string, string>;
   onEdit: () => void;
   onHide: () => void;
-  /** Omitted (not just a no-op) when clinic.enablePatientComms is off,
-   *  so the button itself doesn't show — same gate as Requests → Bookings. */
+  /** Omitted (not just a no-op) when this person can't book, so the button itself doesn't show. */
   onBook?: () => void;
-  /** Omitted when the patient isn't stale (no visits, or last one within
-   *  STALE_PACKAGE_DAYS) or has no phone on file — same gating as onBook. */
+  /** Omitted when the patient isn't stale (no visits, or last one within STALE_PACKAGE_DAYS), has no phone on file,
+   *  or asked not to be messaged. */
   onRemind?: () => void;
   referringSources: ReferringSourceItem[];
 }) {

@@ -343,6 +343,14 @@ describe('dashboardService.openPackages', () => {
     expect(rows.find((r) => r.packageGroupId === 'g2')).toMatchObject({ expiresOn: null, expiry: null, stale: true });
   });
 
+  it('carries the patient\'s do-not-message flag, so the reminder button can stay away', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 3 }));
+    const patient = await fake.repos.patients.get('pat-1');
+    patient!.doNotMessage = true;
+    const rows = await createDashboardService(fake.repos).openPackages('clinic-1');
+    expect(rows[0].doNotMessage).toBe(true);
+  });
+
   it('excludes a completed package', async () => {
     fake.visits.set(
       'v1',

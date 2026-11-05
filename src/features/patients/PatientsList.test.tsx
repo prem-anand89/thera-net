@@ -22,7 +22,6 @@ vi.mock('@/app/clinicContext', () => ({
     id: 'c1',
     name: 'Test Clinic',
     fyStartMonth: 4,
-    enablePatientComms: false,
   }),
 }));
 
