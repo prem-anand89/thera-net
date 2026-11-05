@@ -2799,8 +2799,7 @@ the sync engine's generic per-table pull (`ALL_SYNCED_TABLES` in
 `src/lib/db.ts`) — that loop assumes every table has an `id` primary key,
 and this one is keyed by `clinicId`. Instead the hook fetches it directly
 via Supabase, exactly mirroring `useClinicRole`'s pattern: cached as JSON in
-Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline,
-a fresh online fetch always wins, and an unresolved fetch never flashes the
+Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline. Plan updates from Studio reach open browsers via the sync engine's realtime channel into `db.meta`; `useEntitlements` uses whichever of the cached and the freshly fetched plan has the later `updatedAt` (`newestPlan`; a tie goes to the fetched plan), so changes apply without a reload, a stale cache can't hide a newer fetch and a failed cache write can't freeze an old plan. All changes to `clinic_plans` are audited in `platform_admin.clinic_plans_audit`. An unresolved fetch never flashes the
 least-restrictive default (`lite`/1 seat/50 visits — the same fail-closed
 default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
 returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
@@ -4808,8 +4807,7 @@ the sync engine's generic per-table pull (`ALL_SYNCED_TABLES` in
 `src/lib/db.ts`) — that loop assumes every table has an `id` primary key,
 and this one is keyed by `clinicId`. Instead the hook fetches it directly
 via Supabase, exactly mirroring `useClinicRole`'s pattern: cached as JSON in
-Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline,
-a fresh online fetch always wins, and an unresolved fetch never flashes the
+Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline. Plan updates from Studio reach open browsers via the sync engine's realtime channel into `db.meta`; `useEntitlements` uses whichever of the cached and the freshly fetched plan has the later `updatedAt` (`newestPlan`; a tie goes to the fetched plan), so changes apply without a reload, a stale cache can't hide a newer fetch and a failed cache write can't freeze an old plan. All changes to `clinic_plans` are audited in `platform_admin.clinic_plans_audit`. An unresolved fetch never flashes the
 least-restrictive default (`lite`/1 seat/50 visits — the same fail-closed
 default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
 returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
@@ -5116,6 +5114,78 @@ re-blocks the same clinic with no other change.
 One row per subscribed browser (`endpoint` unique), keyed to `auth.users(id)`. Users can insert, update, and delete only their own rows; reads for sending use the service role. Written by the browser on enable, deleted on disable and sign-out, and pruned by `send-push` on 404/410.
 
 Triggers `appointments_push`, `appointment_requests_push`, and `feedback_responses_push` call `notify_push()`, which posts `{kind, clinic_id, row_id}` to `send-push`.
+
+---
+
+## Platform Administration & Subscriptions (Studio)
+
+Founder operations and subscription tracking run entirely through Supabase Studio against a dedicated `platform_admin` schema.
+
+### Schema Isolation & Security
+- `platform_admin` is strictly isolated: privileges are revoked from `public`, `anon`, `authenticated`, and `service_role`. Only `postgres` (used in Supabase Studio SQL editor / Table editor) has access.
+- It is never added to the API's exposed schemas. Authenticated requests with `Accept-Profile: platform_admin` are refused outright (HTTP 406 `PGRST106`).
+
+### Tables
+1. **`platform_admin.subscription_payments`** — Payment ledger.
+   - Holds: `id`, `clinic_id`, `clinic_name`, `plan_tier` (`lite`, `solo`, `clinic`, `clinic_plus`), `amount_paise`, `payment_method` (`upi`, `card`, `bank_transfer`, `cash`, `waived`), `payment_reference`, `paid_on`, `valid_until`, `duration_days`, `notes`, `voided_at`, `void_reason`, `created_at`, `created_by`.
+   - Payment history outlives the clinic: no foreign key constraint to `public.clinics`, snapshots clinic name at time of payment.
+   - Index on `(clinic_id, valid_until desc) where voided_at is null`.
+   - Invariant: wrong payments are voided, never deleted or edited (`check ((voided_at is null) = (void_reason is null))`).
+
+2. **`platform_admin.clinic_plans_audit`** — Audit log of every `clinic_plans` change.
+   - Trigger `clinic_plans_audit_log` (`AFTER INSERT OR UPDATE OR DELETE ON public.clinic_plans`) fires `platform_admin.log_clinic_plan_change()`.
+   - Records: `clinic_id`, `operation` (INSERT/UPDATE/DELETE), `old_tier`, `new_tier`, `old_status`, `new_status`, `old_limits` (jsonb), `new_limits` (jsonb), `changed_at`, `changed_by_user` (`auth.uid()`, null from Studio), `changed_by_role` (`session_user`).
+
+### Views
+1. **`platform_admin.clinics_overview`** — Full picture of every clinic, usage, and renewal status.
+   - Includes: `clinic_id`, `clinic_name`, `clinic_phone`, `clinic_email`, `onboarding_completed_at`, `admin_email`, `plan_tier`, `plan_status`, `visits_this_month`, `visit_cap_per_month`, `near_visit_cap` (>=80%), `team_seats_used`, `max_team_seats`, `roster_therapists_used`, `max_roster_therapists`, `last_paid_on`, `valid_until`, `days_remaining`, `renewal_status`, `latest_visit_date`, `latest_visit_change`.
+   - Calculated relative to each clinic's own timezone (`clinics.timezone`).
+   - Renewal statuses:
+     - `exempt_unpaid`: Clinic with no payments recorded. Never counts as overdue; exempt until first payment.
+     - `active`: More than 7 days remaining (`valid_until - today > 7`).
+     - `renewal_due_soon`: Within 7 days of expiry (`0 <= valid_until - today <= 7`).
+     - `in_grace_period`: Up to 7 days past expiry (`-7 <= valid_until - today < 0`).
+     - `overdue`: More than 7 days past expiry (`valid_until - today < -7`).
+
+2. **`platform_admin.renewals_due`** — Filtered view of paying clinics needing attention (`renewal_status in ('renewal_due_soon', 'in_grace_period', 'overdue')`), ordered by `days_remaining`.
+
+### Operating Functions
+- **`platform_admin.clinic_today(p_clinic_id uuid) returns date`**: Current date in the clinic's local timezone.
+- **`platform_admin.set_clinic_tier(p_clinic_id, p_tier, p_status default null, p_preserve_custom_limits default true)`**: Updates `clinic_plans`. Custom limits (differing from tier defaults) are preserved unless `p_preserve_custom_limits` is false; standard limits adjust to the new tier defaults. If `p_status` is null, the existing status is preserved.
+- **`platform_admin.record_subscription_payment(p_clinic_id, p_tier, p_amount_paise, p_payment_method, p_payment_reference, p_duration_days default 30, p_notes default null)`**: Inserts ledger entry, extends from existing unexpired validity if currently active, and atomically sets plan to `active` via `set_clinic_tier`.
+- **`platform_admin.void_subscription_payment(p_payment_id, p_reason)`**: Voids an erroneous payment with required reason; validity falls back to previous valid payment.
+- **`platform_admin.lock_overdue_clinics(p_dry_run default true)`**: Previews or locks overdue clinics past the 7-day grace period to `read_only`. Deliberate manual action only — no automated cron jobs lock clinics.
+
+### Realtime Path & Client Synchronization
+- Plan changes reach open browsers without a page reload through the sync engine's single existing realtime channel (`src/sync/engine.ts`).
+- `engine.ts` listens for `postgres_changes` on `public.clinic_plans` and invokes `applyPlanChange` (`src/sync/planCache.ts`), which writes the updated plan directly to Dexie's `db.meta` table (`plan:${clinicId}`).
+- `useEntitlements` reads `db.meta` via `useLiveQuery` and uses whichever of the cached and the freshly fetched plan has the later `updatedAt` (`newestPlan`; a tie goes to the fetched plan), so a stale cache can't hide a newer fetch and a failed cache write can't freeze an old plan.
+- **Rule:** Never open a Realtime channel inside `useEntitlements` (it has 11 call sites). The sync engine's single channel manages all subscriptions, and offline fallback is guaranteed by the Dexie cache.
+
+### Founder Procedures (Studio SQL Editor)
+```sql
+-- 1. Review all clinics and recent activity
+select * from platform_admin.clinics_overview order by latest_visit_change desc nulls last;
+
+-- 2. Check paying clinics due for renewal or overdue
+select * from platform_admin.renewals_due;
+
+-- 3. Upgrade or change a clinic's tier manually
+select platform_admin.set_clinic_tier('<clinic id>', 'solo');
+
+-- 4. Record a subscription payment (automatically activates and extends plan)
+select platform_admin.record_subscription_payment('<clinic id>', 'solo', 79900, 'upi', 'UTR123', 30, 'Paid via GPay');
+
+-- 5. Void an erroneous payment entry
+select platform_admin.void_subscription_payment('<payment id>', 'Entered twice');
+
+-- 6. Lock overdue clinics (preview first, then apply)
+select * from platform_admin.lock_overdue_clinics();       -- preview (dry run)
+select * from platform_admin.lock_overdue_clinics(false);  -- apply (locks to read_only)
+```
+*Note on unlocking:* Recording a payment via `record_subscription_payment` automatically sets the clinic's plan status back to `active`.
+
+---
 
 ## Key Design Patterns
 

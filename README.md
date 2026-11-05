@@ -277,5 +277,6 @@ All original features remain: offline-first sync, revenue split tracking, invoic
   a future amendment/credit-note feature, not edits.
 - Rate/tax changes in Settings apply to new visits only; history keeps the rates
   it was billed under.
+- Founder operations & subscription management run through the private `platform_admin` schema via Supabase Studio (ledger, tier upgrades, renewal tracking, manual locking).
 - Export monthly CSVs — this app should never be the only copy of financial
   records.
