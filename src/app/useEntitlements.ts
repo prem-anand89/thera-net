@@ -6,11 +6,8 @@ import { repos } from '@/repositories/local';
 import { rowToDomain } from '@/repositories/rowMapping';
 import { tierIncludes, currentMonthRange, type PlanFeature } from '@/domain/plans';
 import type { ClinicPlan, PlanStatus, PlanTier } from '@/domain/types';
+import { planCacheKey } from '@/sync/planCache';
 import { useSession } from './useSession';
-
-function cacheKey(clinicId: string): string {
-  return `plan:${clinicId}`;
-}
 
 // Not clinic-scoped (platform_config is a global singleton row) — same
 // db.meta table, fixed key.
@@ -92,7 +89,7 @@ export interface Entitlements {
  */
 export function useEntitlements(clinicId: string): Entitlements {
   const { session } = useSession();
-  const cached = useLiveQuery(() => db.meta.get(cacheKey(clinicId)), [clinicId]);
+  const cached = useLiveQuery(() => db.meta.get(planCacheKey(clinicId)), [clinicId]);
   const cachedPlatformConfig = useLiveQuery(() => db.meta.get(PLATFORM_CONFIG_CACHE_KEY), []);
   const [fetched, setFetched] = useState<ClinicPlan | null>(null);
   const [fetchedEnforcementEnabled, setFetchedEnforcementEnabled] = useState<boolean | null>(null);
@@ -121,7 +118,7 @@ export function useEntitlements(clinicId: string): Entitlements {
       if (planRow) {
         const plan = rowToDomain<ClinicPlan>(planRow);
         setFetched(plan);
-        void db.meta.put({ key: cacheKey(clinicId), value: JSON.stringify(plan) });
+        void db.meta.put({ key: planCacheKey(clinicId), value: JSON.stringify(plan) });
       }
       if (platformConfigRow) {
         setFetchedEnforcementEnabled(platformConfigRow.tier_enforcement_enabled as boolean);
@@ -162,7 +159,7 @@ export function useEntitlements(clinicId: string): Entitlements {
     return null;
   })();
 
-  const resolved = fetched ?? cachedPlan ?? null;
+  const resolved = cachedPlan ?? fetched ?? null;
   const enforcementEnabled = fetchedEnforcementEnabled ?? cachedEnforcementEnabled ?? DEFAULT_ENFORCEMENT_ENABLED;
 
   const { from, to } = currentMonthRange();

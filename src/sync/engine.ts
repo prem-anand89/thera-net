@@ -8,6 +8,7 @@ import { syncStatus, isPermanentFailure } from './status';
 import { coerceReferringSource, type Patient } from '@/domain/types';
 import { isMrnoCollision, reissueWalkInMrno } from '@/domain/walkInMrno';
 import { notify } from '@/lib/notify';
+import { applyPlanChange } from './planCache';
 
 /** Shown (and matched by toFriendlyMessage) when the server can't be reached. */
 const LAST_SUCCESS_META_KEY = 'lastSuccessAt';
@@ -227,6 +228,9 @@ export class SyncEngine {
         this.schedule()
       );
     }
+    this.channel.on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_plans' }, (payload) => {
+      void applyPlanChange(payload.new as Record<string, unknown>).catch(() => {});
+    });
     this.channel.subscribe();
 
     // Fallback poll in case a realtime event is missed
