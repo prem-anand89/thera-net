@@ -572,7 +572,7 @@ export function PatientProfilePage() {
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {billingSummary.outstandingBalance > 0 && (
                 <span className="rounded-full bg-[var(--rust-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--rust)]">
-                  {currencySymbol()}{(billingSummary.outstandingBalance / 100).toFixed(0)} outstanding
+                  {formatAmount(billingSummary.outstandingBalance)} outstanding
                 </span>
               )}
               {patient.primaryCondition && (
@@ -1096,13 +1096,13 @@ function PaymentsSummarySection({
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="font-num text-sm font-semibold text-[var(--ink)]">
-            {currencySymbol()}{(billed / 100).toFixed(0)}
+            {formatAmount(billed)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Billed</div>
         </div>
         <div>
           <div className="font-num text-sm font-semibold text-[var(--teal)]">
-            {currencySymbol()}{(collected / 100).toFixed(0)}
+            {formatAmount(collected)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Collected</div>
         </div>
@@ -1110,7 +1110,7 @@ function PaymentsSummarySection({
           <div
             className={`font-num text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}
           >
-            {currencySymbol()}{(outstanding / 100).toFixed(0)}
+            {formatAmount(outstanding)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Outstanding</div>
         </div>
