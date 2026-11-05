@@ -49,26 +49,26 @@ describe('Treatments — chips', () => {
     render(<TreatmentCatalog />);
     expect(screen.getByRole('heading', { name: 'Treatments' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Add' })).toBeInTheDocument();
-    expect(screen.getByText('Tap a treatment to rename or hide it.')).toBeInTheDocument();
+    expect(screen.getByText(/Tap a treatment to rename or hide it\./)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Treatment name')).toBeNull();
     expect(screen.queryByText(/^\d+ (total|active)$/)).toBeNull();
   });
 
-  it('puts the most used first (alphabetical for ties), and shows counts only with "Show usage"', () => {
+  it('puts the most used first (alphabetical for ties), and shows counts unless "Show usage" is switched off', () => {
     treatments = [t('Dry Needling'), t('Exercise'), t('Manual Therapy'), t('Taping')];
     usage = [{ treatmentId: 'Manual Therapy', count: 312 }, { treatmentId: 'Exercise', count: 280 }];
     render(<TreatmentCatalog />);
     expect(chipNames()).toEqual(['Manual Therapy', 'Exercise', 'Dry Needling', 'Taping']);
-    expect(screen.queryByText('312')).toBeNull();
-    const toggle = screen.getByRole('switch', { name: 'Show usage' });
-    expect(toggle).not.toBeChecked();
-    fireEvent.click(toggle);
     expect(screen.getByText('312')).toBeInTheDocument();
     expect(screen.getByText(/Counts are visits in the last 90 days\./)).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: 'Show usage' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(screen.queryByText('312')).toBeNull();
     // The choice survives a reload.
     cleanup();
     render(<TreatmentCatalog />);
-    expect(screen.getByRole('switch', { name: 'Show usage' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Show usage' })).not.toBeChecked();
   });
 
   it('hidden treatments sit in a collapsed "Inactive (N)" footer', () => {

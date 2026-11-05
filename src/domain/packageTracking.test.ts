@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from './packageTracking';
+import { daysSince, formatExpiryDate, groupOpenPackages, isStale, localToday, packageExpiresOn, packageExpiryState, packageValidityOf, STALE_PACKAGE_DAYS } from './packageTracking';
 import type { Visit } from './types';
 
 function makeVisit(overrides: Partial<Visit> & Pick<Visit, 'id' | 'visitDate'>): Visit {
@@ -108,5 +108,45 @@ describe('daysSince / isStale', () => {
 
   it('is stale over the threshold', () => {
     expect(isStale('2026-06-01', '2026-06-16', STALE_PACKAGE_DAYS)).toBe(true);
+  });
+});
+
+describe('package expiry', () => {
+  const session = (visitDate: string, packageValidityDays: number | null | undefined, deleted = false) => ({ visitDate, packageValidityDays, deleted });
+
+  it('is the first visit date plus the days, across a month and year end', () => {
+    expect(packageExpiresOn([session('2026-12-20', 30), session('2026-12-25', 30)])).toBe('2027-01-19');
+  });
+
+  it('moves when the first visit date is corrected', () => {
+    expect(packageExpiresOn([session('2026-01-10', 30)])).toBe('2026-02-09');
+    expect(packageExpiresOn([session('2026-01-05', 30)])).toBe('2026-02-04');
+  });
+
+  it('blank means none, including rows from before the column existed', () => {
+    expect(packageExpiresOn([session('2026-01-10', null), session('2026-01-12', undefined)])).toBeNull();
+  });
+
+  it('deleting the first visit does not lose the days', () => {
+    const group = [session('2026-01-01', 30, true), session('2026-01-10', 30)];
+    expect(packageValidityOf(group)).toBe(30);
+    expect(packageExpiresOn(group)).toBe('2026-02-09');
+  });
+
+  it('an older session without the days still takes them from one that has them', () => {
+    expect(packageExpiresOn([session('2026-01-01', null), session('2026-01-10', 30)])).toBe('2026-01-31');
+  });
+
+  it('the last day is still valid; seven days out is expiring; eight is quiet', () => {
+    expect(packageExpiryState('2026-03-10', '2026-03-11')).toBe('expired');
+    expect(packageExpiryState('2026-03-10', '2026-03-10')).toBe('expiring');
+    expect(packageExpiryState('2026-03-10', '2026-03-03')).toBe('expiring');
+    expect(packageExpiryState('2026-03-10', '2026-03-02')).toBeNull();
+    expect(packageExpiryState(null, '2026-03-10')).toBeNull();
+  });
+
+  it('formats dates in words and today in local time', () => {
+    expect(formatExpiryDate('2026-12-12')).toBe('12 Dec');
+    expect(localToday(new Date(2026, 0, 5, 23, 30))).toBe('2026-01-05');
   });
 });

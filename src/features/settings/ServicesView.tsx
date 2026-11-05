@@ -20,7 +20,7 @@ const FLASH_MS = 1600;
 /**
  * Services and prices. One list card on phones (group names as small sticky headings inside it), a table from the
  * `desktop:` width up; every row opens the same sheet. Named groups first, ungrouped last under "Other"
- * (`orderedServices`, the same rule as the visit picker). Usage counts sit behind "Show usage" (off by default, per
+ * (`orderedServices`, the same rule as the visit picker). Usage counts follow "Show usage" (on by default, per
  * device), except where they decide something: the edit sheet and the "Inactive" footer.
  */
 export function ServicesView() {

@@ -16,6 +16,8 @@ import {
   groupOpenPackages,
   isNearingCompletion,
   isStale,
+  packageExpiryState,
+  type PackageExpiryState,
   STALE_PACKAGE_DAYS,
 } from '@/domain/packageTracking';
 import {
@@ -46,6 +48,9 @@ export interface OpenPackageRow {
   /** 2 or fewer sessions left — see `isNearingCompletion`. Independent of
    *  `stale`: a package can be actively attended and still running out. */
   nearingCompletion: boolean;
+  /** Last valid day, or null when the package doesn't expire. */
+  expiresOn: string | null;
+  expiry: PackageExpiryState;
   /** Therapist who logged the package's first session — for "my open packages" scoping. */
   startedByTherapistId: UUID;
   startedByTherapistName: string;
@@ -366,7 +371,10 @@ export function createDashboardService(repos: Repos) {
             lastVisitOn: g.lastVisitOn,
             lastVisitId: g.lastVisitId,
             daysSinceLastVisit: daysSince(g.lastVisitOn),
-            stale: isStale(g.lastVisitOn),
+            // Expired replaces the stale marker, so a row never says both (and gets no "come back" reminder).
+            stale: packageExpiryState(g.expiresOn) !== 'expired' && isStale(g.lastVisitOn),
+            expiresOn: g.expiresOn,
+            expiry: packageExpiryState(g.expiresOn),
             nearingCompletion: isNearingCompletion(g.sessionsLogged, g.packageTotal),
             startedByTherapistId: g.startedByTherapistId,
             startedByTherapistName: therapistNameById.get(g.startedByTherapistId) ?? 'Unknown',

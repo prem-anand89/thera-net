@@ -48,6 +48,9 @@ function Harness(props: {
   quickServices?: CatalogItem[];
   onRows?: (rows: DraftLine[]) => void;
   catalog?: CatalogItem[];
+  onAddService?: (name: string, rowKey: string) => void;
+  askAdminToAdd?: boolean;
+  visitDate?: string;
 }) {
   const [rows, setRows] = useState(props.initial);
   return (
@@ -65,6 +68,9 @@ function Harness(props: {
       errors={new Map()}
       patientName="Rahul"
       quickServices={props.quickServices}
+      onAddService={props.onAddService}
+      askAdminToAdd={props.askAdminToAdd}
+      visitDate={props.visitDate}
     />
   );
 }
@@ -672,5 +678,45 @@ describe('ServiceRows — the same order and headings as Settings → Services',
     render(<Harness initial={[row('a')]} catalog={c} openPackages={[pkg]} />);
     expect(headingsAndOptions().filter((t) => !t?.startsWith('·'))).toEqual(['Open packages', 'Services']);
   });
-});
 
+  it('an admin can add what the search did not find; the typed name goes to the row that asked', () => {
+    const asked: [string, string][] = [];
+    render(<Harness initial={[row('a')]} onAddService={(n, k) => asked.push([n, k])} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Cupping' } });
+    fireEvent.mouseDown(screen.getByRole('button', { name: '+ Add “Cupping”' }));
+    expect(asked).toEqual([['Cupping', 'a']]);
+  });
+
+  it('shows no add while the search still finds something, and asks a non-admin to ask the admin', () => {
+    const { unmount } = render(<Harness initial={[row('a')]} onAddService={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Assess' } });
+    expect(screen.queryByRole('button', { name: /^\+ Add/ })).toBeNull();
+    unmount();
+    render(<Harness initial={[row('a')]} askAdminToAdd />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Cupping' } });
+    expect(screen.getByText('Ask your admin to add it')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^\+ Add/ })).toBeNull();
+  });
+
+  it('an expired package says so on the row and the picker, and is judged against the date being logged', () => {
+    const expiring = { ...pkg, expiresOn: '2026-12-12' };
+    const { unmount } = render(<Harness initial={[{ ...pkgRow(), continuation: expiring }]} openPackages={[expiring]} visitDate="2026-12-13" />);
+    expect(screen.getByText('This package expired on 12 Dec.')).toBeInTheDocument();
+    unmount();
+    const backdated = render(<Harness initial={[{ ...pkgRow(), continuation: expiring }]} openPackages={[expiring]} visitDate="2026-12-12" />);
+    expect(screen.queryByText(/expired on/)).toBeNull();
+    backdated.unmount();
+    render(<Harness initial={[row('a')]} openPackages={[expiring]} visitDate="2026-12-13" />);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
+    expect(screen.getByRole('option', { name: /session 5 of 10 \(₹0\) \(expired 12 Dec\)/ })).toBeInTheDocument();
+  });
+
+  it('the picker\'s expired label follows the visit date when it changes', () => {
+    const expiring = { ...pkg, expiresOn: '2026-12-12' };
+    const { rerender } = render(<Harness initial={[row('a')]} openPackages={[expiring]} visitDate="2026-12-12" />);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
+    expect(screen.queryByRole('option', { name: /expired 12 Dec/ })).toBeNull();
+    rerender(<Harness initial={[row('a')]} openPackages={[expiring]} visitDate="2026-12-13" />);
+    expect(screen.getByRole('option', { name: /expired 12 Dec/ })).toBeInTheDocument();
+  });
+});

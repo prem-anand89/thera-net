@@ -7,6 +7,7 @@ import {
   type UUID,
 } from '@/domain/types';
 import { roundToRupeeHalfUp, type Paise } from '@/domain/money';
+import { packageValidityOf } from '@/domain/packageTracking';
 import { computeVisitSplit, uninvoicedSplitRates, visitNeedsSplitUpdate, type SplitRates } from '@/domain/split';
 import {
   SHARE_BELOW_PACKAGE,
@@ -34,6 +35,9 @@ export interface VisitLineInput {
    */
   sessionShare?: { therapistId: UUID; pct: number } | null;
 }
+
+type PackageFields = Pick<Visit, 'sessionIndex' | 'packageTotal' | 'packageGroupId' | 'packageValidityDays'>;
+const NO_PACKAGE: PackageFields = { sessionIndex: null, packageTotal: null, packageGroupId: null, packageValidityDays: null };
 
 const VISIT_DELETED = 'This visit was deleted.';
 const LINES_FROZEN = 'This visit is on an invoice; its services are frozen.';
@@ -373,8 +377,10 @@ export function createVisitService(repos: Repos) {
         ...specs.flatMap((sp) => (sp.continuation ? [sp.continuation.packageGroupId] : [])),
         ...(legacyPackage && input.packageGroupId ? [input.packageGroupId] : []),
       ];
+      const continuedValidity = new Map<UUID, number | null>();
       for (const groupId of continuedGroups) {
         const group = await repos.visits.listByPackageGroup(groupId);
+        continuedValidity.set(groupId, packageValidityOf(group));
         if (group.some((v) => !v.deleted && v.patientId !== input.patientId)) {
           throw new Error('That package belongs to another patient.');
         }
@@ -404,7 +410,7 @@ export function createVisitService(repos: Repos) {
 
       const pkgSpec = specs.find((s) => s.isPackage);
       const pkgItem = pkgSpec ? catalog.get(pkgSpec.serviceCatalogId)! : undefined;
-      let pkg: { sessionIndex: number | null; packageTotal: number | null; packageGroupId: UUID | null };
+      let pkg: PackageFields;
       if (legacyPackage) {
         const isPackage = Boolean(pkgSpec);
         const item = catalog.get(specs[0].serviceCatalogId)!;
@@ -412,13 +418,15 @@ export function createVisitService(repos: Repos) {
           sessionIndex: input.sessionIndex ?? (isPackage ? 1 : null),
           packageTotal: input.packageTotal ?? (isPackage ? item.sessionCount : null),
           packageGroupId: input.packageGroupId ?? (isPackage ? crypto.randomUUID() : null),
+          // A given group id is an existing package (or an imported one, whose history never expires).
+          packageValidityDays: input.packageGroupId ? (continuedValidity.get(input.packageGroupId) ?? null) : isPackage ? (item.validityDays ?? null) : null,
         };
       } else if (pkgSpec?.continuation) {
-        pkg = { ...pkgSpec.continuation };
+        pkg = { ...pkgSpec.continuation, packageValidityDays: continuedValidity.get(pkgSpec.continuation.packageGroupId) ?? null };
       } else if (pkgItem) {
-        pkg = { sessionIndex: 1, packageTotal: pkgItem.sessionCount, packageGroupId: crypto.randomUUID() };
+        pkg = { sessionIndex: 1, packageTotal: pkgItem.sessionCount, packageGroupId: crypto.randomUUID(), packageValidityDays: pkgItem.validityDays ?? null };
       } else {
-        pkg = { sessionIndex: null, packageTotal: null, packageGroupId: null };
+        pkg = NO_PACKAGE;
       }
 
       const visit: Visit = {
@@ -535,22 +543,25 @@ export function createVisitService(repos: Repos) {
       const split = computeVisitSplit(actualBillPaise, visit.clinicSplitPct, visit.taxPct, visit.tdsBasis);
 
       const pkgSpec = specs.find((s) => s.isPackage);
-      let pkg: { sessionIndex: number | null; packageTotal: number | null; packageGroupId: UUID | null };
+      let pkg: PackageFields;
       if (!pkgSpec) {
-        pkg = { sessionIndex: null, packageTotal: null, packageGroupId: null };
+        pkg = NO_PACKAGE;
       } else if (pkgSpec.continuation) {
-        pkg = { ...pkgSpec.continuation };
+        const group = await repos.visits.listByPackageGroup(pkgSpec.continuation.packageGroupId);
+        pkg = { ...pkgSpec.continuation, packageValidityDays: packageValidityOf(group) };
       } else if (keptPackage && visit.packageGroupId) {
         pkg = {
           sessionIndex: visit.sessionIndex ?? 1,
           packageTotal: visit.packageTotal ?? catalog.get(pkgSpec.serviceCatalogId)!.sessionCount,
           packageGroupId: visit.packageGroupId,
+          packageValidityDays: visit.packageValidityDays ?? null,
         };
       } else {
         pkg = {
           sessionIndex: 1,
           packageTotal: catalog.get(pkgSpec.serviceCatalogId)!.sessionCount,
           packageGroupId: crypto.randomUUID(),
+          packageValidityDays: catalog.get(pkgSpec.serviceCatalogId)!.validityDays ?? null,
         };
       }
 

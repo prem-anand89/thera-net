@@ -10,12 +10,22 @@ import { btnPrimary, btnSecondary, ConfirmDialog, Field, inputCls, RupeeInput, S
 import { SwitchRow } from './settingsShared';
 import { DURATION_ERROR, NameCheckNote, parseDuration, saveErrorMessage } from './catalogShared';
 
-export type ServiceSheetMode = { kind: 'add' } | { kind: 'edit'; item: CatalogItem };
+export type ServiceSheetMode = { kind: 'add'; name?: string } | { kind: 'edit'; item: CatalogItem };
 
 type Kind = 'one' | 'package';
 const NEW_GROUP = '__new__';
 const MIN_PACKAGE = 2;
 const MAX_SESSIONS = 100;
+const MAX_VALIDITY = 730;
+const VALIDITY_CHOICES = [30, 60, 90];
+
+/** "Valid for" box: blank = no expiry (null), a whole number 1–730, anything else undefined. */
+function parseValidity(text: string): number | null | undefined {
+  const t = text.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_VALIDITY ? n : undefined;
+}
 
 /**
  * "Add a service" / "Edit service": one sheet for both. Fields in the order people think (type, name, sessions,
@@ -42,7 +52,7 @@ export function ServiceFormSheet({
   // Keyed by the item, so opening another row starts from that row's values.
   return (
     <ServiceForm
-      key={mode.kind === 'edit' ? mode.item.id : 'add'}
+      key={mode.kind === 'edit' ? mode.item.id : `add:${mode.name ?? ''}`}
       mode={mode}
       allItems={allItems}
       groupNames={groupNames}
@@ -71,12 +81,13 @@ function ServiceForm({
   const clinic = useClinic();
   const editing = mode.kind === 'edit' ? mode.item : null;
   const [kind, setKind] = useState<Kind>(editing && editing.sessionCount > 1 ? 'package' : 'one');
-  const [name, setName] = useState(editing?.name ?? '');
+  const [name, setName] = useState(editing?.name ?? (mode.kind === 'add' ? mode.name ?? '' : ''));
   const [sessions, setSessions] = useState(editing && editing.sessionCount > 1 ? editing.sessionCount : 5);
   const [pricePaise, setPricePaise] = useState<number | null>(editing?.basePricePaise ?? null);
   const [group, setGroup] = useState((editing?.category ?? '').trim() ?? '');
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [duration, setDuration] = useState(editing?.durationMinutes != null ? String(editing.durationMinutes) : '');
+  const [validity, setValidity] = useState(editing?.validityDays != null ? String(editing.validityDays) : '');
   const [active, setActive] = useState(editing?.active ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +97,7 @@ function ServiceForm({
   const groupId = useId();
   const priceId = useId();
   const lengthId = useId();
+  const validityId = useId();
 
   const check = nameCheck(name, allItems, { selfId: editing?.id });
   const groupCheck = newGroup !== null ? groupNameCheck(newGroup, groupNames) : null;
@@ -106,6 +118,7 @@ function ServiceForm({
     pricePaise !== editing.basePricePaise ||
     chosenGroup() !== (editing.category ?? '').trim() ||
     (parseDuration(duration) ?? null) !== (editing.durationMinutes ?? null) ||
+    (isPackage ? parseValidity(validity) : null) !== (editing.validityDays ?? null) ||
     active !== editing.active;
   const priceChanged = Boolean(editing && pricePaise != null && pricePaise !== editing.basePricePaise);
   // A used service whose session count changes: only visits logged from now on use the new number.
@@ -126,12 +139,15 @@ function ServiceForm({
     }
     const durationMinutes = parseDuration(duration);
     if (durationMinutes === undefined) return setError(DURATION_ERROR);
+    const validityDays = isPackage ? parseValidity(validity) : null;
+    if (validityDays === undefined) return setError(`Enter the days as a whole number from 1 to ${MAX_VALIDITY}, or leave it blank.`);
     const fields = {
       name: name.trim(),
       category: chosenGroup(),
       sessionCount,
       basePricePaise: pricePaise,
       durationMinutes,
+      validityDays,
       updatedAt: new Date().toISOString(),
     };
     setSaving(true);
@@ -388,6 +404,45 @@ function ServiceForm({
             onChange={(e) => setDuration(e.target.value)}
           />
         </Field>
+
+        {isPackage && (
+          <Field
+            label="Valid for (days, optional)"
+            htmlFor={validityId}
+            hint={`Blank means it never expires. Counted from the first visit. Expiry only shows a note; visits can still be logged.${editing ? ' Packages already bought keep what they started with.' : ''}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="w-24">
+                <input
+                  id={validityId}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_VALIDITY}
+                  step={1}
+                  className={inputCls}
+                  value={validity}
+                  onChange={(e) => setValidity(e.target.value)}
+                />
+              </div>
+              {VALIDITY_CHOICES.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={validity === String(d)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                    validity === String(d)
+                      ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                      : 'border-[var(--border)] text-[var(--muted)]'
+                  }`}
+                  onClick={() => setValidity(String(d))}
+                >
+                  {d} days
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
 
         {editing && (
           <div className="space-y-2 border-t border-[var(--border)] pt-3">

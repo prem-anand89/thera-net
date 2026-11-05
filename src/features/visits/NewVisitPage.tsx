@@ -28,12 +28,15 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { findSimilarPatients } from '@/domain/similarPatients';
 import { SimilarPatients } from '@/components/SimilarPatients';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
+import { ServiceFormSheet } from '@/features/settings/ServiceFormSheet';
+import { packageExpiresOn } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import { rankServicesByUsage } from '@/domain/serviceUsage';
 import {
   type Patient,
   type PaymentMethod,
   type TreatmentItem,
+  type CatalogItem,
   type UUID,
 } from '@/domain/types';
 import type { ServiceUsageCountRow, TreatmentUsageRow } from '@/services/dashboardService';
@@ -103,6 +106,8 @@ import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, reme
 // `?? []` literal on every render would change identity each time and
 // defeat the useMemo that ranks treatments by usage.
 const EMPTY_TREATMENTS: TreatmentItem[] = [];
+const EMPTY_CATALOG: CatalogItem[] = [];
+const EMPTY_USAGE = new Map<string, number>();
 const EMPTY_PACKAGES: OpenPackage[] = [];
 const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
 const EMPTY_SERVICE_USAGE: ServiceUsageCountRow[] = [];
@@ -420,6 +425,9 @@ export function NewVisitPage() {
     [therapists, session?.user?.id]
   );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  // Admin only: a service the search didn't find, added from here and selected on the row that asked for it.
+  const [addService, setAddService] = useState<{ name: string; rowKey: string } | null>(null);
+  const allCatalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]) ?? EMPTY_CATALOG;
   const treatments =
     useLiveQuery(() => repos.treatmentCatalog.list(clinic.id), [clinic.id]) ?? EMPTY_TREATMENTS;
   const treatmentUsage =
@@ -504,6 +512,7 @@ export function NewVisitPage() {
         startedOn: sorted[0].visitDate,
         purchaseVisitId: sorted[0].id,
         lastShare: lastPackageShare(group, sessionLines, (id) => activeIds.has(id)),
+        expiresOn: packageExpiresOn(group),
       });
     }
     return { patientId: patient.id, list: open.sort((a, b) => b.startedOn.localeCompare(a.startedOn)) };
@@ -2124,6 +2133,20 @@ export function NewVisitPage() {
     <div className="space-y-4">
       {treatmentsCard}
 
+      {addService && (
+        <ServiceFormSheet
+          mode={{ kind: 'add', name: addService.name }}
+          allItems={allCatalog}
+          groupNames={[...new Set(allCatalog.map((i) => (i.category ?? '').trim()).filter(Boolean))].sort()}
+          usage={EMPTY_USAGE}
+          onClose={() => setAddService(null)}
+          onSaved={(id) => {
+            const key = addService.rowKey;
+            setAddService(null);
+            changeRows(rows.map((r) => (r.key === key ? { ...r, serviceCatalogId: id, continuation: undefined } : r)));
+          }}
+        />
+      )}
       <SectionCard id="visit-services" title="Services">
         <div className="grid grid-cols-1 gap-3">
           <ServiceRows
@@ -2138,6 +2161,9 @@ export function NewVisitPage() {
             revealProblems={revealRowProblems}
             patientName={patient?.name}
             quickServices={quickServices}
+            onAddService={isAdmin ? (name, rowKey) => setAddService({ name, rowKey }) : undefined}
+            askAdminToAdd={!isAdmin}
+            visitDate={visitDate}
           />
 
           {showAssistant && (

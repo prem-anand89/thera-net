@@ -10,17 +10,17 @@ afterEach(() => {
 });
 
 describe('useShowUsage', () => {
-  it('is off by default and remembers the choice on this device, per list', () => {
+  it('is on by default and remembers switching it off on this device, per list', () => {
     const a = renderHook(() => useShowUsage('services'));
-    expect(a.result.current[0]).toBe(false);
-    act(() => a.result.current[1](true));
     expect(a.result.current[0]).toBe(true);
+    act(() => a.result.current[1](false));
+    expect(a.result.current[0]).toBe(false);
     // A reload (a fresh hook) keeps it; the treatments list keeps its own choice.
-    expect(renderHook(() => useShowUsage('services')).result.current[0]).toBe(true);
-    expect(renderHook(() => useShowUsage('treatments')).result.current[0]).toBe(false);
+    expect(renderHook(() => useShowUsage('services')).result.current[0]).toBe(false);
+    expect(renderHook(() => useShowUsage('treatments')).result.current[0]).toBe(true);
   });
 
-  it('still works for this visit when storage is blocked, and starts off', () => {
+  it('still works for this visit when storage is blocked, and starts on', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
@@ -28,8 +28,8 @@ describe('useShowUsage', () => {
       throw new Error('blocked');
     });
     const h = renderHook(() => useShowUsage('services'));
-    expect(h.result.current[0]).toBe(false);
-    act(() => h.result.current[1](true));
     expect(h.result.current[0]).toBe(true);
+    act(() => h.result.current[1](false));
+    expect(h.result.current[0]).toBe(false);
   });
 });

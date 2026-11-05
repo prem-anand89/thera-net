@@ -302,6 +302,35 @@ describe('visitService.create', () => {
     expect(v.packageGroupId).toBeTruthy();
   });
 
+  it('copies the validity days onto each session; a catalog edit leaves a held package alone', async () => {
+    const svc = createVisitService(fake.repos);
+    const cat = fake.catalog.find((c) => c.id === 'svc-physio3')!;
+    cat.validityDays = 30;
+    const first = await svc.create(base);
+    expect(first.packageValidityDays).toBe(30);
+
+    cat.validityDays = 90;
+    const second = await svc.create({
+      clinicId: base.clinicId,
+      patientId: base.patientId,
+      therapistId: base.therapistId,
+      visitDate: '2026-05-06',
+      lines: [
+        {
+          serviceCatalogId: 'svc-physio3',
+          packageContinuation: { packageGroupId: first.packageGroupId!, sessionIndex: 2, packageTotal: 3 },
+        },
+      ],
+    });
+    expect(second.packageValidityDays).toBe(30);
+
+    // A new purchase takes the catalog's current value; blank means none; a one-visit service has none.
+    expect((await svc.create(base)).packageValidityDays).toBe(90);
+    cat.validityDays = null;
+    expect((await svc.create(base)).packageValidityDays).toBeNull();
+    expect((await svc.create({ ...base, serviceCatalogId: 'svc-consult' })).packageValidityDays).toBeNull();
+  });
+
   it('requires a reason for any price override, and records the variance', async () => {
     const svc = createVisitService(fake.repos);
     await expect(svc.create({ ...base, actualBillPaise: rs(2000) })).rejects.toThrow(/reason/);
