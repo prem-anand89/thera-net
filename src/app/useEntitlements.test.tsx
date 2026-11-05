@@ -100,8 +100,27 @@ vi.mock('@/lib/supabase', () => ({
   }),
 }));
 
-import { useEntitlements } from './useEntitlements';
+import { newestPlan, useEntitlements } from './useEntitlements';
 import { db } from '@/lib/db';
+
+describe('newestPlan', () => {
+  const plan = (tier: ClinicPlan['planTier'], updatedAt: string): ClinicPlan => ({ clinicId: 'c1', planTier: tier, status: 'active', maxMembers: 1, visitCapPerMonth: null, maxRosterTherapists: 1, updatedAt }) as ClinicPlan;
+  it('takes the later of the two, so a stale cache cannot hide a newer fetch (or the reverse)', () => {
+    const older = plan('solo', '2026-11-06T10:00:00.000Z');
+    const newer = plan('clinic', '2026-11-06T11:00:00.000Z');
+    expect(newestPlan(older, newer)?.planTier).toBe('clinic');
+    expect(newestPlan(newer, older)?.planTier).toBe('clinic');
+  });
+  it('uses whichever exists, and the fetched plan on a tie or when a timestamp is missing', () => {
+    const a = plan('solo', '2026-11-06T10:00:00.000Z');
+    expect(newestPlan(a, null)).toBe(a);
+    expect(newestPlan(null, a)).toBe(a);
+    expect(newestPlan(null, null)).toBeNull();
+    const same = plan('clinic', '2026-11-06T10:00:00.000Z');
+    expect(newestPlan(a, same)?.planTier).toBe('clinic');
+    expect(newestPlan(plan('solo', ''), plan('clinic', '2026-11-06T10:00:00.000Z'))?.planTier).toBe('clinic');
+  });
+});
 
 describe('useEntitlements', () => {
   beforeEach(() => {
@@ -138,6 +157,7 @@ describe('useEntitlements', () => {
       status: 'active',
       max_members: 1,
       visit_cap_per_month: 200,
+      updated_at: '2020-01-01T00:00:00.000Z',
     };
 
     const { result } = renderHook(() => useEntitlements('c1'));

@@ -87,6 +87,21 @@ export interface Entitlements {
  * read `maxMembers`/`visitCapPerMonth` directly check `enforcementEnabled`
  * themselves.
  */
+/**
+ * The more recent of the cached plan (kept current by the sync engine's realtime event) and the plan just fetched,
+ * by `updatedAt`. A tie, or no timestamp to compare, goes to the fetched plan (read from the server a moment ago).
+ * Neither side wins by default: a stale cache must not hide a newer fetch, and a failed cache write must not freeze
+ * an old plan on screen.
+ */
+export function newestPlan(cached: ClinicPlan | null, fetched: ClinicPlan | null): ClinicPlan | null {
+  if (!cached) return fetched;
+  if (!fetched) return cached;
+  const cachedAt = Date.parse(cached.updatedAt ?? '');
+  const fetchedAt = Date.parse(fetched.updatedAt ?? '');
+  if (Number.isNaN(cachedAt) || Number.isNaN(fetchedAt)) return fetched;
+  return cachedAt > fetchedAt ? cached : fetched;
+}
+
 export function useEntitlements(clinicId: string): Entitlements {
   const { session } = useSession();
   const cached = useLiveQuery(() => db.meta.get(planCacheKey(clinicId)), [clinicId]);
@@ -159,7 +174,7 @@ export function useEntitlements(clinicId: string): Entitlements {
     return null;
   })();
 
-  const resolved = cachedPlan ?? fetched ?? null;
+  const resolved = newestPlan(cachedPlan, fetched);
   const enforcementEnabled = fetchedEnforcementEnabled ?? cachedEnforcementEnabled ?? DEFAULT_ENFORCEMENT_ENABLED;
 
   const { from, to } = currentMonthRange();

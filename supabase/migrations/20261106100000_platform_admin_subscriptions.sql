@@ -161,7 +161,7 @@ select
   cp.plan_tier, cp.status as plan_status,
   coalesce(v.visits_this_month, 0) as visits_this_month,
   cp.visit_cap_per_month,
-  cp.visit_cap_per_month > 0 and coalesce(v.visits_this_month, 0) >= 0.8 * cp.visit_cap_per_month as near_visit_cap,
+  coalesce(cp.visit_cap_per_month > 0 and coalesce(v.visits_this_month, 0) >= 0.8 * cp.visit_cap_per_month, false) as near_visit_cap,
   m.team_seats_used, cp.max_members as max_team_seats,
   t.roster_therapists_used, cp.max_roster_therapists,
   pay.last_paid_on, pay.valid_until,
