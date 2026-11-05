@@ -25,7 +25,7 @@ export function RequestDeclinedStrip({
       className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md"
     >
       <p className="text-sm text-[var(--ink)]">
-        <strong>{declined.name}</strong>&apos;s request was declined. They haven&apos;t been told yet.
+        <strong>{declined.name}</strong> was taken off Awaiting. They haven&apos;t been told yet.
       </p>
       <div className="flex items-center gap-2">
         <button

@@ -7,14 +7,14 @@ import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appo
 import { Pill, pillAccent, pillDanger, pillNeutral, pillPrimary } from '@/components/ui';
 import { useShowMore, ShowMoreFooter } from '@/components/ShowMore';
 import { partitionTodayAppointments } from './todayPartition';
-import { RequestsInbox } from './RequestsInbox';
+import { AwaitingList } from './AwaitingList';
 import { appointmentFill } from './scheduleColors';
 import { PatientFlagPills } from './PatientFlagPills';
 import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 
 const UPCOMING_LIMIT = 5;
 const DONE_OPEN_KEY = 'theranet:today-done-open';
-const REQUESTS_LIMIT = 3;
+const AWAITING_LIMIT = 3;
 
 const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
 /** Flat divided rows bleeding to the card edge — the same density as the
@@ -24,8 +24,8 @@ const listCls = '-mx-5 divide-y divide-[var(--border)] border-y border-[var(--bo
 
 /**
  * Workspace → Today → Appointments. Kept short so it never pushes the rest
- * of the page down: public booking requests waiting for a confirm (admin /
- * front desk only), visits in progress (arrived, service not added yet),
+ * of the page down: Awaiting (public requests and staff entries with no time
+ * yet; admin / front desk only), visits in progress (arrived, service not added yet),
  * then the next few upcoming, and finished ones folded away.
  */
 export function TodayAppointments({
@@ -40,6 +40,7 @@ export function TodayAppointments({
   therapistNameForId,
   onConfirmRequest,
   onDeclineRequest,
+  onMessageRequest,
   onSeeAllRequests,
   flagContext,
   mrnoFor,
@@ -56,11 +57,13 @@ export function TodayAppointments({
   therapistNameFor: (appointment: Appointment) => string;
   showTherapist: boolean;
   onSelect: (appointment: Appointment) => void;
-  /** Pending public booking requests, oldest first. Omit for therapists. */
+  /** Awaiting: pending requests (public and staff-entered). Omit for therapists. */
   requests?: AppointmentRequest[];
   therapistNameForId?: (id: string | null) => string | null;
   onConfirmRequest?: (request: AppointmentRequest) => void;
   onDeclineRequest?: (request: AppointmentRequest) => void;
+  /** WhatsApp to someone who is awaiting ("we've noted your request"). */
+  onMessageRequest?: (request: AppointmentRequest) => void;
   onSeeAllRequests?: () => void;
   /** Patient flags + condition (`usePatientFlagContext`); omit to hide them. */
   flagContext?: PatientFlagContext;
@@ -106,7 +109,7 @@ export function TodayAppointments({
   const loggedMore = useShowMore(logged, logged.length, 10);
 
   const shownUpcoming = showAll ? upcoming : upcoming.slice(0, UPCOMING_LIMIT);
-  const hasRequests = requests.length > 0 && Boolean(onConfirmRequest && onDeclineRequest);
+  const hasRequests = requests.length > 0 && Boolean(onConfirmRequest && onDeclineRequest && onMessageRequest);
   const sectionCount = [hasRequests, inProgress.length > 0, upcoming.length > 0].filter(Boolean).length;
 
   const row = (a: Appointment, end: ReactNode, note?: string, showEndOnMobile = false) => {
@@ -238,15 +241,16 @@ export function TodayAppointments({
   };
 
   const requestsSection = hasRequests ? (
-    <section aria-label="Requests to confirm">
-      <h3 className={sectionHeading}>Requests to confirm ({requests.length})</h3>
-      <RequestsInbox
-        variant="rows"
+    <section aria-label="Awaiting">
+      <h3 className={sectionHeading}>Awaiting ({requests.length})</h3>
+      <AwaitingList
         requests={requests}
-        limit={REQUESTS_LIMIT}
+        today={toLocalDateStr(new Date())}
+        limit={AWAITING_LIMIT}
         therapistNameFor={therapistNameForId ?? (() => null)}
-        onConfirm={onConfirmRequest!}
-        onDecline={onDeclineRequest!}
+        onBook={onConfirmRequest!}
+        onMessage={onMessageRequest!}
+        onDismiss={onDeclineRequest!}
         onSeeAll={onSeeAllRequests ?? (() => undefined)}
       />
     </section>

@@ -84,8 +84,7 @@ export function RequestsInbox({
   limit = 5,
 }: {
   requests: AppointmentRequest[];
-  /** 'rows': flat divided rows sized like Workspace's visit list. */
-  variant: 'strip' | 'rail' | 'list' | 'rows';
+  variant: 'strip' | 'rail' | 'list';
   therapistNameFor: (id: string | null) => string | null;
   onConfirm: (request: AppointmentRequest) => void;
   onDecline: (request: AppointmentRequest) => void;
@@ -121,48 +120,6 @@ export function RequestsInbox({
   );
 
   if (variant === 'list') return rows;
-
-  if (variant === 'rows') {
-    return (
-      <ul className="-mx-5 divide-y divide-[var(--border)] border-y border-[var(--border)]">
-        {shown.map((request) => {
-          const therapist = therapistNameFor(request.preferredTherapistId);
-          return (
-            <li key={request.id} className="flex items-center gap-3 px-5 py-2.5">
-              <span className="min-w-0 flex-1">
-                {/* Two lines, using the width: who and how to reach them, then when, with whom and why. */}
-                <span className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-display text-sm font-medium text-[var(--ink)]">{request.name}</span>
-                  <span className="text-xs text-[var(--muted)]">{timeAgo(request.createdAt)}</span>
-                  <a href={`tel:${request.phone}`} className="py-0.5 text-xs text-[var(--teal)] hover:underline">
-                    {request.phone}
-                  </a>
-                </span>
-                <span className="block text-xs text-[var(--muted)]">
-                  {requestWants(request)}
-                  {therapist ? `, with ${therapist}` : ''}
-                  {request.notes && <span className="text-[var(--ink)]"> · {request.notes}</span>}
-                </span>
-              </span>
-              <button type="button" className="shrink-0 rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => onConfirm(request)}>
-                Confirm
-              </button>
-              <button type="button" className="shrink-0 px-1 py-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => onDecline(request)}>
-                Decline
-              </button>
-            </li>
-          );
-        })}
-        {requests.length > shown.length && (
-          <li className="px-5 py-2">
-            <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onSeeAll}>
-              See all {requests.length} requests
-            </button>
-          </li>
-        )}
-      </ul>
-    );
-  }
 
   if (variant === 'rail') {
     return (

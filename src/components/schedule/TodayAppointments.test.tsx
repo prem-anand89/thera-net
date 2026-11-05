@@ -89,7 +89,7 @@ describe('TodayAppointments', () => {
     expect(screen.getByText(/No appointments today/)).toBeInTheDocument();
   });
 
-  it('lists booking requests first, with Confirm / Decline and See all past three', () => {
+  it('lists Awaiting first, with Book / WhatsApp / Dismiss and See all past three', () => {
     const request = (i: number): AppointmentRequest => ({
       id: `r${i}`, clinicId: 'c', name: `Req ${i}`, phone: '98', email: null, preferredTherapistId: 't1', notes: null,
       preferredDate: null, preferredTimeText: 'evening', status: 'pending', appointmentId: null,
@@ -98,6 +98,7 @@ describe('TodayAppointments', () => {
     const onConfirm = vi.fn();
     const onDecline = vi.fn();
     const onSeeAll = vi.fn();
+    const onMessage = vi.fn();
     render(
       <TodayAppointments
         appointments={[]}
@@ -111,17 +112,22 @@ describe('TodayAppointments', () => {
         therapistNameForId={() => 'Dr A'}
         onConfirmRequest={onConfirm}
         onDeclineRequest={onDecline}
+        onMessageRequest={onMessage}
         onSeeAllRequests={onSeeAll}
       />
     );
-    const section = screen.getByRole('region', { name: 'Requests to confirm' });
-    expect(within(section).getByText('Requests to confirm (4)')).toBeInTheDocument();
-    expect(within(section).getAllByRole('button', { name: 'Confirm' })).toHaveLength(3);
-    fireEvent.click(within(section).getAllByRole('button', { name: 'Confirm' })[0]);
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
-    fireEvent.click(within(section).getAllByRole('button', { name: 'Decline' })[1]);
-    expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
-    fireEvent.click(within(section).getByRole('button', { name: 'See all 4 requests' }));
+    const section = screen.getByRole('region', { name: 'Awaiting' });
+    expect(within(section).getByText('Awaiting (4)')).toBeInTheDocument();
+    // Oldest first: r4 was asked longest ago.
+    const books = within(section).getAllByRole('button', { name: /^Book / });
+    expect(books).toHaveLength(3);
+    fireEvent.click(books[0]);
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'r4' }));
+    fireEvent.click(within(section).getAllByRole('button', { name: /^Dismiss / })[1]);
+    expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r3' }));
+    fireEvent.click(within(section).getAllByRole('button', { name: /^WhatsApp / })[2]);
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'See all 4 awaiting' }));
     expect(onSeeAll).toHaveBeenCalled();
     // The card header already says "none today"; the body does not repeat it next to the requests.
     expect(screen.queryByText(/No appointments today/)).toBeNull();
@@ -313,7 +319,7 @@ describe('TodayAppointments all-done wording', () => {
     onSelect: vi.fn(),
   };
 
-  it('does not claim "All done" while booking requests are still waiting', () => {
+  it('does not claim "All done" while someone is still awaiting', () => {
     const request: AppointmentRequest = {
       id: 'r1', clinicId: 'c', name: 'Req', phone: '98', email: null, preferredTherapistId: 't1', notes: null,
       preferredDate: null, preferredTimeText: 'evening', status: 'pending', appointmentId: null,
@@ -326,9 +332,10 @@ describe('TodayAppointments all-done wording', () => {
         requests={[request]}
         onConfirmRequest={vi.fn()}
         onDeclineRequest={vi.fn()}
+        onMessageRequest={vi.fn()}
       />
     );
-    expect(screen.getByRole('region', { name: 'Requests to confirm' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Awaiting' })).toBeInTheDocument();
     // Finished work stays reachable, but nothing claims the day is over or empty while a request waits.
     expect(screen.getByText(/Done today/)).toBeInTheDocument();
     expect(screen.queryByText(/All done for today/)).not.toBeInTheDocument();

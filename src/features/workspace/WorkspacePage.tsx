@@ -35,6 +35,9 @@ import { useShowMore, ShowMoreFooter } from '@/components/ShowMore';
 import { ReviewsPanel, type BookFollowUp } from '@/features/followUp/ReviewsPanel';
 import { useFollowUpData } from '@/features/followUp/useFollowUpData';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
+import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
+import { AwaitingOpenedStrip, useAwaitingOpening } from '@/components/schedule/AwaitingOpenedStrip';
+import { awaitingMessage } from '@/domain/awaiting';
 import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { noteForVisit } from '@/domain/noteLinks';
@@ -370,6 +373,8 @@ export function WorkspacePage() {
     [appointmentRequests]
   );
   const pendingRequestCount = pendingRequests.length;
+  const awaitingOpening = useAwaitingOpening(pendingRequests);
+  const [addAwaitingOpen, setAddAwaitingOpen] = useState(false);
   const [confirmingRequest, setConfirmingRequest] = useState<AppointmentRequest | null>(null);
   // After a booking, a strip offers the one-tap WhatsApp to the patient (booking never messages anyone itself).
   const [booked, setBooked] = useState<BookedSlot | null>(null);
@@ -771,6 +776,7 @@ export function WorkspacePage() {
         condition={openAppointment?.patientId ? flagContext?.conditionByPatient.get(openAppointment.patientId) ?? null : null}
         canManage={Boolean(openAppointment) && (canManageBookings || openAppointment?.therapistId === scope.myTherapistId)}
         onClose={() => setOpenAppointmentId(null)}
+        onCancelled={awaitingOpening.freed}
         onReschedule={(appointment) => {
           setOpenAppointmentId(null);
           setReschedulingAppointment(appointment);
@@ -817,9 +823,9 @@ export function WorkspacePage() {
       />
       <ConfirmDialog
         open={decliningRequest !== null}
-        title="Decline this request?"
-        message={decliningRequest ? `${decliningRequest.name}'s request will be removed from the list. You can message them right after.` : ''}
-        confirmLabel="Decline"
+        title="Remove from Awaiting?"
+        message={decliningRequest ? `${decliningRequest.name} will be taken off the Awaiting list. You can message them right after.` : ''}
+        confirmLabel="Dismiss"
         destructive
         onCancel={() => setDecliningRequest(null)}
         onConfirm={() => {
@@ -838,8 +844,23 @@ export function WorkspacePage() {
         onClose={() => setReschedulingAppointment(null)}
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
-        onBooked={setBooked}
+        onBooked={(result) => {
+          setBooked(result);
+          // Moved to another time or therapist: its old time is free for anyone awaiting it.
+          const old = reschedulingAppointment;
+          if (old && (old.scheduledAt !== result.scheduledAt || (old.therapistId ?? null) !== (result.therapistId ?? null))) {
+            awaitingOpening.freed(old);
+          }
+        }}
       />
+      <AddToWaitlistSheet
+        open={addAwaitingOpen}
+        clinicId={clinic.id}
+        initialDate={toLocalDateStr(new Date())}
+        therapists={(workspaceTherapists ?? []).filter((t) => t.active !== false)}
+        onClose={() => setAddAwaitingOpen(false)}
+      />
+      <AwaitingOpenedStrip matches={awaitingOpening.matches} onBook={setConfirmingRequest} onDismiss={awaitingOpening.clear} />
       {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
       <BookSlotSheet
         isOpen={bookingFollowUp !== null}
@@ -955,9 +976,13 @@ export function WorkspacePage() {
             <span className="flex shrink-0 items-center gap-2.5">
               {pendingRequestCount > 0 && (
                 <span className="rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-xs font-medium text-[var(--amber)]">
-                  {pendingRequestCount} {pendingRequestCount === 1 ? 'request' : 'requests'}
-                  <span className="hidden sm:inline"> to confirm</span>
+                  {pendingRequestCount} awaiting
                 </span>
+              )}
+              {canManageBookings && (
+                <button type="button" className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => setAddAwaitingOpen(true)}>
+                  + Awaiting
+                </button>
               )}
               <Link to="/schedule" className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline">
                 <span className="sm:hidden">Schedule →</span>
@@ -978,6 +1003,7 @@ export function WorkspacePage() {
             therapistNameForId={(id) => (id ? therapistRoster.get(id)?.name ?? null : null)}
             onConfirmRequest={setConfirmingRequest}
             onDeclineRequest={setDecliningRequest}
+            onMessageRequest={(r) => bookingService.sendText(awaitingMessage({ patientName: r.name, clinicName: clinic.name }), r.phone)}
             onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
             flagContext={flagContext}
             mrnoFor={mrnoFor}

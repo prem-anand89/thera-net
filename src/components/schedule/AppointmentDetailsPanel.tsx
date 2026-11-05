@@ -64,6 +64,7 @@ export function AppointmentDetailsPanel({
   onClose,
   onReschedule,
   onCancelSeries,
+  onCancelled,
   seriesFollowingCount,
   onStartNote,
   returnTo,
@@ -90,6 +91,8 @@ export function AppointmentDetailsPanel({
   onReschedule: (appointment: Appointment) => void;
   /** Cancels this and the following sessions of its series. */
   onCancelSeries?: (appointment: Appointment) => void;
+  /** Called after this appointment was cancelled, so the page can offer its freed time to anyone awaiting. */
+  onCancelled?: (appointment: Appointment) => void;
   /** Sessions a series cancel would cancel (this one and the active ones after it), shown in its confirm. */
   seriesFollowingCount?: number;
   /** Opens "Start note" — notes now, service and payment later. */
@@ -427,7 +430,10 @@ export function AppointmentDetailsPanel({
         onCancel={() => setConfirmCancel(false)}
         onConfirm={() => {
           setConfirmCancel(false);
-          void run(() => bookingService.cancelAppointment(appointment.id));
+          void run(async () => {
+            await bookingService.cancelAppointment(appointment.id);
+            onCancelled?.(appointment);
+          });
         }}
       />
       <ConfirmDialog

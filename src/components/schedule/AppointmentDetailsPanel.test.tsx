@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 
@@ -11,7 +11,8 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c', name: 'BM Physio' }) }));
-vi.mock('@/services', () => ({ bookingService: {} }));
+const cancelAppointment = vi.hoisted(() => vi.fn());
+vi.mock('@/services', () => ({ bookingService: { cancelAppointment: (id: string) => cancelAppointment(id) } }));
 
 import { AppointmentDetailsPanel } from './AppointmentDetailsPanel';
 
@@ -295,5 +296,45 @@ describe('AppointmentDetailsPanel restore actions', () => {
     cleanup();
     show(appt({ status: 'cancelled' })); // its time has passed: the server would refuse
     expect(screen.queryByRole('button', { name: 'Restore appointment' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AppointmentDetailsPanel cancel', () => {
+  afterEach(cleanup);
+
+  it('tells the page once the appointment is cancelled, so its time can be offered to anyone awaiting', async () => {
+    cancelAppointment.mockResolvedValue(undefined);
+    const onCancelled = vi.fn();
+    const appointment = appt({});
+    render(
+      <AppointmentDetailsPanel
+        appointment={appointment}
+        therapistName="Bm"
+        therapistColor="#a6552f"
+        therapistPhone={null}
+        slotMinutes={30}
+        canManage
+        onClose={() => {}}
+        onReschedule={() => {}}
+        onCancelled={onCancelled}
+      />
+    );
+    fireEvent.click(screen.getByText('Cancel appointment'));
+    expect(onCancelled).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Cancel this appointment?' })).getByRole('button', { name: 'Cancel appointment' }));
+    await waitFor(() => expect(onCancelled).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' })));
+    expect(cancelAppointment).toHaveBeenCalledWith('a1');
+  });
+
+  it('does not offer the time when the cancel fails', async () => {
+    cancelAppointment.mockRejectedValue(new Error('boom'));
+    const onCancelled = vi.fn();
+    render(
+      <AppointmentDetailsPanel appointment={appt({})} therapistName="Bm" therapistColor="#a6552f" therapistPhone={null} slotMinutes={30} canManage onClose={() => {}} onReschedule={() => {}} onCancelled={onCancelled} />
+    );
+    fireEvent.click(screen.getByText('Cancel appointment'));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Cancel this appointment?' })).getByRole('button', { name: 'Cancel appointment' }));
+    await waitFor(() => expect(cancelAppointment).toHaveBeenCalled());
+    expect(onCancelled).not.toHaveBeenCalled();
   });
 });

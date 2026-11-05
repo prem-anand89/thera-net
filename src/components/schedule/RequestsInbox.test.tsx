@@ -45,26 +45,6 @@ describe('RequestsInbox', () => {
     expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
   });
 
-  it('rows: two lines — name, how long ago and phone, then day, time, therapist and reason — with nothing truncated', () => {
-    render(
-      <RequestsInbox
-        variant="rows"
-        requests={[request({ notes: 'Right shoulder pain for 2 weeks', preferredTherapistId: 't1' })]}
-        therapistNameFor={() => 'Prem Anand'}
-        onConfirm={vi.fn()}
-        onDecline={vi.fn()}
-        onSeeAll={vi.fn()}
-      />
-    );
-    const when = screen.getByText(/Fri, 2 Oct, 10:30 AM, with Prem Anand/);
-    expect(when.className).not.toContain('truncate');
-    expect(when).toHaveTextContent('Right shoulder pain for 2 weeks');
-    const phone = screen.getByRole('link', { name: '9820000002' });
-    expect(phone).toHaveAttribute('href', 'tel:9820000002');
-    // the phone sits on the first line with the name, not on a line of its own
-    expect(phone.parentElement).toHaveTextContent('Meera');
-  });
-
   it('rail: the name and time are the jump button; Confirm, Decline and the phone link stay separate, and nothing truncates', () => {
     const onFocus = vi.fn();
     const onConfirm = vi.fn();

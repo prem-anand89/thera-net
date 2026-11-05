@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { BookedStrip } from '@/components/schedule/BookedStrip';
+import { AwaitingOpenedStrip, useAwaitingOpening } from '@/components/schedule/AwaitingOpenedStrip';
 import type { RequestGhost } from '@/components/schedule/RequestGhostBlock';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
@@ -462,6 +463,7 @@ export function ScheduleBookingsView({
     [requests]
   );
   const requestById = useMemo(() => new Map((requests ?? []).map((r) => [r.id, r])), [requests]);
+  const awaitingOpening = useAwaitingOpening(pendingRequests);
 
 
   const [sheet, setSheet] = useState<SheetState | null>(null);
@@ -721,6 +723,7 @@ export function ScheduleBookingsView({
     try {
       await bookingService.rescheduleAppointment(appointment.id, localDateTimeToIso(target.date, minutesToTime(target.start)), target.duration, reassign);
       const resized = target.start === minutesOfDay(appointment.scheduledAt) && target.date === dateForAppointment(appointment) && !reassign;
+      if (!resized) awaitingOpening.freed(previous);
       setUndo({
         message: resized
           ? `${appointment.patientName} is now ${formatMinutes(target.duration)}.`
@@ -1317,6 +1320,7 @@ export function ScheduleBookingsView({
 
       {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
 
+      <AwaitingOpenedStrip matches={awaitingOpening.matches} onBook={confirmRequest} onDismiss={awaitingOpening.clear} />
       {confirmed && (
         <BookedStrip
           booked={confirmed}
@@ -1359,6 +1363,7 @@ export function ScheduleBookingsView({
         slotMinutes={slotMinutes}
         canManage={selectedAppointment ? canManageAppointment(selectedAppointment) : false}
         onClose={() => setSelectedId(null)}
+        onCancelled={awaitingOpening.freed}
         onReschedule={(appointment) => {
           setSelectedId(null);
           setConfirmed(null);
@@ -1406,6 +1411,10 @@ export function ScheduleBookingsView({
         lockTherapist={isTherapist}
         rescheduleAppointment={sheet?.reschedule}
         onBooked={(result) => {
+          const old = sheet?.reschedule;
+          if (old && (old.scheduledAt !== result.scheduledAt || (old.therapistId ?? null) !== (result.therapistId ?? null))) {
+            awaitingOpening.freed(old);
+          }
           setConfirmed(result);
           setSchedule({ view: 'schedule', date: toLocalDateStr(new Date(result.scheduledAt)) });
         }}

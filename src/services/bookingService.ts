@@ -136,6 +136,8 @@ export const bookingService = {
       p_preferred_time_of_day: params.preferredTimeOfDay ?? null,
     });
     if (error) throw new Error(error.message);
+    // The entry is read back through sync like every other request, so it shows in Awaiting at once.
+    syncEngine.schedule(0);
     return data as UUID;
   },
 
