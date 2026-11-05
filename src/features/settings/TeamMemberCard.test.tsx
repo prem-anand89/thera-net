@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 afterEach(cleanup);
 import { TeamMemberCard } from './TeamSection';
 import type { Clinic, ShiftTemplate, Therapist, TherapistShiftAssignment } from '@/domain/types';
 
+const memberWrites = vi.hoisted(() => ({ updates: [] as Record<string, unknown>[], client: null as unknown }));
+
 vi.mock('@/lib/supabase', () => ({
-  getSupabase: () => null,
+  getSupabase: () => memberWrites.client,
   publicTherapistPhotoUrl: () => null,
   publicLogoUrl: () => null,
 }));
@@ -204,5 +206,77 @@ describe('TeamMemberCard — unlinked state while the member list loads', () => 
   it('still shows them for a roster row with no login at all, even before the list loads', () => {
     render1(unlinked, false);
     expect(screen.getByText('No login')).toBeInTheDocument();
+  });
+});
+
+describe('TeamMemberCard — Role in the edit form', () => {
+  const linked: Therapist = { id: 't1', clinicId: 'c1', name: 'Dr Linked', active: true, userId: 'u1', updatedAt: '' };
+  const member = (role: string) => ({
+    userId: 'u1',
+    email: 'a@b.c',
+    role,
+    displayName: 'Dr Linked',
+    status: 'active',
+    invitedAt: null,
+    lastSignInAt: null,
+    lastActiveAt: null,
+  });
+  const card = (m: ReturnType<typeof member> | null, membersLoaded: boolean) => (
+    <TeamMemberCard
+      person={{ key: 'p', therapist: linked, member: m } as never}
+      membersLoaded={membersLoaded}
+      clinicId="c1"
+      isLastAdmin={false}
+      revoking={false}
+      resending={false}
+      onRevoke={vi.fn()}
+      onResend={vi.fn()}
+      onSaved={vi.fn()}
+      onDelete={vi.fn()}
+      onPhotoUpload={vi.fn()}
+      onDeactivate={vi.fn()}
+      assignments={[]}
+      templates={[]}
+      clinic={clinic}
+    />
+  );
+
+  beforeEach(() => {
+    memberWrites.updates = [];
+    memberWrites.client = {
+      from: () => ({
+        update: (row: Record<string, unknown>) => {
+          memberWrites.updates.push(row);
+          return { eq: () => ({ eq: async () => ({ error: null }) }) };
+        },
+      }),
+    };
+  });
+  afterEach(() => {
+    memberWrites.client = null;
+  });
+
+  const roleBox = () => screen.queryByRole('combobox', { name: 'Role' });
+
+  it('is hidden while the member list loads, then shows the real role, and saving writes no role', async () => {
+    const { rerender } = render(card(null, false));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(roleBox()).toBeNull();
+
+    rerender(card(member('admin'), true));
+    expect(roleBox()).toHaveValue('admin');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(memberWrites.updates).toHaveLength(1));
+    expect(memberWrites.updates[0]).not.toHaveProperty('role');
+  });
+
+  it('writes the role only when the admin picks a different one', async () => {
+    render(card(member('front_desk'), true));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(roleBox()!, { target: { value: 'admin' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(memberWrites.updates).toHaveLength(1));
+    expect(memberWrites.updates[0]).toMatchObject({ role: 'admin' });
   });
 });

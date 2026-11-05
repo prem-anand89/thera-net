@@ -198,7 +198,12 @@ export function TeamMemberCard({
   const [showHoursFlow, setShowHoursFlow] = useState(false);
   
   const [nameDraft, setNameDraft] = useState(displayName);
-  const [roleDraft, setRoleDraft] = useState<ClinicRole>(role);
+  // The role the admin picked in the form, null until they pick one. Until then the form follows the real role, so a
+  // form opened before the member list arrives can never save a guess over someone's actual role.
+  const [rolePicked, setRolePicked] = useState<ClinicRole | null>(null);
+  const roleDraft = rolePicked ?? role;
+  // A linked therapist's role is unknown until the member list loads (or if it fails): the Role box waits for it.
+  const roleKnown = Boolean(member) || isUnlinkedTherapist;
   const [emailDraft, setEmailDraft] = useState('');
   const [regDraft, setRegDraft] = useState(therapist?.registrationNo ?? '');
   const [phoneDraft, setPhoneDraft] = useState(therapist?.phone ?? '');
@@ -267,7 +272,7 @@ export function TeamMemberCard({
             display_name: nameDraft.trim() || null,
             // Only touch role when the admin actually changed it; a stale
             // draft must never silently demote/promote a member.
-            ...(roleDraft !== role ? { role: roleDraft } : {}),
+            ...(rolePicked !== null && rolePicked !== role ? { role: rolePicked } : {}),
           })
           .eq('clinic_id', clinicId)
           .eq('user_id', member.userId);
@@ -452,7 +457,7 @@ export function TeamMemberCard({
             onClick={(e) => {
               e.stopPropagation();
               setNameDraft(displayName);
-              setRoleDraft(role);
+              setRolePicked(null);
               setRegDraft(therapist?.registrationNo ?? '');
               setPhoneDraft(therapist?.phone ?? '');
               setColorDraft(therapist?.color ?? '');
@@ -550,7 +555,7 @@ export function TeamMemberCard({
                     {nameDraft || 'New Member'}
                   </div>
                   <div className="text-xs text-[var(--muted)]">
-                    {roleDraft !== 'unknown' ? CLINIC_ROLE_LABELS[roleDraft] : 'Therapist'}
+                    {!roleKnown ? null : roleDraft !== 'unknown' ? CLINIC_ROLE_LABELS[roleDraft] : 'Therapist'}
                   </div>
                 </div>
               </div>
@@ -571,12 +576,12 @@ export function TeamMemberCard({
                   />
                 </Field>
                 
-                {(member || (!member && therapist)) && (
+                {roleKnown && (
                   <Field label="Role">
                     <select
                       className={inputCls}
                       value={roleDraft}
-                      onChange={(e) => setRoleDraft(e.target.value as Exclude<ClinicRole, 'unknown'>)}
+                      onChange={(e) => setRolePicked(e.target.value as Exclude<ClinicRole, 'unknown'>)}
                     >
                       <option value="therapist">Therapist</option>
                       <option value="front_desk">Front desk</option>

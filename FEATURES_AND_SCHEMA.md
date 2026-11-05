@@ -5214,6 +5214,9 @@ into a confident wrong message that flips a moment later.
   record, the edit form's login field and its invite-on-save. A therapist whose roster
   row has a `userId` only counts as unlinked once the member list has loaded and found
   no matching login; a row with no `userId` is unlinked either way.
+- **Role in the Team edit form** follows the member's real role until the admin picks one
+  (`rolePicked`), and the Role box stays hidden while a linked therapist's role is unknown, so a
+  form opened before the member list arrives can't save "Therapist" over an admin or front desk.
 - **Lists** show `LoadingRows` (`ui.tsx`) while `items === undefined` — Workspace's
   "Today's visits" and Services — and only then "No visits logged today" / "No services yet".
 - **Plan-gated UI** uses `useEntitlements().planPending` (still fetching *and* nothing
