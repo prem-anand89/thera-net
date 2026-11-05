@@ -317,6 +317,10 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
   // The region is one line of text until someone wants to change it. A disclosure, not a lock: nothing is disabled.
   const [open, setOpen] = useState(false);
   const expanded = open || dirty;
+  // A successful save closes the fields; the summary line above shows the new values.
+  async function saveAndClose() {
+    if (await save()) setOpen(false);
+  }
   const country = COUNTRY_CODES.find((c) => c.code === (form.defaultCountryCode ?? '+91'));
   const summary = regionSummary({
     country: country?.code ? `${country.name} (${country.code})` : 'Other country',
@@ -335,11 +339,24 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             <p className="text-sm text-[var(--ink)]" data-testid="region-summary">
               {summary}
             </p>
-            {!dirty && (
-              <button type="button" className="min-h-8 shrink-0 rounded-md px-2 text-xs font-semibold text-[var(--teal)] hover:bg-[var(--paper)]" aria-expanded={expanded} onClick={() => setOpen((v) => !v)}>
-                {expanded ? 'Done' : 'Change'}
-              </button>
-            )}
+            {/* While the fields are open this is always Cancel: it drops any edit and closes the panel, so there is a way
+                out whether or not anything was changed. Saving also closes it. */}
+            <button
+              type="button"
+              className="min-h-8 shrink-0 rounded-md px-2 text-xs font-semibold text-[var(--teal)] hover:bg-[var(--paper)]"
+              aria-expanded={expanded}
+              disabled={busy}
+              onClick={() => {
+                if (expanded) {
+                  cancel();
+                  setOpen(false);
+                } else {
+                  setOpen(true);
+                }
+              }}
+            >
+              {expanded ? 'Cancel' : 'Change'}
+            </button>
           </div>
           {expanded && (
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -459,7 +476,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             dirty={dirty}
             saved={saved}
             busy={busy}
-            onSave={() => (zoneChanges ? setConfirmingZone(true) : void save())}
+            onSave={() => (zoneChanges ? setConfirmingZone(true) : void saveAndClose())}
             onCancel={() => {
               cancel();
             }}
@@ -474,7 +491,7 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
           onCancel={() => setConfirmingZone(false)}
           onConfirm={() => {
             setConfirmingZone(false);
-            void save();
+            void saveAndClose();
           }}
         />
       </SectionCard>

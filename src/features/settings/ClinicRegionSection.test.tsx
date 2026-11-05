@@ -73,8 +73,10 @@ describe('Region and daily email', () => {
     expect(screen.getByRole('combobox', { name: /Time zone/ })).toBeEnabled();
     expect(screen.getByRole('combobox', { name: /Phone country code/ })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /Financial year starts in/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    // Cancel is there from the moment the fields open, whether or not anything was changed.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('combobox', { name: /Time zone/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument();
   });
 
   it('the financial year saves from here, with a note that it applies to invoices from now on', async () => {
@@ -92,8 +94,30 @@ describe('Region and daily email', () => {
     render(<ClinicRegionSection onDirtyChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Change' }));
     fireEvent.change(screen.getByRole('combobox', { name: /Phone country code/ }), { target: { value: '+44' } });
-    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
     expect(screen.getByRole('combobox', { name: /Phone country code/ })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+  });
+
+  it('Cancel at the top drops an edit and closes the fields; nothing is saved', () => {
+    render(<ClinicRegionSection onDirtyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.change(screen.getByRole('combobox', { name: /Time zone/ }), { target: { value: 'Asia/Dubai' } });
+    expect(screen.getByTestId('region-summary')).toHaveTextContent('Gulf Standard Time');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
+    expect(screen.queryByRole('combobox', { name: /Time zone/ })).toBeNull();
+    expect(screen.getByTestId('region-summary')).toHaveTextContent('India Standard Time');
+    expect(screen.queryByTestId('section-save-bar')).toBeNull();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('saving closes the fields and the summary shows the new value', async () => {
+    render(<ClinicRegionSection onDirtyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.change(screen.getByRole('combobox', { name: /Phone country code/ }), { target: { value: '+44' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole('combobox', { name: /Phone country code/ })).toBeNull());
+    expect(screen.getByTestId('region-summary')).toHaveTextContent('UK (+44)');
   });
 
   it('changing the time zone asks first; Cancel saves nothing, confirming saves', async () => {
