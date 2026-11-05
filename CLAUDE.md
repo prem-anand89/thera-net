@@ -43,6 +43,15 @@ migration history disagree, and the next person (or the next rebuild) can't
 tell what state the schema is actually in. This has been a recurring bug
 class in this repo; don't reintroduce it.
 
+## Keep the app ready for other countries (no new India-only assumption)
+
+The app is India-only today, but must not get harder to take abroad. In new code:
+- **Money:** show amounts with `formatAmount(paise)` and a hand-typed or labelled symbol with `currencySymbol()`, both from `@/domain/money`. Never type `₹` or call `formatINR` (an ESLint error stops both; only `domain/money.ts`, UPI files and tests are exempt). Never rename a `*_paise` column.
+- **Phone numbers:** build and compare them through the clinic's country code (`clinicCountryCode`, `splitPhone`), not by assuming +91 or 10 digits.
+- **Time:** use the clinic's zone (`clinicTimezone`), not `Asia/Kolkata`.
+- **Tax:** do not hard-code GST or TDS wording where a regime could differ (`clinicTaxRegime`, `isGstIndia`).
+- **New India-only surface** (UPI, GST/TDS, Indian digit grouping, a rupee-only label): add it to the "India-only surfaces" list in `FEATURES_AND_SCHEMA.md` (section 0e) in the same change.
+
 ## Button type attribute — required for HTML compliance
 
 Every `<button>` element **must** have an explicit `type` attribute:

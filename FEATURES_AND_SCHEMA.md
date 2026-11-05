@@ -1608,6 +1608,8 @@ slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
 timezone                     text NOT NULL DEFAULT 'Asia/Kolkata' — IANA zone for every server-sent time (emails, push, the agenda, the public booking page); a trigger rejects names Postgres does not know (migration `20261021100000_clinic_region.sql`)
 default_country_code         text NOT NULL DEFAULT '+91' — `^\+[0-9]{1,4}$`; the code a phone number without one belongs to (`PhoneField`)
+currency_code                text NOT NULL DEFAULT 'INR' — INR, USD, GBP, EUR, AED, AUD, CAD or SGD. **Stored only**: no screen reads it yet (`clinicCurrencyCode` falls back to INR). Never change it per clinic by hand: a clinic set to GBP would still see rupees (migration `20261106110000_clinic_currency_tax.sql`)
+tax_regime                  text NOT NULL DEFAULT 'GST_IN' — GST_IN, GENERIC_TAX or NO_TAX. **Stored only**, same rule (`clinicTaxRegime`, `isGstIndia`)
 agenda_enabled               boolean NOT NULL DEFAULT true — the clinic sends the evening agenda email (migration `20261021130000_clinic_agenda_switch.sql`)
 agenda_hour                  smallint NOT NULL DEFAULT 20 — 0-23, the clinic-local hour `send-agenda` mails tomorrow's appointments (migration `20261021120000_daily_agenda.sql`)
 booking_start_hour, booking_end_hour  integer NOT NULL (default 9, 17) — the
@@ -3616,6 +3618,8 @@ slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
 timezone                     text NOT NULL DEFAULT 'Asia/Kolkata' — IANA zone for every server-sent time (emails, push, the agenda, the public booking page); a trigger rejects names Postgres does not know (migration `20261021100000_clinic_region.sql`)
 default_country_code         text NOT NULL DEFAULT '+91' — `^\+[0-9]{1,4}$`; the code a phone number without one belongs to (`PhoneField`)
+currency_code                text NOT NULL DEFAULT 'INR' — INR, USD, GBP, EUR, AED, AUD, CAD or SGD. **Stored only**: no screen reads it yet (`clinicCurrencyCode` falls back to INR). Never change it per clinic by hand: a clinic set to GBP would still see rupees (migration `20261106110000_clinic_currency_tax.sql`)
+tax_regime                  text NOT NULL DEFAULT 'GST_IN' — GST_IN, GENERIC_TAX or NO_TAX. **Stored only**, same rule (`clinicTaxRegime`, `isGstIndia`)
 agenda_enabled               boolean NOT NULL DEFAULT true — the clinic sends the evening agenda email (migration `20261021130000_clinic_agenda_switch.sql`)
 agenda_hour                  smallint NOT NULL DEFAULT 20 — 0-23, the clinic-local hour `send-agenda` mails tomorrow's appointments (migration `20261021120000_daily_agenda.sql`)
 booking_start_hour, booking_end_hour  integer NOT NULL (default 9, 17) — the
@@ -5274,9 +5278,6 @@ read misses (clipped pills, tables wider than their card).
 - **Don't repeat a heading at several levels** (card title, eyebrow, sub-heading,
   table heading all saying "therapist comparison"): one title per block.
 
-### 0d. One way to show money (`domain/money.ts`)
-Amounts go through **`formatAmount(paise)`** and a symbol typed or labelled by hand through **`currencySymbol()`** ("Price (₹)", "₹0 if free"). Both print rupees for now, with no setting behind them, so a clinic's currency can be honoured in one place later (`clinics.currency_code` is stored, not yet read). `formatINR` stays only for rupee-only surfaces (`UpiQrModal`). An ESLint **error** (`eslint.config.js`: `no-restricted-syntax` on a typed `₹`, `no-restricted-imports` on `formatINR`) stops both coming back; only `domain/money.ts`, UPI files and tests are exempt. Output for India is byte-for-byte what it was before the rule.
-
 ### 0c. Don't show "empty", "locked" or "unlinked" for data that hasn't arrived
 Local Dexie data (`useLiveQuery`) resolves long before server calls (the team member
 list, `clinic_plans`), and `data ?? []` / a fail-closed default turns "not loaded yet"
@@ -5295,6 +5296,20 @@ into a confident wrong message that flips a moment later.
   cached on this device) to hold a placeholder instead of the "Invoicing is not in your
   plan" lock. A returning device reads its cached plan at once, so `planPending` stays
   false for it; `can()` itself still fails closed for enforcement.
+
+### 0d. One way to show money (`domain/money.ts`)
+Amounts go through **`formatAmount(paise)`** and a symbol typed or labelled by hand through **`currencySymbol()`** ("Price (₹)", "₹0 if free"). Both print rupees for now, with no setting behind them, so a clinic's currency can be honoured in one place later (`clinics.currency_code` and `clinics.tax_regime` are stored but nothing reads them yet). `formatINR` stays only for rupee-only surfaces (`UpiQrModal`). An ESLint **error** (`eslint.config.js`: `no-restricted-syntax` on a typed `₹`, `no-restricted-imports` on `formatINR`) stops both coming back; only `domain/money.ts`, UPI files and tests are exempt. Output for India is byte-for-byte what it was before the rule.
+
+### 0e. India-only surfaces (the list a future global project starts from)
+The app is built for India and works only there today. This is what is India-only, so a later project to serve another country starts here and nothing is a surprise. None of it matters until a clinic outside India is signed; the rule for new code is in `CLAUDE.md`.
+- **Money:** every amount goes through `formatAmount` and `currencySymbol()` (section 0d), but both still print rupees. The `*_paise` columns and the `Paise` type mean "1/100 of the currency": **never rename them**. Currencies without 100 minor units (Japanese yen, Kuwaiti dinar) are out of scope by design. `clinics.currency_code` and `clinics.tax_regime` exist but nothing reads them.
+- **UPI:** about 30 files (the QR, the payment method, Settings → Payments), `UpiQrModal` and `upiPay.ts`, which are the only places allowed to name rupees directly.
+- **Tax wording:** GST and TDS appear in about 17 files; the partner split's TDS basis; invoice labels ("Bill cum receipt", GST number); `amountInWords` (rupees, lakh, crore); Indian digit grouping.
+- **Money text the lint rule cannot see:** `toLocaleString('en-IN')` grouping (`BillAdjustmentFields`, `VisitSharedSplit`), the word "rupee" in text and screen-reader labels ("Every rupee that moved", "Price in rupees"), the letterhead preview's "Rupees … Only", two e2e specs that look for `₹`, and `SHARE_BELOW_ZERO` / `SHARE_MISSING` (`domain/visitLines.ts`), which are fixed when the app loads and so would not follow a per-clinic currency.
+- **Phone numbers:** patients are matched by the last 10 digits (`lastTenDigits`), which fails for shorter numbers abroad. WhatsApp links use the clinic's country code (`clinicRuntime`), default +91.
+- **Time and region:** `Asia/Kolkata` is only the fallback (`clinicTimezone`); financial years start in April unless `fy_start_month` is set.
+- **Hosting:** one Supabase project in Mumbai, and plan prices in rupees. Patient privacy rules (GDPR, HIPAA) and data regions need legal advice and are likely a separate project per region, not a code change. The app reads its project URL from environment settings, which keeps that door open.
+- **Language:** English only. No translation layer.
 
 ### 1. Offline-First with Outbox Sync
 - **Dexie** for local IndexedDB storage

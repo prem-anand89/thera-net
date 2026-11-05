@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clinicCountryCode, clinicTimezone, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
+import { clinicCountryCode, clinicCurrencyCode, clinicTaxRegime, clinicTimezone, CURRENCY_CODES, isGstIndia, TAX_REGIMES, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
 
 describe('clinic region', () => {
   it('defaults to India until set', () => {
@@ -17,6 +17,23 @@ describe('clinic region', () => {
   });
   it('describes a zone with its UTC offset', () => {
     expect(timezoneHint('Asia/Kolkata')).toContain('UTC+5:30');
+  });
+});
+
+describe('currency and tax regime (stored only)', () => {
+  it('are rupees and GST until set, for a missing clinic, an empty value or one we do not know', () => {
+    for (const c of [undefined, null, {}, { currencyCode: '', taxRegime: '' }, { currencyCode: 'XYZ', taxRegime: 'VAT' }, { currencyCode: null, taxRegime: null }]) {
+      expect(clinicCurrencyCode(c)).toBe('INR');
+      expect(clinicTaxRegime(c)).toBe('GST_IN');
+      expect(isGstIndia(c)).toBe(true);
+    }
+  });
+  it('read what the clinic has set, from the same lists as the database check', () => {
+    expect(clinicCurrencyCode({ currencyCode: 'GBP' })).toBe('GBP');
+    expect(clinicTaxRegime({ taxRegime: 'NO_TAX' })).toBe('NO_TAX');
+    expect(isGstIndia({ taxRegime: 'GENERIC_TAX' })).toBe(false);
+    expect([...CURRENCY_CODES]).toEqual(['INR', 'USD', 'GBP', 'EUR', 'AED', 'AUD', 'CAD', 'SGD']);
+    expect([...TAX_REGIMES]).toEqual(['GST_IN', 'GENERIC_TAX', 'NO_TAX']);
   });
 });
 

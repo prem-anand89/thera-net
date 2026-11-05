@@ -132,6 +132,10 @@ export interface Clinic {
   timezone?: string;
   /** Default country code for new phone numbers (e.g. +91). Absent = India. */
   defaultCountryCode?: string;
+  /** The clinic's currency (`clinics.currency_code`). Stored only: nothing reads it yet, so every screen shows rupees. Read through `clinicCurrencyCode`. */
+  currencyCode?: string;
+  /** The clinic's tax regime (`clinics.tax_regime`). Stored only, like `currencyCode`. Read through `clinicTaxRegime`. */
+  taxRegime?: string;
   /** The clinic sends each therapist tomorrow's agenda by email each evening. Absent = on. */
   agendaEnabled?: boolean;
   /** Clinic-local hour (0-23) the agenda email goes out. Absent = 20 (8 pm). */
