@@ -67,6 +67,21 @@ export function awaitingDuplicateNotes(
   return notes;
 }
 
+/**
+ * "Already booked for Fri, 6 Nov, 9:30 AM": this person's next upcoming appointment, matched by phone. Shown on the
+ * Awaiting row so staff don't mistake a booking they can see on the calendar for the awaiting entry itself.
+ */
+export function bookedNoteFor(request: Pick<AppointmentRequest, 'phone'>, appointments: Appointment[], now: Date = new Date()): string | null {
+  const digits = lastTenDigits(request.phone);
+  if (digits.length < 7) return null;
+  const next = appointments
+    .filter((a) => lastTenDigits(a.patientPhone) === digits && (a.status === 'confirmed' || a.status === 'rescheduled') && new Date(a.scheduledAt).getTime() > now.getTime())
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
+  if (!next) return null;
+  const when = new Date(next.scheduledAt).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  return `Already booked for ${when}`;
+}
+
 /** The slot an appointment frees when it is cancelled or moved away: its day, therapist and part of the day. */
 export function openingFor(appointment: Pick<Appointment, 'scheduledAt' | 'therapistId'>): WaitlistOpening {
   return {

@@ -42,6 +42,7 @@ export function TodayAppointments({
   onDeclineRequest,
   onMessageRequest,
   canMessageRequest,
+  bookedNoteForRequest,
   onSeeAllRequests,
   flagContext,
   mrnoFor,
@@ -66,6 +67,7 @@ export function TodayAppointments({
   /** WhatsApp to someone who is awaiting ("we've noted your request"). */
   onMessageRequest?: (request: AppointmentRequest) => void;
   canMessageRequest?: (request: AppointmentRequest) => boolean;
+  bookedNoteForRequest?: (request: AppointmentRequest) => string | null;
   onSeeAllRequests?: () => void;
   /** Patient flags + condition (`usePatientFlagContext`); omit to hide them. */
   flagContext?: PatientFlagContext;
@@ -253,6 +255,7 @@ export function TodayAppointments({
         onBook={onConfirmRequest!}
         onMessage={onMessageRequest!}
         canMessage={canMessageRequest}
+        bookedNoteFor={bookedNoteForRequest}
         onDismiss={onDeclineRequest!}
         onSeeAll={onSeeAllRequests ?? (() => undefined)}
       />

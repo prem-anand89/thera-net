@@ -51,7 +51,7 @@ import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
-import { awaitingMessage } from '@/domain/awaiting';
+import { awaitingMessage, bookedNoteFor } from '@/domain/awaiting';
 import { RequestsInbox, requestWants } from '@/components/schedule/RequestsInbox';
 import { PendingRequestsBar } from '@/components/schedule/PendingRequestsBar';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
@@ -624,6 +624,8 @@ export function ScheduleBookingsView({
     });
   }
 
+  const bookedNoteForRequest = (request: AppointmentRequest) => bookedNoteFor(request, allAppointments ?? []);
+
   function messageAwaiting(request: AppointmentRequest) {
     bookingService.sendText(awaitingMessage({ patientName: request.name, clinicName: clinic.name }), request.phone);
   }
@@ -720,6 +722,10 @@ export function ScheduleBookingsView({
     if (therapistId && selectedIds.length && !selectedIds.includes(therapistId)) setTherapists([...selectedIds, therapistId]);
     setHighlightRequestId(request.id);
     setTimeout(() => setHighlightRequestId((current) => (current === request.id ? null : current)), 5000);
+    // No readable time: nothing is drawn on the grid, so say so. Anything on the calendar is a real booking.
+    if (clockTextMinutes(request.preferredTimeText) === null) {
+      notify.info(`${request.name} didn't ask for a time, so nothing is marked on the calendar. Use Book to choose one.`);
+    }
   }
 
   const canManageAppointment = (appointment: Appointment) =>
@@ -976,6 +982,7 @@ export function ScheduleBookingsView({
                     onConfirm={confirmRequest}
                     onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
                     onMessage={messageAwaiting}
+                    bookedNoteFor={bookedNoteForRequest}
                     onSeeAll={() => setSchedule({ view: 'requests' })}
                     onFocus={showRequestOnCalendar}
                     limit={3}
@@ -996,6 +1003,7 @@ export function ScheduleBookingsView({
                   onConfirm={confirmRequest}
                   onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
                   onMessage={messageAwaiting}
+                    bookedNoteFor={bookedNoteForRequest}
                   onSeeAll={() => setSchedule({ view: 'requests' })}
                 />
               </div>
@@ -1322,6 +1330,7 @@ export function ScheduleBookingsView({
             }}
             onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
             onMessage={messageAwaiting}
+                    bookedNoteFor={bookedNoteForRequest}
             onSeeAll={() => {}}
           />
         )}

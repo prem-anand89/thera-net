@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppointmentRequest } from './types';
-import { awaitingDuplicateNotes, awaitingMessage, awaitingOrder, awaitingWants, isPastDay, openingFor } from './awaiting';
+import { awaitingDuplicateNotes, bookedNoteFor, awaitingMessage, awaitingOrder, awaitingWants, isPastDay, openingFor } from './awaiting';
 import { matchingWaitlistEntries } from './waitlistMatch';
 
 const req = (id: string, over: Partial<AppointmentRequest> = {}): AppointmentRequest =>
@@ -78,6 +78,17 @@ describe('awaitingDuplicateNotes', () => {
     expect(awaitingDuplicateNotes('9820000001', [], [appt({ scheduledAt: new Date(2020, 0, 1).toISOString() }), appt({ status: 'cancelled' })], new Date(2026, 10, 5))).toEqual([]);
     expect(awaitingDuplicateNotes('9820000001', [req('x', { status: 'declined' } as never)], [], new Date(2026, 10, 5))).toEqual([]);
     expect(awaitingDuplicateNotes('123', [req('x')], [], new Date())).toEqual([]);
+  });
+});
+
+describe('bookedNoteFor', () => {
+  const appt = (over = {}) => ({ id: 'a', patientName: 'Ananya', patientPhone: '812731273', scheduledAt: new Date(2099, 10, 6, 9, 30).toISOString(), status: 'confirmed', ...over }) as never;
+  it('names the next upcoming booking for the same phone', () => {
+    expect(bookedNoteFor({ phone: '+91 8127312730'.slice(0, 13) }, [appt()], new Date(2026, 10, 5))).toBeNull();
+    expect(bookedNoteFor({ phone: '812731273' }, [appt({ scheduledAt: new Date(2099, 11, 1, 9).toISOString() }), appt()], new Date(2026, 10, 5))).toMatch(/^Already booked for .*6 Nov/);
+  });
+  it('says nothing for cancelled, past or other-number bookings', () => {
+    expect(bookedNoteFor({ phone: '812731273' }, [appt({ status: 'cancelled' }), appt({ scheduledAt: new Date(2020, 0, 1).toISOString() }), appt({ patientPhone: '999999999' })], new Date(2026, 10, 5))).toBeNull();
   });
 });
 

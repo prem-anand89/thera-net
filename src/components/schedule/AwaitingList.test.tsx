@@ -24,9 +24,9 @@ const req = (id: string, over: Partial<AppointmentRequest> = {}): AppointmentReq
     ...over,
   }) as AppointmentRequest;
 
-function setup(requests: AppointmentRequest[], limit = 3) {
+function setup(requests: AppointmentRequest[], limit = 3, bookedNoteFor?: (r: AppointmentRequest) => string | null) {
   const fns = { onBook: vi.fn(), onMessage: vi.fn(), onDismiss: vi.fn(), onSeeAll: vi.fn() };
-  render(<AwaitingList requests={requests} today="2026-11-05" limit={limit} therapistNameFor={(id) => (id ? 'Prem Anand' : null)} {...fns} />);
+  render(<AwaitingList requests={requests} today="2026-11-05" limit={limit} therapistNameFor={(id) => (id ? 'Prem Anand' : null)} bookedNoteFor={bookedNoteFor} {...fns} />);
   return fns;
 }
 
@@ -43,6 +43,11 @@ describe('AwaitingList', () => {
   it('tags a request from the booking page "Online", and not a staff entry', () => {
     setup([req('web', { source: 'online' }), req('desk', { source: 'staff' }), req('old')]);
     expect(screen.getAllByText('Online')).toHaveLength(1);
+  });
+
+  it('says "Already booked for …" on a row whose person has an upcoming appointment', () => {
+    setup([req('Ananya'), req('Other')], 3, (r) => (r.name === 'Ananya' ? 'Already booked for Fri, 6 Nov, 9:30 am' : null));
+    expect(screen.getAllByText(/Already booked for/)).toHaveLength(1);
   });
 
   it('Book, WhatsApp and Dismiss each act on their own row', () => {

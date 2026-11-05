@@ -37,7 +37,7 @@ import { useFollowUpData } from '@/features/followUp/useFollowUpData';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { AwaitingOpenedStrip, useAwaitingOpening, type OpenedSlot } from '@/components/schedule/AwaitingOpenedStrip';
-import { awaitingMessage } from '@/domain/awaiting';
+import { awaitingMessage, bookedNoteFor } from '@/domain/awaiting';
 import { lastTenDigits } from '@/domain/phoneDigits';
 import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -1025,6 +1025,7 @@ export function WorkspacePage() {
             onConfirmRequest={setConfirmingRequest}
             onDeclineRequest={setDecliningRequest}
             onMessageRequest={(r) => bookingService.sendText(awaitingMessage({ patientName: r.name, clinicName: clinic.name }), r.phone)}
+            bookedNoteForRequest={(r) => bookedNoteFor(r, workspaceAppointments ?? [])}
             canMessageRequest={(r) => !doNotMessagePhones.has(lastTenDigits(r.phone))}
             onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
             flagContext={flagContext}

@@ -31,12 +31,14 @@ function RequestRow({
   onDecline,
   onFocus,
   onMessage,
+  bookedNote,
 }: {
   request: AppointmentRequest;
   therapistName: string | null;
   onConfirm: () => void;
   onDecline: () => void;
   onMessage?: () => void;
+  bookedNote?: string | null;
   /** Show it on the calendar (jump to its day and time). The name and time become the button; the phone link and actions stay separate. */
   onFocus?: () => void;
 }) {
@@ -64,7 +66,8 @@ function RequestRow({
         {request.phone}
       </a>
       {request.notes && <p className="line-clamp-2 text-xs text-[var(--ink)]">{request.notes}</p>}
-      <div className="mt-1.5 flex items-center gap-2">
+      {bookedNote && <p className="text-xs font-medium text-[var(--teal-strong)]">{bookedNote}</p>}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
         <button type="button" className="min-h-9 rounded-lg bg-[var(--teal)] px-3 text-xs font-medium text-white" onClick={onConfirm}>
           Book
         </button>
@@ -95,6 +98,7 @@ export function RequestsInbox({
   onSeeAll,
   onFocus,
   onMessage,
+  bookedNoteFor,
   limit = 5,
 }: {
   requests: AppointmentRequest[];
@@ -107,6 +111,8 @@ export function RequestsInbox({
   onFocus?: (request: AppointmentRequest) => void;
   /** WhatsApp "we've noted your request" to the person. Omit to hide the button. */
   onMessage?: (request: AppointmentRequest) => void;
+  /** "Already booked for …" when the person has an upcoming appointment. */
+  bookedNoteFor?: (request: AppointmentRequest) => string | null;
   limit?: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -124,6 +130,7 @@ export function RequestsInbox({
           onDecline={() => onDecline(request)}
           onFocus={onFocus ? () => onFocus(request) : undefined}
           onMessage={onMessage ? () => onMessage(request) : undefined}
+          bookedNote={bookedNoteFor?.(request) ?? null}
         />
       ))}
       {requests.length > shown.length && (

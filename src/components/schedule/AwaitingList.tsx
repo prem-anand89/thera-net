@@ -17,6 +17,7 @@ export function AwaitingList({
   onDismiss,
   onSeeAll,
   canMessage = () => true,
+  bookedNoteFor,
 }: {
   requests: AppointmentRequest[];
   /** ISO date of today, to tell entries whose day has passed. */
@@ -29,6 +30,8 @@ export function AwaitingList({
   onSeeAll: () => void;
   /** False when this number belongs to a patient who asked not to be messaged. */
   canMessage?: (request: AppointmentRequest) => boolean;
+  /** "Already booked for Fri, 6 Nov, 9:30 AM" when this person has an upcoming appointment. */
+  bookedNoteFor?: (request: AppointmentRequest) => string | null;
 }) {
   const ordered = awaitingOrder(requests, today);
   const shown = ordered.slice(0, limit);
@@ -53,6 +56,7 @@ export function AwaitingList({
                 {therapist ? `, with ${therapist}` : ''}
                 {request.notes && <span className="text-[var(--ink)]"> · {request.notes}</span>}
               </span>
+              {bookedNoteFor?.(request) && <span className="block text-xs font-medium text-[var(--teal-strong)]">{bookedNoteFor(request)}</span>}
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
               <button
