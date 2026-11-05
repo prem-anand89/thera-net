@@ -37,7 +37,7 @@ import { useFollowUpData } from '@/features/followUp/useFollowUpData';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { AwaitingOpenedStrip, useAwaitingOpening, type OpenedSlot } from '@/components/schedule/AwaitingOpenedStrip';
-import { awaitingMessage, bookedNoteFor } from '@/domain/awaiting';
+import { awaitingMessage, awaitingWants, bookedNoteFor } from '@/domain/awaiting';
 import { lastTenDigits } from '@/domain/phoneDigits';
 import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -833,6 +833,7 @@ export function WorkspacePage() {
         requestId={confirmingRequest?.id}
         requestNotes={confirmingRequest?.notes ?? undefined}
         requestPreferredTimeText={confirmingRequest?.preferredTimeText ?? undefined}
+        requestAsked={confirmingRequest ? awaitingWants(confirmingRequest, toLocalDateStr(new Date())) : undefined}
         onBooked={(result) => {
           setBooked(result);
           setOpenedSlot(null);
@@ -851,7 +852,7 @@ export function WorkspacePage() {
           if (request) {
             bookingService
               .declineAppointmentRequest(request.id)
-              .then(() => setDeclined({ name: request.name, phone: request.phone, requestedFor: requestWants(request) }))
+              .then(() => setDeclined({ name: request.name, phone: request.phone, requestedFor: requestWants(request), doNotMessage: doNotMessagePhones.has(lastTenDigits(request.phone)) }))
               .catch((error: unknown) => notify.error(toFriendlyMessage(error)));
           }
         }}

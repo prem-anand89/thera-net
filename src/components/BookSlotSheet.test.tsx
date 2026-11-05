@@ -215,6 +215,16 @@ describe('BookSlotSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('keeps what the person originally asked for in view, even for a request with no typed time or reason', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} requestId="r9" prefilledPatientName="Someone" prefilledPatientPhone="+91 9000000009" requestAsked="Was for 3 Nov" />);
+    expect(screen.getByText('Asked for').parentElement).toHaveTextContent('Asked for Was for 3 Nov');
+  });
+
+  it('shows no "Asked for" line on an ordinary booking', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    expect(screen.queryByText('Asked for')).toBeNull();
+  });
+
   it('a request from someone already on file opens on that patient, with no duplicate warning; a stranger stays New', () => {
     const known = data.patients[0];
     const original = known.phone;

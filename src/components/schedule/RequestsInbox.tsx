@@ -98,6 +98,7 @@ export function RequestsInbox({
   onSeeAll,
   onFocus,
   onMessage,
+  canMessage,
   bookedNoteFor,
   limit = 5,
 }: {
@@ -111,6 +112,8 @@ export function RequestsInbox({
   onFocus?: (request: AppointmentRequest) => void;
   /** WhatsApp "we've noted your request" to the person. Omit to hide the button. */
   onMessage?: (request: AppointmentRequest) => void;
+  /** False when this number belongs to a patient who asked not to be messaged (hides WhatsApp). */
+  canMessage?: (request: AppointmentRequest) => boolean;
   /** "Already booked for …" when the person has an upcoming appointment. */
   bookedNoteFor?: (request: AppointmentRequest) => string | null;
   limit?: number;
@@ -129,7 +132,7 @@ export function RequestsInbox({
           onConfirm={() => onConfirm(request)}
           onDecline={() => onDecline(request)}
           onFocus={onFocus ? () => onFocus(request) : undefined}
-          onMessage={onMessage ? () => onMessage(request) : undefined}
+          onMessage={onMessage && (canMessage?.(request) ?? true) ? () => onMessage(request) : undefined}
           bookedNote={bookedNoteFor?.(request) ?? null}
         />
       ))}

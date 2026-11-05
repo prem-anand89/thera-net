@@ -73,6 +73,8 @@ type BookSlotSheetProps = {
   requestId?: UUID;
   requestNotes?: string;
   requestPreferredTimeText?: string;
+  /** What the person originally asked for ("Fri, 6 Nov, morning" / "Was for 3 Nov"), so it stays in view when the sheet opens on another time. */
+  requestAsked?: string;
   /** Therapist logins book only for themselves. */
   lockTherapist?: boolean;
   /** Offer only these therapists (e.g. the ones free at a time picked in the multi-therapist week grid). */
@@ -105,6 +107,7 @@ export function BookSlotSheet({
   requestId,
   requestNotes,
   requestPreferredTimeText,
+  requestAsked,
   lockTherapist = false,
   onlyTherapistIds,
   rescheduleAppointment,
@@ -623,8 +626,13 @@ export function BookSlotSheet({
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
-          {requestId && (requestNotes || requestPreferredTimeText) && (
+          {requestId && (requestNotes || requestPreferredTimeText || requestAsked) && (
             <div className="rounded-xl bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]">
+              {requestAsked && (
+                <p>
+                  <span className="text-[var(--muted)]">Asked for</span> {requestAsked}
+                </p>
+              )}
               {requestPreferredTimeText && (
                 <p>
                   <span className="text-[var(--muted)]">Requested</span> {requestPreferredTimeText}

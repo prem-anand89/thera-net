@@ -3,7 +3,7 @@ import { bookingService } from '@/services';
 import { requestDeclinedMessage } from '@/domain/bookingMessages';
 
 /** What a declined request needs next: the one-tap WhatsApp telling the patient (declining never messages anyone itself). */
-export type DeclinedRequest = { name: string; phone: string; requestedFor: string };
+export type DeclinedRequest = { name: string; phone: string; requestedFor: string; /** Asked not to be messaged: no "Message patient". */ doNotMessage?: boolean };
 
 export function RequestDeclinedStrip({
   declined,
@@ -28,18 +28,20 @@ export function RequestDeclinedStrip({
         <strong>{declined.name}</strong> was taken off Awaiting. They haven&apos;t been told yet.
       </p>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="min-h-9 text-xs font-medium text-[var(--teal)]"
-          onClick={() =>
-            bookingService.sendText(
-              requestDeclinedMessage({ patientName: declined.name, clinicName, requestedFor: declined.requestedFor }),
-              declined.phone
-            )
-          }
-        >
-          Message patient
-        </button>
+        {!declined.doNotMessage && (
+          <button
+            type="button"
+            className="min-h-9 text-xs font-medium text-[var(--teal)]"
+            onClick={() =>
+              bookingService.sendText(
+                requestDeclinedMessage({ patientName: declined.name, clinicName, requestedFor: declined.requestedFor }),
+                declined.phone
+              )
+            }
+          >
+            Message patient
+          </button>
+        )}
         <button type="button" className="text-xs font-medium text-[var(--muted)]" onClick={onDismiss}>
           Dismiss
         </button>

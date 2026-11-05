@@ -51,7 +51,8 @@ import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
-import { awaitingMessage, bookedNoteFor } from '@/domain/awaiting';
+import { lastTenDigits } from '@/domain/phoneDigits';
+import { awaitingMessage, awaitingWants, bookedNoteFor } from '@/domain/awaiting';
 import { RequestsInbox, requestWants } from '@/components/schedule/RequestsInbox';
 import { PendingRequestsBar } from '@/components/schedule/PendingRequestsBar';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
@@ -115,6 +116,7 @@ type SheetState = {
   /** Open with this length selected (the stretch they are free for) instead of the default slot length. */
   lengthMinutes?: number;
   requestId?: UUID;
+  requestAsked?: string;
   patientName?: string;
   patientPhone?: string;
   requestNotes?: string;
@@ -193,7 +195,12 @@ export function ScheduleBookingsView({
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const allAppointments = useLiveQuery(() => repos.appointments.listByClinic(clinic.id), [clinic.id]);
   const flagContext = usePatientFlagContext(clinic.id, allAppointments ?? EMPTY_APPOINTMENTS);
-  const { mrnoFor } = usePatientDirectory(clinic.id);
+  const { mrnoFor, patients: directoryPatients } = usePatientDirectory(clinic.id);
+  const doNotMessagePhones = useMemo(
+    () => new Set(directoryPatients.filter((p) => p.doNotMessage && p.phone).map((p) => lastTenDigits(p.phone))),
+    [directoryPatients]
+  );
+  const canMessageRequest = (request: AppointmentRequest) => !doNotMessagePhones.has(lastTenDigits(request.phone));
   const reasonFor = useCallback((appointment: Appointment) => appointmentReason(appointment, flagContext)?.text ?? null, [flagContext]);
   const requests = useLiveQuery(
     () => (canManageAll ? repos.appointmentRequests.listByClinic(clinic.id) : undefined),
@@ -642,6 +649,7 @@ export function ScheduleBookingsView({
         therapistId: (opened.therapistId ?? request.preferredTherapistId ?? undefined) as UUID | undefined,
         requestNotes: request.notes ?? undefined,
         requestPreferredTimeText: request.preferredTimeText ?? undefined,
+        requestAsked: awaitingWants(request, today),
       });
       return;
     }
@@ -685,6 +693,7 @@ export function ScheduleBookingsView({
       therapistId,
       requestNotes: request.notes ?? undefined,
       requestPreferredTimeText: request.preferredTimeText ?? undefined,
+        requestAsked: awaitingWants(request, today),
     });
   }
 
@@ -814,7 +823,7 @@ export function ScheduleBookingsView({
     const request = requestById.get(requestId);
     try {
       await bookingService.declineAppointmentRequest(requestId);
-      if (request) setDeclined({ name: request.name, phone: request.phone, requestedFor: requestWants(request) });
+      if (request) setDeclined({ name: request.name, phone: request.phone, requestedFor: requestWants(request), doNotMessage: !canMessageRequest(request) });
     } catch (error) {
       notify.error(toFriendlyMessage(error));
     }
@@ -982,6 +991,7 @@ export function ScheduleBookingsView({
                     onConfirm={confirmRequest}
                     onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
                     onMessage={messageAwaiting}
+                    canMessage={canMessageRequest}
                     bookedNoteFor={bookedNoteForRequest}
                     onSeeAll={() => setSchedule({ view: 'requests' })}
                     onFocus={showRequestOnCalendar}
@@ -1003,6 +1013,7 @@ export function ScheduleBookingsView({
                   onConfirm={confirmRequest}
                   onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
                   onMessage={messageAwaiting}
+                    canMessage={canMessageRequest}
                     bookedNoteFor={bookedNoteForRequest}
                   onSeeAll={() => setSchedule({ view: 'requests' })}
                 />
@@ -1330,6 +1341,7 @@ export function ScheduleBookingsView({
             }}
             onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
             onMessage={messageAwaiting}
+                    canMessage={canMessageRequest}
                     bookedNoteFor={bookedNoteForRequest}
             onSeeAll={() => {}}
           />
@@ -1439,6 +1451,7 @@ export function ScheduleBookingsView({
         requestId={sheet?.requestId}
         requestNotes={sheet?.requestNotes}
         requestPreferredTimeText={sheet?.requestPreferredTimeText}
+        requestAsked={sheet?.requestAsked}
         lockTherapist={isTherapist}
         rescheduleAppointment={sheet?.reschedule}
         onBooked={(result) => {
