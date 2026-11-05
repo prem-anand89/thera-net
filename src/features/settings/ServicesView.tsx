@@ -6,7 +6,7 @@ import type { CatalogItem } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { OTHER_GROUP, orderedServices, perSessionLabel, serviceSubline, usageLabel } from '@/domain/catalogDisplay';
 import { groupNameCheck } from '@/domain/nameCheck';
-import { btnPrimary, btnSecondary, Field, inputCls, SectionCard, SheetDialog } from '@/components/ui';
+import { btnPrimary, btnSecondary, Field, inputCls, LoadingRows, SectionCard, SheetDialog } from '@/components/ui';
 import { useIsDesktop } from '@/components/useMediaQuery';
 import { HiddenItemsFooter, MiniSwitch, saveErrorMessage } from './catalogShared';
 import { ServiceFormSheet, type ServiceSheetMode } from './ServiceFormSheet';
@@ -94,7 +94,9 @@ export function ServicesView() {
         />
       )}
 
-      {rows.length === 0 ? (
+      {items === undefined ? (
+        <LoadingRows label="Loading services" />
+      ) : rows.length === 0 ? (
         <p className="py-4 text-sm text-[var(--muted)]">
           {query
             ? `No services match "${search.trim()}".`

@@ -24,6 +24,7 @@ import { countTherapistLinkedRecords } from './therapistLinks';
 import { ShiftSheet } from './ShiftSheet';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Accent, ACCENT_VARS } from './settingsShared';
+import { isUnlinked } from './teamLinking';
 
 interface ClinicMember {
   userId: string;
@@ -139,6 +140,8 @@ function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] |
 }
 
 export type TeamMemberCardProps = {
+  /** False until the member list has loaded: a therapist with a login must not read as unlinked in the meantime. Defaults to true. */
+  membersLoaded?: boolean;
   person: TeamPerson;
   clinicId: string;
   isLastAdmin: boolean;
@@ -163,6 +166,7 @@ export type TeamMemberCardProps = {
 
 export function TeamMemberCard({
   person,
+  membersLoaded = true,
   clinicId,
   isLastAdmin,
   revoking,
@@ -181,6 +185,7 @@ export function TeamMemberCard({
   loginsHint = '',
 }: TeamMemberCardProps) {
   const { member, therapist } = person;
+  const isUnlinkedTherapist = isUnlinked(person, membersLoaded);
   const displayName = member?.displayName || therapist?.name || member?.email || 'Unknown';
   const role = member ? ((member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist') : 'therapist';
   const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
@@ -234,7 +239,7 @@ export function TeamMemberCard({
     // The plan can fill up while this form is open: a box that now shows locked must not still send what was typed.
     const inviteEmail = loginsLocked ? '' : emailDraft.trim();
     try {
-      if (!member && therapist && inviteEmail) {
+      if (isUnlinkedTherapist && inviteEmail) {
         const supabase = getSupabase();
         if (!supabase) throw new Error('No Supabase connection');
         const { data: result, error: invokeError } = await supabase.functions.invoke(
@@ -353,7 +358,6 @@ export function TeamMemberCard({
 
 
 
-  const isUnlinkedTherapist = !member && therapist;
   const isBookable = !!therapist && role !== 'front_desk' && therapist.active !== false;
 
   return (
@@ -384,7 +388,7 @@ export function TeamMemberCard({
                   Not on online booking
                 </span>
               )}
-              {!member && therapist && (
+              {isUnlinkedTherapist && (
                 <span className="inline-block rounded-full bg-[var(--amber-light)] px-2.5 py-0.5 text-caption font-semibold text-[var(--amber-strong)]">
                   No login
                 </span>
@@ -581,7 +585,7 @@ export function TeamMemberCard({
                   </Field>
                 )}
 
-                {!member && therapist && (
+                {isUnlinkedTherapist && (
                   <Field label="Email for login">
                     <input
                       type="email"
@@ -1029,12 +1033,14 @@ export function Therapists() {
       if (filter === 'bookable') return !!p.therapist;
       if (filter === 'staff') return p.member && !p.therapist;
       if (filter === 'invited') return p.member?.status !== 'active';
-      if (filter === 'unlinked') return p.therapist && !p.member;
+      if (filter === 'unlinked') return isUnlinked(p, members !== null);
       return true;
     });
-  }, [teamList, filter]);
+  }, [teamList, filter, members]);
 
-  const unlinkedCount = teamList.filter(p => p.therapist && p.therapist.active !== false && !p.member).length;
+  const unlinkedCount = teamList.filter(
+    (p) => p.therapist && p.therapist.active !== false && isUnlinked(p, members !== null)
+  ).length;
 
   const atSeatCap = members !== null && seatCapReached(entitlements, members.length);
 
@@ -1280,6 +1286,7 @@ export function Therapists() {
             <TeamMemberCard
               key={p.key}
               person={p}
+              membersLoaded={members !== null}
               clinicId={clinic.id}
               isLastAdmin={isLastAdmin}
               revoking={revokeInProgress === p.member?.userId}

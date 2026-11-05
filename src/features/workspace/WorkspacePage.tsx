@@ -43,6 +43,7 @@ import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService'
 import {
   btnPrimary,
   btnSecondary,
+  LoadingRows,
   SectionCard,
   StatStrip,
   ConfirmDialog,
@@ -1014,7 +1015,7 @@ export function WorkspacePage() {
       )}
 
       <SectionCard
-        title={`Today's visits · ${today?.visits.length ?? 0}`}
+        title={today ? `Today's visits · ${today.visits.length}` : "Today's visits"}
         action={
           today && today.visits.length > 0 ? (
             <div className="hidden tab:block">
@@ -1026,7 +1027,9 @@ export function WorkspacePage() {
           ) : undefined
         }
       >
-        {!today || today.visits.length === 0 ? (
+        {!today ? (
+          <LoadingRows label="Loading today's visits" />
+        ) : today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
