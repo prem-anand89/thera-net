@@ -24,6 +24,9 @@ import { REFERRING_SOURCE_LABELS, type Patient, type Visit, type ReferringSource
 import { isStale } from '@/domain/packageTracking';
 import {
   th,
+  thNum,
+  tdNum,
+  cellSub,
   td,
   ErrorNote,
   Pill,
@@ -518,7 +521,7 @@ export function PatientsList() {
                   <th className={th}>Therapist</th>
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
                   <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
-                  <th className={th}>Bill</th>
+                  <th className={thNum}>Bill</th>
                   <th className={th}>Actions</th>
                 </tr>
               </thead>
@@ -587,10 +590,8 @@ export function PatientsList() {
                       <td className={`${td} whitespace-nowrap`}>
                         {stats ? (
                           <>
-                            <div className="font-num text-xs text-[var(--ink)]">
-                              {formatDateDMY(stats.lastVisitOn)}
-                            </div>
-                            <div className="text-xs text-[var(--muted)]">
+                            <div className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</div>
+                            <div className={cellSub}>
                               {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
                             </div>
                           </>
@@ -598,14 +599,12 @@ export function PatientsList() {
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
                         )}
                       </td>
-                      <td className={td}>
+                      <td className={`${tdNum} whitespace-nowrap`}>
                         {stats ? (
                           <>
-                            <div className="font-num font-medium text-[var(--ink)]">
-                              {formatAmount(billing?.totalBilledPaise ?? 0)} billed
-                            </div>
+                            <div>{formatAmount(billing?.totalBilledPaise ?? 0)} billed</div>
                             {(billing?.outstandingBalancePaise ?? 0) > 0 && (
-                              <div className="mt-0.5 font-num text-[var(--rust)]">
+                              <div className="mt-0.5 text-xs text-[var(--rust)]">
                                 {formatAmount(billing!.outstandingBalancePaise)} due
                               </div>
                             )}

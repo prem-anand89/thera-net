@@ -713,6 +713,12 @@ export const th =
   'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
 export const td = 'px-3 py-3 text-sm text-[var(--ink)]';
 export const tdNum = 'font-num px-3 py-3 text-sm text-[var(--ink)] text-right';
+/**
+ * Table cell typography, one rule everywhere: the value a column is about is 14px (`td` / `tdNum`, ink); a second line
+ * under it ("3 visits", "₹500 due", an ID under a name) is 12px (`cellSub`, muted or a status colour). Never a
+ * primary date or amount at 12px: `tableTypography.test.ts` fails on that.
+ */
+export const cellSub = 'text-xs text-[var(--muted)]';
 export const thNum =
   'px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
 

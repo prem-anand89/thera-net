@@ -440,7 +440,7 @@ export function SingleVisitPatientsCard({
                           >
                             {p.patientName}
                           </Link>
-                          <div className="mt-0.5 text-xs font-num font-mono text-[var(--muted)]">
+                          <div className="mt-0.5 text-xs font-num text-[var(--muted)]">
                             {p.mrno}
                           </div>
                         </div>
@@ -449,7 +449,7 @@ export function SingleVisitPatientsCard({
                       {/* Last Visit & Recency */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span className="font-num text-xs text-[var(--ink)]">
+                          <span className="font-num text-sm text-[var(--ink)]">
                             {formatDateDMY(p.visitDate)}
                           </span>
                           {getRecencyBadge(p.daysSince)}

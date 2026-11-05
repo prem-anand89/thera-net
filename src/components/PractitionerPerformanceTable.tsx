@@ -287,7 +287,7 @@ export function PractitionerPerformanceTable({
                   Clinic Total
                 </td>
                 <td className="px-4 py-3">
-                  <span className="font-num text-xs font-semibold text-[var(--ink)]">
+                  <span className="font-num font-semibold text-[var(--ink)]">
                     {totals.avgRatio != null ? `${Math.round(totals.avgRatio * 100)}% clinic avg` : '—'}
                   </span>
                 </td>
