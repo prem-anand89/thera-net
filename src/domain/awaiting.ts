@@ -1,6 +1,7 @@
 import type { Appointment, AppointmentRequest } from './types';
 import { minutesOfDay, toLocalDateStr } from './schedule';
 import { timeOfDayFor, type WaitlistOpening } from './waitlistMatch';
+import { lastTenDigits } from './phoneDigits';
 
 /** Pending only, in the order staff should work them: oldest first, but entries whose day has passed sink to the bottom. */
 export function awaitingOrder(requests: AppointmentRequest[], today: string): AppointmentRequest[] {
@@ -42,6 +43,28 @@ export function awaitingWants(request: AppointmentRequest, today: string): strin
  */
 export function awaitingMessage(input: { patientName: string; clinicName: string }): string {
   return `Hi ${input.patientName}, this is ${input.clinicName}. We've noted your request for an appointment and will call you as soon as a time is free.`;
+}
+
+/** Quiet, never blocking: this number is already awaiting, or already has an upcoming appointment. */
+export function awaitingDuplicateNotes(
+  phone: string,
+  pending: AppointmentRequest[],
+  appointments: Appointment[],
+  now: Date = new Date()
+): string[] {
+  const digits = lastTenDigits(phone);
+  if (digits.length < 7) return [];
+  const notes: string[] = [];
+  const waiting = pending.find((r) => r.status === 'pending' && lastTenDigits(r.phone) === digits);
+  if (waiting) notes.push(`${waiting.name} is already awaiting (added ${waiting.createdAt.slice(8, 10).replace(/^0/, '')} ${MONTHS[Number(waiting.createdAt.slice(5, 7)) - 1]}).`);
+  const upcoming = appointments
+    .filter((a) => lastTenDigits(a.patientPhone) === digits && (a.status === 'confirmed' || a.status === 'rescheduled') && new Date(a.scheduledAt).getTime() > now.getTime())
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
+  if (upcoming) {
+    const when = new Date(upcoming.scheduledAt).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    notes.push(`${upcoming.patientName} already has an appointment on ${when}.`);
+  }
+  return notes;
 }
 
 /** The slot an appointment frees when it is cancelled or moved away: its day, therapist and part of the day. */

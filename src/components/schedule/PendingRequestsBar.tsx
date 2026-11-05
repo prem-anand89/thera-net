@@ -38,7 +38,7 @@ export function PendingRequestsBar({
   return (
     <div
       role="region"
-      aria-label="Booking request to confirm"
+      aria-label="Awaiting"
       className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-[var(--amber)]/30 bg-[var(--amber-light)] px-3 py-2 text-sm text-[var(--ink)]"
     >
       <span className="min-w-0">
@@ -53,10 +53,10 @@ export function PendingRequestsBar({
       </span>
       <span className="flex items-center gap-2">
         <button type="button" className="min-h-8 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => onConfirm(request)}>
-          Confirm
+          Book
         </button>
         <button type="button" className="min-h-8 px-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => onDecline(request)}>
-          Decline
+          Dismiss
         </button>
         <button type="button" className="min-h-8 px-1 text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => onFocus(request)}>
           Show on calendar

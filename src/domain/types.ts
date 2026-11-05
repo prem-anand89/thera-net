@@ -926,6 +926,9 @@ export interface AppointmentRequest {
    *  matching and auto-resolve treat every pending request the same way,
    *  see `domain/waitlistMatch.ts`. Optional: older rows lack it. */
   isWaitlist?: boolean;
+  /** Where it came from: the public booking page, or staff adding someone (`add_waitlist_entry`). Optional: older rows and
+   *  databases without the column lack it. */
+  source?: 'online' | 'staff';
   status: AppointmentRequestStatus;
   appointmentId: UUID | null;
   createdAt: string;

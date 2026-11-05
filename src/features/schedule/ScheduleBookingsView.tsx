@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { BookedStrip } from '@/components/schedule/BookedStrip';
-import { AwaitingOpenedStrip, useAwaitingOpening } from '@/components/schedule/AwaitingOpenedStrip';
+import { AwaitingOpenedStrip, useAwaitingOpening, type OpenedSlot } from '@/components/schedule/AwaitingOpenedStrip';
 import type { RequestGhost } from '@/components/schedule/RequestGhostBlock';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
@@ -51,6 +51,7 @@ import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
+import { awaitingMessage } from '@/domain/awaiting';
 import { RequestsInbox, requestWants } from '@/components/schedule/RequestsInbox';
 import { PendingRequestsBar } from '@/components/schedule/PendingRequestsBar';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
@@ -623,7 +624,25 @@ export function ScheduleBookingsView({
     });
   }
 
-  function confirmRequest(request: AppointmentRequest) {
+  function messageAwaiting(request: AppointmentRequest) {
+    bookingService.sendText(awaitingMessage({ patientName: request.name, clinicName: clinic.name }), request.phone);
+  }
+
+  function confirmRequest(request: AppointmentRequest, opened?: OpenedSlot | null) {
+    if (opened) {
+      // From the "a time opened" strip: the freed time, not the person's own wish.
+      openBooking({
+        date: opened.date,
+        time: opened.time,
+        requestId: request.id,
+        patientName: request.name,
+        patientPhone: request.phone,
+        therapistId: (opened.therapistId ?? request.preferredTherapistId ?? undefined) as UUID | undefined,
+        requestNotes: request.notes ?? undefined,
+        requestPreferredTimeText: request.preferredTimeText ?? undefined,
+      });
+      return;
+    }
     const wantedDate = request.preferredDate && request.preferredDate >= today ? request.preferredDate : null;
     let openOn = wantedDate ?? date;
     let time = requestedSlotTime(request, allAppointments ?? [], today, slotMinutes) ?? undefined;
@@ -956,6 +975,7 @@ export function ScheduleBookingsView({
                     therapistNameFor={(id) => (id ? rosterById.get(id)?.name ?? null : null)}
                     onConfirm={confirmRequest}
                     onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+                    onMessage={messageAwaiting}
                     onSeeAll={() => setSchedule({ view: 'requests' })}
                     onFocus={showRequestOnCalendar}
                     limit={3}
@@ -975,6 +995,7 @@ export function ScheduleBookingsView({
                   therapistNameFor={(id) => (id ? rosterById.get(id)?.name ?? null : null)}
                   onConfirm={confirmRequest}
                   onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+                  onMessage={messageAwaiting}
                   onSeeAll={() => setSchedule({ view: 'requests' })}
                 />
               </div>
@@ -1286,9 +1307,9 @@ export function ScheduleBookingsView({
         </div>
       )}
 
-      <Panel open={requestsPanelOpen} onClose={() => setSchedule({ view: 'schedule' })} title={`Booking requests (${pendingRequests.length})`}>
+      <Panel open={requestsPanelOpen} onClose={() => setSchedule({ view: 'schedule' })} title={`Awaiting (${pendingRequests.length})`}>
         {pendingRequests.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No requests.</p>
+          <p className="py-6 text-center text-sm text-[var(--muted)]">Nobody is awaiting.</p>
         ) : (
           <RequestsInbox
             variant="list"
@@ -1300,6 +1321,7 @@ export function ScheduleBookingsView({
               confirmRequest(request);
             }}
             onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+            onMessage={messageAwaiting}
             onSeeAll={() => {}}
           />
         )}
@@ -1320,7 +1342,7 @@ export function ScheduleBookingsView({
 
       {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
 
-      <AwaitingOpenedStrip matches={awaitingOpening.matches} onBook={confirmRequest} onDismiss={awaitingOpening.clear} />
+      <AwaitingOpenedStrip matches={awaitingOpening.matches} onBook={(request) => confirmRequest(request, awaitingOpening.slot)} onDismiss={awaitingOpening.clear} />
       {confirmed && (
         <BookedStrip
           booked={confirmed}
@@ -1486,6 +1508,8 @@ export function ScheduleBookingsView({
         clinicId={clinic.id}
         initialDate={date < today ? today : date}
         therapists={roster.filter((t) => t.active !== false)}
+        pending={pendingRequests}
+        appointments={allAppointments ?? []}
         onClose={() => setAddWaitlistOpen(false)}
       />
 
@@ -1545,9 +1569,9 @@ export function ScheduleBookingsView({
 
       <ConfirmDialog
         open={declining !== null}
-        title="Decline this request?"
-        message={declining ? `Removes ${declining.name}'s request. You can message them right after.` : ''}
-        confirmLabel="Decline"
+        title="Remove from Awaiting?"
+        message={declining ? `${declining.name} will be taken off the Awaiting list. You can message them right after.` : ''}
+        confirmLabel="Dismiss"
         destructive
         onCancel={() => setDeclining(null)}
         onConfirm={() => {

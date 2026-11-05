@@ -40,6 +40,23 @@ describe('useAwaitingOpening limits', () => {
   });
 });
 
+describe('the opened slot', () => {
+  it('is kept for the booking sheet (day, time, therapist) and cleared with the strip', () => {
+    const { result } = renderHook(() => useAwaitingOpening([req('a')]));
+    act(() => result.current.freed(freedAt));
+    expect(result.current.slot).toEqual({ date: '2099-11-06', time: '10:30', therapistId: 't1' });
+    act(() => result.current.clear());
+    expect(result.current.slot).toBeNull();
+  });
+
+  it('Book hands the person over before the strip clears its slot', () => {
+    const order: string[] = [];
+    render(<AwaitingOpenedStrip matches={[req('Suresh')]} onBook={() => order.push('book')} onDismiss={() => order.push('dismiss')} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Book' }));
+    expect(order).toEqual(['book', 'dismiss']);
+  });
+});
+
 describe('AwaitingOpenedStrip', () => {
   it('names one person, or counts several, and Book goes to the oldest', () => {
     const onBook = vi.fn();

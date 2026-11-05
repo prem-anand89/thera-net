@@ -36,7 +36,7 @@ import { ReviewsPanel, type BookFollowUp } from '@/features/followUp/ReviewsPane
 import { useFollowUpData } from '@/features/followUp/useFollowUpData';
 import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedule/RequestDeclinedStrip';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
-import { AwaitingOpenedStrip, useAwaitingOpening } from '@/components/schedule/AwaitingOpenedStrip';
+import { AwaitingOpenedStrip, useAwaitingOpening, type OpenedSlot } from '@/components/schedule/AwaitingOpenedStrip';
 import { awaitingMessage } from '@/domain/awaiting';
 import { lastTenDigits } from '@/domain/phoneDigits';
 import { requestWants } from '@/components/schedule/RequestsInbox';
@@ -380,6 +380,8 @@ export function WorkspacePage() {
   );
   const awaitingOpening = useAwaitingOpening(pendingRequests);
   const [addAwaitingOpen, setAddAwaitingOpen] = useState(false);
+  // Booking from the "a time opened" strip: the sheet opens on that time, not the person's own wish.
+  const [openedSlot, setOpenedSlot] = useState<OpenedSlot | null>(null);
   const [confirmingRequest, setConfirmingRequest] = useState<AppointmentRequest | null>(null);
   // After a booking, a strip offers the one-tap WhatsApp to the patient (booking never messages anyone itself).
   const [booked, setBooked] = useState<BookedSlot | null>(null);
@@ -806,16 +808,23 @@ export function WorkspacePage() {
       />
       <BookSlotSheet
         isOpen={confirmingRequest !== null}
-        onClose={() => setConfirmingRequest(null)}
+        onClose={() => {
+          setConfirmingRequest(null);
+          setOpenedSlot(null);
+        }}
         appointments={workspaceAppointments ?? []}
         prefilledDate={
-          confirmingRequest?.preferredDate && confirmingRequest.preferredDate >= toLocalDateStr(new Date())
-            ? confirmingRequest.preferredDate
-            : undefined
+          openedSlot
+            ? openedSlot.date
+            : confirmingRequest?.preferredDate && confirmingRequest.preferredDate >= toLocalDateStr(new Date())
+              ? confirmingRequest.preferredDate
+              : undefined
         }
-        prefilledTherapistId={confirmingRequest?.preferredTherapistId ?? undefined}
+        prefilledTherapistId={openedSlot?.therapistId ?? confirmingRequest?.preferredTherapistId ?? undefined}
         prefilledTime={
-          confirmingRequest
+          openedSlot
+            ? openedSlot.time
+            : confirmingRequest
             ? requestedSlotTime(confirmingRequest, workspaceAppointments ?? [], toLocalDateStr(new Date()), clinic.slotDurationMinutes || 30) ?? undefined
             : undefined
         }
@@ -824,7 +833,10 @@ export function WorkspacePage() {
         requestId={confirmingRequest?.id}
         requestNotes={confirmingRequest?.notes ?? undefined}
         requestPreferredTimeText={confirmingRequest?.preferredTimeText ?? undefined}
-        onBooked={setBooked}
+        onBooked={(result) => {
+          setBooked(result);
+          setOpenedSlot(null);
+        }}
       />
       <ConfirmDialog
         open={decliningRequest !== null}
@@ -863,9 +875,18 @@ export function WorkspacePage() {
         clinicId={clinic.id}
         initialDate={toLocalDateStr(new Date())}
         therapists={(workspaceTherapists ?? []).filter((t) => t.active !== false)}
+        pending={pendingRequests}
+        appointments={workspaceAppointments ?? []}
         onClose={() => setAddAwaitingOpen(false)}
       />
-      <AwaitingOpenedStrip matches={awaitingOpening.matches} onBook={setConfirmingRequest} onDismiss={awaitingOpening.clear} />
+      <AwaitingOpenedStrip
+        matches={awaitingOpening.matches}
+        onBook={(request) => {
+          setOpenedSlot(awaitingOpening.slot);
+          setConfirmingRequest(request);
+        }}
+        onDismiss={awaitingOpening.clear}
+      />
       {declined && <RequestDeclinedStrip declined={declined} clinicName={clinic.name} onDismiss={() => setDeclined(null)} />}
       <BookSlotSheet
         isOpen={bookingFollowUp !== null}

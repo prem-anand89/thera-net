@@ -19,7 +19,7 @@ export type RequestGhost = {
 
 /**
  * A quiet dashed marker for a booking request, not an appointment: it takes no time, blocks nothing and can't be
- * dragged. Tap it for Confirm / Decline. When an appointment already sits at that time it shrinks to a small tab on
+ * dragged. Tap it for Book / Dismiss. When an appointment already sits at that time it shrinks to a small tab on
  * the column's right edge so neither one covers the other.
  */
 export function RequestGhostBlock({
@@ -97,7 +97,7 @@ export function RequestGhostBlock({
                 ghost.onConfirm();
               }}
             >
-              Confirm
+              Book
             </button>
             <button
               type="button"
@@ -107,7 +107,7 @@ export function RequestGhostBlock({
                 ghost.onDecline();
               }}
             >
-              Decline
+              Dismiss
             </button>
           </div>
         </div>

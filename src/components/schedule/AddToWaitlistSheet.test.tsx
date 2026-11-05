@@ -53,6 +53,17 @@ describe('AddToWaitlistSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('says quietly when the number is already awaiting or booked, and still lets them add', async () => {
+    const pending = [{ id: 'r', name: 'Suresh', phone: '+91 9820000001', status: 'pending', createdAt: '2026-11-03T10:00:00Z' }] as never;
+    open({ pending });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'sure' } });
+    fireEvent.click(within(screen.getByRole('list', { name: 'Matching patients' })).getByRole('button', { name: /Suresh Kumar/ }));
+    expect(screen.getByRole('note')).toHaveTextContent('Suresh is already awaiting (added 3 Nov).');
+    expect(screen.getByRole('note')).toHaveTextContent('You can still add them.');
+    fireEvent.click(screen.getByRole('button', { name: 'Add to awaiting' }));
+    await waitFor(() => expect(add).toHaveBeenCalledTimes(1));
+  });
+
   it('a name with no phone cannot be added, and says why', async () => {
     open();
     fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Walk In' } });

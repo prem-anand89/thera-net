@@ -34,18 +34,18 @@ describe('RequestsInbox', () => {
         onSeeAll={vi.fn()}
       />
     );
-    expect(screen.getByText('2 booking requests')).toBeInTheDocument();
+    expect(screen.getByText('2 awaiting')).toBeInTheDocument();
     expect(screen.getByText(/oldest 2h ago/)).toBeInTheDocument();
     expect(screen.queryByText('Meera')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Review/ }));
     expect(screen.getByText(/Fri, 2 Oct, 10:30 AM · Dr Asha/)).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Confirm' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Book' })[0]);
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Decline' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Dismiss' })[1]);
     expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
   });
 
-  it('rail: the name and time are the jump button; Confirm, Decline and the phone link stay separate, and nothing truncates', () => {
+  it('rail: the name and time are the jump button; Book, Dismiss and the phone link stay separate, and nothing truncates', () => {
     const onFocus = vi.fn();
     const onConfirm = vi.fn();
     render(
@@ -63,7 +63,7 @@ describe('RequestsInbox', () => {
     expect(jump).toHaveTextContent('Fri, 2 Oct, 10:30 AM · Prem Anand');
     expect(jump.querySelector('.truncate')).toBeNull();
     expect(jump.contains(screen.getByRole('link', { name: '9820000002' }))).toBe(false);
-    expect(jump.contains(screen.getByRole('button', { name: 'Confirm' }))).toBe(false);
+    expect(jump.contains(screen.getByRole('button', { name: 'Book' }))).toBe(false);
     expect(screen.getByText('ACL rehab')).toBeInTheDocument();
     fireEvent.click(jump);
     expect(onFocus).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
@@ -85,7 +85,7 @@ describe('RequestsInbox', () => {
     );
     expect(screen.getByText('Meera', { exact: false })).toBeInTheDocument();
     expect(screen.queryByText(/Kiran/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'See all 2 requests' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See all 2 awaiting' }));
     expect(onSeeAll).toHaveBeenCalled();
   });
 });

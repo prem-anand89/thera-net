@@ -18,18 +18,18 @@ const ghost = (over: Partial<RequestGhost> = {}): RequestGhost => ({
 describe('RequestGhostBlock', () => {
   afterEach(cleanup);
 
-  it('sits at the requested time and opens Confirm / Decline on tap', () => {
+  it('sits at the requested time and opens Book / Dismiss on tap', () => {
     const g = ghost();
     const { container } = render(<RequestGhostBlock ghost={g} hoursStart={7} pxPerMinute={1.6} overlapsAppointment={false} />);
     // (10:00 - 7:00) hours * 60 * 1.6 px, plus the 1px nudge
     expect(container.querySelector('[data-request-ghost]')).toHaveStyle({ top: `${3 * 60 * 1.6 + 1}px` });
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Booking request from John Doe for 10:00 AM/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Book' }));
     expect(g.onConfirm).toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Booking request from/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(g.onDecline).toHaveBeenCalled();
   });
 

@@ -40,6 +40,11 @@ describe('AwaitingList', () => {
     expect(screen.getByRole('link', { name: '9820000002' })).toHaveAttribute('href', 'tel:9820000002');
   });
 
+  it('tags a request from the booking page "Online", and not a staff entry', () => {
+    setup([req('web', { source: 'online' }), req('desk', { source: 'staff' }), req('old')]);
+    expect(screen.getAllByText('Online')).toHaveLength(1);
+  });
+
   it('Book, WhatsApp and Dismiss each act on their own row', () => {
     const f = setup([req('a', { createdAt: '2026-11-01T10:00:00Z' }), req('b', { createdAt: '2026-11-02T10:00:00Z' })]);
     fireEvent.click(screen.getByRole('button', { name: 'Book b' }));

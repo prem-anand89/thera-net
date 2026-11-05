@@ -2,25 +2,36 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { matchingWaitlistEntries, type WaitlistOpening } from '@/domain/waitlistMatch';
 import { awaitingOrder, openingFor } from '@/domain/awaiting';
-import { toLocalDateStr } from '@/domain/schedule';
+import { minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 
 /**
  * "A time just opened": call `freed(appointment)` when an appointment is cancelled or moved away. `matches` are the
  * Awaiting entries that fit that day, therapist and part of the day (`matchingWaitlistEntries`), oldest first.
  * Nothing is remembered once dismissed; the list itself is always still on Workspace.
  */
+/** The freed time as the booking sheet wants it. */
+export type OpenedSlot = { date: string; time: string; therapistId: string | null };
+
 export function useAwaitingOpening(pending: AppointmentRequest[]) {
   const [opening, setOpening] = useState<WaitlistOpening | null>(null);
+  const [slot, setSlot] = useState<OpenedSlot | null>(null);
   const matches = useMemo(
     () => (opening ? awaitingOrder(matchingWaitlistEntries(pending, opening), toLocalDateStr(new Date())) : []),
     [pending, opening]
   );
   // A time already gone frees nothing. Stable, so a re-render doesn't restart the strip's timer.
   const freed = useCallback((appointment: Pick<Appointment, 'scheduledAt' | 'therapistId'>) => {
-    if (new Date(appointment.scheduledAt).getTime() > Date.now()) setOpening(openingFor(appointment));
+    if (new Date(appointment.scheduledAt).getTime() <= Date.now()) return;
+    const opened = openingFor(appointment);
+    const m = minutesOfDay(appointment.scheduledAt);
+    setOpening(opened);
+    setSlot({ date: opened.date, therapistId: opened.therapistId, time: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` });
   }, []);
-  const clear = useCallback(() => setOpening(null), []);
-  return { matches, freed, clear };
+  const clear = useCallback(() => {
+    setOpening(null);
+    setSlot(null);
+  }, []);
+  return { matches, slot, freed, clear };
 }
 
 /** One line under the other strips: who is awaiting the time that just opened, and a Book button for the oldest. */
@@ -62,8 +73,8 @@ export function AwaitingOpenedStrip({
           type="button"
           className="min-h-9 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
           onClick={() => {
-            onDismiss();
             onBook(first);
+            onDismiss();
           }}
         >
           {matches.length === 1 ? 'Book' : `Book ${first.name}`}

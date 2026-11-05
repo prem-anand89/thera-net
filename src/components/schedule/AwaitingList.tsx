@@ -1,6 +1,6 @@
 import type { AppointmentRequest } from '@/domain/types';
 import { awaitingOrder, awaitingWants, isPastDay } from '@/domain/awaiting';
-import { timeAgo } from './RequestsInbox';
+import { OnlineTag, timeAgo } from './RequestsInbox';
 
 /**
  * Workspace → Appointments → Awaiting: everyone who asked for an appointment and has no time yet, public requests and
@@ -42,6 +42,7 @@ export function AwaitingList({
             <span className="min-w-0 flex-1 basis-48">
               <span className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-display text-sm font-medium text-[var(--ink)]">{request.name}</span>
+                <OnlineTag request={request} />
                 <span className="text-xs text-[var(--muted)]">{timeAgo(request.createdAt)}</span>
                 <a href={`tel:${request.phone}`} className="py-0.5 text-xs text-[var(--teal)] hover:underline">
                   {request.phone}

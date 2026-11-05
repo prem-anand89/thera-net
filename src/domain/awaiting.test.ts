@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppointmentRequest } from './types';
-import { awaitingMessage, awaitingOrder, awaitingWants, isPastDay, openingFor } from './awaiting';
+import { awaitingDuplicateNotes, awaitingMessage, awaitingOrder, awaitingWants, isPastDay, openingFor } from './awaiting';
 import { matchingWaitlistEntries } from './waitlistMatch';
 
 const req = (id: string, over: Partial<AppointmentRequest> = {}): AppointmentRequest =>
@@ -64,6 +64,20 @@ describe('awaitingMessage', () => {
     const text = awaitingMessage({ patientName: 'Suresh', clinicName: 'Beyond Mechanics' });
     expect(text).toBe("Hi Suresh, this is Beyond Mechanics. We've noted your request for an appointment and will call you as soon as a time is free.");
     expect(text).not.toMatch(/confirmed|booked/i);
+  });
+});
+
+describe('awaitingDuplicateNotes', () => {
+  const appt = (over = {}) => ({ id: 'a', patientName: 'Suresh', patientPhone: '+91 98200 00001', scheduledAt: new Date(2099, 0, 5, 10, 30).toISOString(), status: 'confirmed', ...over }) as never;
+  it('says so when the number is already awaiting, or already has an upcoming appointment', () => {
+    expect(awaitingDuplicateNotes('9820000001', [req('Suresh', { createdAt: '2026-11-03T10:00:00Z' })], [], new Date(2026, 10, 5))).toEqual(['Suresh is already awaiting (added 3 Nov).']);
+    expect(awaitingDuplicateNotes('9820000001', [], [appt()], new Date(2026, 10, 5))[0]).toMatch(/Suresh already has an appointment on .*Jan/);
+  });
+  it('stays quiet for another number, a past or cancelled appointment, a dismissed request or a short number', () => {
+    expect(awaitingDuplicateNotes('9820000002', [req('x')], [appt()], new Date(2026, 10, 5))).toEqual([]);
+    expect(awaitingDuplicateNotes('9820000001', [], [appt({ scheduledAt: new Date(2020, 0, 1).toISOString() }), appt({ status: 'cancelled' })], new Date(2026, 10, 5))).toEqual([]);
+    expect(awaitingDuplicateNotes('9820000001', [req('x', { status: 'declined' } as never)], [], new Date(2026, 10, 5))).toEqual([]);
+    expect(awaitingDuplicateNotes('123', [req('x')], [], new Date())).toEqual([]);
   });
 });
 

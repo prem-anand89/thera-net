@@ -4,7 +4,8 @@ import { PhoneField } from '@/components/PhoneField';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { toFriendlyMessage } from '@/lib/errors';
 import { bookingService } from '@/services';
-import type { UUID } from '@/domain/types';
+import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
+import { awaitingDuplicateNotes } from '@/domain/awaiting';
 import type { TimeOfDay } from '@/domain/waitlistMatch';
 
 const TIME_OF_DAY_OPTIONS: { value: TimeOfDay | 'any'; label: string }[] = [
@@ -27,6 +28,8 @@ export function AddToWaitlistSheet({
   clinicId,
   initialDate,
   therapists,
+  pending = [],
+  appointments = [],
   onClose,
   onAdded,
 }: {
@@ -34,6 +37,9 @@ export function AddToWaitlistSheet({
   clinicId: UUID;
   initialDate: string;
   therapists: { id: UUID; name: string }[];
+  /** Who is already awaiting and who is booked: a quiet note if this number is among them. It never blocks. */
+  pending?: AppointmentRequest[];
+  appointments?: Appointment[];
   onClose: () => void;
   onAdded?: () => void;
 }) {
@@ -61,6 +67,8 @@ export function AddToWaitlistSheet({
     setBusy(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open only
   }, [open]);
+
+  const duplicateNotes = useMemo(() => awaitingDuplicateNotes(phone, pending, appointments), [phone, pending, appointments]);
 
   const suggestions = useMemo(() => {
     const needle = name.trim().toLowerCase();
@@ -159,6 +167,14 @@ export function AddToWaitlistSheet({
           <PhoneField id="waitlist-phone" value={phone} onChange={setPhone} />
         </Field>
       </div>
+      {duplicateNotes.length > 0 && (
+        <div role="note" className="mt-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]">
+          {duplicateNotes.map((note) => (
+            <p key={note}>{note}</p>
+          ))}
+          <p className="text-[var(--muted)]">You can still add them.</p>
+        </div>
+      )}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field label="Preferred day" htmlFor="awaiting-day">
           <input id="awaiting-day" type="date" className={inputCls} value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} />

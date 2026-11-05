@@ -33,9 +33,9 @@ describe('PendingRequestsBar', () => {
 
   it('shows the request whatever day is on screen, with the day, time and therapist, and answers it in place', () => {
     const h = setup([request({})]);
-    expect(screen.getByRole('region', { name: 'Booking request to confirm' })).toHaveTextContent('John Doe asked for Fri, 30 Oct, 10:00 AM · Prem Anand');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(screen.getByRole('region', { name: 'Awaiting' })).toHaveTextContent('John Doe asked for Fri, 30 Oct, 10:00 AM · Prem Anand');
+    fireEvent.click(screen.getByRole('button', { name: 'Book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show on calendar' }));
     expect(h.onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
     expect(h.onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
