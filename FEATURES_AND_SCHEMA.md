@@ -5809,7 +5809,7 @@ its own narrow in-place edit path instead.
 Defined in `src/index.css`; use the classes, never ad-hoc families (`font-serif`, `font-mono`, inline `fontFamily`):
 - **Inter** (`font-display`, semibold, 500/600 loaded, tracking -0.01em; replaced Fraunces, which is no longer loaded or used anywhere) — page and section titles, card titles, the greeting, the Schedule date headline, the Thera.Net wordmark, and **patient names wherever they appear** (visit cards, package cards and table rows, Today appointment and request rows, Ledger).
 - **IBM Plex Sans** (body default) — everything else: labels, buttons, pills, table text, therapist names, times.
-- **IBM Plex Mono** (`font-num`) — money, stat-tile numbers, patient IDs (MRNO), invoice numbers. Tabular figures so columns line up.
+- **IBM Plex Sans with tabular figures** (`font-num`) — money, stat-tile numbers, patient IDs (MRNO), invoice numbers. Every digit is the same width so columns line up, and the commas stay narrow (the earlier IBM Plex Mono gave each comma a full digit cell, so "₹1,50,000" looked gappy). IBM Plex Mono is now only used where a code should look like code (the booking link, clinic code field).
 - Weights actually loaded: Inter 500/600, Plex Sans 400/500/600, Plex Mono 400/500. Use `font-semibold` at most, never `font-bold` (700 is not loaded, so the browser fakes it); the Settings screens are already swept, other screens still have some `font-bold`.
 
 ### 9d. Page titles

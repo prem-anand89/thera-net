@@ -119,9 +119,11 @@ body {
 }
 
 /* MRNOs, invoice numbers, and every currency figure — misaligned rupee
-   columns are the fastest way for a ledger to look untrustworthy. */
+   columns are the fastest way for a ledger to look untrustworthy. Tabular figures in the body font: every digit is the
+   same width so columns line up, but the commas stay narrow (a monospaced font gives each comma a full digit cell, which
+   made "₹1,50,000" look gappy). */
 .font-num {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
 }
 
