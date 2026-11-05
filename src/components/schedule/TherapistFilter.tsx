@@ -51,7 +51,7 @@ export function TherapistFilter({
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute right-0 top-full z-30 mt-1.5 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">
+          <div className="absolute left-0 top-full z-30 mt-1.5 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg sm:left-auto sm:right-0">
             <div className="flex items-center justify-between px-3 py-1.5">
               <span className="text-xs font-semibold text-[var(--muted)]">Show therapists</span>
               {visibleIds.length > 0 && (

@@ -54,6 +54,7 @@ import {
   type SettingsTab,
 } from './sections';
 import { toFriendlyMessage } from '@/lib/errors';
+import { syncEngine } from '@/sync/engine';
 import { lastBackupMetaKey } from '@/domain/setupGuide';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { isValidUpiVpa } from '@/domain/upiPay';
@@ -279,7 +280,7 @@ export function SettingsPage() {
   const [query, setQuery] = useState('');
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const unlinkedCount = (therapists ?? []).filter((t) => t.active && !t.userId).length;
+  const rosterUnlinkedCount = (therapists ?? []).filter((t) => t.active && !t.userId).length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
@@ -366,10 +367,10 @@ export function SettingsPage() {
   const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
     if (landedOnDefault || therapists === undefined || catalog === undefined) return;
-    setActiveTab(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'general');
+    setActiveTab(rosterUnlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'general');
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
+  }, [landedOnDefault, therapists, catalog, rosterUnlinkedCount, catalogEmpty]);
 
   // A link (setup step, closed-days sheet) can change ?tab= while Settings is
   // already open; follow it.
@@ -504,12 +505,6 @@ export function SettingsPage() {
           )}
           {activeTab === 'team' && (
             <>
-              {unlinkedCount > 0 && (
-                <div className="rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
-                  {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login.
-                  Set Linked login so their Workspace isn’t empty.
-                </div>
-              )}
               <Therapists />
               <ShiftAssignmentsSection />
               <ShiftTemplatesSection />
@@ -2450,13 +2445,32 @@ function therapistInitials(name: string): string {
   return '';
 }
 
-interface TeamPerson {
+export interface TeamPerson {
   key: string;
   member: ClinicMember | null;
   therapist: Therapist | null;
 }
 
-function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] | null): TeamPerson[] {
+function normalizeTeamPersonName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Match a roster row to a member when `user_id` hasn't synced locally yet. */
+function findMemberKeyForTherapistName(
+  map: Map<string, TeamPerson>,
+  therapistName: string
+): string | null {
+  const target = normalizeTeamPersonName(therapistName);
+  if (!target) return null;
+  for (const [key, person] of map) {
+    if (!person.member || person.therapist) continue;
+    const memberName = normalizeTeamPersonName(person.member.displayName ?? '');
+    if (memberName && memberName === target) return key;
+  }
+  return null;
+}
+
+export function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] | null): TeamPerson[] {
   const map = new Map<string, TeamPerson>();
   
   if (members) {
@@ -2469,13 +2483,20 @@ function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] |
     for (const t of therapists) {
       if (t.userId && map.has(t.userId)) {
         map.get(t.userId)!.therapist = t;
+        continue;
+      }
+
+      const memberKey = members ? findMemberKeyForTherapistName(map, t.name) : null;
+      if (memberKey) {
+        map.get(memberKey)!.therapist = t;
+        continue;
+      }
+
+      const key = t.userId ? t.userId : `t-${t.id}`;
+      if (!map.has(key)) {
+        map.set(key, { key, member: null, therapist: t });
       } else {
-        const key = t.userId ? t.userId : `t-${t.id}`;
-        if (!map.has(key)) {
-          map.set(key, { key, member: null, therapist: t });
-        } else {
-          map.get(key)!.therapist = t;
-        }
+        map.get(key)!.therapist = t;
       }
     }
   }
@@ -2491,6 +2512,7 @@ export type TeamMemberCardProps = {
   person: TeamPerson;
   clinicId: string;
   isLastAdmin: boolean;
+  membersLoaded: boolean;
   revoking: boolean;
   resending: boolean;
   onRevoke: () => void;
@@ -2508,6 +2530,7 @@ export function TeamMemberCard({
   person,
   clinicId,
   isLastAdmin,
+  membersLoaded,
   revoking,
   resending,
   onRevoke,
@@ -2674,11 +2697,11 @@ export function TeamMemberCard({
                   Hidden online
                 </span>
               )}
-              {!member && therapist && (
+              {!membersLoaded ? null : !member && therapist ? (
                 <span className="inline-block rounded-full bg-[var(--amber-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--amber-strong)]">
                   No login
                 </span>
-              )}
+              ) : null}
             </div>
           </div>
           
@@ -3163,6 +3186,7 @@ function Therapists() {
     [clinic.id]
   );
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
+  const [membersLoaded, setMembersLoaded] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
@@ -3177,11 +3201,13 @@ function Therapists() {
   const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) return;
+    setMembersError(null);
     const { data, error } = await supabase.rpc('list_clinic_members_with_email', {
       p_clinic_id: clinic.id,
     });
     if (error) {
       setMembersError(toFriendlyMessage(new Error(error.message)));
+      setMembersLoaded(true);
       return;
     }
     setMembers(
@@ -3210,6 +3236,8 @@ function Therapists() {
         lastActiveAt: m.last_active_at,
       }))
     );
+    setMembersLoaded(true);
+    syncEngine.schedule(0);
   }, [clinic.id]);
 
   useEffect(() => {
@@ -3236,7 +3264,9 @@ function Therapists() {
     });
   }, [teamList, filter]);
 
-  const unlinkedCount = teamList.filter(p => p.therapist && p.therapist.active !== false && !p.member).length;
+  const unlinkedCount = membersLoaded
+    ? teamList.filter((p) => p.therapist && p.therapist.active !== false && !p.member).length
+    : 0;
 
   const atSeatCap =
     entitlements.enforcementEnabled &&
@@ -3415,6 +3445,12 @@ function Therapists() {
 
   return (
     <SectionCard id="settings-card-team-therapists" title="Team Directory">
+      {membersLoaded && unlinkedCount > 0 && (
+        <div className="mb-4 rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
+          {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login. Open them below
+          and add their email to invite them, so their Workspace isn&apos;t empty.
+        </div>
+      )}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
         <div className="flex flex-wrap gap-2">
           {(['all', 'bookable', 'staff', 'invited', 'inactive', 'unlinked'] as const).map((f) => (
@@ -3458,6 +3494,7 @@ function Therapists() {
               person={p}
               clinicId={clinic.id}
               isLastAdmin={isLastAdmin}
+              membersLoaded={membersLoaded}
               revoking={revokeInProgress === p.member?.userId}
               resending={resendInProgress === p.member?.userId}
               onRevoke={() => {
