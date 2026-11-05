@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, catalogService } from '@/services';
 import type { ReferringSourceItem } from '@/domain/types';
-import { btnPrimary, btnSecondary, Field, inputCls, SectionCard, SheetDialog } from '@/components/ui';
+import { btnPrimary, btnSecondary, Field, inputCls, LoadingRows, SectionCard, SheetDialog } from '@/components/ui';
 import { nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
 import { REFERRALS_CARD_ID } from './sections';
 import { SwitchRow } from './settingsShared';
@@ -38,7 +38,9 @@ export function ReferralSourcesCard() {
       <p className="mb-3 text-xs text-[var(--muted)]">
         How patients found you. Asked when you add a patient; feeds the Referral sources report.
       </p>
-      {shown.length === 0 ? (
+      {items === undefined ? (
+        <LoadingRows label="Loading referral sources" />
+      ) : shown.length === 0 ? (
         <p className="py-4 text-sm text-[var(--muted)]">
           {hidden.length > 0
             ? 'No active sources. Turn one back on under Inactive, or add one with "+ Add".'

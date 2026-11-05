@@ -20,6 +20,7 @@ function renderCard(person: React.ComponentProps<typeof TeamMemberCard>['person'
   render(
     <TeamMemberCard
       person={person}
+      membersLoaded
       clinicId="c1"
       isLastAdmin={false}
       revoking={false}

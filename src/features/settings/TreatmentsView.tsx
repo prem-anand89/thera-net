@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { catalogService, dashboardService, repos } from '@/services';
 import type { TreatmentItem } from '@/domain/types';
-import { btnPrimary, btnSecondary, Field, inputCls, SectionCard, SheetDialog } from '@/components/ui';
+import { btnPrimary, btnSecondary, Field, inputCls, LoadingRows, SectionCard, SheetDialog } from '@/components/ui';
 import { nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
 import { SwitchRow } from './settingsShared';
 import { HiddenItemsFooter, MiniSwitch, NameCheckNote, saveErrorMessage } from './catalogShared';
@@ -57,7 +57,9 @@ export function TreatmentCatalog() {
           <MiniSwitch label="Show usage" checked={showUsage} onChange={setShowUsage} />
         </div>
 
-        {shown.length === 0 ? (
+        {items === undefined || usageRows === undefined ? (
+          <LoadingRows label="Loading treatments" />
+        ) : shown.length === 0 ? (
           <p className="py-4 text-sm text-[var(--muted)]">
             {hidden.length > 0
               ? 'No active treatments. Turn one back on under Inactive, or add one with "+ Add".'

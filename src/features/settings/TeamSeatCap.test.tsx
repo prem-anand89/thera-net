@@ -15,6 +15,7 @@ function renderCard(locked: boolean) {
   render(
     <TeamMemberCard
       person={{ key: 'p1', therapist, member: null }}
+      membersLoaded
       clinicId="c1"
       isLastAdmin={false}
       revoking={false}

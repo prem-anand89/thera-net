@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { TreatmentItem } from '@/domain/types';
 
 let treatments: TreatmentItem[] = [];
-let usage: { treatmentId: string; count: number }[] = [];
+let usage: { treatmentId: string; count: number }[] | undefined = [];
 const put = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => null }));
@@ -38,6 +38,15 @@ afterEach(() => {
   treatments = [];
   usage = [];
   window.localStorage.clear();
+});
+
+it('shows a loading placeholder, not "No treatments yet" or zero counts, until the data has arrived', () => {
+  usage = undefined;
+  treatments = [t('Exercise')];
+  render(<TreatmentCatalog />);
+  expect(screen.getByRole('status', { name: 'Loading treatments' })).toBeInTheDocument();
+  expect(screen.queryByText(/No treatments yet/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Edit Exercise' })).toBeNull();
 });
 
 const dialog = () => screen.getByRole('dialog');

@@ -26,7 +26,10 @@ const FLASH_MS = 1600;
 export function ServicesView() {
   const clinic = useClinic();
   const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
-  const usage = useLiveQuery(() => catalogService.usageCounts(clinic.id), [clinic.id]) ?? EMPTY_USAGE;
+  const usageRows = useLiveQuery(() => catalogService.usageCounts(clinic.id), [clinic.id]);
+  // Counts that haven't arrived are not zeros: no count (and no "Not used yet") until they have.
+  const usageLoaded = usageRows !== undefined;
+  const usage = usageRows ?? EMPTY_USAGE;
   const [showUsage, setShowUsage] = useShowUsage('services');
   const isDesktop = useIsDesktop();
   const [search, setSearch] = useState('');
@@ -64,7 +67,7 @@ export function ServicesView() {
 
   const openAdd = () => setSheet({ kind: 'add' });
   const openEdit = (item: CatalogItem) => setSheet({ kind: 'edit', item });
-  const usageFor = (item: CatalogItem) => (showUsage ? usage.get(item.id) ?? 0 : undefined);
+  const usageFor = (item: CatalogItem) => (showUsage && usageLoaded ? usage.get(item.id) ?? 0 : undefined);
 
   return (
     <SectionCard
@@ -105,7 +108,7 @@ export function ServicesView() {
               : 'No services yet. Add the first one with "+ Add".'}
         </p>
       ) : isDesktop ? (
-        <ServicesTable rows={rows} usage={usage} showUsage={showUsage} flashId={flashId} onEdit={openEdit} onGroup={setGroupSheet} />
+        <ServicesTable rows={rows} usage={usage} showUsage={showUsage && usageLoaded} flashId={flashId} onEdit={openEdit} onGroup={setGroupSheet} />
       ) : (
         <div className="overflow-clip rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           {blocks.map((block, b) => (
@@ -137,7 +140,7 @@ export function ServicesView() {
             <ServiceRow
               key={item.id}
               item={item}
-              note={used > 0 ? usageLabel(used) : 'Not used yet · can be deleted'}
+              note={!usageLoaded ? undefined : used > 0 ? usageLabel(used) : 'Not used yet · can be deleted'}
               flash={item.id === flashId}
               onOpen={() => openEdit(item)}
             />

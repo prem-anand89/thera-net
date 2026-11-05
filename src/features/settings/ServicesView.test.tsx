@@ -128,12 +128,14 @@ describe('Services list — phone', () => {
     expect(screen.queryByRole('button', { name: /^Edit S1,/ })).toBeNull();
   });
 
-  it('keeps stopped services in a collapsed "Inactive" footer that says which can be deleted', () => {
+  it('keeps stopped services in a collapsed "Inactive" footer that says which can be deleted, once the counts have loaded', async () => {
     catalogItems = [item(), item({ name: 'Old', active: false })];
     render(<ServicesView />);
     expect(screen.queryByRole('button', { name: /^Edit Old/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Inactive/ }));
-    expect(screen.getByRole('button', { name: /^Edit Old/ })).toHaveTextContent('Not used yet · can be deleted');
+    // Counts that haven't arrived are not zeros: no "Not used yet" until they have.
+    expect(screen.getByRole('button', { name: /^Edit Old/ })).not.toHaveTextContent('Not used yet');
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Edit Old/ })).toHaveTextContent('Not used yet · can be deleted'));
   });
 });
 
@@ -311,7 +313,10 @@ describe('Services list — desktop table', () => {
     visits = [{ id: 'v1', serviceCatalogId: pkg.id }];
     render(<ServicesView />);
     const table = screen.getByRole('table');
-    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Service', 'Sessions', 'Price', 'Each', 'Length', 'Used', 'Edit']);
+    // The Used column waits for the counts, so a table never shows zeros that are really "not loaded yet".
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Service', 'Sessions', 'Price', 'Each', 'Length', 'Edit']);
+    await act(async () => {});
+    expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Service', 'Sessions', 'Price', 'Each', 'Length', 'Used', 'Edit']);
     const row = within(table).getByRole('row', { name: 'Edit Package, ₹10,000' });
     expect(row).toHaveTextContent('10');
     expect(row).toHaveTextContent('₹1,000');

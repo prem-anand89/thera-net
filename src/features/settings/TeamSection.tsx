@@ -140,8 +140,8 @@ function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] |
 }
 
 export type TeamMemberCardProps = {
-  /** False until the member list has loaded: a therapist with a login must not read as unlinked in the meantime. Defaults to true. */
-  membersLoaded?: boolean;
+  /** False until the member list has loaded: a therapist with a login must not read as unlinked in the meantime. */
+  membersLoaded: boolean;
   person: TeamPerson;
   clinicId: string;
   isLastAdmin: boolean;
@@ -166,7 +166,7 @@ export type TeamMemberCardProps = {
 
 export function TeamMemberCard({
   person,
-  membersLoaded = true,
+  membersLoaded,
   clinicId,
   isLastAdmin,
   revoking,
@@ -1261,7 +1261,8 @@ export function Therapists() {
         </p>
       </div>
 
-      {unlinkedCount > 0 && (
+      {/* Held until the member list and the plan have both loaded, so the message can't change a moment later. */}
+      {unlinkedCount > 0 && members !== null && !entitlements.loading && (
         <div className="mb-3 rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]" data-testid="unlinked-banner">
           {atSeatCap ? (
             <>

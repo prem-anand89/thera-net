@@ -58,4 +58,6 @@
 | 2, 3, 4 | **Sonnet** | Reuse of existing pieces |
 | Final review | **Opus** | |
 
+**Loading rule (from PR #107, FEATURES_AND_SCHEMA §0c), for Tasks 2 to 4:** the Awaiting list and the Workspace counts read server data (requests, waitlist), so show `LoadingRows` while the data is `undefined`, never "nothing waiting" or a zero count, and hold any message that depends on a second source (such as the plan or the switch) until both have loaded.
+
 Order: 1, 2, 3, 4. One commit each. Tasks 2 to 4 assume Task 1; if the owner skips it, they reach only clinics with the switch on.

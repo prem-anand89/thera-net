@@ -77,6 +77,7 @@ describe('TeamMemberCard', () => {
     render(
       <TeamMemberCard
         person={{ key: 'p1', therapist, member: null }}
+        membersLoaded
         clinicId="c1"
         isLastAdmin={false}
         revoking={false}
@@ -113,6 +114,7 @@ describe('TeamMemberCard', () => {
     render(
       <TeamMemberCard
         person={{ key: 'p2', therapist, member: null }}
+        membersLoaded
         clinicId="c1"
         isLastAdmin={false}
         revoking={false}
@@ -146,6 +148,7 @@ describe('TeamMemberCard', () => {
     render(
       <TeamMemberCard
         person={{ key: 'p3', therapist, member: null }}
+        membersLoaded
         clinicId="c1"
         isLastAdmin={false}
         revoking={false}
