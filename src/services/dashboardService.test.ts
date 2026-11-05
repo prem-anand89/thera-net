@@ -331,6 +331,18 @@ describe('dashboardService.openPackages', () => {
     });
   });
 
+  it('an expired package reads Expired, never stale as well; one with no validity stays as it was', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2020-01-01', packageGroupId: 'g1', packageTotal: 3, packageValidityDays: 30 })
+    );
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2020-01-01', packageGroupId: 'g2', packageTotal: 3 }));
+    const rows = await createDashboardService(fake.repos).openPackages('clinic-1');
+    const held = rows.find((r) => r.packageGroupId === 'g1')!;
+    expect(held).toMatchObject({ expiresOn: '2020-01-31', expiry: 'expired', stale: false });
+    expect(rows.find((r) => r.packageGroupId === 'g2')).toMatchObject({ expiresOn: null, expiry: null, stale: true });
+  });
+
   it('excludes a completed package', async () => {
     fake.visits.set(
       'v1',

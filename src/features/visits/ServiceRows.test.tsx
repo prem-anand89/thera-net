@@ -50,6 +50,7 @@ function Harness(props: {
   catalog?: CatalogItem[];
   onAddService?: (name: string, rowKey: string) => void;
   askAdminToAdd?: boolean;
+  visitDate?: string;
 }) {
   const [rows, setRows] = useState(props.initial);
   return (
@@ -69,6 +70,7 @@ function Harness(props: {
       quickServices={props.quickServices}
       onAddService={props.onAddService}
       askAdminToAdd={props.askAdminToAdd}
+      visitDate={props.visitDate}
     />
   );
 }
@@ -694,5 +696,18 @@ describe('ServiceRows — the same order and headings as Settings → Services',
     fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Cupping' } });
     expect(screen.getByText('Ask your admin to add it')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^\+ Add/ })).toBeNull();
+  });
+
+  it('an expired package says so on the row and the picker, and is judged against the date being logged', () => {
+    const expiring = { ...pkg, expiresOn: '2026-12-12' };
+    const { unmount } = render(<Harness initial={[{ ...pkgRow(), continuation: expiring }]} openPackages={[expiring]} visitDate="2026-12-13" />);
+    expect(screen.getByText('This package expired on 12 Dec.')).toBeInTheDocument();
+    unmount();
+    const backdated = render(<Harness initial={[{ ...pkgRow(), continuation: expiring }]} openPackages={[expiring]} visitDate="2026-12-12" />);
+    expect(screen.queryByText(/expired on/)).toBeNull();
+    backdated.unmount();
+    render(<Harness initial={[row('a')]} openPackages={[expiring]} visitDate="2026-12-13" />);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
+    expect(screen.getByRole('option', { name: /session 5 of 10 \(₹0\) \(expired 12 Dec\)/ })).toBeInTheDocument();
   });
 });

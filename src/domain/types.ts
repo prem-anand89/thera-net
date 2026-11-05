@@ -359,6 +359,8 @@ export interface CatalogItem {
   /** How long one session takes, 1–480 min (per session for a package). Optional/null = not set;
    *  older cached rows lack the key. Snapshotted onto a visit's service line when it's entered. */
   durationMinutes?: number | null;
+  /** Package only: "Valid for (days)", 1–730. Optional/null = no expiry. Copied onto each session when it's logged. */
+  validityDays?: number | null;
   updatedAt: string;
 }
 
@@ -547,6 +549,8 @@ export interface Visit {
   packageTotal: number | null;
   /** Groups the sessions of one package; therapist may change mid-package */
   packageGroupId: UUID | null;
+  /** The package's validity, copied onto every session; null/absent = never expires. See `packageExpiresOn`. */
+  packageValidityDays?: number | null;
   /**
    * Optional internal split: a share of this visit's billed amount is
    * credited to an assisting therapist in reporting only. Never changes the

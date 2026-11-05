@@ -11,6 +11,7 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
+import { formatExpiryDate } from '@/domain/packageTracking';
 import {
   clinicBillingConfig,
   type ConsultationNote,
@@ -241,6 +242,8 @@ const EMPTY_APPOINTMENTS: Appointment[] = [];
  *  running low on sessions) since a package can't need re-engaging and be
  *  actively finishing up at the same time in any way staff should act on. */
 function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
+  if (pkg.expiry === 'expired' && pkg.expiresOn) return <Pill tone="amber">Expired · {formatExpiryDate(pkg.expiresOn)}</Pill>;
+  if (pkg.expiry === 'expiring' && pkg.expiresOn) return <Pill tone="amber">Expiring soon · {formatExpiryDate(pkg.expiresOn)}</Pill>;
   if (pkg.stale) return <Pill tone="amber">Stale</Pill>;
   if (pkg.nearingCompletion) return <Pill tone="amber">Renew soon</Pill>;
   return <Pill tone="green">Open</Pill>;
@@ -474,7 +477,7 @@ export function WorkspacePage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
-  const needsAttention = (p: OpenPackageRow) => p.stale || p.nearingCompletion;
+  const needsAttention = (p: OpenPackageRow) => p.stale || p.nearingCompletion || p.expiry !== null;
   const scopedPackages = useMemo(
     () =>
       pkgMineOnly && scope.myTherapistId

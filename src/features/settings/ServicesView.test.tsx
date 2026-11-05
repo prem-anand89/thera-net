@@ -265,6 +265,37 @@ describe('Groups', () => {
   });
 });
 
+describe('Package validity', () => {
+  it('is on packages only, blank by default, offers 30/60/90, and refuses a bad number', async () => {
+    catalogItems = [];
+    render(<ServicesView />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    expect(within(dialog()).queryByLabelText(/Valid for/)).toBeNull();
+    fireEvent.click(within(dialog()).getByRole('radio', { name: 'Package' }));
+    const box = within(dialog()).getByLabelText(/Valid for/) as HTMLInputElement;
+    expect(box.value).toBe('');
+    fireEvent.click(within(dialog()).getByRole('button', { name: '60 days' }));
+    expect(box.value).toBe('60');
+    fireEvent.change(within(dialog()).getByRole('textbox', { name: 'Name' }), { target: { value: 'Rehab' } });
+    fireEvent.change(within(dialog()).getByRole('spinbutton', { name: 'Price for the whole package' }), { target: { value: '5000' } });
+    fireEvent.change(box, { target: { value: '731' } });
+    fireEvent.click(within(dialog()).getByRole('button', { name: /^(Save|Add)/ }));
+    expect(await within(dialog()).findByText(/whole number from 1 to 730/)).toBeInTheDocument();
+  });
+
+  it('editing says held packages keep their validity, and Save wakes on a change', () => {
+    catalogItems = [item({ name: 'Package', sessionCount: 5, validityDays: 30 })];
+    render(<ServicesView />);
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Package/ }));
+    expect(within(dialog()).getByLabelText(/Valid for/)).toHaveValue(30);
+    expect(within(dialog()).getByText(/Packages already bought keep what they started with/)).toBeInTheDocument();
+    const save = within(dialog()).getByRole('button', { name: /^Save/ });
+    expect(save).toBeDisabled();
+    fireEvent.change(within(dialog()).getByLabelText(/Valid for/), { target: { value: '' } });
+    expect(save).toBeEnabled();
+  });
+});
+
 describe('Services list — desktop table', () => {
   it('shows columns, "—" for one-visit rows, and Used unless "Show usage" is off', async () => {
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('min-width'), media: q, addEventListener() {}, removeEventListener() {} }));

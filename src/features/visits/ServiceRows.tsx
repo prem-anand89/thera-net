@@ -4,6 +4,7 @@ import { type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/d
 import { orderedServices, perSessionLabel, serviceSubline } from '@/domain/catalogDisplay';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { therapistColor } from '@/components/schedule/scheduleColors';
+import { formatExpiryDate, packageExpiryState } from '@/domain/packageTracking';
 import { PickerMenu } from './PickerMenu';
 import { IconClose, IconUserPlus } from '@/components/StatIcons';
 
@@ -19,6 +20,8 @@ export interface OpenPackage {
   purchaseVisitId?: UUID;
   /** The share the package's most recent session that had one gave a colleague; the next session starts with it. */
   lastShare?: { therapistId: UUID; pct: number } | null;
+  /** Last valid day, when the package has one. Past it the row and the picker say so; saving still works. */
+  expiresOn?: string | null;
 }
 
 /**
@@ -190,6 +193,8 @@ export interface ServiceRowsProps {
   onAddService?: (name: string, rowKey: string) => void;
   /** Not an admin: the empty search says to ask one instead of offering an add. */
   askAdminToAdd?: boolean;
+  /** The date being logged (expiry is judged against it, so a backdated visit isn't warned). Default today. */
+  visitDate?: string;
 }
 
 /**
@@ -210,6 +215,7 @@ export function ServiceRows({
   revealProblems = false,
   onAddService,
   askAdminToAdd = false,
+  visitDate,
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
@@ -227,12 +233,11 @@ export function ServiceRows({
   );
 
   const serviceOptions = useMemo(() => {
-    const packages = openPackages.map((p) => ({
-      value: `pkg:${p.packageGroupId}`,
-      label: `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)`,
-      title: `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)`,
-      group: 'Open packages',
-    }));
+    const packages = openPackages.map((p) => {
+      const expired = packageExpiryState(p.expiresOn, visitDate) === 'expired' ? ` (expired ${formatExpiryDate(p.expiresOn!)})` : '';
+      const text = `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)${expired}`;
+      return { value: `pkg:${p.packageGroupId}`, label: text, title: text, group: 'Open packages' };
+    });
     // The same order and headings as Settings → Services (`orderedServices`): named groups first, then the
     // ungrouped ones under "Other" — or one flat list with no headings when the clinic uses no groups.
     const services = orderedServices(catalog).map(({ item: i, heading }) => ({
@@ -467,6 +472,9 @@ export function ServiceRows({
                 <button type="button" className={linkBtn} onClick={() => switchToOtherService(row.key)}>
                   Use a different service
                 </button>
+                {packageExpiryState(row.continuation.expiresOn, visitDate) === 'expired' && (
+                  <span className="w-full text-[var(--amber)]">This package expired on {formatExpiryDate(row.continuation.expiresOn!)}.</span>
+                )}
               </div>
             )}
             {named && !row.continuation && cat && cat.sessionCount > 1 && (

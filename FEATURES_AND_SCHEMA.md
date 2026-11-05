@@ -173,7 +173,8 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 #### Today-First Workspace
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
-  - Packages panel (bottom of page) — **Open** (default: every open package, the ones needing attention sorted first and tagged Stale / Renew soon) and **Needs attention (n)** (stale or renew soon), plus a "Mine only" checkbox for anyone with a linked therapist record (admin included). "Stale" and "All" were dropped: Stale is a subset of Needs attention, and All only differed from Open by the stale rows
+  - **Optional package expiry:** a package service can carry "Valid for (days)" (admin only, `ServiceFormSheet`; blank = never; 30/60/90 or typed, up to 730). The days are copied onto every session (`visits.package_validity_days`), so editing the catalog never changes a package already held; packages sold before this, and imported history, never expire. The date is never stored: `packageExpiresOn` (`packageTracking.ts`) adds the days to the package's first live visit date, so correcting that date moves it and deleting that visit doesn't lose it. The last day still counts as valid. Expiry never blocks: past it the visit row says "This package expired on 12 Dec." and the picker's continue row adds "(expired 12 Dec)", both judged against the date being logged. Workspace → Packages shows "Expiring soon" (within 7 days) or "Expired" with the date; Expired replaces Stale and its reminder button, so a row never shows both. Not on invoices.
+  - Packages panel (bottom of page) — **Open** (default: every open package, the ones needing attention sorted first and tagged Expired / Expiring soon / Stale / Renew soon) and **Needs attention (n)** (any of those), plus a "Mine only" checkbox for anyone with a linked therapist record (admin included). "Stale" and "All" were dropped: Stale is a subset of Needs attention, and All only differed from Open by the stale rows
 - **Stat strip** (`StatStrip` in `ui.tsx`, inside the Workspace header card) — one row of tinted tiles, no period captions (each label carries its own period). Each tile is lightly tinted in its own hue with a white icon badge (from `sm:`; phones drop the badge so three tiles fit at 390px), the number (`font-num`) over a short label. Phones split the row evenly; from `tab:` counts get a **fixed width** (`kind: 'count'`, 9rem) and money tiles **flex** for the spare room (`'money'` fits ₹99,999). **What it shows is chosen by role, so the header only holds numbers that aren't already one tap away:** Reports (admin / front desk only) already carries the month's revenue, visits, new patients and packages with trends, and the Today card's tabs already count today's appointments and visits. So admin / front desk see **Collected** (today, opens the Ledger daybook) and **Dues** (everything still owed across all visits — `dashboardService.duesSummary`, per visit via `visitDuePaise`: a "Take payment later" visit with no invoice counts, an invoiced-but-unpaid visit counts, a part-paid visit counts only its rest; labelled "Dues · 3" with the visit count; opens the Ledger on the unpaid visits, all dates: `/ledger?tab=visits&filter=not_collected`), followed by one muted line "October: ₹4,82,300 net revenue · 86 visits — Reports ›" linking to `/insights`. Therapists (no Reports access, so this is their only view of it) see **Collected** (their own today), **Dues** (what's owed on their own visits, via `duesSummary(clinicId, therapistId)`; opens the Ledger on their unpaid visits) and **Oct visits** — when billing is open to them; otherwise Collected, Oct visits and Oct packages (open packages are listed below on the page). One icon and hue per kind of number (`src/components/StatIcons.tsx`): collected = moss ₹, dues = amber wallet, visits = sky patient-tick, packages = plum stack; `--sky` / `--plum` are tokens for stat icons only. `StatTile` remains for Reports/print
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
@@ -1769,6 +1770,7 @@ base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
 duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
                  (per session for a package); snapshotted onto visit_items
+validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
@@ -1828,6 +1830,7 @@ adjustment_paise      bigint NOT NULL — actual − catalog
 adjustment_reason     text (NULLABLE)
 session_index, package_total  int (NULLABLE)
 package_group_id      uuid (NULLABLE)
+package_validity_days smallint (NULLABLE, 1–730) — copied onto every session; null = never expires (optional package expiry)
 shared_therapist_id   uuid (FOREIGN KEY → therapists.id, NULLABLE) — internal
                        revenue-split assist, reporting only
 shared_pct            numeric (NULLABLE)
@@ -3775,6 +3778,7 @@ base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
 duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
                  (per session for a package); snapshotted onto visit_items
+validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
@@ -3834,6 +3838,7 @@ adjustment_paise      bigint NOT NULL — actual − catalog
 adjustment_reason     text (NULLABLE)
 session_index, package_total  int (NULLABLE)
 package_group_id      uuid (NULLABLE)
+package_validity_days smallint (NULLABLE, 1–730) — copied onto every session; null = never expires (optional package expiry)
 shared_therapist_id   uuid (FOREIGN KEY → therapists.id, NULLABLE) — internal
                        revenue-split assist, reporting only
 shared_pct            numeric (NULLABLE)

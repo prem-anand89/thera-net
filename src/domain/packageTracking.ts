@@ -16,6 +16,8 @@ export interface OpenPackageGroup {
   lastVisitId: UUID;
   /** Therapist who logged the earliest (session 1) visit — who "started" this package. */
   startedByTherapistId: UUID;
+  /** Last valid day (ISO date), or null when the package doesn't expire. */
+  expiresOn: string | null;
 }
 
 /**
@@ -47,6 +49,7 @@ export function groupOpenPackages(visits: Visit[]): OpenPackageGroup[] {
       lastVisitOn: sorted[sorted.length - 1].visitDate,
       lastVisitId: sorted[sorted.length - 1].id,
       startedByTherapistId: sorted[0].therapistId,
+      expiresOn: packageExpiresOn(group),
     });
   }
   return open;
@@ -57,6 +60,56 @@ export function daysSince(dateStr: string, asOf: Date | string = new Date()): nu
   const from = new Date(`${dateStr.slice(0, 10)}T00:00:00`);
   const to = typeof asOf === 'string' ? new Date(`${asOf.slice(0, 10)}T00:00:00`) : asOf;
   return Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+type PackageSession = Pick<Visit, 'visitDate' | 'packageValidityDays' | 'deleted'>;
+
+/** The days a package is valid for: any live session carries them, so deleting the first visit doesn't lose them. */
+export function packageValidityOf(group: PackageSession[]): number | null {
+  return group.find((v) => !v.deleted && v.packageValidityDays != null)?.packageValidityDays ?? null;
+}
+
+/**
+ * A package's last valid day: its first live visit's date + the validity days. Worked out on read, never stored,
+ * so correcting that visit's date moves it. Null = it doesn't expire.
+ */
+export function packageExpiresOn(group: PackageSession[]): string | null {
+  const days = packageValidityOf(group);
+  if (days == null) return null;
+  const first = group
+    .filter((v) => !v.deleted)
+    .map((v) => v.visitDate.slice(0, 10))
+    .sort()[0];
+  const [y, m, d] = first.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** Within this many days of the last valid day, a package reads "Expiring soon". */
+export const EXPIRING_SOON_DAYS = 7;
+
+export type PackageExpiryState = 'expired' | 'expiring' | null;
+
+/** Today on this device as an ISO date (not UTC: an evening in India is still today). */
+export function localToday(now: Date = new Date()): string {
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
+/** The last valid day still counts as valid. `asOf` is an ISO date (today, or the date of the visit being logged). */
+export function packageExpiryState(expiresOn: string | null | undefined, asOf: string = localToday()): PackageExpiryState {
+  if (!expiresOn) return null;
+  const left = daysSince(asOf, expiresOn);
+  if (left < 0) return 'expired';
+  return left <= EXPIRING_SOON_DAYS ? 'expiring' : null;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "12 Dec", for package expiry wording. */
+export function formatExpiryDate(isoDate: string): string {
+  const [, m, d] = isoDate.slice(0, 10).split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
 }
 
 export const STALE_PACKAGE_DAYS = 14;

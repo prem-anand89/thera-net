@@ -29,6 +29,7 @@ import { findSimilarPatients } from '@/domain/similarPatients';
 import { SimilarPatients } from '@/components/SimilarPatients';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { ServiceFormSheet } from '@/features/settings/ServiceFormSheet';
+import { packageExpiresOn } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import { rankServicesByUsage } from '@/domain/serviceUsage';
 import {
@@ -511,6 +512,7 @@ export function NewVisitPage() {
         startedOn: sorted[0].visitDate,
         purchaseVisitId: sorted[0].id,
         lastShare: lastPackageShare(group, sessionLines, (id) => activeIds.has(id)),
+        expiresOn: packageExpiresOn(group),
       });
     }
     return { patientId: patient.id, list: open.sort((a, b) => b.startedOn.localeCompare(a.startedOn)) };
@@ -2161,6 +2163,7 @@ export function NewVisitPage() {
             quickServices={quickServices}
             onAddService={isAdmin ? (name, rowKey) => setAddService({ name, rowKey }) : undefined}
             askAdminToAdd={!isAdmin}
+            visitDate={visitDate}
           />
 
           {showAssistant && (
