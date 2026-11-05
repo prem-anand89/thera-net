@@ -1484,7 +1484,7 @@ export function ScheduleBookingsView({
       <AddToWaitlistSheet
         open={addWaitlistOpen}
         clinicId={clinic.id}
-        initialDate={date < today ? today : date}
+        initialDate={date <= today ? addDays(today, 1) : date}
         therapists={roster.filter((t) => t.active !== false)}
         onClose={() => setAddWaitlistOpen(false)}
       />
