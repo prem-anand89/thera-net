@@ -43,7 +43,7 @@ Settings should feel like a normal form: click a field, type, press Save. Each s
 - **Names (owner):** the tab is **Services & treatments** with `Services | Treatments`; referral sources are a General card called **Referral sources** (first line "How patients found you"); the word "technique" is never used; the visit screen's "Services" and "Treatments" cards use the same words.
 - **Prices:** per-session prices are whole rupees with no qualifier ("₹1,667 each", never "≈" or paise); `effectivePricePerSession` stays exact for maths. Display goes through `catalogDisplay.ts` (`serviceSubline`, `perSessionLabel`, `groupServices`).
 - **Names are unique:** the database has `unique (clinic_id, name)` on services, treatments and referral sources, and the app saves on the device first, so every add or rename goes through `catalogService`, which refuses a taken name (capitals ignored) before writing. Use `nameCheck` for any new list of named things.
-- **Shared pieces:** `SheetDialog` (bottom sheet on phones, pinned buttons), `HiddenItemsFooter`, `SwitchRow`, `Segmented`, `useShowUsage` (a per-device view switch, off by default, never a clinic setting), `SectionSaveBar`.
+- **Shared pieces:** `SheetDialog` (bottom sheet on phones, pinned buttons), `HiddenItemsFooter`, `SwitchRow`, `Segmented`, `useShowUsage` (a per-device view switch, on by default since 16d, never a clinic setting), `SectionSaveBar`.
 - **Save bar:** a plain static row at the foot of the card. A floating bar was tried and dropped (it felt broken and cost phone/iPad height); the tab dot and the leave prompt are the safety net on long cards.
 - **Group rules:** groups are optional; named groups first, ungrouped under "Other", one flat list when no groups; the visit picker follows the same rule.
 - **Mockup (reference):** https://claude.ai/artifact/NFxXHxizzsRZUs9xQbaST4
@@ -262,6 +262,7 @@ Already built: `quickServices` (`rankServicesByUsage`) shows the top 3 services 
 - Making "Schedule" a link in the Hours card's closures note (the tests render without a router).
 - `font-bold` outside Settings (about 85 places; 700 is not loaded): separate sweep.
 - **App-wide pass for redundant buttons, fields and options (deferred by the owner 2026-11-02):** read-only first, a list to approve before any change. Screens: New visit, the saved-visit screen, Ledger, Schedule, Workspace, Patient profile. Look for duplicate buttons doing the same thing, options nobody changes (check the live data), and the same setting asked in two places.
+- **Future Feature Proposal (Care Settings & Therapist Access Scoping):** Inpatient (IPD), Outpatient (OPD), and Home Care segregation, department-wise partner splits, and per-therapist care setting access scoping drafted in `docs/superpowers/plans/2026-11-05-care-settings-ipd-opd-homecare.md` for Claude's review.
 
 ## Final check (Opus, whole plan)
 
