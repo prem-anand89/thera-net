@@ -598,10 +598,10 @@ export function PatientsList() {
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
                         )}
                       </td>
-                      <td className={`${td} text-xs`}>
+                      <td className={td}>
                         {stats ? (
                           <>
-                            <div className="font-num text-[var(--ink)]">
+                            <div className="font-num font-medium text-[var(--ink)]">
                               {formatAmount(billing?.totalBilledPaise ?? 0)} billed
                             </div>
                             {(billing?.outstandingBalancePaise ?? 0) > 0 && (
