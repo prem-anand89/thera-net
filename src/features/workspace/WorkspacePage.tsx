@@ -38,6 +38,7 @@ import { RequestDeclinedStrip, type DeclinedRequest } from '@/components/schedul
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { AwaitingOpenedStrip, useAwaitingOpening } from '@/components/schedule/AwaitingOpenedStrip';
 import { awaitingMessage } from '@/domain/awaiting';
+import { lastTenDigits } from '@/domain/phoneDigits';
 import { requestWants } from '@/components/schedule/RequestsInbox';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { noteForVisit } from '@/domain/noteLinks';
@@ -343,7 +344,12 @@ export function WorkspacePage() {
   );
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
   const flagContext = usePatientFlagContext(clinic.id, workspaceAppointments ?? EMPTY_APPOINTMENTS);
-  const { mrnoFor } = usePatientDirectory(clinic.id);
+  const { mrnoFor, patients: directoryPatients } = usePatientDirectory(clinic.id);
+  // Awaiting entries carry only a name and number: this is how "asked not to be messaged" reaches them.
+  const doNotMessagePhones = useMemo(
+    () => new Set(directoryPatients.filter((p) => p.doNotMessage && p.phone).map((p) => lastTenDigits(p.phone))),
+    [directoryPatients]
+  );
   const [bookingOpen, setBookingOpen] = useState(false);
   const [startVisit, setStartVisit] = useState<{ appointment?: Appointment } | null>(null);
   const hour = new Date().getHours();
@@ -372,7 +378,6 @@ export function WorkspacePage() {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [appointmentRequests]
   );
-  const pendingRequestCount = pendingRequests.length;
   const awaitingOpening = useAwaitingOpening(pendingRequests);
   const [addAwaitingOpen, setAddAwaitingOpen] = useState(false);
   const [confirmingRequest, setConfirmingRequest] = useState<AppointmentRequest | null>(null);
@@ -974,13 +979,8 @@ export function WorkspacePage() {
           }
           action={
             <span className="flex shrink-0 items-center gap-2.5">
-              {pendingRequestCount > 0 && (
-                <span className="rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-xs font-medium text-[var(--amber)]">
-                  {pendingRequestCount} awaiting
-                </span>
-              )}
               {canManageBookings && (
-                <button type="button" className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => setAddAwaitingOpen(true)}>
+                <button type="button" className="min-h-9 whitespace-nowrap px-1 text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => setAddAwaitingOpen(true)}>
                   + Awaiting
                 </button>
               )}
@@ -1004,6 +1004,7 @@ export function WorkspacePage() {
             onConfirmRequest={setConfirmingRequest}
             onDeclineRequest={setDecliningRequest}
             onMessageRequest={(r) => bookingService.sendText(awaitingMessage({ patientName: r.name, clinicName: clinic.name }), r.phone)}
+            canMessageRequest={(r) => !doNotMessagePhones.has(lastTenDigits(r.phone))}
             onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
             flagContext={flagContext}
             mrnoFor={mrnoFor}

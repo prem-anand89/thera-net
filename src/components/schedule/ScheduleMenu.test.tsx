@@ -8,7 +8,7 @@ function items(onSelect = vi.fn()): ScheduleMenuItem[] {
   return [
     { id: 'find', label: 'Find a time', hint: 'See free start times for each therapist', icon: 'find', group: 'view', onSelect },
     { id: 'cancelled', label: 'Show cancelled', icon: 'cancelled', group: 'view', onSelect },
-    { id: 'waitlist', label: 'Add to waitlist', icon: 'waitlist', group: 'actions', onSelect },
+    { id: 'waitlist', label: 'Add to awaiting', icon: 'waitlist', group: 'actions', onSelect },
     { id: 'closed', label: 'Set closed days', icon: 'closed', group: 'manage', onSelect },
     { id: 'keys', label: 'Keyboard shortcuts', icon: 'keys', group: 'view', desktopOnly: true, onSelect },
   ];
@@ -25,7 +25,7 @@ describe('ScheduleMenu on phones', () => {
     const view = screen.getByRole('region', { name: 'View' });
     expect(within(view).getByRole('button', { name: /Find a time/ })).toBeInTheDocument();
     expect(within(view).getByText('See free start times for each therapist')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Do' })).getByRole('button', { name: /Add to waitlist/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Do' })).getByRole('button', { name: /Add to awaiting/ })).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Manage' })).getByRole('button', { name: /Set closed days/ })).toBeInTheDocument();
     expect(screen.queryByText('Keyboard shortcuts')).not.toBeInTheDocument();
   });
@@ -56,7 +56,7 @@ describe('ScheduleMenu on tablet and desktop', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More schedule options' }));
     expect(screen.queryByText('Schedule options')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Keyboard shortcuts/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Add to waitlist/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add to awaiting/ }));
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 });

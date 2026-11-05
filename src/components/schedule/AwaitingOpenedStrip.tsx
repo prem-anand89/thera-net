@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { matchingWaitlistEntries, type WaitlistOpening } from '@/domain/waitlistMatch';
 import { awaitingOrder, openingFor } from '@/domain/awaiting';
@@ -15,11 +15,12 @@ export function useAwaitingOpening(pending: AppointmentRequest[]) {
     () => (opening ? awaitingOrder(matchingWaitlistEntries(pending, opening), toLocalDateStr(new Date())) : []),
     [pending, opening]
   );
-  return {
-    matches,
-    freed: (appointment: Pick<Appointment, 'scheduledAt' | 'therapistId'>) => setOpening(openingFor(appointment)),
-    clear: () => setOpening(null),
-  };
+  // A time already gone frees nothing. Stable, so a re-render doesn't restart the strip's timer.
+  const freed = useCallback((appointment: Pick<Appointment, 'scheduledAt' | 'therapistId'>) => {
+    if (new Date(appointment.scheduledAt).getTime() > Date.now()) setOpening(openingFor(appointment));
+  }, []);
+  const clear = useCallback(() => setOpening(null), []);
+  return { matches, freed, clear };
 }
 
 /** One line under the other strips: who is awaiting the time that just opened, and a Book button for the oldest. */

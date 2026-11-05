@@ -885,7 +885,7 @@ export function ScheduleBookingsView({
           ...(isPhone
             ? [{ id: 'reminders', label: 'Send reminders', hint: 'WhatsApp, one tap each', icon: 'bell' as const, group: 'actions' as const, onSelect: () => setReminderOpen(true) }]
             : []),
-          { id: 'waitlist', label: 'Add to waitlist', hint: 'For an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
+          { id: 'waitlist', label: 'Add to awaiting', hint: 'For an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
           { id: 'closed-days', label: 'Set closed days', hint: 'Clinic holidays', icon: 'closed', group: 'manage', onSelect: () => setClosedSheetOpen(true) },
           { id: 'assign-shift', label: 'Assign shift…', hint: 'Per therapist', icon: 'shift', group: 'manage', onSelect: () => chooseTherapist('shift') },
           { id: 'working-hours', label: 'Working hours…', hint: 'Hours and breaks', icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },

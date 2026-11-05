@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Patient } from './types';
-import { findSimilarPatients, patientSummary } from './similarPatients';
+import { certainPatientMatch, findSimilarPatients, patientSummary } from './similarPatients';
 
 const p = (over: Partial<Patient>): Patient => ({
   id: 'p1', clinicId: 'c', mrno: 'BM-1', mrnoSource: 'auto', name: 'Priya Sharma', age: 34, sex: 'F', phone: null,
@@ -41,5 +41,18 @@ describe('patientSummary', () => {
   it('joins ID, age and sex, condition and last visit, leaving out what is missing', () => {
     expect(patientSummary(p({}), '2026-10-12')).toBe('BM-1 · 34 F · Ankle sprain · seen 12 Oct');
     expect(patientSummary(p({ age: null, sex: null, primaryCondition: null }))).toBe('BM-1');
+  });
+});
+
+describe('certainPatientMatch', () => {
+  const pt = (id: string, name: string, phone: string | null, over = {}) => ({ id, name, phone, ...over }) as Patient;
+  it('links only one patient with the same phone and name', () => {
+    expect(certainPatientMatch([pt('a', 'Ananya', '+91 9876543210')], 'ananya', '9876543210')?.id).toBe('a');
+  });
+  it('never links on phone alone, on name alone, on a hidden patient or between two candidates', () => {
+    expect(certainPatientMatch([pt('a', 'Ravi Kumar', '9876543210')], 'Ananya', '9876543210')).toBeNull();
+    expect(certainPatientMatch([pt('a', 'Ananya', '9000000000')], 'Ananya', '9876543210')).toBeNull();
+    expect(certainPatientMatch([pt('a', 'Ananya', '9876543210', { deletedAt: 'x' })], 'Ananya', '9876543210')).toBeNull();
+    expect(certainPatientMatch([pt('a', 'Ananya', '9876543210'), pt('b', 'Ananya', '9876543210')], 'Ananya', '9876543210')).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ export function AwaitingList({
   onMessage,
   onDismiss,
   onSeeAll,
+  canMessage = () => true,
 }: {
   requests: AppointmentRequest[];
   /** ISO date of today, to tell entries whose day has passed. */
@@ -26,6 +27,8 @@ export function AwaitingList({
   onMessage: (request: AppointmentRequest) => void;
   onDismiss: (request: AppointmentRequest) => void;
   onSeeAll: () => void;
+  /** False when this number belongs to a patient who asked not to be messaged. */
+  canMessage?: (request: AppointmentRequest) => boolean;
 }) {
   const ordered = awaitingOrder(requests, today);
   const shown = ordered.slice(0, limit);
@@ -59,6 +62,7 @@ export function AwaitingList({
               >
                 Book
               </button>
+              {canMessage(request) && (
               <button
                 type="button"
                 className="min-h-9 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
@@ -67,6 +71,7 @@ export function AwaitingList({
               >
                 WhatsApp
               </button>
+              )}
               <button
                 type="button"
                 className="min-h-9 px-2 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]"

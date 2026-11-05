@@ -9,7 +9,7 @@ import { ErrorNote, Field, inputCls, btnPrimary, ConfirmDialog } from '@/compone
 import { PhoneField } from '@/components/PhoneField';
 import { SimilarPatients } from '@/components/SimilarPatients';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
-import { findSimilarPatients, patientSummary } from '@/domain/similarPatients';
+import { certainPatientMatch, findSimilarPatients, patientSummary } from '@/domain/similarPatients';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -252,6 +252,22 @@ export function BookSlotSheet({
     setBusy(false);
     setError(null);
   }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, prefilledLengthMinutes, today, slotMinutes]);
+  // After the reset above, which starts a request on New patient.
+  // A request from someone already on file opens on that patient, once per opening (switching to New patient sticks).
+  const autoLinkedRequest = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) {
+      autoLinkedRequest.current = null;
+      return;
+    }
+    if (!requestId || prefilledPatientId || !patients || autoLinkedRequest.current === requestId) return;
+    autoLinkedRequest.current = requestId;
+    const match = certainPatientMatch(patients, prefilledPatientName ?? '', prefilledPatientPhone ?? '');
+    if (match) {
+      setPatientMode('find');
+      setPatientId(match.id);
+    }
+  }, [isOpen, requestId, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, patients]);
 
   // Solo clinics and therapist logins shouldn't have to pick themselves.
   useEffect(() => {

@@ -8,13 +8,13 @@ import { AwaitingOpenedStrip, useAwaitingOpening } from './AwaitingOpenedStrip';
 afterEach(cleanup);
 
 const req = (id: string, over: Partial<AppointmentRequest> = {}): AppointmentRequest =>
-  ({ id, clinicId: 'c1', name: id, phone: '98', email: null, preferredTherapistId: null, notes: null, preferredDate: '2026-11-06', preferredTimeText: null, status: 'pending', createdAt: `2026-11-0${id.length}T10:00:00Z`, updatedAt: '', ...over }) as AppointmentRequest;
+  ({ id, clinicId: 'c1', name: id, phone: '98', email: null, preferredTherapistId: null, notes: null, preferredDate: '2099-11-06', preferredTimeText: null, status: 'pending', createdAt: `2026-11-0${id.length}T10:00:00Z`, updatedAt: '', ...over }) as AppointmentRequest;
 
-const freedAt = { scheduledAt: new Date(2026, 10, 6, 10, 30).toISOString(), therapistId: 't1' };
+const freedAt = { scheduledAt: new Date(2099, 10, 6, 10, 30).toISOString(), therapistId: 't1' };
 
 describe('useAwaitingOpening', () => {
   it('finds nothing until an appointment is freed, then only the entries that fit', () => {
-    const pending = [req('a', { preferredTimeOfDay: 'morning' }), req('bb', { preferredTimeOfDay: 'evening' }), req('ccc', { preferredDate: '2026-11-09' }), req('dddd', { preferredTherapistId: 't2' })];
+    const pending = [req('a', { preferredTimeOfDay: 'morning' }), req('bb', { preferredTimeOfDay: 'evening' }), req('ccc', { preferredDate: '2099-11-09' }), req('dddd', { preferredTherapistId: 't2' })];
     const { result } = renderHook(() => useAwaitingOpening(pending));
     expect(result.current.matches).toEqual([]);
     act(() => result.current.freed(freedAt));
@@ -24,9 +24,19 @@ describe('useAwaitingOpening', () => {
   });
 
   it('shows nothing when nobody fits', () => {
-    const { result } = renderHook(() => useAwaitingOpening([req('a', { preferredDate: '2026-11-09' })]));
+    const { result } = renderHook(() => useAwaitingOpening([req('a', { preferredDate: '2099-11-09' })]));
     act(() => result.current.freed(freedAt));
     expect(result.current.matches).toEqual([]);
+  });
+});
+
+describe('useAwaitingOpening limits', () => {
+  it('a time already gone frees nothing; an any-day entry fits any opening', () => {
+    const { result } = renderHook(() => useAwaitingOpening([req('a', { preferredDate: null })]));
+    act(() => result.current.freed({ scheduledAt: new Date(2020, 0, 1, 10).toISOString(), therapistId: 't1' }));
+    expect(result.current.matches).toEqual([]);
+    act(() => result.current.freed(freedAt));
+    expect(result.current.matches.map((r) => r.id)).toEqual(['a']);
   });
 });
 

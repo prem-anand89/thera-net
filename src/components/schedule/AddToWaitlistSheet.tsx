@@ -66,6 +66,7 @@ export function AddToWaitlistSheet({
     const needle = name.trim().toLowerCase();
     if (picked || needle.length < 2) return [];
     return patients
+      .filter((p) => !p.deletedAt)
       .filter((p) => p.name.toLowerCase().includes(needle) || (p.phone ?? '').includes(needle) || p.mrno.toLowerCase().includes(needle))
       .slice(0, MAX_SUGGESTIONS);
   }, [patients, name, picked]);
@@ -126,6 +127,8 @@ export function AddToWaitlistSheet({
               autoComplete="off"
               onChange={(event) => {
                 setName(event.target.value);
+                // Editing a chosen patient's name means someone else: don't keep their number.
+                if (picked) setPhone('');
                 setPicked(false);
               }}
               autoFocus

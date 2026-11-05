@@ -215,6 +215,19 @@ describe('BookSlotSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('a request from someone already on file opens on that patient, with no duplicate warning; a stranger stays New', () => {
+    const known = data.patients[0];
+    const original = known.phone;
+    known.phone = '+91 9876543210';
+    const { unmount } = render(<BookSlotSheet isOpen onClose={() => {}} requestId="r1" prefilledPatientName={known.name} prefilledPatientPhone="+91 9876543210" />);
+    expect(screen.queryByLabelText('Patient name')).toBeNull();
+    expect(screen.queryByText(/already on file/)).toBeNull();
+    unmount();
+    render(<BookSlotSheet isOpen onClose={() => {}} requestId="r2" prefilledPatientName="Someone Else Entirely" prefilledPatientPhone="+91 9000000001" />);
+    expect(screen.getByLabelText('Patient name')).toHaveValue('Someone Else Entirely');
+    known.phone = original;
+  });
+
   it('a new patient whose name is already on file must be resolved: Use this patient, or Different person', async () => {
     const onBooked = vi.fn();
     render(<BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} prefilledDate="2026-10-01" />);

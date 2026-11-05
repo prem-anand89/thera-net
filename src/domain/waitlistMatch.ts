@@ -27,7 +27,7 @@ export function matchingWaitlistEntries(requests: AppointmentRequest[], opening:
   return requests.filter(
     (r) =>
       r.status === 'pending' &&
-      r.preferredDate === opening.date &&
+      (r.preferredDate === opening.date || !r.preferredDate) &&
       (r.preferredTherapistId === null || r.preferredTherapistId === opening.therapistId) &&
       (r.preferredTimeOfDay === 'any' || !r.preferredTimeOfDay || r.preferredTimeOfDay === opening.timeOfDay)
   );

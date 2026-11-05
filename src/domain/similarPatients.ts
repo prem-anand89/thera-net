@@ -29,6 +29,19 @@ export function findSimilarPatients(patients: Patient[], name: string, phone: st
     .slice(0, limit);
 }
 
+/**
+ * The one patient a request is unmistakably for: same phone AND a near-identical name. Null if there is none, or more
+ * than one (a family sharing a phone), so staff still choose. A same-phone-only or name-only match never links itself.
+ */
+export function certainPatientMatch(patients: Patient[], name: string, phone: string): Patient | null {
+  const typedPhone = lastTenDigits(phone);
+  if (typedPhone.length < 7 || !name.trim()) return null;
+  const hits = patients.filter(
+    (p) => !p.deletedAt && lastTenDigits(p.phone) === typedPhone && nameSimilarity(p.name, name.trim()) >= DUPLICATE_NAME_THRESHOLD
+  );
+  return hits.length === 1 ? hits[0] : null;
+}
+
 /** "BM-0042 · 34 F · Ankle sprain · seen 12 Oct": what tells two people of the same name apart. */
 export function patientSummary(patient: Patient, lastVisitOn?: string | null): string {
   const ageSex = [patient.age != null ? String(patient.age) : '', patient.sex === 'M' ? 'M' : patient.sex === 'F' ? 'F' : patient.sex ? 'Other' : '']
