@@ -186,6 +186,10 @@ export interface ServiceRowsProps {
   quickServices?: CatalogItem[];
   /** True after a Save attempt: show every row problem, including a share whose % was never typed. */
   revealProblems?: boolean;
+  /** An admin can add a service the search didn't find: opens the add form with the typed name for this row. */
+  onAddService?: (name: string, rowKey: string) => void;
+  /** Not an admin: the empty search says to ask one instead of offering an add. */
+  askAdminToAdd?: boolean;
 }
 
 /**
@@ -204,6 +208,8 @@ export function ServiceRows({
   patientName,
   quickServices,
   revealProblems = false,
+  onAddService,
+  askAdminToAdd = false,
 }: ServiceRowsProps) {
   // Which row's service picker is open for a change, which row's assistant picker, and which to focus.
   const [changing, setChanging] = useState<string | null>(null);
@@ -369,6 +375,25 @@ export function ServiceRows({
                     value={row.continuation ? `pkg:${row.continuation.packageGroupId}` : row.serviceCatalogId ? `svc:${row.serviceCatalogId}` : ''}
                     onChange={(v) => pick(row.key, v)}
                     options={serviceOptions}
+                    emptyAction={
+                      onAddService
+                        ? (q, close) => (
+                            <button
+                              type="button"
+                              className="rounded-lg bg-[var(--teal-light)] px-3 py-1.5 text-xs font-semibold text-[var(--teal-strong)] hover:opacity-90"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                close();
+                                onAddService(q, row.key);
+                              }}
+                            >
+                              + Add “{q}”
+                            </button>
+                          )
+                        : askAdminToAdd
+                          ? () => <span>Ask your admin to add it</span>
+                          : undefined
+                    }
                   />
                 </div>
                 {named && changing === row.key && (

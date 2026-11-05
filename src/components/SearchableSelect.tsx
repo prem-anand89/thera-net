@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { inputCls } from '@/components/ui';
 
 export type SearchableOption = {
@@ -41,6 +41,7 @@ export function SearchableSelect({
   hideLabel = false,
   variant = 'boxed',
   inputClassName,
+  emptyAction,
 }: {
   label: string;
   value: string;
@@ -50,6 +51,8 @@ export function SearchableSelect({
   hideLabel?: boolean;
   variant?: 'boxed' | 'embedded';
   inputClassName?: string;
+  /** Shown under "No matching services found" when a search finds nothing (e.g. an add button). Gets the typed text. */
+  emptyAction?: (query: string, close: () => void) => ReactNode;
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -152,7 +155,17 @@ export function SearchableSelect({
             className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg divide-y divide-[var(--border)]/30"
           >
             {filtered.length === 0 ? (
-              <li className="px-3.5 py-3 text-xs text-center text-[var(--muted)]">No matching services found</li>
+              <li className="px-3.5 py-3 text-xs text-center text-[var(--muted)]">
+                <div>No matching services found</div>
+                {emptyAction && q.trim() ? (
+                  <div className="mt-2">
+                    {emptyAction(q.trim(), () => {
+                      setOpen(false);
+                      setQ('');
+                    })}
+                  </div>
+                ) : null}
+              </li>
             ) : (
               groups.flatMap(([group, items]) => [
                 group ? (

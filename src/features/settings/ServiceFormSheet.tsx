@@ -10,7 +10,7 @@ import { btnPrimary, btnSecondary, ConfirmDialog, Field, inputCls, RupeeInput, S
 import { SwitchRow } from './settingsShared';
 import { DURATION_ERROR, NameCheckNote, parseDuration, saveErrorMessage } from './catalogShared';
 
-export type ServiceSheetMode = { kind: 'add' } | { kind: 'edit'; item: CatalogItem };
+export type ServiceSheetMode = { kind: 'add'; name?: string } | { kind: 'edit'; item: CatalogItem };
 
 type Kind = 'one' | 'package';
 const NEW_GROUP = '__new__';
@@ -42,7 +42,7 @@ export function ServiceFormSheet({
   // Keyed by the item, so opening another row starts from that row's values.
   return (
     <ServiceForm
-      key={mode.kind === 'edit' ? mode.item.id : 'add'}
+      key={mode.kind === 'edit' ? mode.item.id : `add:${mode.name ?? ''}`}
       mode={mode}
       allItems={allItems}
       groupNames={groupNames}
@@ -71,7 +71,7 @@ function ServiceForm({
   const clinic = useClinic();
   const editing = mode.kind === 'edit' ? mode.item : null;
   const [kind, setKind] = useState<Kind>(editing && editing.sessionCount > 1 ? 'package' : 'one');
-  const [name, setName] = useState(editing?.name ?? '');
+  const [name, setName] = useState(editing?.name ?? (mode.kind === 'add' ? mode.name ?? '' : ''));
   const [sessions, setSessions] = useState(editing && editing.sessionCount > 1 ? editing.sessionCount : 5);
   const [pricePaise, setPricePaise] = useState<number | null>(editing?.basePricePaise ?? null);
   const [group, setGroup] = useState((editing?.category ?? '').trim() ?? '');

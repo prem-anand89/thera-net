@@ -48,6 +48,8 @@ function Harness(props: {
   quickServices?: CatalogItem[];
   onRows?: (rows: DraftLine[]) => void;
   catalog?: CatalogItem[];
+  onAddService?: (name: string, rowKey: string) => void;
+  askAdminToAdd?: boolean;
 }) {
   const [rows, setRows] = useState(props.initial);
   return (
@@ -65,6 +67,8 @@ function Harness(props: {
       errors={new Map()}
       patientName="Rahul"
       quickServices={props.quickServices}
+      onAddService={props.onAddService}
+      askAdminToAdd={props.askAdminToAdd}
     />
   );
 }
@@ -672,5 +676,23 @@ describe('ServiceRows — the same order and headings as Settings → Services',
     render(<Harness initial={[row('a')]} catalog={c} openPackages={[pkg]} />);
     expect(headingsAndOptions().filter((t) => !t?.startsWith('·'))).toEqual(['Open packages', 'Services']);
   });
-});
 
+  it('an admin can add what the search did not find; the typed name goes to the row that asked', () => {
+    const asked: [string, string][] = [];
+    render(<Harness initial={[row('a')]} onAddService={(n, k) => asked.push([n, k])} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Cupping' } });
+    fireEvent.mouseDown(screen.getByRole('button', { name: '+ Add “Cupping”' }));
+    expect(asked).toEqual([['Cupping', 'a']]);
+  });
+
+  it('shows no add while the search still finds something, and asks a non-admin to ask the admin', () => {
+    const { unmount } = render(<Harness initial={[row('a')]} onAddService={() => {}} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Assess' } });
+    expect(screen.queryByRole('button', { name: /^\+ Add/ })).toBeNull();
+    unmount();
+    render(<Harness initial={[row('a')]} askAdminToAdd />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Service' }), { target: { value: 'Cupping' } });
+    expect(screen.getByText('Ask your admin to add it')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^\+ Add/ })).toBeNull();
+  });
+});

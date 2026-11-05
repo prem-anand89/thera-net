@@ -49,7 +49,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - **Start a note first**: for clinics with clinical notes on, a quiet outlined button under the patient's Last visit / Package tiles ("Start a note first — Add the service later"), above "Change patient"; it opens the same start-note flow as before.
   - **Patient search & lookup**: Instant search by Patient ID, name or phone number. Result rows show the patient's name, Patient ID, and a second muted line with masked phone (`••••4821`) and age (`34y`) for clear disambiguation between duplicate names.
   - **Several services per visit.** The Services card is a list of service rows (`ServiceRows.tsx`,
-    presentational: rows in, changes out, reused by the visit editor). One visit therapist is chosen once at
+    presentational: rows in, changes out, reused by the visit editor). When a search finds no service, an admin sees "+ Add “name”" (New Visit only): it opens the Settings add-service sheet with the name filled in and, once saved, selects the new service on that row with the draft intact; front desk and therapists see "Ask your admin to add it" (the catalog stays admin-only). One visit therapist is chosen once at
     the top; a row shows the service, its catalog price and two outlined pills (clinics with several therapists):
     **"Done by: Dr X ▾"** (a select dressed as the pill: who did the service and gets its money — defaults to the
     visit's therapist; picking another sets `assistingTherapistId`) and **"Share"** (a colleague who helped gets a %
