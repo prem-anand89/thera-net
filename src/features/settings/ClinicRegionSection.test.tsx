@@ -24,6 +24,46 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+describe('Time zone picker', () => {
+  const open = () => {
+    render(<ClinicRegionSection onDirtyChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    return screen.getByRole('combobox', { name: /Time zone/ }) as HTMLSelectElement;
+  };
+
+  it('offers a short list by region with place names, India first, instead of every zone', () => {
+    const select = open();
+    expect(select.options.length).toBeLessThan(80);
+    expect(select.options[0]).toHaveTextContent(/^India \(UTC\+5:30\)$/);
+    expect(within(select).getByRole('option', { name: /^UAE/ })).toBeInTheDocument();
+    expect(select).toHaveValue('Asia/Kolkata');
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(expect.arrayContaining(['India and neighbours', 'Middle East', 'Europe']));
+  });
+
+  it('a clinic saved under the old browser name reads as India, and re-saving it is not a change', () => {
+    clinicRef.current = { ...clinicRef.current, timezone: 'Asia/Calcutta' };
+    const select = open();
+    expect(select).toHaveValue('Asia/Kolkata');
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  it('"Show all time zones" adds the rest, each under one current name', () => {
+    const select = open();
+    fireEvent.click(screen.getByRole('button', { name: 'Not listed? Show all time zones' }));
+    expect(select.options.length).toBeGreaterThan(150);
+    const values = [...select.options].map((o) => o.value);
+    expect(new Set(values).size).toBe(values.length);
+    expect(values).not.toContain('Asia/Calcutta');
+    expect(screen.queryByRole('button', { name: 'Not listed? Show all time zones' })).toBeNull();
+  });
+
+  it('keeps a saved zone that is not in the short list, so it is never silently replaced', () => {
+    clinicRef.current = { ...clinicRef.current, timezone: 'Africa/Windhoek' };
+    const select = open();
+    expect(select).toHaveValue('Africa/Windhoek');
+  });
+});
+
 describe('Region and daily email', () => {
   it('reads as one line, with the fields tucked away until Change', () => {
     render(<ClinicRegionSection onDirtyChange={vi.fn()} />);

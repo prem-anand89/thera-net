@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clinicCountryCode, clinicCurrencyCode, clinicTaxRegime, clinicTimezone, CURRENCY_CODES, isGstIndia, TAX_REGIMES, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
+import { canonicalTimezone, timezoneGroups, clinicCountryCode, clinicCurrencyCode, clinicTaxRegime, clinicTimezone, CURRENCY_CODES, isGstIndia, TAX_REGIMES, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
 
 describe('clinic region', () => {
   it('defaults to India until set', () => {
@@ -34,6 +34,27 @@ describe('currency and tax regime (stored only)', () => {
     expect(isGstIndia({ taxRegime: 'GENERIC_TAX' })).toBe(false);
     expect([...CURRENCY_CODES]).toEqual(['INR', 'USD', 'GBP', 'EUR', 'AED', 'AUD', 'CAD', 'SGD']);
     expect([...TAX_REGIMES]).toEqual(['GST_IN', 'GENERIC_TAX', 'NO_TAX']);
+  });
+});
+
+describe('time zone choices', () => {
+  it('turns old browser names into the current ones, and leaves the rest alone', () => {
+    expect(canonicalTimezone('Asia/Calcutta')).toBe('Asia/Kolkata');
+    expect(canonicalTimezone('Asia/Katmandu')).toBe('Asia/Kathmandu');
+    expect(canonicalTimezone('Asia/Dubai')).toBe('Asia/Dubai');
+  });
+  it('the short list starts with India, has no duplicates and every zone is one this browser can format', () => {
+    const groups = timezoneGroups('Asia/Kolkata', false);
+    const zones = groups.flatMap((g) => g.zones.map((z) => z.zone));
+    expect(groups[0].zones[0].zone).toBe('Asia/Kolkata');
+    expect(new Set(zones).size).toBe(zones.length);
+    expect(zones.length).toBeLessThan(80);
+    for (const z of zones) expect(isValidTimezone(z)).toBe(true);
+  });
+  it('always includes the clinic\'s own zone, even one outside the short list', () => {
+    const groups = timezoneGroups('Africa/Windhoek', false);
+    expect(groups[0].region).toBe('Current');
+    expect(groups[0].zones[0].zone).toBe('Africa/Windhoek');
   });
 });
 

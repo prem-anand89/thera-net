@@ -1,7 +1,7 @@
 import { OperatingHoursEditor } from './OperatingHoursEditor';
 import { ClinicCodeField } from './ClinicCodeField';
 import { COUNTRY_CODES } from '@/domain/countryCodes';
-import { clinicCountryCode, clinicTimezone, regionSummary, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
+import { canonicalTimezone, clinicCountryCode, clinicTimezone, regionSummary, timezoneGroups, timezoneHint } from '@/domain/clinicRegion';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
 import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
@@ -310,11 +310,10 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
   );
   // A new time zone shifts the times on the public booking page and in the emailed agendas, so it asks first.
   const [confirmingZone, setConfirmingZone] = useState(false);
-  const zoneChanges = (form.timezone ?? 'Asia/Kolkata') !== clinicTimezone(clinic);
-  const zones = useMemo(() => {
-    const all = timezoneOptions();
-    return form.timezone && !all.includes(form.timezone) ? [form.timezone, ...all] : all;
-  }, [form.timezone]);
+  // An old browser name for the same zone ("Asia/Calcutta") is not a change.
+  const zoneChanges = canonicalTimezone(form.timezone ?? 'Asia/Kolkata') !== canonicalTimezone(clinicTimezone(clinic));
+  const [showAllZones, setShowAllZones] = useState(false);
+  const zoneGroups = useMemo(() => timezoneGroups(form.timezone ?? 'Asia/Kolkata', showAllZones), [form.timezone, showAllZones]);
   // The region is one line of text until someone wants to change it. A disclosure, not a lock: nothing is disabled.
   const [open, setOpen] = useState(false);
   const expanded = open || dirty;
@@ -356,16 +355,30 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
               <select
                 id="clinic-timezone"
                 className={inputCls}
-                value={form.timezone ?? 'Asia/Kolkata'}
+                value={canonicalTimezone(form.timezone ?? 'Asia/Kolkata')}
                 onChange={(e) => set({ timezone: e.target.value })}
               >
-                {zones.map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone}
-                  </option>
+                {zoneGroups.map((group) => (
+                  <optgroup key={group.region} label={group.region}>
+                    {group.zones.map((z) => (
+                      <option key={z.zone} value={z.zone}>
+                        {z.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
-              <span className="mt-1 block text-hint text-[var(--muted)]">{timezoneHint(form.timezone ?? 'Asia/Kolkata')}</span>
+              <span className="mt-1 block text-hint text-[var(--muted)]">
+                {timezoneHint(form.timezone ?? 'Asia/Kolkata')}
+                {!showAllZones && (
+                  <>
+                    {' · '}
+                    <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={() => setShowAllZones(true)}>
+                      Not listed? Show all time zones
+                    </button>
+                  </>
+                )}
+              </span>
             </Field>
             <Field
               label={
