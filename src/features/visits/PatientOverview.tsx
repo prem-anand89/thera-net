@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService } from '@/services';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { REFERRING_SOURCE_LABELS, type Patient } from '@/domain/types';
 import { Pill, SectionCard, StatTile } from '@/components/ui';
@@ -82,7 +82,7 @@ export function PatientOverview({ patient }: { patient: Patient }) {
 
       <div className="mt-4 flex flex-wrap gap-3">
         <StatTile label="Total visits" value={stats.count} />
-        <StatTile label="Lifetime billed" value={formatINR(stats.billedPaise)} />
+        <StatTile label="Lifetime billed" value={formatAmount(stats.billedPaise)} />
         <StatTile label="First seen" value={stats.firstSeen ? formatDateDMY(stats.firstSeen) : '—'} />
         <StatTile label="Last seen" value={stats.lastSeen ? formatDateDMY(stats.lastSeen) : '—'} />
         <StatTile label="Open packages" value={patientPackages.length} />

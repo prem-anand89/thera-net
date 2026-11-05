@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { th, thNum, td, tdNum, InfoTip } from './ui';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import type { FyMonth } from '@/domain/fiscalYear';
@@ -51,11 +51,11 @@ export function MonthlyReportTable({
   const showAssisted = (report?.rows ?? []).some((r) => r.assistedVisitCount > 0);
   const cells = (r: TherapistMonthRow, isTotal = false) => (
     <>
-      <td className={tdNum}>{formatINR(r.billPaise)}</td>
-      {partnerSplit && <td className={tdNum}>{formatINR(r.clinicSharePaise)}</td>}
-      {partnerSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
-      {partnerSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
-      {partnerSplit && <td className={tdNum}>{formatINR(r.partnerSharePaise)}</td>}
+      <td className={tdNum}>{formatAmount(r.billPaise)}</td>
+      {partnerSplit && <td className={tdNum}>{formatAmount(r.clinicSharePaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatAmount(r.tdsPaise)}</td>}
+      {partnerSplit && showPostTax && <td className={tdNum}>{formatAmount(r.postTaxPaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatAmount(r.partnerSharePaise)}</td>}
       {showShared && (
         <td className={tdNum}>
           {r.sharedPaise !== 0 ? (
@@ -66,10 +66,10 @@ export function MonthlyReportTable({
                 className="hover:underline"
                 title="See the visits behind this"
               >
-                {formatINR(r.sharedPaise)}
+                {formatAmount(r.sharedPaise)}
               </Link>
             ) : (
-              formatINR(r.sharedPaise)
+              formatAmount(r.sharedPaise)
             )
           ) : (
             '—'
@@ -77,7 +77,7 @@ export function MonthlyReportTable({
         </td>
       )}
       <td className={`${tdNum} font-semibold bg-[var(--teal-light)]/10 text-[var(--ink)]`}>
-        {formatINR(r.netPostTaxPaise)}
+        {formatAmount(r.netPostTaxPaise)}
         {auditLinkMonth && r.netPostTaxPaise < 0 && (
           <Link
             to="/insights"

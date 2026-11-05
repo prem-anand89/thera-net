@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { attributionAuditService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDMY, monthName } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
 import { inputCls } from '@/components/ui';
@@ -71,17 +71,17 @@ export function MyCreditsCard({ therapistId }: { therapistId: UUID }) {
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
             <div className="rounded-lg bg-[var(--paper)] p-2">
               <div className="text-[var(--muted)]">Credits</div>
-              <div className="font-num text-sm font-semibold text-[var(--ink)]">{formatINR(credits)}</div>
+              <div className="font-num text-sm font-semibold text-[var(--ink)]">{formatAmount(credits)}</div>
             </div>
             <div className="rounded-lg bg-[var(--paper)] p-2">
               <div className="text-[var(--muted)]">Debits</div>
-              <div className="font-num text-sm font-semibold text-[var(--ink)]">{formatINR(debits)}</div>
+              <div className="font-num text-sm font-semibold text-[var(--ink)]">{formatAmount(debits)}</div>
             </div>
             <div className="rounded-lg bg-[var(--paper)] p-2">
               <div className="text-[var(--muted)]">Net change</div>
               <div className="font-num text-sm font-semibold text-[var(--ink)]">
                 {credits - debits < 0 ? '−' : ''}
-                {formatINR(Math.abs(credits - debits))}
+                {formatAmount(Math.abs(credits - debits))}
               </div>
             </div>
           </div>
@@ -99,7 +99,7 @@ export function MyCreditsCard({ therapistId }: { therapistId: UUID }) {
                   className={`font-num shrink-0 font-semibold ${r.signedPaise > 0 ? 'text-[var(--moss-strong)]' : 'text-[var(--rust)]'}`}
                 >
                   {r.signedPaise > 0 ? '+' : '−'}
-                  {formatINR(Math.abs(r.signedPaise))}
+                  {formatAmount(Math.abs(r.signedPaise))}
                 </span>
               </li>
             ))}

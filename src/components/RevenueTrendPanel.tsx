@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { MonthlyRevenueChart } from '@/components/MonthlyRevenueChart';
 import { MonthlyVisitsChart } from '@/components/MonthlyVisitsChart';
 import { RevenueTrendMonthTable } from '@/components/RevenueTrendMonthTable';
@@ -55,7 +55,7 @@ export function RevenueTrendPanel({
             categories={chartCategories}
             fullCategories={categories}
             revenuePaise={revenuePaise}
-            formatRevenue={formatINR}
+            formatRevenue={formatAmount}
             currentMonthIndices={currentMonthIndices}
             selectedIndex={selectedIndex}
             onSelectIndex={setSelectedIndex}

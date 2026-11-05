@@ -5204,6 +5204,9 @@ read misses (clipped pills, tables wider than their card).
 - **Don't repeat a heading at several levels** (card title, eyebrow, sub-heading,
   table heading all saying "therapist comparison"): one title per block.
 
+### 0d. One way to show money (`domain/money.ts`)
+Amounts go through **`formatAmount(paise)`** and a symbol typed or labelled by hand through **`currencySymbol()`** ("Price (₹)", "₹0 if free"). Both print rupees for now, with no setting behind them, so a clinic's currency can be honoured in one place later (`clinics.currency_code` is stored, not yet read). `formatINR` stays only for rupee-only surfaces (`UpiQrModal`). An ESLint **error** (`eslint.config.js`: `no-restricted-syntax` on a typed `₹`, `no-restricted-imports` on `formatINR`) stops both coming back; only `domain/money.ts`, UPI files and tests are exempt. Output for India is byte-for-byte what it was before the rule.
+
 ### 0c. Don't show "empty", "locked" or "unlinked" for data that hasn't arrived
 Local Dexie data (`useLiveQuery`) resolves long before server calls (the team member
 list, `clinic_plans`), and `data ?? []` / a fail-closed default turns "not loaded yet"

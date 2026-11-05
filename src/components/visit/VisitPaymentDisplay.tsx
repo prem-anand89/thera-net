@@ -1,5 +1,5 @@
 import { Pill } from '@/components/ui';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import type { PaymentBadgeKind } from '@/domain/paymentState';
 import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
 import { useClinic } from '@/app/clinicContext';
@@ -100,7 +100,7 @@ export function PaymentStatusDisplay({
             onClick={onTakePayment}
             title={badge.title}
           >
-            Collect {formatINR(data.billPaise - data.collectedPaise)}
+            Collect {formatAmount(data.billPaise - data.collectedPaise)}
           </button>
         ) : badge.kind === 'paid' && isFullyPartnerCollected(data.billPaise, data.partnerCollectedPaise) ? (
           <PartnerCollectedPill />

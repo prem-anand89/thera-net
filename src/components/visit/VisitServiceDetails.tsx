@@ -1,4 +1,4 @@
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 
 export interface VisitServiceDetailsData {
   services: { name: string; assistantName: string | null }[];
@@ -52,7 +52,7 @@ export function VisitSharesLine({ shares }: { shares: NonNullable<VisitServiceDe
   return (
     <p className="text-xs text-[var(--muted)]">
       <span className="font-medium">Revenue share</span> —{' '}
-      {shares.map((s) => `${s.name} ${formatINR(s.amountPaise)}`).join(' · ')}
+      {shares.map((s) => `${s.name} ${formatAmount(s.amountPaise)}`).join(' · ')}
     </p>
   );
 }

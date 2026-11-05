@@ -71,7 +71,24 @@ const inrExact = new Intl.NumberFormat('en-IN', {
   minimumFractionDigits: 2,
 });
 
+/**
+ * Rupees, always. Only for surfaces that are rupees by nature (UPI). Everything else uses `formatAmount`, so a
+ * clinic's currency can be honoured in one place later.
+ */
 export function formatINR(paise: Paise): string {
   const rupees = paise / 100;
   return paise % 100 === 0 ? inrWhole.format(rupees) : inrExact.format(rupees);
+}
+
+/** The currency symbol to show beside amounts typed or labelled by hand ("Price (₹)"). Rupees for now. */
+export function currencySymbol(): string {
+  return '₹';
+}
+
+/**
+ * Money for display: whole units when there are no minor units ("₹1,500"), two decimals otherwise ("₹1,500.50").
+ * The one function every screen, bill, report and message uses. Rupees for now, with no setting behind it.
+ */
+export function formatAmount(paise: Paise): string {
+  return formatINR(paise);
 }

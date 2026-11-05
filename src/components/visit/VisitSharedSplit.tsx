@@ -1,3 +1,4 @@
+import { currencySymbol } from '@/domain/money';
 /** Subtly brighter variants of the app's --teal/--rust tokens, same hues
  *  (184°/19°) with only a modest lightness/saturation bump, used only by
  *  the split-percentage ring below. At the ring's 12px size the standard
@@ -89,7 +90,7 @@ export function SharesRing({
   if (total <= 0) return null;
   const primary = shares.find((s) => s.name === primaryName)?.amountPaise ?? 0;
   const pct = Math.round(((total - primary) / total) * 100);
-  const line = shares.map((s) => `${s.name} ₹${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
+  const line = shares.map((s) => `${s.name} ${currencySymbol()}${Math.round(s.amountPaise / 100).toLocaleString('en-IN')}`).join(' · ');
   const tagged = (services ?? [])
     .filter((x) => x.assistantName)
     .map((x) => `${x.assistantName}: ${x.name}`)

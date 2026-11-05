@@ -7,6 +7,7 @@ import {
 import { perSessionLabel } from '@/domain/catalogDisplay';
 import { nameCheck } from '@/domain/nameCheck';
 import { inputCls, RupeeInput } from '@/components/ui';
+import { currencySymbol } from '@/domain/money';
 
 type AddKind = 'single' | 'package';
 
@@ -55,7 +56,7 @@ export function ServiceCatalogTemplateEditor({
         <div className="flex items-center gap-1.5 border-b border-[var(--border)] bg-[var(--paper)] px-2.5 py-2 text-[11px] sm:gap-2 sm:px-3 font-semibold uppercase tracking-wider text-[var(--muted)]">
           <span className="w-4 shrink-0" aria-hidden="true" />
           <span className="flex-1">Service name</span>
-          <span className="w-[5.25rem] shrink-0 text-right sm:w-28">Price (₹)</span>
+          <span className="w-[5.25rem] shrink-0 text-right sm:w-28">Price ({currencySymbol()})</span>
         </div>
 
         {groups.map(([group, rows], gIdx) => (
@@ -123,7 +124,7 @@ function TemplateRow({
   const missing = !row.enabled
     ? null
     : row.basePricePaise == null
-      ? "Add a price to include this (₹0 if it's free)."
+      ? `Add a price to include this (${currencySymbol()}0 if it's free).`
       : !row.name.trim()
         ? 'Add a name to include this.'
         : null;
@@ -156,7 +157,7 @@ function TemplateRow({
             aria-hidden="true"
             className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]"
           >
-            ₹
+            {currencySymbol()}
           </span>
           <RupeeInput
             valuePaise={row.basePricePaise}

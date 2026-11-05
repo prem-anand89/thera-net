@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, reportService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { publicLogoUrl } from '@/lib/supabase';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { fiscalYearOf, monthDateRange, monthName, formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary } from '@/components/ui';
@@ -135,7 +135,7 @@ export function MonthlyLedgerPrintPage() {
                       </span>
                     )}
                   </td>
-                  <td className="font-num py-1 text-right">{formatINR(v.actualBillPaise)}</td>
+                  <td className="font-num py-1 text-right">{formatAmount(v.actualBillPaise)}</td>
                 </tr>
               );
             })}

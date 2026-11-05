@@ -6,7 +6,7 @@ import {
   type VisitItem,
   type UUID,
 } from '@/domain/types';
-import { roundToRupeeHalfUp, type Paise } from '@/domain/money';
+import { roundToRupeeHalfUp, type Paise, currencySymbol } from '@/domain/money';
 import { packageValidityOf } from '@/domain/packageTracking';
 import { computeVisitSplit, uninvoicedSplitRates, visitNeedsSplitUpdate, type SplitRates } from '@/domain/split';
 import {
@@ -624,7 +624,7 @@ export function createVisitService(repos: Repos) {
       }
       await assertInClinic(visit.clinicId, rows.map((r) => r.therapistId));
       if (!rows.some((r) => r.therapistId === visit.therapistId)) {
-        throw new Error("The visit's therapist needs a share, even if it's ₹0.");
+        throw new Error(`The visit's therapist needs a share, even if it's ${currencySymbol()}0.`);
       }
 
       const { therapistSplit } = clinicBillingConfig(clinic);

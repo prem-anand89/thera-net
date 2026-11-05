@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { visitService } from '@/services';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import type { Therapist, Visit, VisitCredit, VisitItem } from '@/domain/types';
 import { autoCredits, packageHolder, type CreditShare } from '@/domain/visitLines';
 import {
@@ -38,7 +38,7 @@ function ShareBar({ parts, bill }: { parts: { id: string; name: string; paise: n
         p.paise > 0 ? (
           <span
             key={p.id}
-            title={`${p.name} ${formatINR(p.paise)}`}
+            title={`${p.name} ${formatAmount(p.paise)}`}
             style={{ width: `${(p.paise / bill) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length] }}
           />
         ) : null
@@ -186,7 +186,7 @@ export function RevenueShareEditor({
       <>
         <span className="relative block">
           <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]">
-            ₹
+            {currencySymbol()}
           </span>
           <input
             type="number"
@@ -239,7 +239,7 @@ export function RevenueShareEditor({
           </div>
           <div className="text-right">
             <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Bill</div>
-            <div className="font-num text-base font-semibold text-[var(--ink)]">{formatINR(bill)}</div>
+            <div className="font-num text-base font-semibold text-[var(--ink)]">{formatAmount(bill)}</div>
           </div>
         </header>
 
@@ -256,7 +256,7 @@ export function RevenueShareEditor({
                         {i.assistingTherapistId ? nameOf(i.assistingTherapistId) : nameOf(visit.therapistId)}
                       </span>
                     </span>
-                    <span className="font-num shrink-0">{formatINR(i.pricePaise)}</span>
+                    <span className="font-num shrink-0">{formatAmount(i.pricePaise)}</span>
                   </li>
                 ))}
               </ul>
@@ -313,7 +313,7 @@ export function RevenueShareEditor({
                         <li key={r.id} className="flex justify-between gap-2">
                           <span>{nameOf(r.id)}</span>
                           <span className="font-num">
-                            {formatINR(r.from)} → {formatINR(r.to)}
+                            {formatAmount(r.from)} → {formatAmount(r.to)}
                           </span>
                         </li>
                       ))
@@ -373,7 +373,7 @@ export function RevenueShareEditor({
                 ) : (
                   <>
                     <span className="font-num text-right text-sm text-[var(--ink)]">
-                      {formatINR(primaryRow?.amountPaise ?? 0)}
+                      {formatAmount(primaryRow?.amountPaise ?? 0)}
                     </span>
                     <span className="font-num text-right text-sm text-[var(--muted)]">
                       {pctText(primaryRow?.amountPaise ?? 0, bill)}%
@@ -437,11 +437,11 @@ export function RevenueShareEditor({
 
             {ctx.locked && ctx.locked.amountPaise > 0 && (
               <p className="text-xs text-[var(--muted)]">
-                Package money stays with {nameOf(ctx.locked.therapistId)}: {formatINR(ctx.locked.amountPaise)}
+                Package money stays with {nameOf(ctx.locked.therapistId)}: {formatAmount(ctx.locked.amountPaise)}
               </p>
             )}
             {invalid && !error && (
-              <p className="text-xs text-[var(--rust)]">The shares must add up to {formatINR(bill)}.</p>
+              <p className="text-xs text-[var(--rust)]">The shares must add up to {formatAmount(bill)}.</p>
             )}
             <ErrorNote message={error} />
             <ErrorNote message={saveError} />

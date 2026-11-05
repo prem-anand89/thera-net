@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { formatINR } from '@/domain/money';
+import { currencySymbol, formatAmount } from '@/domain/money';
 import { td, tdNum, th, thNum } from '@/components/ui';
 import { monthOverMonthDelta, monthOverMonthPctSeries } from '@/components/chartTrendMath';
 
@@ -20,7 +20,7 @@ function DeltaInrCell({ deltaPaise }: { deltaPaise: number | null }) {
   return (
     <span className={`font-num ${cls}`}>
       {deltaPaise >= 0 ? '+' : '−'}
-      {formatINR(Math.abs(deltaPaise))}
+      {formatAmount(Math.abs(deltaPaise))}
     </span>
   );
 }
@@ -87,7 +87,7 @@ export function RevenueTrendMonthTable({
   }, [totalRevenue, totalVisits]);
 
   async function copyTable() {
-    const header = ['Month', revenueColumnLabel, 'Change ₹', 'Revenue MoM %', 'Visits', 'Visit MoM %', '₹/visit'].join(
+    const header = ['Month', revenueColumnLabel, `Change ${currencySymbol()}`, 'Revenue MoM %', 'Visits', 'Visit MoM %', `${currencySymbol()}/visit`].join(
       '\t'
     );
     const rows = monthLabels.map((lab, i) => {
@@ -97,22 +97,22 @@ export function RevenueTrendMonthTable({
           : '';
       return [
         lab,
-        revenuePaise[i] > 0 ? formatINR(revenuePaise[i]) : '',
-        revDelta[i] != null ? formatINR(revDelta[i]) : '',
+        revenuePaise[i] > 0 ? formatAmount(revenuePaise[i]) : '',
+        revDelta[i] != null ? formatAmount(revDelta[i]) : '',
         revPct[i] ?? '',
         visitCounts[i] || '',
         visitPct[i] ?? '',
-        rpv ? `₹${rpv}` : '',
+        rpv ? `${currencySymbol()}${rpv}` : '',
       ].join('\t');
     });
     const totalRow = [
       'Period Total',
-      totalRevenue > 0 ? formatINR(totalRevenue) : '',
+      totalRevenue > 0 ? formatAmount(totalRevenue) : '',
       '',
       '',
       totalVisits > 0 ? totalVisits : '',
       '',
-      avgRpv != null ? `₹${avgRpv}` : '',
+      avgRpv != null ? `${currencySymbol()}${avgRpv}` : '',
     ].join('\t');
     try {
       await navigator.clipboard.writeText([header, ...rows, totalRow].join('\n'));
@@ -132,11 +132,11 @@ export function RevenueTrendMonthTable({
               <tr>
                 <ColumnHead title="Month" detail="Calendar month in this window" sticky />
                 <ColumnHead title={revenueColumnLabel} detail="Total for the month" />
-                <ColumnHead title="Change ₹" detail="Net change vs prior month" secondary />
+                <ColumnHead title={`Change ${currencySymbol()}`} detail="Net change vs prior month" secondary />
                 <ColumnHead title="Rev. MoM" detail="% change vs prior month" />
                 <ColumnHead title="Visits" detail="Completed sessions" />
                 <ColumnHead title="Visit MoM" detail="% change vs prior month" secondary />
-                <ColumnHead title="₹/visit" detail="Average revenue per visit" secondary />
+                <ColumnHead title={`${currencySymbol()}/visit`} detail="Average revenue per visit" secondary />
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
@@ -168,7 +168,7 @@ export function RevenueTrendMonthTable({
                         </span>
                       )}
                     </td>
-                    <td className={`${tdNum} ${PHONE_PAD}`}>{revenuePaise[i] > 0 ? formatINR(revenuePaise[i]) : '—'}</td>
+                    <td className={`${tdNum} ${PHONE_PAD}`}>{revenuePaise[i] > 0 ? formatAmount(revenuePaise[i]) : '—'}</td>
                     <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>
                       <DeltaInrCell deltaPaise={revDelta[i]} />
                     </td>
@@ -179,7 +179,7 @@ export function RevenueTrendMonthTable({
                     <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>
                       <PctCell value={visitPct[i]} />
                     </td>
-                    <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>{rpv != null ? formatINR(rpv * 100) : '—'}</td>
+                    <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>{rpv != null ? formatAmount(rpv * 100) : '—'}</td>
                   </tr>
                 );
               })}
@@ -193,7 +193,7 @@ export function RevenueTrendMonthTable({
                   Total
                 </td>
                 <td className={`${tdNum} ${PHONE_PAD} font-bold text-[var(--ink)]`}>
-                  {totalRevenue > 0 ? formatINR(totalRevenue) : '—'}
+                  {totalRevenue > 0 ? formatAmount(totalRevenue) : '—'}
                 </td>
                 <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>—</td>
                 <td className={`${tdNum} ${PHONE_PAD}`}>—</td>
@@ -202,7 +202,7 @@ export function RevenueTrendMonthTable({
                 </td>
                 <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>—</td>
                 <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY} font-bold text-[var(--ink)]`}>
-                  {avgRpv != null ? formatINR(avgRpv * 100) : '—'}
+                  {avgRpv != null ? formatAmount(avgRpv * 100) : '—'}
                 </td>
               </tr>
             </tfoot>

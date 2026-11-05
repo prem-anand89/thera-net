@@ -35,6 +35,7 @@ import {
   setOnboardingWizardPhase,
   getOnboardingWizardPhase,
 } from './onboardingDraftStorage';
+import { currencySymbol } from '@/domain/money';
 
 export type { OnboardingWizardStep };
 
@@ -105,7 +106,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
 
   async function finishOnboarding() {
     if (!catalogDraftsReadyToSave(catalogDrafts)) {
-      setFinishError('Add a price (₹0 if you do not charge patients) to at least one included service or package.');
+      setFinishError(`Add a price (${currencySymbol()}0 if you do not charge patients) to at least one included service or package.`);
       return;
     }
     const toSave = catalogDrafts.filter(isPricedDraft);
@@ -219,7 +220,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
               className="mt-2 text-sm font-medium text-[var(--teal)] hover:underline"
               onClick={() => setCatalogDrafts((rows) => zeroCatalogDrafts(rows))}
             >
-              We don&apos;t charge patients here — set every price to ₹0
+              We don&apos;t charge patients here — set every price to {currencySymbol()}0
             </button>
           </div>
           <ServiceCatalogTemplateEditor drafts={catalogDrafts} onChange={setCatalogDrafts} />

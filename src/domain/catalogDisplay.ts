@@ -1,4 +1,4 @@
-import { formatINR, type Paise } from './money';
+import { formatAmount, type Paise } from './money';
 import type { CatalogItem } from './types';
 
 /**
@@ -15,7 +15,7 @@ export function perSessionRupeesPaise(item: Pick<CatalogItem, 'basePricePaise' |
 
 /** "₹1,667 each". */
 export function perSessionLabel(item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount'>): string {
-  return `${formatINR(perSessionRupeesPaise(item))} each`;
+  return `${formatAmount(perSessionRupeesPaise(item))} each`;
 }
 
 /** "412 visits" / "1 visit" / "Not used yet". */

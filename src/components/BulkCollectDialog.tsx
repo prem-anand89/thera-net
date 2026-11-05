@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import type { PaymentMethod } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import type { Paise } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
@@ -74,7 +74,7 @@ export function BulkCollectDialog({
         className="w-full max-w-sm space-y-4 rounded-2xl bg-[var(--surface)] p-5"
       >
         <h2 id="bulk-collect-title" className="text-sm font-semibold text-[var(--ink)]">
-          Collect {formatINR(total)}
+          Collect {formatAmount(total)}
         </h2>
         <p className="text-sm text-[var(--muted)]">
           {patientLabel} — {payable.length} visit{payable.length === 1 ? '' : 's'}, each paid in full.
@@ -97,7 +97,7 @@ export function BulkCollectDialog({
             Cancel
           </button>
           <button type="button" className={btnPrimary} disabled={busy || total <= 0 || !receivedDate} onClick={() => void save()}>
-            {busy ? 'Recording…' : `Collect ${formatINR(total)}`}
+            {busy ? 'Recording…' : `Collect ${formatAmount(total)}`}
           </button>
         </div>
       </div>

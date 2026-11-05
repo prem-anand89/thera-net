@@ -1,4 +1,4 @@
-import { type Paise, largestRemainderRupees, roundToRupeeHalfUp } from './money';
+import { type Paise, largestRemainderRupees, roundToRupeeHalfUp, currencySymbol } from './money';
 import type { UUID, VisitItem } from './types';
 
 /**
@@ -119,8 +119,8 @@ export function packageHolder(
 
 export const SHARE_TOO_LARGE = "A share can't be more than the bill (less package money).";
 export const SHARE_BELOW_PACKAGE = "A share can't be less than the package money it holds.";
-export const SHARE_BELOW_ZERO = "A share can't be less than ₹0.";
-export const SHARE_MISSING = 'Enter the share in ₹ or as a % of the bill.';
+export const SHARE_BELOW_ZERO = `A share can't be less than ${currencySymbol()}0.`;
+export const SHARE_MISSING = `Enter the share in ${currencySymbol()} or as a % of the bill.`;
 
 /**
  * Applies one hand edit in the share editor. Rows are each therapist's TOTAL share of the bill. Sets a

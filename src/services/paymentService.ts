@@ -8,7 +8,7 @@ import type {
 } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import type { Paise } from '@/domain/money';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { allocateAcrossVisits } from './allocate';
 import { isCashInHand } from '@/domain/paymentMethods';
 
@@ -95,7 +95,7 @@ export function createPaymentService(repos: Repos) {
 
     const remaining = invoice.totalPaise - alreadyPaid;
     if (amountPaise > remaining) {
-      throw new Error(`Amount exceeds the outstanding balance of ${formatINR(remaining)}.`);
+      throw new Error(`Amount exceeds the outstanding balance of ${formatAmount(remaining)}.`);
     }
 
     await allocateAcrossVisits(visits, paidByVisit, amountPaise, async (visitId, slicePaise) => {
@@ -191,7 +191,7 @@ export function createDirectPaymentService(repos: Repos) {
       const alreadyPaid = existing.reduce((sum, p) => sum + p.amountPaise, 0);
       const remaining = visit.actualBillPaise - alreadyPaid;
       if (amountPaise > remaining) {
-        throw new Error(`Amount exceeds the outstanding balance of ${formatINR(Math.max(0, remaining))}.`);
+        throw new Error(`Amount exceeds the outstanding balance of ${formatAmount(Math.max(0, remaining))}.`);
       }
       const payment: Payment = {
         id: crypto.randomUUID(),

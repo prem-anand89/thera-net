@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { Invoice, PaymentMode } from '@/domain/types';
 import { INVOICE_PAYMENT_MODES } from '@/domain/paymentMethods';
 import { repos, invoiceService } from '@/services';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
@@ -132,7 +132,7 @@ export function AmendInvoiceDialog({
                       {formatDateDM(v.visitDate)} —{' '}
                       {catalogName.get(v.serviceCatalogId) ?? 'Service'}
                     </span>
-                    <span className="font-num">{formatINR(v.actualBillPaise)}</span>
+                    <span className="font-num">{formatAmount(v.actualBillPaise)}</span>
                   </li>
                 ))}
               </ul>
@@ -157,7 +157,7 @@ export function AmendInvoiceDialog({
                           {catalogName.get(v.serviceCatalogId) ?? 'Service'}
                         </span>
                         <span className="font-num text-[var(--muted)]">
-                          {formatINR(v.actualBillPaise)}
+                          {formatAmount(v.actualBillPaise)}
                         </span>
                       </label>
                     </li>

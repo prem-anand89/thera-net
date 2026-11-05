@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 
 export type SavePayment =
@@ -89,7 +89,7 @@ export function VisitSaveBar({
                   serviceCount > 0 ? 'font-num' : ''
                 }`}
               >
-                {serviceCount === 0 ? 'No service yet' : formatINR(totalPaise)}
+                {serviceCount === 0 ? 'No service yet' : formatAmount(totalPaise)}
               </span>
             </button>
 

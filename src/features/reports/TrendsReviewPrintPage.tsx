@@ -5,7 +5,7 @@ import { dashboardService, reportService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import { publicLogoUrl } from '@/lib/supabase';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { fiscalYearOf, monthName, formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary, StatTile } from '@/components/ui';
@@ -241,7 +241,7 @@ export function TrendsReviewPrintPage() {
               label={revenueLabel}
               value={
                 <>
-                  {formatINR(report?.total.netPostTaxPaise ?? 0)}
+                  {formatAmount(report?.total.netPostTaxPaise ?? 0)}
                   <DeltaCaption value={revenueDeltaPct} suffix="%" />
                 </>
               }
@@ -289,7 +289,7 @@ export function TrendsReviewPrintPage() {
               revenuePaise={report.rows.map((r) => r.netPostTaxPaise)}
               visitsColor={SERIES_COLORS[1]}
               revenueColor={SERIES_COLORS[0]}
-              formatRevenue={formatINR}
+              formatRevenue={formatAmount}
               compact={compact}
               currentMonthIndices={[]}
             />

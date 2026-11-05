@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { CatalogItem } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { ImportPreview, PreviewRow, Resolutions, RowResolution } from '@/services/importVisitsService';
 import { inputCls, td, th } from '@/components/ui';
@@ -115,7 +115,7 @@ export function ImportPreviewTable({
                                   <optgroup key={category} label={category}>
                                     {items.map((i) => (
                                       <option key={i.id} value={i.id}>
-                                        {i.name} — {formatINR(i.basePricePaise)}
+                                        {i.name} — {formatAmount(i.basePricePaise)}
                                       </option>
                                     ))}
                                   </optgroup>
@@ -195,7 +195,7 @@ export function ImportPreviewTable({
                   <td className={td}>{row.mrno}</td>
                   <td className={td}>{row.raw.therapistName}</td>
                   <td className={td}>{row.raw.serviceNameRaw}</td>
-                  <td className={td}>{formatINR(row.billAmountPaise)}</td>
+                  <td className={td}>{formatAmount(row.billAmountPaise)}</td>
                   <td className={td}>
                     {resolutions[row.key]?.skip
                       ? 'Skipped'

@@ -9,7 +9,7 @@ import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { formatExpiryDate } from '@/domain/packageTracking';
 import {
@@ -707,7 +707,7 @@ export function WorkspacePage() {
   const duesCount = dues?.visitCount ?? 0;
   const collectedCell = {
     label: 'Collected',
-    value: receivedToday === undefined ? <LoadingValue /> : formatINR(receivedToday),
+    value: receivedToday === undefined ? <LoadingValue /> : formatAmount(receivedToday),
     icon: <IconRupee />,
     tone: 'moss' as const,
     kind: 'money' as const,
@@ -715,7 +715,7 @@ export function WorkspacePage() {
   };
   const duesCell = {
     label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
-    value: dues === undefined ? <LoadingValue /> : formatINR(dues.totalPaise),
+    value: dues === undefined ? <LoadingValue /> : formatAmount(dues.totalPaise),
     icon: <IconWallet />,
     tone: 'amber' as const,
     kind: 'money' as const,
@@ -945,7 +945,7 @@ export function WorkspacePage() {
             className="flex items-center justify-between gap-2 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
           >
             <span className="min-w-0 truncate">
-              {monthCaption}: {monthReport ? formatINR(monthReport.total.netPostTaxPaise) : '—'} net revenue ·{' '}
+              {monthCaption}: {monthReport ? formatAmount(monthReport.total.netPostTaxPaise) : '—'} net revenue ·{' '}
               {monthReport ? monthReport.total.visitCount : '—'} visits
             </span>
             <span className="shrink-0 font-medium text-[var(--teal)]">Reports ›</span>

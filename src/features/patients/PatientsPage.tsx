@@ -6,7 +6,7 @@ import { repos, patientService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
 import { BookSlotSheet } from '@/components/BookSlotSheet';
@@ -602,11 +602,11 @@ export function PatientsList() {
                         {stats ? (
                           <>
                             <div className="font-num text-[var(--ink)]">
-                              {formatINR(billing?.totalBilledPaise ?? 0)} billed
+                              {formatAmount(billing?.totalBilledPaise ?? 0)} billed
                             </div>
                             {(billing?.outstandingBalancePaise ?? 0) > 0 && (
                               <div className="mt-0.5 font-num text-[var(--rust)]">
-                                {formatINR(billing!.outstandingBalancePaise)} due
+                                {formatAmount(billing!.outstandingBalancePaise)} due
                               </div>
                             )}
                           </>
@@ -868,10 +868,10 @@ function PatientCard({
               <span>
                 {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
               </span>
-              <span className="font-num">{formatINR(billing?.totalBilledPaise ?? 0)} billed</span>
+              <span className="font-num">{formatAmount(billing?.totalBilledPaise ?? 0)} billed</span>
               {(billing?.outstandingBalancePaise ?? 0) > 0 && (
                 <span className="font-num text-[var(--rust)]">
-                  {formatINR(billing!.outstandingBalancePaise)} due
+                  {formatAmount(billing!.outstandingBalancePaise)} due
                 </span>
               )}
             </>

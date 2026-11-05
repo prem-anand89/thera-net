@@ -4,7 +4,7 @@ import { dashboardService, repos } from '@/services';
 import type { MonthlyReport } from '@/services/reportService';
 import { useClinic } from '@/app/clinicContext';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
 import { SectionCard } from '@/components/ui';
 import { useTherapistUtilisation } from '@/components/useTherapistUtilisation';
@@ -331,7 +331,7 @@ export function TherapistComparisonCard({
                       {revenueLabel}
                     </span>
                     <span className="font-num text-xs font-semibold text-[var(--ink)] shrink-0 ml-2">
-                      Total: {formatINR(totalMonthRevenue)}
+                      Total: {formatAmount(totalMonthRevenue)}
                     </span>
                   </div>
                   <div className="space-y-3.5">
@@ -340,7 +340,7 @@ export function TherapistComparisonCard({
                         <div className="flex items-center justify-between text-xs gap-2">
                           <span className="font-medium text-[var(--ink)] truncate">{item.name}</span>
                           <div className="flex items-baseline gap-2 shrink-0">
-                            <span className="font-num font-semibold text-[var(--ink)]">{formatINR(item.revenue)}</span>
+                            <span className="font-num font-semibold text-[var(--ink)]">{formatAmount(item.revenue)}</span>
                             <span className="font-num text-[11px] font-medium text-[var(--muted)]">
                               {item.sharePct}% of clinic
                             </span>
@@ -421,7 +421,7 @@ export function TherapistComparisonCard({
                   {/* Period Total Summary Stats */}
                   <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 rounded-xl bg-[var(--paper)] px-3 py-1.5 text-xs">
                     <span className="text-[var(--muted)]">Period total:</span>
-                    <span className="font-num font-semibold text-[var(--ink)]">{formatINR(individualTotalRevenue)}</span>
+                    <span className="font-num font-semibold text-[var(--ink)]">{formatAmount(individualTotalRevenue)}</span>
                     <span className="text-[var(--muted)]">·</span>
                     <span className="font-num font-semibold text-[var(--ink)]">{individualTotalVisits} visits</span>
                   </div>
@@ -433,7 +433,7 @@ export function TherapistComparisonCard({
                 <MonthlyRevenueChart
                   categories={categories}
                   revenuePaise={individualRevenuePaise}
-                  formatRevenue={formatINR}
+                  formatRevenue={formatAmount}
                   selectedIndex={individualIndex}
                   onSelectIndex={setIndividualIndex}
                 />

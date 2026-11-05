@@ -2,7 +2,7 @@ import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { PaymentMethod } from '@/domain/types';
-import { formatINR, paiseToRupees, rupeesToPaise } from '@/domain/money';
+import { formatAmount, paiseToRupees, rupeesToPaise } from '@/domain/money';
 import type { Paise } from '@/domain/money';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService, directPaymentService, paymentService, repos } from '@/services';
@@ -133,7 +133,7 @@ export function TakePaymentDialog({
     if (splitMode && !splitValid) {
       setError(
         splitRowsValid
-          ? `Split amounts must add up to ${formatINR(parsedAmountPaise)}.`
+          ? `Split amounts must add up to ${formatAmount(parsedAmountPaise)}.`
           : 'Enter a valid amount for each method.'
       );
       return;
@@ -200,12 +200,12 @@ export function TakePaymentDialog({
       >
         <h2 className="text-sm font-semibold text-[var(--ink)]">Take payment</h2>
         <p className="text-sm text-[var(--muted)]">
-          {patientLabel} · {formatINR(ceilingPaise)} billed
-          {alreadyPaidPaise ? ` · ${formatINR(alreadyPaidPaise)} already collected` : ''}
+          {patientLabel} · {formatAmount(ceilingPaise)} billed
+          {alreadyPaidPaise ? ` · ${formatAmount(alreadyPaidPaise)} already collected` : ''}
         </p>
         {advanceBalancePaise > 0 && remainingDuePaise > 0 && (
           <div className="flex items-center justify-between rounded-md bg-[var(--teal-light)] px-3 py-2 text-xs text-[var(--teal-strong)]">
-            <span>{formatINR(advanceBalancePaise)} advance available</span>
+            <span>{formatAmount(advanceBalancePaise)} advance available</span>
             <button
               type="button"
               className="font-medium underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -283,11 +283,11 @@ export function TakePaymentDialog({
             </button>
             {amountValid && (
               <p className={`text-xs ${splitMatchesTotal ? 'text-[var(--muted)]' : 'text-[var(--rust)]'}`}>
-                {formatINR(splitTotalPaise)} allocated of {formatINR(parsedAmountPaise)}
+                {formatAmount(splitTotalPaise)} allocated of {formatAmount(parsedAmountPaise)}
                 {!splitMatchesTotal &&
                   (splitTotalPaise < parsedAmountPaise
-                    ? ` — ${formatINR(parsedAmountPaise - splitTotalPaise)} left to allocate`
-                    : ` — ${formatINR(splitTotalPaise - parsedAmountPaise)} over`)}
+                    ? ` — ${formatAmount(parsedAmountPaise - splitTotalPaise)} left to allocate`
+                    : ` — ${formatAmount(splitTotalPaise - parsedAmountPaise)} over`)}
               </p>
             )}
           </div>

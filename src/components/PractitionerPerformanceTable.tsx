@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { initialsFor } from '@/app/accountInitials';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import type { Utilisation } from '@/domain/utilisation';
 import type { TherapistStatus } from '@/domain/therapistStatus';
@@ -269,7 +269,7 @@ export function PractitionerPerformanceTable({
 
                   {/* Formatted revenue */}
                   <td className="font-num px-4 py-3 text-right font-medium text-[var(--ink)]">
-                    {formatINR(row.revenuePaise)}
+                    {formatAmount(row.revenuePaise)}
                   </td>
 
                   {/* Visit count */}
@@ -292,7 +292,7 @@ export function PractitionerPerformanceTable({
                   </span>
                 </td>
                 <td className="font-num px-4 py-3 text-right font-bold text-[var(--ink)]">
-                  {formatINR(totals.revenuePaise)}
+                  {formatAmount(totals.revenuePaise)}
                 </td>
                 <td className="font-num px-4 py-3 text-right font-bold text-[var(--ink)]">
                   {totals.visitCount}

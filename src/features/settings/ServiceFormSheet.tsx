@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, catalogService } from '@/services';
 import type { CatalogItem } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import { perSessionLabel, usageLabel } from '@/domain/catalogDisplay';
 import { groupNameCheck, nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
 import { btnPrimary, btnSecondary, ConfirmDialog, Field, inputCls, RupeeInput, Segmented, SheetDialog } from '@/components/ui';
@@ -133,7 +133,7 @@ function ServiceForm({
     setError(null);
     if (!name.trim()) return setError('Enter a name.');
     if (nameCheckBlocks(check)) return;
-    if (pricePaise == null) return setError(isPackage ? 'Enter the price for the whole package (₹0 if free).' : 'Enter a price (₹0 if free).');
+    if (pricePaise == null) return setError(isPackage ? `Enter the price for the whole package (${currencySymbol()}0 if free).` : `Enter a price (${currencySymbol()}0 if free).`);
     if (isPackage && sessions < MIN_PACKAGE) {
       return setError('Packages need 2 or more sessions. For one visit, choose One visit.');
     }
@@ -310,12 +310,12 @@ function ServiceForm({
                 <span className="text-[var(--moss)]">{perSessionLabel({ basePricePaise: pricePaise, sessionCount: sessions })}</span>
               )}
               {isPackage && pricePaise != null && priceChanged && ' · '}
-              {priceChanged && editing && <span>Was {formatINR(editing.basePricePaise)}</span>}
+              {priceChanged && editing && <span>Was {formatAmount(editing.basePricePaise)}</span>}
             </>
           }
         >
           <div className="relative">
-            <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">₹</span>
+            <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">{currencySymbol()}</span>
             <RupeeInput id={priceId} valuePaise={pricePaise} onChange={setPricePaise} className={`font-num ${inputCls} !pl-7`} />
           </div>
         </Field>

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { Pill } from '@/components/ui';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
 import type { AssistedVisit } from './assistedVisits';
@@ -8,7 +8,7 @@ import type { AssistedVisit } from './assistedVisits';
 /** What the assistant's own share line reads: their amount, or that the revenue isn't shared. */
 export function assistedShareText(sharePaise: number | null, assistantName?: string): string {
   if (sharePaise == null) return 'revenue not shared';
-  return `${assistantName ? `${assistantName}'s` : 'Your'} share ${formatINR(sharePaise)}`;
+  return `${assistantName ? `${assistantName}'s` : 'Your'} share ${formatAmount(sharePaise)}`;
 }
 
 /**

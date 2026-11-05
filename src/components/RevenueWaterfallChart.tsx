@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { monthOverMonthDelta } from '@/components/chartTrendMath';
+import { currencySymbol } from '@/domain/money';
 
 function roundedTopRectPath(x: number, y: number, w: number, h: number, r: number): string {
   if (h <= 0 || w <= 0) return '';
@@ -84,7 +85,7 @@ export function RevenueWaterfallChart({
         }}
       >
         <text x={padding.left} y={12} className="fill-slate-400" fontSize={8}>
-          ₹ change
+          {currencySymbol()} change
         </text>
         <line
           x1={padding.left}

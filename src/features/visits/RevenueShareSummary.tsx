@@ -1,4 +1,4 @@
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { autoCredits, deliverer, type CreditShare } from '@/domain/visitLines';
 import type { Therapist, UUID, VisitItem } from '@/domain/types';
 
@@ -46,7 +46,7 @@ export function RevenueShareSummary({
         {shares
           .map((s) => {
             const pct = billPaise > 0 ? ` (${Math.round((s.amountPaise / billPaise) * 100)}%)` : '';
-            return `${therapistsById.get(s.therapistId)?.name ?? 'Therapist'} ${formatINR(s.amountPaise)}${pct}`;
+            return `${therapistsById.get(s.therapistId)?.name ?? 'Therapist'} ${formatAmount(s.amountPaise)}${pct}`;
           })
           .join(' · ')}
         {onEdit && (

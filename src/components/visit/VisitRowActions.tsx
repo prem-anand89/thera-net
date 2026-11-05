@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
 import { clinicCanShowUpiQr, clinicUpiPayeeName, buildUpiPayUri } from '@/domain/upiPay';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { paymentActions } from '@/domain/paymentState';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
@@ -75,7 +75,7 @@ export function RowActionsMenu({
         })
       : null;
 
-    let text = `Hi ${data.patientName},\n\nThis is a reminder from ${clinic.name} regarding your pending bill for your visit on ${formatDateDM(data.visitDate)} of ${formatINR(remainingPaise)}.`;
+    let text = `Hi ${data.patientName},\n\nThis is a reminder from ${clinic.name} regarding your pending bill for your visit on ${formatDateDM(data.visitDate)} of ${formatAmount(remainingPaise)}.`;
     
     if (upiPayUri) {
       text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;

@@ -20,7 +20,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { ClinicAddressPrompt } from '@/components/ClinicAddressPrompt';
 import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
 import { sessionCountLabel } from '@/domain/invoiceLine';
 import {
@@ -347,7 +347,7 @@ export function IssueInvoiceDialog({
                   <tr key={i} className="border-b border-[var(--border)] align-top">
                     <td className="py-1.5 font-medium text-[var(--ink)]">{li.serviceName}</td>
                     <td className="py-1.5 text-[var(--muted)]">{sessionCountLabel(li)}</td>
-                    <td className="font-num py-1.5 text-right">{formatINR(li.totalPaise)}</td>
+                    <td className="font-num py-1.5 text-right">{formatAmount(li.totalPaise)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -357,7 +357,7 @@ export function IssueInvoiceDialog({
                     Total
                   </td>
                   <td className="font-num py-2 text-right text-base font-bold text-[var(--ink)]">
-                    {formatINR(preview?.totalPaise ?? 0)}
+                    {formatAmount(preview?.totalPaise ?? 0)}
                   </td>
                 </tr>
               </tfoot>

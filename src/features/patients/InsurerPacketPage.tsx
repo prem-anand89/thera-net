@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { LockedSectionNotice } from '@/features/settings/settingsShared';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { sessionCountLabel } from '@/domain/invoiceLine';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { NoteContent } from './NotePrintPage';
@@ -39,7 +39,7 @@ function InvoiceSummary({ invoice }: { invoice: Invoice }) {
               <td className="py-1 text-[var(--ink)]">{li.serviceName}</td>
               <td className="py-1 text-[var(--ink)]">{sessionCountLabel(li)}</td>
               <td className="font-num py-1 text-right text-[var(--ink)]">
-                {formatINR(li.totalPaise)}
+                {formatAmount(li.totalPaise)}
               </td>
             </tr>
           ))}
@@ -50,7 +50,7 @@ function InvoiceSummary({ invoice }: { invoice: Invoice }) {
               Total
             </td>
             <td className="font-num py-1 text-right font-semibold text-[var(--ink)]">
-              {formatINR(invoice.totalPaise)}
+              {formatAmount(invoice.totalPaise)}
             </td>
           </tr>
         </tfoot>

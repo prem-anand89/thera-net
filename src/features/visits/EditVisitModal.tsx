@@ -5,7 +5,7 @@ import { repos, visitService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useSession } from '@/app/useSession';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import {
   ServiceRows,
@@ -556,13 +556,13 @@ export function EditVisitModal({
                         <span className="text-xs text-[var(--muted)]"> · shared with {nameOf(i.sessionShareTherapistId)} ({i.sessionSharePct}%)</span>
                       ) : null}
                     </span>
-                    <span className="font-num font-medium">{formatINR(i.pricePaise)}</span>
+                    <span className="font-num font-medium">{formatAmount(i.pricePaise)}</span>
                   </li>
                 ))}
               </ul>
               <div className="border-t border-[var(--border)] pt-2 flex justify-between text-sm font-semibold text-[var(--ink)]">
                 <span>Total Billed</span>
-                <span className="font-num">{formatINR(visit.actualBillPaise)}</span>
+                <span className="font-num">{formatAmount(visit.actualBillPaise)}</span>
               </div>
             </div>
           )}
@@ -645,16 +645,16 @@ export function EditVisitModal({
                   <span className="font-medium text-[var(--muted)]">Payment status</span>
                   {paidPaise > 0 ? (
                     paymentDelta === 0 ? (
-                      <span className="font-medium text-[var(--teal)]">Paid {formatINR(paidPaise)} · Settled</span>
+                      <span className="font-medium text-[var(--teal)]">Paid {formatAmount(paidPaise)} · Settled</span>
                     ) : paymentDelta > 0 ? (
-                      <span className="font-medium text-[var(--rust)]">Paid {formatINR(paidPaise)} · {formatINR(paymentDelta)} more to collect</span>
+                      <span className="font-medium text-[var(--rust)]">Paid {formatAmount(paidPaise)} · {formatAmount(paymentDelta)} more to collect</span>
                     ) : (
-                      <span className="font-medium text-[var(--teal)]">Paid {formatINR(paidPaise)} · {formatINR(Math.abs(paymentDelta))} overpaid</span>
+                      <span className="font-medium text-[var(--teal)]">Paid {formatAmount(paidPaise)} · {formatAmount(Math.abs(paymentDelta))} overpaid</span>
                     )
                   ) : billPaise === 0 ? (
-                    <span className="text-[var(--muted)]">No charge · ₹0</span>
+                    <span className="text-[var(--muted)]">No charge · {currencySymbol()}0</span>
                   ) : (
-                    <span className="font-medium text-[var(--rust)]">Payment due · {formatINR(billPaise)}</span>
+                    <span className="font-medium text-[var(--rust)]">Payment due · {formatAmount(billPaise)}</span>
                   )}
                 </div>
 
@@ -691,7 +691,7 @@ export function EditVisitModal({
                   <>
                     {' '}
                     —{' '}
-                    {liveCredits.map((c) => `${nameOf(c.therapistId)} ${formatINR(c.amountPaise)}`).join(' · ')}
+                    {liveCredits.map((c) => `${nameOf(c.therapistId)} ${formatAmount(c.amountPaise)}`).join(' · ')}
                   </>
                 )}{' '}
                 <button
@@ -738,9 +738,9 @@ export function EditVisitModal({
         {/* Sticky footer with bill/payment summary and actions */}
         <div className="modal-actions shrink-0 flex items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 bg-[var(--surface)]">
           <div className="text-xs">
-            <span className="font-semibold text-sm text-[var(--ink)]">{formatINR(billPaise)}</span>
+            <span className="font-semibold text-sm text-[var(--ink)]">{formatAmount(billPaise)}</span>
             <span className="text-[var(--muted)] ml-1.5">
-              {paidPaise > 0 ? `· Paid ${formatINR(paidPaise)}` : billPaise > 0 ? '· Unpaid' : ''}
+              {paidPaise > 0 ? `· Paid ${formatAmount(paidPaise)}` : billPaise > 0 ? '· Unpaid' : ''}
             </span>
           </div>
 

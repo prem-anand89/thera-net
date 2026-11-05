@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { largestRemainderRupees, rupeesToPaise as rs } from './money';
+import { currencySymbol, formatAmount, formatINR, largestRemainderRupees, rupeesToPaise as rs } from './money';
 
 describe('largestRemainderRupees', () => {
   it('splits in whole rupees by largest remainder and sums exactly', () => {
@@ -21,5 +21,21 @@ describe('largestRemainderRupees', () => {
 
   it('splits a negative total as its absolute value', () => {
     expect(largestRemainderRupees([rs(2), rs(1)], -rs(3))).toEqual([-rs(2), -rs(1)]);
+  });
+});
+
+describe('formatAmount and currencySymbol', () => {
+  it('print rupees exactly as formatINR always did, whole or with paise', () => {
+    for (const paise of [0, 100, 150000, 800000, 12345, 99, 100000000, -5000, -12345]) {
+      expect(formatAmount(paise)).toBe(formatINR(paise));
+    }
+    expect(formatAmount(150000)).toBe('₹1,500');
+    expect(formatAmount(150050)).toBe('₹1,500.50');
+    expect(formatAmount(100000000)).toBe('₹10,00,000');
+  });
+
+  it('currencySymbol is the symbol formatAmount prints', () => {
+    expect(currencySymbol()).toBe('₹');
+    expect(formatAmount(100).startsWith(currencySymbol())).toBe(true);
   });
 });

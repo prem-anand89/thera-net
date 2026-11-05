@@ -11,7 +11,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { useGoogleReviewEligibleRequestIds } from '@/features/schedule/scheduleSignals';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, hasDue } from '@/domain/paymentState';
@@ -256,7 +256,7 @@ function DueToggle({
     <button
       type="button"
       aria-pressed={active}
-      aria-label={`Due ${formatINR(outstanding)} across ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`}
+      aria-label={`Due ${formatAmount(outstanding)} across ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`}
       title={active ? 'Showing unpaid visits only. Tap to show all.' : 'Show only unpaid visits'}
       className={`min-h-8 rounded-md px-2.5 py-1 font-num font-bold transition-colors ${
         active
@@ -266,8 +266,8 @@ function DueToggle({
       onClick={onToggle}
     >
       {long
-        ? `Due ${formatINR(outstanding)} · ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`
-        : `Due ${formatINR(outstanding)} (${unpaidCount})`}
+        ? `Due ${formatAmount(outstanding)} · ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`
+        : `Due ${formatAmount(outstanding)} (${unpaidCount})`}
     </button>
   );
 }
@@ -1022,7 +1022,7 @@ export function LedgerPage() {
       {recordsView === 'visits' && outstanding && outstanding.rows.length > 0 && (
         <SectionCard title="Unpaid invoices">
           <div className="mb-4 flex gap-4">
-            <StatTile label="Invoiced, unpaid" value={formatINR(outstanding.totalPaise)} />
+            <StatTile label="Invoiced, unpaid" value={formatAmount(outstanding.totalPaise)} />
             <StatTile label="Invoices" value={outstanding.count} />
           </div>
           {canBill && (
@@ -1053,9 +1053,9 @@ export function LedgerPage() {
                       <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
                     </div>
                     <span className="font-num shrink-0 text-right text-sm font-medium text-[var(--ink)]">
-                      {formatINR(r.remainingPaise)}
+                      {formatAmount(r.remainingPaise)}
                       {r.paidPaise > 0 && (
-                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatINR(r.totalPaise)}</span>
+                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatAmount(r.totalPaise)}</span>
                       )}
                     </span>
                   </div>
@@ -1107,9 +1107,9 @@ export function LedgerPage() {
                       <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
                     </td>
                     <td className={tdNum}>
-                      {formatINR(r.remainingPaise)}
+                      {formatAmount(r.remainingPaise)}
                       {r.paidPaise > 0 && (
-                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatINR(r.totalPaise)}</span>
+                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatAmount(r.totalPaise)}</span>
                       )}
                     </td>
                     <td className={td}>{formatDateDM(r.issuedAt)}</td>
@@ -1237,7 +1237,7 @@ export function LedgerPage() {
                       <>
                         <span className="text-[var(--muted)]">·</span>
                         <span>
-                          Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
+                          Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
                         </span>
                       </>
                     )}
@@ -1245,7 +1245,7 @@ export function LedgerPage() {
                       <>
                         <span className="text-[var(--muted)]">·</span>
                         <span>
-                          <strong className="font-num font-medium text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong> collected
+                          <strong className="font-num font-medium text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong> collected
                         </span>
                         <span className="text-[var(--muted)]">·</span>
                         <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
@@ -1280,11 +1280,11 @@ export function LedgerPage() {
                     {totals.state === 'dues' && (
                       <>
                         <span>
-                          Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
+                          Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
                         </span>
                         <span className="text-[var(--muted)]">·</span>
                         <span>
-                          Collected <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong>
+                          Collected <strong className="font-num text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong>
                         </span>
                         <span className="text-[var(--muted)]">·</span>
                         <DueToggle
@@ -1299,7 +1299,7 @@ export function LedgerPage() {
                     {totals.state === 'clear' && (
                       <>
                         <span>
-                          <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong> collected
+                          <strong className="font-num text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong> collected
                         </span>
                         <span className="text-[var(--muted)]">·</span>
                         <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>

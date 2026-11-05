@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
 import type { PaymentMethod } from '@/domain/types';
-import { formatINR, rupeesToPaise } from '@/domain/money';
+import { formatAmount, rupeesToPaise } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService } from '@/services';
@@ -77,7 +77,7 @@ export function RecordAdvanceDialog({
           <>
             <h2 className="text-sm font-semibold text-[var(--ink)]">Advance recorded</h2>
             <p className="text-sm text-[var(--ink)]">
-              {formatINR(parsedAmountPaise)} recorded for{' '}
+              {formatAmount(parsedAmountPaise)} recorded for{' '}
               {patientLabel}. It's available to apply against a future bill.
             </p>
             <div className="flex justify-end gap-2">

@@ -5,7 +5,7 @@ import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { type Invoice } from '@/domain/types';
 
@@ -139,7 +139,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
         })
       : null;
 
-    let text = `Hi ${inv.patientSnapshot.name},\n\nThis is a reminder from ${clinic.name} regarding your pending bill (${inv.invoiceNo}) of ${formatINR(remainingPaise)}.`;
+    let text = `Hi ${inv.patientSnapshot.name},\n\nThis is a reminder from ${clinic.name} regarding your pending bill (${inv.invoiceNo}) of ${formatAmount(remainingPaise)}.`;
     
     if (upiPayUri) {
       text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
@@ -273,25 +273,25 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
         <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Invoice Collections</div>
           <div className="text-2xl font-display font-semibold text-[var(--ink)]">
-            {formatINR(totalCollected)}
+            {formatAmount(totalCollected)}
           </div>
         </div>
         <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Outstanding Invoices</div>
           <div className="text-2xl font-display font-semibold text-[var(--rust)]">
-            {formatINR(totalOutstanding)}
+            {formatAmount(totalOutstanding)}
           </div>
         </div>
         <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Invoiced</div>
           <div className="text-2xl font-display font-semibold text-[var(--ink)]">
-            {formatINR(totalInvoiced)}
+            {formatAmount(totalInvoiced)}
           </div>
         </div>
         <div className="flex-1 min-w-48 rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)] p-4">
           <div className="text-xs text-[var(--teal-strong)] mb-1">Unbilled Visits</div>
           <div className="text-2xl font-display font-semibold text-[var(--teal-strong)]">
-            {formatINR(unbilledTotal)}
+            {formatAmount(unbilledTotal)}
           </div>
         </div>
       </div>
@@ -324,7 +324,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                       </div>
                     </div>
                     <span className="font-num shrink-0 text-sm font-medium text-[var(--ink)]">
-                      {formatINR(row.collectedPaise)}
+                      {formatAmount(row.collectedPaise)}
                     </span>
                   </div>
                   <button
@@ -374,7 +374,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                         <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
                       </td>
                       <td className={td}>{row.serviceName}</td>
-                      <td className={tdNum}>{formatINR(row.collectedPaise)}</td>
+                      <td className={tdNum}>{formatAmount(row.collectedPaise)}</td>
                       <td className={`${td} text-right`}>
                         <button
                           type="button"
@@ -443,7 +443,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="font-num text-sm font-medium text-[var(--ink)]">
-                        {formatINR(inv.totalPaise)}
+                        {formatAmount(inv.totalPaise)}
                       </span>
                       <Pill tone={isSuperseded ? 'slate' : status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
                         {isSuperseded ? 'Superseded' : status === 'paid' ? 'Paid' : status === 'void' ? 'Void' : isPartial ? 'Partially paid' : 'Outstanding'}
@@ -499,7 +499,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                   </div>
                   {isPartial && (
                     <p className="mt-1.5 text-xs text-[var(--muted)]">
-                      {formatINR(paidPaise)} collected · {formatINR(remainingPaise)} due
+                      {formatAmount(paidPaise)} collected · {formatAmount(remainingPaise)} due
                     </p>
                   )}
                 </div>
@@ -544,7 +544,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                       <td className={td}>{formatDateDM(inv.issuedAt)}</td>
                       <td className={`${td} font-display truncate`} title={inv.patientSnapshot.name}>{inv.patientSnapshot.name}</td>
                       <td className={td}>{inv.patientSnapshot.mrno}</td>
-                      <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
+                      <td className={tdNum}>{formatAmount(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
                         <Pill tone={isSuperseded ? 'slate' : status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
@@ -560,8 +560,8 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                         </Pill>
                         {isPartial && (
                           <div className="mt-1 text-xs text-[var(--muted)]">
-                            {formatINR(paidPaise)} of {formatINR(inv.totalPaise)} ·{' '}
-                            {formatINR(remainingPaise)} due
+                            {formatAmount(paidPaise)} of {formatAmount(inv.totalPaise)} ·{' '}
+                            {formatAmount(remainingPaise)} due
                           </div>
                         )}
                         {!isSuperseded && status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (

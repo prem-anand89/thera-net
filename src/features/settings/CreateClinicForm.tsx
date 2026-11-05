@@ -13,6 +13,7 @@ import type { Clinic } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { toFriendlyMessage } from '@/lib/errors';
 import { signOutSafely } from '@/app/signOut';
+import { formatAmount } from '@/domain/money';
 
 interface CreateClinicFormProps {
   onSuccess: () => void;
@@ -344,8 +345,8 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
               </p>
             ) : null}
             <div aria-hidden="true" className="mt-3 space-y-1.5 text-xs text-[var(--muted)]">
-              <p className="flex justify-between border-t border-[var(--border)] pt-2"><span>Sample service</span><span className="font-num">₹800</span></p>
-              <p className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--ink)]"><span>Total</span><span className="font-num">₹800</span></p>
+              <p className="flex justify-between border-t border-[var(--border)] pt-2"><span>Sample service</span><span className="font-num">{formatAmount(80000)}</span></p>
+              <p className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--ink)]"><span>Total</span><span className="font-num">{formatAmount(80000)}</span></p>
             </div>
           </div>
           <p className="mt-2 text-xs text-[var(--muted)]">Sample amounts. Bill numbers run in sequence and never skip.</p>

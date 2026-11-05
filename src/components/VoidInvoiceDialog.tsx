@@ -2,7 +2,7 @@ import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import type { Invoice } from '@/domain/types';
 import { invoiceService } from '@/services';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 
@@ -56,7 +56,7 @@ export function VoidInvoiceDialog({
           <li>Its visit{invoice.lineItems.length > 1 ? 's become' : ' becomes'} editable again, so you can fix the price, patient or date and give a new bill.</li>
           {receivedPaise > 0 && (
             <li>
-              The {formatINR(receivedPaise)} already received stays recorded against the visit — nothing is refunded or lost.
+              The {formatAmount(receivedPaise)} already received stays recorded against the visit — nothing is refunded or lost.
             </li>
           )}
         </ul>

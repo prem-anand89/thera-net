@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
 import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
@@ -112,11 +112,11 @@ export function DaybookPage() {
         
         if (visit && visit.adjustmentPaise < 0) {
           const adjReason = visit.adjustmentReason || 'no reason';
-          const discountStr = `Included ${formatINR(Math.abs(visit.adjustmentPaise))} discount (${adjReason})`;
+          const discountStr = `Included ${formatAmount(Math.abs(visit.adjustmentPaise))} discount (${adjReason})`;
           note = note ? `${discountStr}. ${note}` : discountStr;
         } else if (visit && visit.adjustmentPaise > 0) {
           const adjReason = visit.adjustmentReason || 'no reason';
-          const topUpStr = `Included ${formatINR(visit.adjustmentPaise)} top-up (${adjReason})`;
+          const topUpStr = `Included ${formatAmount(visit.adjustmentPaise)} top-up (${adjReason})`;
           note = note ? `${topUpStr}. ${note}` : topUpStr;
         }
 
@@ -202,20 +202,20 @@ export function DaybookPage() {
               <tbody>
                 <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                   <td className={td}>Cash</td>
-                  <td className={tdNum}>{formatINR(cash)}</td>
+                  <td className={tdNum}>{formatAmount(cash)}</td>
                 </tr>
                 <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                   <td className={td}>UPI</td>
-                  <td className={tdNum}>{formatINR(upi)}</td>
+                  <td className={tdNum}>{formatAmount(upi)}</td>
                 </tr>
                 <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                   <td className={td}>Card</td>
-                  <td className={tdNum}>{formatINR(card)}</td>
+                  <td className={tdNum}>{formatAmount(card)}</td>
                 </tr>
                 {other > 0 && (
                   <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                     <td className={td}>Other (Bank/Cheque)</td>
-                    <td className={tdNum}>{formatINR(other)}</td>
+                    <td className={tdNum}>{formatAmount(other)}</td>
                   </tr>
                 )}
                 {partner > 0 && (
@@ -224,14 +224,14 @@ export function DaybookPage() {
                       {paymentMethodLabel('partner', clinic)}
                       <span className="block text-xs">Not in your drawer — settled with them later</span>
                     </td>
-                    <td className={`${tdNum} text-[var(--muted)]`}>{formatINR(partner)}</td>
+                    <td className={`${tdNum} text-[var(--muted)]`}>{formatAmount(partner)}</td>
                   </tr>
                 )}
               </tbody>
               <tfoot>
                 <tr>
                   <td className="py-3 px-3 text-right font-semibold text-[var(--ink)]">Total Collected</td>
-                  <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatINR(total)}</td>
+                  <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatAmount(total)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -271,7 +271,7 @@ export function DaybookPage() {
                     </Pill>
                   </td>
                   <td className={td}>{t.method === '—' ? '—' : methodText(t.method)}</td>
-                  <td className={tdNum}>{formatINR(t.amount)}</td>
+                  <td className={tdNum}>{formatAmount(t.amount)}</td>
                   <td className={`${td} text-[var(--muted)] whitespace-normal break-words leading-snug`} title={t.notes}>{t.notes || '—'}</td>
                 </tr>
               ))}
@@ -291,7 +291,7 @@ export function DaybookPage() {
               <div key={t.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-display font-medium text-[var(--ink)]">{t.patientName}</div>
-                  <div className="font-num font-bold text-[var(--ink)]">{formatINR(t.amount)}</div>
+                  <div className="font-num font-bold text-[var(--ink)]">{formatAmount(t.amount)}</div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
                   <Pill tone="slate">{formatDateDMY(t.date)}</Pill>

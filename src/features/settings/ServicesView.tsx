@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, catalogService } from '@/services';
 import type { CatalogItem } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { OTHER_GROUP, orderedServices, perSessionLabel, serviceSubline, usageLabel } from '@/domain/catalogDisplay';
 import { groupNameCheck } from '@/domain/nameCheck';
 import { btnPrimary, btnSecondary, Field, inputCls, LoadingRows, SectionCard, SheetDialog } from '@/components/ui';
@@ -208,7 +208,7 @@ function ServiceRow({
   return (
     <button
       type="button"
-      aria-label={`Edit ${item.name}, ${formatINR(item.basePricePaise)}`}
+      aria-label={`Edit ${item.name}, ${formatAmount(item.basePricePaise)}`}
       aria-describedby={sub ? subId : undefined}
       className={`flex min-h-11 w-full items-center gap-3 border-t border-[var(--border)] px-3 py-2.5 text-left transition-colors first:border-t-0 hover:bg-[var(--paper)] active:bg-[var(--paper)] ${
         flash ? 'bg-[var(--teal-light)]' : ''
@@ -222,7 +222,7 @@ function ServiceRow({
           <span className="mt-1 inline-block rounded-full bg-[var(--slate-light)] px-2 py-0.5 text-[11px] font-medium text-[var(--slate)]">{usageText}</span>
         )}
       </span>
-      <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--ink)]">{formatINR(item.basePricePaise)}</span>
+      <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--ink)]">{formatAmount(item.basePricePaise)}</span>
       <span aria-hidden="true" className="shrink-0 text-lg text-[var(--muted)]">›</span>
     </button>
   );
@@ -298,7 +298,7 @@ function ServicesTable({
               <tr
                 key={item.id}
                 tabIndex={0}
-                aria-label={`Edit ${item.name}, ${formatINR(item.basePricePaise)}`}
+                aria-label={`Edit ${item.name}, ${formatAmount(item.basePricePaise)}`}
                 className={`group cursor-pointer border-t border-[var(--border)] outline-none hover:bg-[var(--teal-light)] focus-visible:bg-[var(--teal-light)] ${
                   item.id === flashId ? 'bg-[var(--teal-light)]' : ''
                 }`}
@@ -307,7 +307,7 @@ function ServicesTable({
               >
                 <td className="break-words px-3.5 py-2.5 text-[var(--ink)]">{item.name}</td>
                 <td className="px-3.5 py-2.5 text-right">{isPackage ? item.sessionCount : dash}</td>
-                <td className="px-3.5 py-2.5 text-right font-semibold">{formatINR(item.basePricePaise)}</td>
+                <td className="px-3.5 py-2.5 text-right font-semibold">{formatAmount(item.basePricePaise)}</td>
                 <td className="px-3.5 py-2.5 text-right">{isPackage ? perSessionLabel(item).replace(' each', '') : dash}</td>
                 <td className="px-3.5 py-2.5 text-right">{item.durationMinutes != null ? `${item.durationMinutes} min` : dash}</td>
                 {showUsage && (

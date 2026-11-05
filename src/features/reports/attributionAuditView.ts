@@ -1,4 +1,4 @@
-import { formatINR, type Paise } from '@/domain/money';
+import { formatAmount, type Paise, currencySymbol } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
 import type { AttributionEntry } from '@/services/attributionAuditService';
@@ -13,16 +13,16 @@ export const MECHANISM_LABEL: Record<AttributionEntry['mechanism'], string> = {
 export function basisText(e: AttributionEntry, nameOf: (id: UUID) => string): string {
   switch (e.mechanism) {
     case 'manual_split':
-      return `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`;
+      return `${e.sharedPct}% of ${formatAmount(e.visitBillPaise ?? 0)} bill`;
     case 'line_share':
-      return `Share of ${formatINR(e.visitBillPaise ?? 0)} bill`;
+      return `Share of ${formatAmount(e.visitBillPaise ?? 0)} bill`;
     case 'package_attribution':
       return (
         `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ` +
         (e.packageRole === 'helper'
           ? `${nameOf(e.toTherapistId)} helped (${e.sessionSharePct}%)`
           : `run by ${nameOf(e.toTherapistId)}${e.sessionSharePct ? ` (keeps ${100 - e.sessionSharePct}%)` : ''}`) +
-        ` · from ${nameOf(e.fromTherapistId)}'s ${formatINR(e.packageTotalPaise ?? 0)} package` +
+        ` · from ${nameOf(e.fromTherapistId)}'s ${formatAmount(e.packageTotalPaise ?? 0)} package` +
         (e.billingVisitDate ? ` billed ${formatDateDMY(e.billingVisitDate)}` : '')
       );
   }
@@ -66,7 +66,7 @@ export function toAuditCsv(
   patientName: (id: UUID) => string
 ): string {
   const rows = [
-    ['Date', 'Patient', 'From', 'To', 'Mechanism', 'Basis', 'Gross (₹)', 'Post-tax (₹)'],
+    ['Date', 'Patient', 'From', 'To', 'Mechanism', 'Basis', `Gross (${currencySymbol()})`, `Post-tax (${currencySymbol()})`],
     ...entries.map((e) => [
       e.visitDate,
       patientName(e.patientId),

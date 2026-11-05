@@ -5,6 +5,7 @@ import { publicLogoUrl } from '@/lib/supabase';
 import type { Clinic } from '@/domain/types';
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
+import { formatAmount } from '@/domain/money';
 
 export interface LetterheadPreviewProps {
   draft: Pick<Clinic, 'name' | 'address' | 'phone' | 'email' | 'gstNo' | 'partnerHospitalName'>;
@@ -102,31 +103,31 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
               </td>
               <td className="py-2 text-xs text-[var(--muted)]">12 Aug 2026 – 15 Aug 2026 (3 sessions)</td>
               <td className="py-2 text-[var(--muted)]">3 delivered of 10 authorised</td>
-              <td className="font-num py-2 text-right whitespace-nowrap pr-4">₹800</td>
+              <td className="font-num py-2 text-right whitespace-nowrap pr-4">{formatAmount(80000)}</td>
               <td className="font-num py-2 text-right whitespace-nowrap pr-4">—</td>
-              <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">₹8,000</td>
+              <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatAmount(800000)}</td>
             </tr>
             <tr className="border-b border-[var(--border)] align-top print:break-inside-avoid">
               <td className="py-2 font-medium text-[var(--ink)]">Therapeutic Ultrasound</td>
               <td className="py-2 text-xs text-[var(--muted)]">15 Aug 2026</td>
               <td className="py-2 text-[var(--muted)]">1 session</td>
-              <td className="font-num py-2 text-right whitespace-nowrap pr-4">₹300</td>
-              <td className="font-num py-2 text-right whitespace-nowrap pr-4">-₹50</td>
-              <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">₹250</td>
+              <td className="font-num py-2 text-right whitespace-nowrap pr-4">{formatAmount(30000)}</td>
+              <td className="font-num py-2 text-right whitespace-nowrap pr-4">-{formatAmount(5000)}</td>
+              <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatAmount(25000)}</td>
             </tr>
           </tbody>
           <tfoot className="print:break-inside-avoid">
             <tr>
               <td colSpan={5} className="pt-3 pb-1 text-right font-medium text-[var(--muted)]">Subtotal</td>
-              <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">₹8,300</td>
+              <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">{formatAmount(830000)}</td>
             </tr>
             <tr>
               <td colSpan={5} className="py-1 text-right font-medium text-[var(--muted)]">Total Adjustment</td>
-              <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">-₹50</td>
+              <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">-{formatAmount(5000)}</td>
             </tr>
             <tr>
               <td colSpan={5} className="py-3 text-right font-semibold text-[var(--ink)] border-b border-[var(--border)] border-dashed">Total</td>
-              <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap border-b border-[var(--border)] border-dashed">₹8,250</td>
+              <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap border-b border-[var(--border)] border-dashed">{formatAmount(825000)}</td>
             </tr>
           </tfoot>
         </table>
@@ -147,7 +148,7 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
               <tr className="border-b border-[var(--border)] border-dashed last:border-0">
                 <td className="py-1.5 text-[var(--ink)]">15 Aug 2026</td>
                 <td className="py-1.5 text-[var(--ink)]">UPI</td>
-                <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">₹8,250</td>
+                <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">{formatAmount(825000)}</td>
               </tr>
             </tbody>
           </table>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatINR, roundToRupeeHalfUp } from '@/domain/money';
+import { formatAmount, roundToRupeeHalfUp, currencySymbol } from '@/domain/money';
 import { type CatalogItem, type Therapist, type UUID, type VisitItem } from '@/domain/types';
 import { orderedServices, perSessionLabel, serviceSubline } from '@/domain/catalogDisplay';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -235,17 +235,17 @@ export function ServiceRows({
   const serviceOptions = useMemo(() => {
     const packages = openPackages.map((p) => {
       const expired = packageExpiryState(p.expiresOn, visitDate) === 'expired' ? ` (expired ${formatExpiryDate(p.expiresOn!)})` : '';
-      const text = `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (₹0)${expired}`;
+      const text = `Continue: ${p.serviceName} — session ${p.logged + 1} of ${p.packageTotal} (${currencySymbol()}0)${expired}`;
       return { value: `pkg:${p.packageGroupId}`, label: text, title: text, group: 'Open packages' };
     });
     // The same order and headings as Settings → Services (`orderedServices`): named groups first, then the
     // ungrouped ones under "Other" — or one flat list with no headings when the clinic uses no groups.
     const services = orderedServices(catalog).map(({ item: i, heading }) => ({
       value: `svc:${i.id}`,
-      label: `${i.name} — ${formatINR(i.basePricePaise)}${i.sessionCount > 1 ? ` (${i.sessionCount} sessions, ${perSessionLabel(i)})` : ''}`,
+      label: `${i.name} — ${formatAmount(i.basePricePaise)}${i.sessionCount > 1 ? ` (${i.sessionCount} sessions, ${perSessionLabel(i)})` : ''}`,
       title: i.name,
       subtitle: serviceSubline(i) || undefined,
-      price: formatINR(i.basePricePaise),
+      price: formatAmount(i.basePricePaise),
       // With no groups there is no heading, except next to "Open packages": then plain services are headed "Services"
       // so they aren't read as more open packages.
       group: heading || (packages.length > 0 ? 'Services' : undefined),
@@ -438,7 +438,7 @@ export function ServiceRows({
                   </div>
                 </button>
                 <span className="shrink-0 font-num text-sm font-semibold text-[var(--ink)]">
-                  {formatINR(rowPricePaise(row, catalog))}
+                  {formatAmount(rowPricePaise(row, catalog))}
                 </span>
                 {rows.length > 1 ? (
                   <RemoveButton name={name} onClick={() => onChange(rows.filter((r) => r.key !== row.key))} />
@@ -467,7 +467,7 @@ export function ServiceRows({
             {named && row.continuation && (
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
                 <span>
-                  Package session {row.continuation.logged + 1} of {row.continuation.packageTotal} · ₹0
+                  Package session {row.continuation.logged + 1} of {row.continuation.packageTotal} · {currencySymbol()}0
                 </span>
                 <button type="button" className={linkBtn} onClick={() => switchToOtherService(row.key)}>
                   Use a different service
@@ -585,13 +585,13 @@ export function ServiceRows({
                   }
                 }}
               >
-                Use a session for this visit (₹0)
+                Use a session for this visit ({currencySymbol()}0)
               </button>
             </>
           ) : (
             <div className="w-full space-y-1.5">
               <span>
-                <span className="font-medium text-[var(--ink)]">Open packages:</span> {who} has {openPackages.length}. Use one for this visit (₹0):
+                <span className="font-medium text-[var(--ink)]">Open packages:</span> {who} has {openPackages.length}. Use one for this visit ({currencySymbol()}0):
               </span>
               <div className="flex flex-wrap gap-1.5" data-testid="package-chips">
                 {openPackages.map((pkg) => {
@@ -662,7 +662,7 @@ function RowShare({
   }
   const preview =
     !isPackage && Number.isFinite(share.pct) && share.pct > 0 && pricePaise > 0
-      ? formatINR(roundToRupeeHalfUp((pricePaise * share.pct) / 100))
+      ? formatAmount(roundToRupeeHalfUp((pricePaise * share.pct) / 100))
       : null;
   return (
     // Phone: the label on its own line, then dropdown + % + remove on ONE line, then the plain-language result.

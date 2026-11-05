@@ -1,4 +1,4 @@
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import type { BucketReport } from '@/domain/utilisationReport';
 
 export function RevenueVolumeCard({
@@ -54,7 +54,7 @@ export function RevenueVolumeCard({
 
         <div className="mt-3 flex items-baseline gap-3">
           <span className="font-num text-3xl font-bold tracking-tight text-[var(--ink)]">
-            {formatINR(activeRevenue)}
+            {formatAmount(activeRevenue)}
           </span>
           {compareMode && deltaPaise != null && (
             <span
@@ -62,7 +62,7 @@ export function RevenueVolumeCard({
                 deltaPaise >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
               }`}
             >
-              {deltaPaise >= 0 ? `+${formatINR(deltaPaise)}` : `-${formatINR(Math.abs(deltaPaise))}`}{' '}
+              {deltaPaise >= 0 ? `+${formatAmount(deltaPaise)}` : `-${formatAmount(Math.abs(deltaPaise))}`}{' '}
               vs prior
             </span>
           )}
@@ -189,10 +189,10 @@ export function RevenueVolumeCard({
             <button
               key={r.bucket.key}
               type="button"
-              aria-label={`${r.bucket.label}: ${formatINR(r.clinicRevenuePaise)}`}
+              aria-label={`${r.bucket.label}: ${formatAmount(r.clinicRevenuePaise)}`}
               onClick={() => onSelectBucket(i)}
               className="flex-1 cursor-pointer focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
-              title={`${r.bucket.label}: ${formatINR(r.clinicRevenuePaise)}`}
+              title={`${r.bucket.label}: ${formatAmount(r.clinicRevenuePaise)}`}
             />
           ))}
         </div>

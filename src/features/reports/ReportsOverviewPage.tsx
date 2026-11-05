@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, reportService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import {
   monthName,
   pacingMonthDateRange,
@@ -550,7 +550,7 @@ export function ReportsOverviewPage() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label={scope.isClinicWideView ? revenueLabel : `My ${revenueLabel}`}
-          value={revenueDisplay != null ? formatINR(revenueDisplay) : '—'}
+          value={revenueDisplay != null ? formatAmount(revenueDisplay) : '—'}
           projected={kpiMode === 'projected'}
           trendPct={
             revenueDisplay != null && revenueCompareValue != null
@@ -558,7 +558,7 @@ export function ReportsOverviewPage() {
               : null
           }
           trendLabel={revenueCompareLabel}
-          lastMonthValue={revenueCompareValue != null ? formatINR(revenueCompareValue) : undefined}
+          lastMonthValue={revenueCompareValue != null ? formatAmount(revenueCompareValue) : undefined}
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Visits' : 'My visits'}
@@ -574,7 +574,7 @@ export function ReportsOverviewPage() {
         />
         <KpiCard
           label="Avg. charge / session"
-          value={avgChargePerSession != null ? formatINR(avgChargePerSession) : '—'}
+          value={avgChargePerSession != null ? formatAmount(avgChargePerSession) : '—'}
           trendLabel="clinic-wide this month"
         />
         <KpiCard
@@ -835,7 +835,7 @@ export function ReportsOverviewPage() {
                             <span className="min-w-0 truncate">{name}</span>
                             <span className="font-num shrink-0 text-xs text-[var(--muted)]">
                               {g.patients} patient{g.patients === 1 ? '' : 's'} · {g.visits} visit
-                              {g.visits === 1 ? '' : 's'} · {formatINR(g.revenuePaise)}
+                              {g.visits === 1 ? '' : 's'} · {formatAmount(g.revenuePaise)}
                             </span>
                           </div>
                         ))
@@ -850,7 +850,7 @@ export function ReportsOverviewPage() {
                             </span>
                             <span className="font-num shrink-0 text-xs text-[var(--muted)]">
                               {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
-                              {formatINR(p.revenuePaise)}
+                              {formatAmount(p.revenuePaise)}
                             </span>
                           </div>
                         ))}
@@ -875,7 +875,7 @@ export function ReportsOverviewPage() {
                                   <td className={`${td} font-medium`}>{name}</td>
                                   <td className={tdNum}>{g.patients}</td>
                                   <td className={tdNum}>{g.visits}</td>
-                                  <td className={tdNum}>{formatINR(g.revenuePaise)}</td>
+                                  <td className={tdNum}>{formatAmount(g.revenuePaise)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -891,7 +891,7 @@ export function ReportsOverviewPage() {
                                   {referralDetailGroups.reduce((s, [, g]) => s + g.visits, 0)}
                                 </td>
                                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>
-                                  {formatINR(referralDetailGroups.reduce((s, [, g]) => s + g.revenuePaise, 0))}
+                                  {formatAmount(referralDetailGroups.reduce((s, [, g]) => s + g.revenuePaise, 0))}
                                 </td>
                               </tr>
                             </tfoot>
@@ -913,7 +913,7 @@ export function ReportsOverviewPage() {
                                     <span className="text-[var(--muted)]">{p.mrno}</span>
                                   </td>
                                   <td className={tdNum}>{p.visitCount}</td>
-                                  <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                                  <td className={tdNum}>{formatAmount(p.revenuePaise)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -926,7 +926,7 @@ export function ReportsOverviewPage() {
                                   {referralActive.patients.reduce((s, p) => s + p.visitCount, 0)}
                                 </td>
                                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>
-                                  {formatINR(referralActive.patients.reduce((s, p) => s + p.revenuePaise, 0))}
+                                  {formatAmount(referralActive.patients.reduce((s, p) => s + p.revenuePaise, 0))}
                                 </td>
                               </tr>
                             </tfoot>

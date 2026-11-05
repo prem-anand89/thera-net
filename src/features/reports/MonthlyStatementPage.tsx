@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, reportService, settlementService } from '@/services';
 import { partnerName } from '@/domain/paymentMethods';
 import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import type { Paise } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthName, formatDateDM, type FyMonth } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type SettlementPayment } from '@/domain/types';
@@ -165,7 +165,7 @@ export function MonthlyStatementPage() {
               Total Billed
             </div>
             <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--ink)] truncate">
-              {report ? formatINR(report.total.billPaise) : '—'}
+              {report ? formatAmount(report.total.billPaise) : '—'}
             </div>
             <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
               {report?.total.billedSessionCount ?? 0} billed sessions
@@ -179,12 +179,12 @@ export function MonthlyStatementPage() {
                 Collected
               </div>
               <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--teal-strong)] truncate">
-                {collection ? formatINR(collection.collectedPaise) : '—'}
+                {collection ? formatAmount(collection.collectedPaise) : '—'}
               </div>
               <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
                 {collection
                   ? collection.billedPaise > collection.collectedPaise
-                    ? `${formatINR(collection.billedPaise - collection.collectedPaise)} still due`
+                    ? `${formatAmount(collection.billedPaise - collection.collectedPaise)} still due`
                     : 'Nothing due'
                   : '—'}
               </div>
@@ -198,11 +198,11 @@ export function MonthlyStatementPage() {
               {showPostTax ? `Post-Tax ${labels.own}` : `${labels.own} Share`}
             </div>
             <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--teal-strong)] truncate">
-              {report ? formatINR(report.total.netPostTaxPaise) : '—'}
+              {report ? formatAmount(report.total.netPostTaxPaise) : '—'}
             </div>
             <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
               {report && (report.total.tdsPaise ?? 0) > 0 ? (
-                <span>TDS: {formatINR(report.total.tdsPaise)} withheld</span>
+                <span>TDS: {formatAmount(report.total.tdsPaise)} withheld</span>
               ) : (
                 <span>Net clinic earnings</span>
               )}
@@ -217,7 +217,7 @@ export function MonthlyStatementPage() {
                 {labels.partner} Share
               </div>
               <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--ink)] truncate">
-                {report ? formatINR(report.total.partnerSharePaise) : '—'}
+                {report ? formatAmount(report.total.partnerSharePaise) : '—'}
               </div>
               <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
                 {100 - clinic.clinicSplitPct}% contractual cut
@@ -376,13 +376,13 @@ function SettlementCard({
           ? `Expected from ${partner} (computed ${showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`}):`
           : `${labels.partner} share to pay (computed):`}{' '}
         <span className="font-medium text-[var(--ink)]">
-          {balance ? formatINR(balance.usualPaise) : '—'}
+          {balance ? formatAmount(balance.usualPaise) : '—'}
         </span>
       </p>
       {partnerCollectedPaise > 0 && (
         <p className="text-sm text-[var(--muted)]">
           Collected by {partner} this month:{' '}
-          <span className="font-medium text-[var(--ink)]">{formatINR(partnerCollectedPaise)}</span> (
+          <span className="font-medium text-[var(--ink)]">{formatAmount(partnerCollectedPaise)}</span> (
           {partnerCollectedVisits} visit{partnerCollectedVisits === 1 ? '' : 's'})
         </p>
       )}
@@ -391,17 +391,17 @@ function SettlementCard({
           {partnerCollects && (
             <p className="text-sm text-[var(--muted)]">
               Collected at your desk this month:{' '}
-              <span className="font-medium text-[var(--ink)]">{formatINR(balance.crossCollectedPaise)}</span> ({balance.crossVisitCount} visit
+              <span className="font-medium text-[var(--ink)]">{formatAmount(balance.crossCollectedPaise)}</span> ({balance.crossVisitCount} visit
               {balance.crossVisitCount === 1 ? '' : 's'})
             </p>
           )}
           <p className="text-sm text-[var(--muted)]">
             Adjustment for {balance.crossVisitCount} visit{balance.crossVisitCount === 1 ? '' : 's'}{' '}
             {partnerCollects ? 'you collected' : `${partner} collected`}:{' '}
-            <span className="font-medium text-[var(--ink)]">−{formatINR(balance.adjustmentPaise)}</span>
+            <span className="font-medium text-[var(--ink)]">−{formatAmount(balance.adjustmentPaise)}</span>
           </p>
           <p className="mt-1 text-sm font-medium text-[var(--ink)]">
-            {clinicPays ? `Net to pay ${partner}` : `Net due from ${partner}`}: {formatINR(balance.duePaise)}
+            {clinicPays ? `Net to pay ${partner}` : `Net due from ${partner}`}: {formatAmount(balance.duePaise)}
           </p>
         </div>
       )}
@@ -412,7 +412,7 @@ function SettlementCard({
             <div key={p.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
               <div className="min-w-0">
                 <span className="font-medium text-[var(--ink)]">
-                  {formatINR(p.amountReceivedPaise)}
+                  {formatAmount(p.amountReceivedPaise)}
                 </span>
                 {p.receivedDate && (
                   <span className="ml-2 text-[var(--muted)]">{formatDateDM(p.receivedDate)}</span>
@@ -441,7 +441,7 @@ function SettlementCard({
       )}
 
       <p className="mt-3 text-sm font-medium text-[var(--ink)]">
-        {clinicPays ? `Total paid to ${partner}` : 'Total received'}: {formatINR(totalReceivedPaise as Paise)}
+        {clinicPays ? `Total paid to ${partner}` : 'Total received'}: {formatAmount(totalReceivedPaise as Paise)}
       </p>
       {variancePaise != null && (
         <p
@@ -449,7 +449,7 @@ function SettlementCard({
         >
           {clinicPays ? 'Still to pay' : 'Variance'}:{' '}
           {!clinicPays && variancePaise >= 0 ? '+' : ''}
-          {formatINR(variancePaise as Paise)}
+          {formatAmount(variancePaise as Paise)}
         </p>
       )}
 

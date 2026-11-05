@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { th, thNum, td, tdNum } from '@/components/ui';
 import {
   columnLeaders,
@@ -138,9 +138,9 @@ export function TherapistComparisonTable({
                 >
                   {row.therapistName}
                 </td>
-                <td className={tdN}>{formatINR(row.billPaise)}</td>
-                {showPostTax && <td className={tdN}>{formatINR(row.postTaxPaise)}</td>}
-                <td className={tdN}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
+                <td className={tdN}>{formatAmount(row.billPaise)}</td>
+                {showPostTax && <td className={tdN}>{formatAmount(row.postTaxPaise)}</td>}
+                <td className={tdN}>{formatAmount(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
                 <td className={tdN}>{row.patientsTreated}{lead('visits', row.therapistName)}</td>
                 {showAssisted && <td className={tdN}>{row.assistedVisitCount ?? 0}</td>}
                 <td className={tdN}>{row.newPackages}</td>
@@ -197,9 +197,9 @@ export function TherapistComparisonTable({
                 >
                   Total
                 </td>
-                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.billPaise)}</td>
-                {showPostTax && <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
-                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatAmount(total.billPaise)}</td>
+                {showPostTax && <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatAmount(total.postTaxPaise)}</td>}
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatAmount(total.netPostTaxPaise)}</td>
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.patientsTreated}</td>
                 {showAssisted && <td className={tdN}>—</td>}
                 <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.newPackages}</td>

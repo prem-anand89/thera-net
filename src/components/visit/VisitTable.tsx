@@ -4,7 +4,7 @@ import {
   VISIT_OPTIONAL_COLUMN_ORDER,
   type VisitColumnKey,
 } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { PackageThread, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import type { PatientProfileBackTarget } from '@/app/router';
@@ -276,7 +276,7 @@ export function VisitTable({
                       );
                   }
                 })}
-                <td className={`${tdNum} ${VISIT_ROW_CELL_BG}`}>{formatINR(row.billPaise)}</td>
+                <td className={`${tdNum} ${VISIT_ROW_CELL_BG}`}>{formatAmount(row.billPaise)}</td>
                 <td
                   className={`sticky right-0 z-[1] border-l border-[var(--border)] align-top ${td} ${VISIT_ROW_CELL_BG}`}
                 >

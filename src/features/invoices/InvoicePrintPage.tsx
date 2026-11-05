@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { buildInvoicePaymentLedger, type InvoiceLedger } from '@/domain/invoicePaymentLedger';
@@ -116,19 +116,19 @@ function LegacyLineItemsTable({
                     : '1'}
                   <div className="text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</div>
                 </td>
-                <td className="font-num py-2 text-right whitespace-nowrap">{formatINR(li.catalogPricePaise)}</td>
+                <td className="font-num py-2 text-right whitespace-nowrap">{formatAmount(li.catalogPricePaise)}</td>
                 {hasAdjustments && (
                   <td className="font-num py-2 text-right whitespace-nowrap">
                     {li.adjustmentPaise !== 0 ? (
                       <>
-                        {formatINR(li.adjustmentPaise)}
+                        {formatAmount(li.adjustmentPaise)}
                       </>
                     ) : (
                       '—'
                     )}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium whitespace-nowrap">{formatINR(li.totalPaise)}</td>
+                <td className="font-num py-2 text-right font-medium whitespace-nowrap">{formatAmount(li.totalPaise)}</td>
               </tr>
             );
           })}
@@ -144,7 +144,7 @@ function LegacyLineItemsTable({
                   Subtotal
                 </td>
                 <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap">
-                  {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
+                  {formatAmount(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
                 </td>
               </tr>
               <tr>
@@ -157,7 +157,7 @@ function LegacyLineItemsTable({
                 <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap">
                   {(() => {
                     const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
-                    return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
+                    return adj < 0 ? `-${formatAmount(Math.abs(adj))}` : formatAmount(adj);
                   })()}
                 </td>
               </tr>
@@ -171,7 +171,7 @@ function LegacyLineItemsTable({
               Total
             </td>
             <td className={`font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}>
-              {formatINR(totalPaise)}
+              {formatAmount(totalPaise)}
             </td>
           </tr>
           {paymentLedger && paymentLedger.paidPaise > 0 && (
@@ -184,7 +184,7 @@ function LegacyLineItemsTable({
                   Amount Paid
                 </td>
                 <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">
-                  {formatINR(paymentLedger.paidPaise)}
+                  {formatAmount(paymentLedger.paidPaise)}
                 </td>
               </tr>
               <tr>
@@ -195,7 +195,7 @@ function LegacyLineItemsTable({
                   Balance Due
                 </td>
                 <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">
-                  {formatINR(paymentLedger.balancePaise)}
+                  {formatAmount(paymentLedger.balancePaise)}
                 </td>
               </tr>
             </>
@@ -249,20 +249,20 @@ function LineItemsTable({
                 <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
                 <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
                 <td className="font-num py-2 text-right whitespace-nowrap pr-4">
-                  {formatINR(lineRatePerSessionPaise(li))}
+                  {formatAmount(lineRatePerSessionPaise(li))}
                 </td>
                 {hasAdjustments && (
                   <td className="font-num py-2 text-right whitespace-nowrap pr-4">
                     {li.adjustmentPaise !== 0 ? (
                       <>
-                        {formatINR(li.adjustmentPaise)}
+                        {formatAmount(li.adjustmentPaise)}
                       </>
                     ) : (
                       '—'
                     )}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatINR(li.totalPaise)}</td>
+                <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatAmount(li.totalPaise)}</td>
               </tr>
             );
           })}
@@ -278,7 +278,7 @@ function LineItemsTable({
                   Subtotal
                 </td>
                 <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">
-                  {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
+                  {formatAmount(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
                 </td>
               </tr>
               <tr>
@@ -291,7 +291,7 @@ function LineItemsTable({
                 <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">
                   {(() => {
                     const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
-                    return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
+                    return adj < 0 ? `-${formatAmount(Math.abs(adj))}` : formatAmount(adj);
                   })()}
                 </td>
               </tr>
@@ -305,7 +305,7 @@ function LineItemsTable({
               Total
             </td>
             <td className={`font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''} ${hasAdjustments ? '' : 'pr-2'}`}>
-              {formatINR(totalPaise)}
+              {formatAmount(totalPaise)}
             </td>
           </tr>
           {paymentLedger && paymentLedger.paidPaise > 0 && (
@@ -318,7 +318,7 @@ function LineItemsTable({
                   Amount Paid
                 </td>
                 <td className={`font-num py-2 text-right text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
-                  {formatINR(paymentLedger.paidPaise)}
+                  {formatAmount(paymentLedger.paidPaise)}
                 </td>
               </tr>
               <tr>
@@ -329,7 +329,7 @@ function LineItemsTable({
                   Balance Due
                 </td>
                 <td className={`font-num py-2 text-right text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
-                  {formatINR(paymentLedger.balancePaise)}
+                  {formatAmount(paymentLedger.balancePaise)}
                 </td>
               </tr>
             </>
@@ -448,7 +448,7 @@ export function InvoicePrintPage() {
     if (!contentRef.current || !invoice) return;
     setSharing(true);
     setShareError(null);
-    const summary = `Invoice ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatINR(invoice.totalPaise)}. From ${clinic.name}.`;
+    const summary = `Invoice ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatAmount(invoice.totalPaise)}. From ${clinic.name}.`;
     const patientPhone = invoice.patientSnapshot.phone;
     try {
       let file: File | null = null;
@@ -824,7 +824,7 @@ export function InvoicePrintPage() {
                       <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
                       <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
                       <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
-                        {formatINR(row.amountPaise)}
+                        {formatAmount(row.amountPaise)}
                       </td>
                     </tr>
                   ))}

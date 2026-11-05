@@ -4,7 +4,7 @@ import type { PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, advanceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
+import { formatAmount } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
@@ -91,7 +91,7 @@ export function AdvanceReceiptPrintPage() {
 
         <div className="mt-6 rounded-md border border-[var(--border)] p-4">
           <p className="font-num text-2xl font-bold text-[var(--ink)]">
-            {formatINR(advance.amountPaise)}
+            {formatAmount(advance.amountPaise)}
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{amountInWords(advance.amountPaise)}</p>
           <p className="mt-3 text-sm text-[var(--ink)]">
@@ -102,7 +102,7 @@ export function AdvanceReceiptPrintPage() {
 
         {advanceBalancePaise > 0 && (
           <p className="mt-6 text-sm font-medium text-[var(--ink)]">
-            Total Advance Balance Available: <span className="font-semibold">{formatINR(advanceBalancePaise)}</span>
+            Total Advance Balance Available: <span className="font-semibold">{formatAmount(advanceBalancePaise)}</span>
           </p>
         )}
 

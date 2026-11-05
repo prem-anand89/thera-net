@@ -1,4 +1,4 @@
-import { formatINR, type Paise } from './money';
+import { formatAmount, type Paise } from './money';
 import type { PaymentStatus, UUID } from './types';
 import { daysSince } from './packageTracking';
 
@@ -231,7 +231,7 @@ export function paymentBadge(input: {
   if (state === 'partially_collected') {
     const label =
       collectedPaise > 0 && collectedPaise < billPaise
-        ? `${formatINR(collectedPaise)} of ${formatINR(billPaise)}`
+        ? `${formatAmount(collectedPaise)} of ${formatAmount(billPaise)}`
         : 'Partial';
     // Tone escalates to overdue past the threshold; the label keeps saying
     // Partial — the partial-payment fact is more informative than a

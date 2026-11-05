@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pill, PackageThread, TherapistPill } from '@/components/ui';
-import { formatINR, type Paise } from '@/domain/money';
+import { formatAmount, type Paise } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { toLocalDateStr } from '@/domain/schedule';
 import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
@@ -163,7 +163,7 @@ export function SharedVisitCard({
         .join('')
     : '';
 
-  const bill = formatINR(data.billPaise);
+  const bill = formatAmount(data.billPaise);
   const actions = canCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
@@ -239,7 +239,7 @@ export function SharedVisitCard({
             onClick={onTakePayment}
             title={badge.title}
           >
-            Collect {formatINR(data.billPaise - data.collectedPaise)}
+            Collect {formatAmount(data.billPaise - data.collectedPaise)}
           </button>
         ) : (
           <div className="flex items-center gap-1">
@@ -412,7 +412,7 @@ export function ResponsiveVisitList({
               <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
                 {group.label} ({group.rows.length} visit{group.rows.length === 1 ? '' : 's'})
                 <span className="ml-4 text-xs font-normal text-[var(--muted)]">
-                  {formatINR(group.totalBillPaise)}
+                  {formatAmount(group.totalBillPaise)}
                 </span>
               </div>
               <div className="divide-y divide-[var(--border)] px-4">

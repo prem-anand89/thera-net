@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { currencySymbol } from '@/domain/money';
 
 function roundedTopRectPath(x: number, y: number, w: number, h: number, r: number): string {
   if (h <= 0 || w <= 0) return '';
@@ -115,7 +116,7 @@ export function VisitsRevenueTrendChart({
           visits
         </text>
         <text x={width - padding.right} y={12} textAnchor="end" className="fill-slate-400" fontSize={8}>
-          ₹
+          {currencySymbol()}
         </text>
         {[1, 2, 3].map((i) => {
           const y = padding.top + (plotH * i) / 3;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import {
   computeAdjustedBillPaise,
   describeBillAdjustment,
@@ -143,7 +143,7 @@ export function BillAdjustmentFields({
     const target = subtotalRupees - remainder500;
     roundOffPreset = {
       value: remainder500,
-      label: `Round to ₹${target.toLocaleString('en-IN')}`,
+      label: `Round to ${currencySymbol()}${target.toLocaleString('en-IN')}`,
       type: 'amount',
     };
   }
@@ -152,12 +152,12 @@ export function BillAdjustmentFields({
   const activePresets: Array<{ value: number; label: string; type: BillAdjustmentValueType }> =
     effectiveType === 'extra'
       ? valueType === 'amount'
-        ? EXTRA_AMOUNT_PRESETS.map((p) => ({ value: p, label: `+₹${p}`, type: 'amount' as const }))
+        ? EXTRA_AMOUNT_PRESETS.map((p) => ({ value: p, label: `+${currencySymbol()}${p}`, type: 'amount' as const }))
         : EXTRA_PERCENT_PRESETS.map((p) => ({ value: p, label: `+${p}%`, type: 'percent' as const }))
       : valueType === 'percent'
         ? DISCOUNT_PERCENT_PRESETS.map((p) => ({ value: p, label: `${p}%`, type: 'percent' as const }))
         : [
-          ...DISCOUNT_AMOUNT_PRESETS.map((p) => ({ value: p, label: `₹${p}`, type: 'amount' as const })),
+          ...DISCOUNT_AMOUNT_PRESETS.map((p) => ({ value: p, label: `${currencySymbol()}${p}`, type: 'amount' as const })),
           ...(roundOffPreset ? [roundOffPreset] : []),
         ];
 
@@ -172,7 +172,7 @@ export function BillAdjustmentFields({
       {!hideSummaryBoxes && (hasAdjustment || !hideUnadjustedPrice) && (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs">
           <span className="text-[var(--muted)]">{catalogLabel ?? 'Catalog price'}: </span>
-          <span className="font-num font-medium text-[var(--ink)]">{formatINR(catalogPricePaise)}</span>
+          <span className="font-num font-medium text-[var(--ink)]">{formatAmount(catalogPricePaise)}</span>
         </div>
       )}
 
@@ -290,7 +290,7 @@ export function BillAdjustmentFields({
                     }`}
                   title="Amount in Rupees"
                 >
-                  ₹
+                  {currencySymbol()}
                 </button>
               </div>
             </div>
@@ -340,7 +340,7 @@ export function BillAdjustmentFields({
                   }`}
               >
                 {effectiveType === 'extra' ? '+' : '−'}
-                {formatINR(liveDeltaPaise)}
+                {formatAmount(liveDeltaPaise)}
               </span>
             )}
 
@@ -439,11 +439,11 @@ export function BillAdjustmentFields({
             }`}
         >
           <span className="font-num font-medium">
-            {totalLabel}: {formatINR(billPaise)}
+            {totalLabel}: {formatAmount(billPaise)}
           </span>
           {summary && (
             <span className="mt-0.5 block text-xs text-[var(--teal-strong)]/90">
-              {summary.kind === 'discount' ? 'Discount' : 'Extra'} of {formatINR(summary.amountPaise)}
+              {summary.kind === 'discount' ? 'Discount' : 'Extra'} of {formatAmount(summary.amountPaise)}
               {valueType === 'percent' && numericValue > 0 ? ` (${numericValue}%)` : ''}
             </span>
           )}

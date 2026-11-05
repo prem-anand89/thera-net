@@ -29,7 +29,7 @@ import {
   type ConsultationNote,
   type ConsultationNoteStatus,
 } from '@/domain/types';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { partnerPaymentsByVisit, isFullyPartnerCollected } from '@/domain/paymentMethods';
@@ -572,7 +572,7 @@ export function PatientProfilePage() {
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {billingSummary.outstandingBalance > 0 && (
                 <span className="rounded-full bg-[var(--rust-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--rust)]">
-                  ₹{(billingSummary.outstandingBalance / 100).toFixed(0)} outstanding
+                  {currencySymbol()}{(billingSummary.outstandingBalance / 100).toFixed(0)} outstanding
                 </span>
               )}
               {patient.primaryCondition && (
@@ -588,7 +588,7 @@ export function PatientProfilePage() {
               {patient.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
               {advanceBalancePaise > 0 && (
                 <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
-                  {formatINR(advanceBalancePaise)} advance available
+                  {formatAmount(advanceBalancePaise)} advance available
                 </span>
               )}
             </div>
@@ -802,7 +802,7 @@ export function PatientProfilePage() {
                   checked={hideZeroBilled}
                   onChange={(e) => setHideZeroBilled(e.target.checked)}
                 />
-                Hide ₹0 visits (package sessions)
+                Hide {currencySymbol()}0 visits (package sessions)
               </label>
             )}
           </div>
@@ -810,14 +810,14 @@ export function PatientProfilePage() {
             {selectedRows.length > 0 && (
               <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
                 <span className="text-sm font-medium text-[var(--teal)]">
-                  {selectedRows.length} selected · {formatINR(canBill ? selectedBillPaise : selectedDuePaise)}
+                  {selectedRows.length} selected · {formatAmount(canBill ? selectedBillPaise : selectedDuePaise)}
                 </span>
                 <button
                   type="button"
                   className="rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
                   onClick={startBulkAction}
                 >
-                  {canBill ? 'Issue invoice / collect' : `Collect ${formatINR(selectedDuePaise)}`}
+                  {canBill ? 'Issue invoice / collect' : `Collect ${formatAmount(selectedDuePaise)}`}
                 </button>
               </div>
             )}
@@ -842,7 +842,7 @@ export function PatientProfilePage() {
               </div>
             ) : visibleVisitCardRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">
-                All visits are ₹0 (package sessions) — uncheck "Hide ₹0 visits" to see them.
+                All visits are {currencySymbol()}0 (package sessions) — uncheck "Hide {currencySymbol()}0 visits" to see them.
               </p>
             ) : (
               <div className="p-5">
@@ -1096,13 +1096,13 @@ function PaymentsSummarySection({
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="font-num text-sm font-semibold text-[var(--ink)]">
-            ₹{(billed / 100).toFixed(0)}
+            {currencySymbol()}{(billed / 100).toFixed(0)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Billed</div>
         </div>
         <div>
           <div className="font-num text-sm font-semibold text-[var(--teal)]">
-            ₹{(collected / 100).toFixed(0)}
+            {currencySymbol()}{(collected / 100).toFixed(0)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Collected</div>
         </div>
@@ -1110,7 +1110,7 @@ function PaymentsSummarySection({
           <div
             className={`font-num text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}
           >
-            ₹{(outstanding / 100).toFixed(0)}
+            {currencySymbol()}{(outstanding / 100).toFixed(0)}
           </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Outstanding</div>
         </div>

@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import { ErrorNote } from '@/components/ui';
 import type { UUID } from '@/domain/types';
 
@@ -230,15 +230,15 @@ export function VisitLoggedCard({
         <div>
           {paymentDue > 0 ? (
             <span className="inline-flex items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] shadow-2xs">
-              Payment due · {formatINR(paymentDue)}
-              {receivedPaise > 0 ? ` (paid ${formatINR(receivedPaise)})` : ''}
+              Payment due · {formatAmount(paymentDue)}
+              {receivedPaise > 0 ? ` (paid ${formatAmount(receivedPaise)})` : ''}
             </span>
           ) : justSaved.alreadyCollected || receivedPaise > 0 ? (
             <span
               className="inline-flex items-center rounded-full border border-[var(--teal)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)] shadow-2xs"
               data-testid="collected-line"
             >
-              ✓ {formatINR(receivedPaise > 0 ? receivedPaise : justSaved.billPaise)} collected{justSaved.alreadyCollected && justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
+              ✓ {formatAmount(receivedPaise > 0 ? receivedPaise : justSaved.billPaise)} collected{justSaved.alreadyCollected && justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
             </span>
           ) : justSaved.isPackage && justSaved.packageSessionNumber && justSaved.packageTotalSessions ? (
             <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)] shadow-2xs">
@@ -256,14 +256,14 @@ export function VisitLoggedCard({
                 </span>
               )}
               <span>
-                Package session ({justSaved.packageSessionNumber} of {justSaved.packageTotalSessions}) · ₹0
+                Package session ({justSaved.packageSessionNumber} of {justSaved.packageTotalSessions}) · {currencySymbol()}0
               </span>
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] shadow-2xs">
               {justSaved.billPaise === 0
                 ? justSaved.isPackage
-                  ? 'Package session · ₹0'
+                  ? `Package session · ${currencySymbol()}0`
                   : 'No charge'
                 : 'Billing handled separately'}
             </span>
@@ -314,7 +314,7 @@ export function VisitLoggedCard({
             className="w-full inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--teal)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-95 transition-colors shadow-xs"
             onClick={onTakePayment}
           >
-            Take payment · {formatINR(paymentDue)}
+            Take payment · {formatAmount(paymentDue)}
           </button>
         )}
 

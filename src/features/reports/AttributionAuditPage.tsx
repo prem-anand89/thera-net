@@ -3,7 +3,7 @@ import { useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { attributionAuditService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicShareLabels } from '@/domain/types';
 import {
@@ -175,9 +175,9 @@ export function AttributionAuditPage() {
                 {summary.map((r) => (
                   <tr key={r.therapistId}>
                     <td className={td}>{nameOf(r.therapistId)}</td>
-                    <td className={tdNum}>{r.given ? formatINR(r.given) : '—'}</td>
-                    <td className={tdNum}>{r.received ? formatINR(r.received) : '—'}</td>
-                    <td className={`${tdNum} font-semibold`}>{formatINR(r.received - r.given)}</td>
+                    <td className={tdNum}>{r.given ? formatAmount(r.given) : '—'}</td>
+                    <td className={tdNum}>{r.received ? formatAmount(r.received) : '—'}</td>
+                    <td className={`${tdNum} font-semibold`}>{formatAmount(r.received - r.given)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -219,15 +219,15 @@ export function AttributionAuditPage() {
                     className="shrink-0 text-right"
                     title={
                       e.grossPaise == null
-                        ? 'No gross figure for package attribution — the continuation session was billed at ₹0; only the Post-Tax share (from the billing visit) moves.'
+                        ? `No gross figure for package attribution — the continuation session was billed at ${currencySymbol()}0; only the Post-Tax share (from the billing visit) moves.`
                         : undefined
                     }
                   >
                     <div className="font-num text-sm font-medium text-[var(--ink)]">
-                      {formatINR(e.postTaxPaise)}
+                      {formatAmount(e.postTaxPaise)}
                     </div>
                     <div className="font-num text-xs text-[var(--muted)]">
-                      Gross {e.grossPaise != null ? formatINR(e.grossPaise) : '—'}
+                      Gross {e.grossPaise != null ? formatAmount(e.grossPaise) : '—'}
                     </div>
                   </div>
                 </div>
@@ -294,14 +294,14 @@ export function AttributionAuditPage() {
                         className={tdNum}
                         title={
                           e.grossPaise == null
-                            ? 'No gross figure for package attribution — the continuation session was billed at ₹0; only the Post-Tax share (from the billing visit) moves.'
+                            ? `No gross figure for package attribution — the continuation session was billed at ${currencySymbol()}0; only the Post-Tax share (from the billing visit) moves.`
                             : undefined
                         }
                       >
-                        {e.grossPaise != null ? formatINR(e.grossPaise) : '—'}
+                        {e.grossPaise != null ? formatAmount(e.grossPaise) : '—'}
                       </td>
                       <td className={`${tdNum} font-semibold text-[var(--ink)]`}>
-                        {formatINR(e.postTaxPaise)}
+                        {formatAmount(e.postTaxPaise)}
                       </td>
                     </tr>
                   ))}
@@ -312,10 +312,10 @@ export function AttributionAuditPage() {
                       Total Reallocated ({entries.length} entries)
                     </td>
                     <td className={`${tdNum} font-bold text-[var(--ink)]`}>
-                      {formatINR(entries.reduce((s, e) => s + (e.grossPaise ?? 0), 0))}
+                      {formatAmount(entries.reduce((s, e) => s + (e.grossPaise ?? 0), 0))}
                     </td>
                     <td className={`${tdNum} font-bold text-[var(--ink)]`}>
-                      {formatINR(entries.reduce((s, e) => s + e.postTaxPaise, 0))}
+                      {formatAmount(entries.reduce((s, e) => s + e.postTaxPaise, 0))}
                     </td>
                   </tr>
                 </tfoot>

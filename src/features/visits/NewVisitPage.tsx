@@ -90,7 +90,7 @@ import { PickerMenu } from './PickerMenu';
 import { FollowUpQuickRow } from '@/features/followUp/FollowUpQuickRow';
 import { therapistColor } from '@/components/schedule/scheduleColors';
 import { patientDue } from '@/domain/patientDue';
-import { formatINR } from '@/domain/money';
+import { formatAmount, currencySymbol } from '@/domain/money';
 import { treatmentsDisplayText } from '@/components/visit/formatters';
 import { PaymentMethodChips } from './PaymentMethodChips';
 import { VisitLoggedCard, type SavedVisitInfo } from './VisitLoggedCard';
@@ -937,10 +937,10 @@ export function NewVisitPage() {
       const rawName = r.continuation?.serviceName ?? cat?.name ?? 'Service';
       const cleanName = rawName.replace(/\s+Therapy/i, '').trim() || rawName;
       if (r.continuation) {
-        return `${cleanName} Pkg ₹0`;
+        return `${cleanName} Pkg ${currencySymbol()}0`;
       }
       if (hasMultiple && hasContinuation && cat) {
-        return `${cleanName} ${formatINR(cat.basePricePaise)}`;
+        return `${cleanName} ${formatAmount(cat.basePricePaise)}`;
       }
       return cleanName;
     });
@@ -966,8 +966,8 @@ export function NewVisitPage() {
       };
     }
 
-    const subtotalFormatted = formatINR(catalogPricePaise);
-    const diffFormatted = formatINR(Math.abs(catalogPricePaise - billPaise));
+    const subtotalFormatted = formatAmount(catalogPricePaise);
+    const diffFormatted = formatAmount(Math.abs(catalogPricePaise - billPaise));
     const isDiscount = adjustmentMode === 'discount';
     const sign = isDiscount ? '−' : '+';
     const modeLabel = isDiscount ? 'discount' : 'extra';
@@ -1515,7 +1515,7 @@ export function NewVisitPage() {
               role="status"
               className="rounded-lg bg-[var(--amber-light)] px-3 py-1.5 text-xs font-medium text-[var(--amber)]"
             >
-              Balance due {formatINR(patientBalance.duePaise)} · {patientBalance.unpaidVisits} unpaid{' '}
+              Balance due {formatAmount(patientBalance.duePaise)} · {patientBalance.unpaidVisits} unpaid{' '}
               {patientBalance.unpaidVisits === 1 ? 'visit' : 'visits'}
             </div>
           )}
@@ -2231,7 +2231,7 @@ export function NewVisitPage() {
                       className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition-colors shadow-2xs"
                     />
                     <span className="text-xs text-[var(--muted)]">
-                      Scan to collect {formatINR(billPaise)} directly to clinic UPI
+                      Scan to collect {formatAmount(billPaise)} directly to clinic UPI
                     </span>
                   </div>
                 )}
@@ -2312,7 +2312,7 @@ export function NewVisitPage() {
                       servicesChosen === 0 ? 'text-[var(--muted)]' : 'text-[var(--ink)]'
                     }`}
                   >
-                    {servicesChosen === 0 ? '₹0' : formatINR(billPaise)}
+                    {servicesChosen === 0 ? `${currencySymbol()}0` : formatAmount(billPaise)}
                   </span>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]">
                     Total
