@@ -251,7 +251,7 @@ export function ServiceRows({
       group: heading || (packages.length > 0 ? 'Services' : undefined),
     }));
     return [...packages, ...services];
-  }, [openPackages, catalog]);
+  }, [openPackages, catalog, visitDate]);
 
   function update(key: string, patch: Partial<DraftLine>) {
     onChange(

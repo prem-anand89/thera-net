@@ -412,17 +412,19 @@ function ServiceForm({
             hint={`Blank means it never expires. Counted from the first visit. Expiry only shows a note; visits can still be logged.${editing ? ' Packages already bought keep what they started with.' : ''}`}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                id={validityId}
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={MAX_VALIDITY}
-                step={1}
-                className={`${inputCls} w-24`}
-                value={validity}
-                onChange={(e) => setValidity(e.target.value)}
-              />
+              <div className="w-24">
+                <input
+                  id={validityId}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_VALIDITY}
+                  step={1}
+                  className={inputCls}
+                  value={validity}
+                  onChange={(e) => setValidity(e.target.value)}
+                />
+              </div>
               {VALIDITY_CHOICES.map((d) => (
                 <button
                   key={d}

@@ -710,4 +710,13 @@ describe('ServiceRows — the same order and headings as Settings → Services',
     fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
     expect(screen.getByRole('option', { name: /session 5 of 10 \(₹0\) \(expired 12 Dec\)/ })).toBeInTheDocument();
   });
+
+  it('the picker\'s expired label follows the visit date when it changes', () => {
+    const expiring = { ...pkg, expiresOn: '2026-12-12' };
+    const { rerender } = render(<Harness initial={[row('a')]} openPackages={[expiring]} visitDate="2026-12-12" />);
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Service' }));
+    expect(screen.queryByRole('option', { name: /expired 12 Dec/ })).toBeNull();
+    rerender(<Harness initial={[row('a')]} openPackages={[expiring]} visitDate="2026-12-13" />);
+    expect(screen.getByRole('option', { name: /expired 12 Dec/ })).toBeInTheDocument();
+  });
 });
