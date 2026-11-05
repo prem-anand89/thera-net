@@ -58,6 +58,13 @@ export interface Entitlements {
    */
   enforcementEnabled: boolean;
   loading: boolean;
+  /**
+   * True only while the plan is genuinely unknown: still fetching AND nothing cached on
+   * this device. A returning device reads its cached plan at once, so this stays false
+   * for it. While true `can()` reports the fail-closed lite default — show a placeholder,
+   * not a "not in your plan" lock that flips a moment later.
+   */
+  planPending: boolean;
   can(feature: PlanFeature): boolean;
 }
 
@@ -175,6 +182,7 @@ export function useEntitlements(clinicId: string): Entitlements {
     visitsThisMonth,
     enforcementEnabled,
     loading,
+    planPending: loading && resolved === null,
     can: (feature) => !enforcementEnabled || tierIncludes(resolved?.planTier ?? DEFAULT_PLAN.planTier, feature),
   };
 }

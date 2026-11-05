@@ -698,6 +698,17 @@ export function SheetDialog({
   );
 }
 
+/** Placeholder rows while a list's data is still loading — never show "nothing here" for data that hasn't arrived. */
+export function LoadingRows({ rows = 3, label = 'Loading' }: { rows?: number; label?: string }) {
+  return (
+    <div className="animate-pulse space-y-2" role="status" aria-busy="true" aria-label={label}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="h-12 rounded-xl bg-[var(--border)]/40" />
+      ))}
+    </div>
+  );
+}
+
 export const th =
   'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
 export const td = 'px-3 py-3 text-sm text-[var(--ink)]';

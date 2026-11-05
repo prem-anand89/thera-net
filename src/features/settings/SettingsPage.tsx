@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { atSeatCap } from '@/domain/seatCap';
-import { ConfirmDialog, Segmented } from '@/components/ui';
+import { ConfirmDialog, LoadingRows, Segmented } from '@/components/ui';
 import { CatalogSection, ReferralSourcesCard, type CatalogView } from './CatalogSection';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
@@ -523,12 +523,18 @@ export function SettingsPage() {
           {activeTab === 'billing' && (
             <>
               <PaymentsSection onDirtyChange={setPaymentsDirty} />
-              {canSeeBilling ? (
-                <BillingSection onDirtyChange={setBillingDirty} />
+              {entitlements.planPending ? (
+                <LoadingRows rows={2} label="Loading plan" />
               ) : (
-                <LockedCard id="settings-card-billing-invoicing" title="Invoicing" feature="invoicing" />
+                <>
+                  {canSeeBilling ? (
+                    <BillingSection onDirtyChange={setBillingDirty} />
+                  ) : (
+                    <LockedCard id="settings-card-billing-invoicing" title="Invoicing" feature="invoicing" />
+                  )}
+                  <PartnerSection onDirtyChange={setPartnerDirty} allowed={canSeePartner} />
+                </>
               )}
-              <PartnerSection onDirtyChange={setPartnerDirty} allowed={canSeePartner} />
             </>
           )}
           {activeTab === 'account' && (

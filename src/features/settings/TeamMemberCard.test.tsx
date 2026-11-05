@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+
+afterEach(cleanup);
 import { TeamMemberCard } from './TeamSection';
 import type { Clinic, ShiftTemplate, Therapist, TherapistShiftAssignment } from '@/domain/types';
 
@@ -160,5 +162,47 @@ describe('TeamMemberCard', () => {
 
     expect(screen.getByText('Mon–Sat 9–5')).toBeInTheDocument();
     expect(screen.queryByText('Custom schedule')).toBeNull();
+  });
+});
+
+describe('TeamMemberCard — unlinked state while the member list loads', () => {
+  const render1 = (therapist: Therapist, membersLoaded: boolean) =>
+    render(
+      <TeamMemberCard
+        person={{ key: 'p', therapist, member: null }}
+        membersLoaded={membersLoaded}
+        clinicId="c1"
+        isLastAdmin={false}
+        revoking={false}
+        resending={false}
+        onRevoke={vi.fn()}
+        onResend={vi.fn()}
+        onSaved={vi.fn()}
+        onDelete={vi.fn()}
+        onPhotoUpload={vi.fn()}
+        onDeactivate={vi.fn()}
+        assignments={[]}
+        templates={[]}
+        clinic={clinic}
+      />
+    );
+  const linked: Therapist = { id: 't1', clinicId: 'c1', name: 'Dr Linked', active: true, userId: 'u1', updatedAt: '' };
+  const unlinked: Therapist = { id: 't2', clinicId: 'c1', name: 'Dr Roster', active: true, userId: null, updatedAt: '' };
+
+  it('shows no "No login" pill or Delete record for a therapist that has a login while members are loading', () => {
+    render1(linked, false);
+    expect(screen.queryByText('No login')).toBeNull();
+    expect(screen.queryByText('Delete record')).toBeNull();
+  });
+
+  it('shows both once the member list has loaded and found no login for them', () => {
+    render1(linked, true);
+    expect(screen.getByText('No login')).toBeInTheDocument();
+    expect(screen.getByText('Delete record')).toBeInTheDocument();
+  });
+
+  it('still shows them for a roster row with no login at all, even before the list loads', () => {
+    render1(unlinked, false);
+    expect(screen.getByText('No login')).toBeInTheDocument();
   });
 });

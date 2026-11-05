@@ -5205,6 +5205,22 @@ read misses (clipped pills, tables wider than their card).
 - **Don't repeat a heading at several levels** (card title, eyebrow, sub-heading,
   table heading all saying "therapist comparison"): one title per block.
 
+### 0c. Don't show "empty", "locked" or "unlinked" for data that hasn't arrived
+Local Dexie data (`useLiveQuery`) resolves long before server calls (the team member
+list, `clinic_plans`), and `data ?? []` / a fail-closed default turns "not loaded yet"
+into a confident wrong message that flips a moment later.
+- **Unlinked therapist** has one rule, `isUnlinked()` (`settings/teamLinking.ts`),
+  used by the Team cards, the Unlinked filter and badge, the amber callout, Delete
+  record, the edit form's login field and its invite-on-save. A therapist whose roster
+  row has a `userId` only counts as unlinked once the member list has loaded and found
+  no matching login; a row with no `userId` is unlinked either way.
+- **Lists** show `LoadingRows` (`ui.tsx`) while `items === undefined` — Workspace's
+  "Today's visits" and Services — and only then "No visits logged today" / "No services yet".
+- **Plan-gated UI** uses `useEntitlements().planPending` (still fetching *and* nothing
+  cached on this device) to hold a placeholder instead of the "Invoicing is not in your
+  plan" lock. A returning device reads its cached plan at once, so `planPending` stays
+  false for it; `can()` itself still fails closed for enforcement.
+
 ### 1. Offline-First with Outbox Sync
 - **Dexie** for local IndexedDB storage
 - **Outbox table** (in Supabase) for tracking changes made offline

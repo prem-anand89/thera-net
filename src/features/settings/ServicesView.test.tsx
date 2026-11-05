@@ -68,6 +68,13 @@ afterEach(() => {
 const dialog = () => screen.getByRole('dialog');
 
 describe('Services list — phone', () => {
+  it('shows a loading placeholder, not "No services yet", until the list has loaded', () => {
+    catalogItems = undefined as unknown as CatalogItem[];
+    render(<ServicesView />);
+    expect(screen.getByRole('status', { name: 'Loading services' })).toBeInTheDocument();
+    expect(screen.queryByText(/No services yet/)).not.toBeInTheDocument();
+  });
+
   it('has "+ Add" in the header, calm rows, and usage unless "Show usage" is off', async () => {
     const a = item({ name: 'Follow-up', basePricePaise: 60000 });
     catalogItems = [a];
