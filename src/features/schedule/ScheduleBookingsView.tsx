@@ -731,9 +731,9 @@ export function ScheduleBookingsView({
     if (therapistId && selectedIds.length && !selectedIds.includes(therapistId)) setTherapists([...selectedIds, therapistId]);
     setHighlightRequestId(request.id);
     setTimeout(() => setHighlightRequestId((current) => (current === request.id ? null : current)), 5000);
-    // No readable time: nothing is drawn on the grid, so say so. Anything on the calendar is a real booking.
-    if (clockTextMinutes(request.preferredTimeText) === null) {
-      notify.info(`${request.name} didn't ask for a time, so nothing is marked on the calendar. Use Book to choose one.`);
+    // Nothing to draw without a day, a time and a column: say so. Anything on the calendar is a real booking.
+    if (!requestGhosts.some((ghost) => ghost.id === request.id)) {
+      notify.info(`${request.name} didn't ask for a specific day and time, so nothing is marked on the calendar. Use Book to choose one.`);
     }
   }
 
