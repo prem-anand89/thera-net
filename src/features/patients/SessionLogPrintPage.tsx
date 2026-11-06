@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { LockedSectionNotice } from '@/features/settings/settingsShared';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
+import { PrintLetterhead } from '@/features/invoices/printChrome';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import {
   upcastSessionPayload,
@@ -61,6 +62,7 @@ export function SessionLogContent({
   therapistById,
   treatingTherapists,
   logoUrl,
+  partnerLogoUrl,
   signatureUrl,
 }: {
   patient: Patient;
@@ -69,23 +71,12 @@ export function SessionLogContent({
   therapistById: Map<string, Therapist>;
   treatingTherapists: Therapist[];
   logoUrl: string | null;
+  partnerLogoUrl: string | null;
   signatureUrl: string | null;
 }) {
   return (
-    <div className="mx-auto max-w-3xl bg-[var(--surface)] p-8 print:max-w-none print:p-0">
-      {/* Letterhead */}
-      <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
-        <div className="flex items-center gap-3">
-          {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto object-contain" />}
-          <div>
-            <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
-            {clinic.address && <p className="text-xs text-[var(--muted)]">{clinic.address}</p>}
-            <p className="text-xs text-[var(--muted)]">
-              {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
-            </p>
-          </div>
-        </div>
-      </header>
+    <div className="doc-paper mx-auto max-w-3xl bg-[var(--surface)] p-8 print:max-w-none print:p-0">
+      <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
 
       <section className="mt-4 flex justify-between text-sm">
         <div>
@@ -241,6 +232,7 @@ export function SessionLogPrintPage() {
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
+  const partnerLogoUrl = useMemo(() => publicLogoUrl(clinic.partnerHospitalLogoPath), [clinic.partnerHospitalLogoPath]);
   const signatureUrl = useMemo(() => publicLogoUrl(clinic.signaturePath), [clinic.signaturePath]);
 
   useEffect(() => {
@@ -307,6 +299,7 @@ export function SessionLogPrintPage() {
         therapistById={therapistById}
         treatingTherapists={treatingTherapists}
         logoUrl={logoUrl}
+        partnerLogoUrl={partnerLogoUrl}
         signatureUrl={signatureUrl}
       />
     </div>

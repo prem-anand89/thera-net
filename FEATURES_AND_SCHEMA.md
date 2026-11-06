@@ -350,7 +350,7 @@ queued with a visible error.
 - **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
 - **Immutable once issued** via DB triggers
 - **Printable** on A4/A5 with clinic letterhead + optional partner-hospital branding
-- **Letterhead** (`PrintLetterhead`, shared by bills, advance receipts and the Settings preview; clinical notes later):
+- **Letterhead** (`PrintLetterhead`, shared by bills, advance receipts, the clinical note, the session log, the insurer packet and the Settings preview):
   logo and clinic name on the left, with the optional tagline (Settings → Clinic profile, 60 characters) and, if any, one
   small "In partnership with" line under the name; address, phone, email and GSTIN always on the right
 - **Colour:** `.doc-paper` tokens give the screen and the shared PDF the app's teal; printing is pure black and white and

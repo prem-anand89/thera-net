@@ -370,7 +370,7 @@ export function SingleVisitPatientsCard({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search patient, MRNO, condition…"
+              placeholder="Search patient, ID, condition…"
               className="w-full rounded-full border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-8 pr-7 text-xs text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-hidden"
             />
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)] pointer-events-none">
@@ -529,7 +529,7 @@ export function SingleVisitPatientsCard({
             <div className="md:hidden divide-y divide-[var(--border)] bg-[var(--surface)]">
               {list.visible.map((p) => (
                 <div key={p.patientId} className="p-4 space-y-3">
-                  {/* Row 1: Patient Name, MRNO and Recency Badge */}
+                  {/* Row 1: Patient Name, Patient ID and Recency Badge */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <Link

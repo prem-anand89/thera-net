@@ -139,7 +139,7 @@ describe('SingleVisitPatientsCard', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText(/Search patient, MRNO, condition…/i);
+    const searchInput = screen.getByPlaceholderText(/Search patient, ID, condition…/i);
     fireEvent.change(searchInput, { target: { value: 'ACL' } });
 
     expect(screen.queryByText('Aarav Patel')).not.toBeInTheDocument();

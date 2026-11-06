@@ -85,6 +85,7 @@ export function InsurerPacketPage() {
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
+  const partnerLogoUrl = useMemo(() => publicLogoUrl(clinic.partnerHospitalLogoPath), [clinic.partnerHospitalLogoPath]);
   const signatureUrl = useMemo(() => publicLogoUrl(clinic.signaturePath), [clinic.signaturePath]);
 
   useEffect(() => {
@@ -186,6 +187,7 @@ export function InsurerPacketPage() {
           therapist={therapistById.get(heavyNote.therapistId)}
           clinic={clinic}
           logoUrl={logoUrl}
+          partnerLogoUrl={partnerLogoUrl}
           signatureUrl={signatureUrl}
         />
       ) : (
@@ -202,6 +204,7 @@ export function InsurerPacketPage() {
         therapistById={therapistById}
         treatingTherapists={treatingTherapists}
         logoUrl={logoUrl}
+        partnerLogoUrl={partnerLogoUrl}
         signatureUrl={signatureUrl}
       />
 
