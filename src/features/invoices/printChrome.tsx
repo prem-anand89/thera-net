@@ -16,13 +16,16 @@ export function PrintLetterhead({
   partnerLogoUrl,
   compact = false,
 }: {
-  clinic: Pick<Clinic, 'name' | 'tagline' | 'address' | 'phone' | 'email' | 'gstNo' | 'partnerHospitalName'>;
+  clinic: Pick<Clinic, 'name' | 'tagline' | 'address' | 'phone' | 'email' | 'gstNo' | 'hasPartner' | 'partnerHospitalName'>;
   logoUrl: string | null;
   partnerLogoUrl: string | null;
   /** A5: smaller type, and the partner keeps its name but not its logo. */
   compact?: boolean;
 }) {
   const small = compact ? 'text-[9.5px]' : 'text-[10.5px]';
+  // Turning partner mode off keeps the hospital's name in Settings (so turning it back on needs no retyping), so the
+  // name alone doesn't mean there is a partner: only a clinic with partner mode on prints it.
+  const partnerName = clinic.hasPartner ? clinic.partnerHospitalName : null;
   return (
     <header className="doc-paper grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 border-b-[1.5px] border-[var(--doc-rule)] pb-3">
       <div className="flex min-w-0 items-center gap-3.5">
@@ -40,7 +43,7 @@ export function PrintLetterhead({
           {clinic.tagline && (
             <p className={`mt-0.5 leading-snug text-[var(--muted)] ${compact ? 'text-[9.5px]' : 'text-[11px]'}`}>{clinic.tagline}</p>
           )}
-          {clinic.partnerHospitalName && (
+          {partnerName && (
             <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <span className="text-[7.5px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                 In partnership with
@@ -49,7 +52,7 @@ export function PrintLetterhead({
                 <img src={partnerLogoUrl} alt="" className="h-4 w-auto max-w-[48px] object-contain" />
               )}
               <span className={`font-medium text-[var(--ink)] ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-                {clinic.partnerHospitalName}
+                {partnerName}
               </span>
             </div>
           )}

@@ -13,6 +13,7 @@ const clinic = {
   phone: '123',
   email: 'a@b.c',
   gstNo: null,
+  hasPartner: false,
   partnerHospitalName: null,
 };
 
@@ -21,16 +22,24 @@ describe('PrintLetterhead', () => {
     const { rerender } = render(<PrintLetterhead clinic={clinic} logoUrl={null} partnerLogoUrl={null} />);
     expect(screen.queryByText(/In partnership with/i)).toBeNull();
     rerender(
-      <PrintLetterhead clinic={{ ...clinic, tagline: 'Sports rehab', partnerHospitalName: 'Partner' }} logoUrl={null} partnerLogoUrl={null} />
+      <PrintLetterhead clinic={{ ...clinic, tagline: 'Sports rehab', hasPartner: true, partnerHospitalName: 'Partner' }} logoUrl={null} partnerLogoUrl={null} />
     );
     expect(screen.getByText(/In partnership with/i)).toBeInTheDocument();
     expect(screen.getByText('Partner')).toBeInTheDocument();
     expect(screen.getByText('Sports rehab')).toBeInTheDocument();
   });
 
+  it('prints no partner once partner mode is off, even though Settings keeps the name', () => {
+    render(
+      <PrintLetterhead clinic={{ ...clinic, hasPartner: false, partnerHospitalName: 'Healthvalley' }} logoUrl={null} partnerLogoUrl="/p.png" />
+    );
+    expect(screen.queryByText(/In partnership with/i)).toBeNull();
+    expect(screen.queryByText('Healthvalley')).toBeNull();
+  });
+
   it('drops the partner logo but keeps the name on A5', () => {
     const { container } = render(
-      <PrintLetterhead clinic={{ ...clinic, partnerHospitalName: 'Partner' }} logoUrl={null} partnerLogoUrl="/p.png" compact />
+      <PrintLetterhead clinic={{ ...clinic, hasPartner: true, partnerHospitalName: 'Partner' }} logoUrl={null} partnerLogoUrl="/p.png" compact />
     );
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByText('Partner')).toBeInTheDocument();

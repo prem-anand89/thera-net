@@ -81,7 +81,7 @@ export function MonthlyLedgerPrintPage() {
               {clinic.gstNo && <p className="text-xs text-[var(--muted)]">GSTIN: {clinic.gstNo}</p>}
             </div>
           </div>
-          {clinic.partnerHospitalName && (
+          {clinic.hasPartner && clinic.partnerHospitalName && (
             <div className="flex shrink-0 items-center gap-2 text-right">
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">In partnership with</p>
@@ -163,7 +163,7 @@ export function MonthlyLedgerPrintPage() {
 
         <footer className="mt-8 border-t border-[var(--border)] pt-3 text-xs text-[var(--muted)]">
           Generated {formatDateDM(new Date().toISOString())} · {clinic.name}
-          {clinic.partnerHospitalName ? ` — ${clinic.partnerHospitalName}` : ''}
+          {clinic.hasPartner && clinic.partnerHospitalName ? ` — ${clinic.partnerHospitalName}` : ''}
         </footer>
       </div>
     </div>
