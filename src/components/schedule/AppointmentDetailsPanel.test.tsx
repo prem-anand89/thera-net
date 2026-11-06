@@ -10,7 +10,10 @@ vi.mock('@tanstack/react-router', () => ({
     <a href="#link" className={className}>{children}</a>
   ),
 }));
-vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c', name: 'BM Physio' }) }));
+vi.mock('@/app/clinicContext', async () => {
+  const { createContext } = await import('react');
+  return { useClinic: () => ({ id: 'c', name: 'BM Physio' }), ClinicContext: createContext(null) };
+});
 const cancelAppointment = vi.hoisted(() => vi.fn());
 vi.mock('@/services', () => ({ bookingService: { cancelAppointment: (id: string) => cancelAppointment(id) } }));
 

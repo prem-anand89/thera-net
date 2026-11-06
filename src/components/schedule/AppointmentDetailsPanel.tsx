@@ -5,7 +5,9 @@ import { Link } from '@tanstack/react-router';
 import { ConfirmDialog, Pill } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { toFriendlyMessage } from '@/lib/errors';
-import { bookingService } from '@/services';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { bookingService, repos } from '@/services';
+import { HomeBadge, useShowsHome } from './LocationBadge';
 import {
   APPOINTMENT_STATUS_LABEL,
   APPOINTMENT_STATUS_TONE,
@@ -108,7 +110,17 @@ export function AppointmentDetailsPanel({
   const [confirmSeries, setConfirmSeries] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => setCopied(false), [appointment?.id]);
+  const [addressCopied, setAddressCopied] = useState(false);
+  const isHome = useShowsHome(appointment);
+  const homeAddress = useLiveQuery(
+    async () => (isHome && appointment?.patientId ? (await repos.patients.get(appointment.patientId))?.address ?? null : null),
+    [isHome, appointment?.patientId]
+  );
+
+  useEffect(() => {
+    setCopied(false);
+    setAddressCopied(false);
+  }, [appointment?.id]);
 
   if (!appointment) return null;
   const start = minutesOfDay(appointment.scheduledAt);
@@ -181,6 +193,7 @@ export function AppointmentDetailsPanel({
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Pill tone={APPOINTMENT_STATUS_TONE[appointment.status]}>{APPOINTMENT_STATUS_LABEL[appointment.status]}</Pill>
+              <HomeBadge record={appointment} />
               {canManage && patientMrno && <span className="font-num text-xs text-[var(--muted)]" data-patient-id>{patientMrno}</span>}
               {seriesLabel && <span className="text-xs text-[var(--muted)]">{seriesLabel}</span>}
               {canManage && <PatientFlagPills flags={flags.filter((flag) => flag.key !== 'noshow')} />}
@@ -198,6 +211,25 @@ export function AppointmentDetailsPanel({
 
         {/* Facts in reading order. The patient's clinical lines sit in a soft card; then the therapist and the booking. The phone is not shown here: Call dials it and Remind uses it. */}
         <div className="mt-4 space-y-3 text-sm">
+          {canManage && isHome && (
+            <div className="rounded-xl bg-[var(--teal-light)] px-3 py-2.5">
+              <p className="text-xs font-semibold text-[var(--teal-strong)]">Home visit</p>
+              {homeAddress ? (
+                <>
+                  <p className="mt-1 whitespace-pre-line text-[var(--ink)]">{homeAddress}</p>
+                  <button
+                    type="button"
+                    className="mt-2 min-h-9 rounded-lg border border-[var(--teal)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--teal-strong)]"
+                    onClick={() => void navigator.clipboard?.writeText(homeAddress).then(() => setAddressCopied(true), () => setAddressCopied(false))}
+                  >
+                    {addressCopied ? 'Address copied ✓' : 'Copy address'}
+                  </button>
+                </>
+              ) : (
+                <p className="mt-1 text-[var(--muted)]">No address on file. Add one from the patient profile.</p>
+              )}
+            </div>
+          )}
           {canManage && (condition || requestNotes) && (
             <dl className="space-y-2 rounded-xl bg-[var(--paper)] px-3 py-2.5">
               {condition && (

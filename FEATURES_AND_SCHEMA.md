@@ -1780,6 +1780,7 @@ base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
 default_location text NOT NULL DEFAULT 'clinic' — clinic, home or ward: where this service usually happens
 duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
+default_location  text NOT NULL (default 'clinic'; clinic|home|ward) — where the service usually happens: the starting Where on a booking, set in the service form's "Usually done at" (only shown when the clinic has more than one place)
                  (per session for a package); snapshotted onto visit_items
 validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
 created_by, updated_by  uuid (NULLABLE)
@@ -2536,6 +2537,7 @@ duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule
 status                 text NOT NULL — 'confirmed'|'rescheduled'|'no_show'|'cancelled'|'arrived'
 request_id             uuid (NULLABLE, FOREIGN KEY → appointment_requests.id)
 visit_id               uuid (NULLABLE, FOREIGN KEY → visits.id)
+location               text NOT NULL (default 'clinic'; clinic|home|ward) — where it happens; set by the booking sheet's Where row (`defaultBookingLocation`), carried by the booking RPCs' `p_location`. Home appointments show a Home badge (list rows, calendar blocks, the appointment panel) and the panel shows the patient's address with Copy address — all only while the clinic has more than one place on (`useShowsHome`). Inpatient is not bookable yet
 reschedule_count       integer NOT NULL (default 0)
 previous_scheduled_at  timestamptz (NULLABLE)
 created_by, updated_by uuid (NULLABLE)
@@ -3792,6 +3794,7 @@ base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
 default_location text NOT NULL DEFAULT 'clinic' — clinic, home or ward: where this service usually happens
 duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
+default_location  text NOT NULL (default 'clinic'; clinic|home|ward) — where the service usually happens: the starting Where on a booking, set in the service form's "Usually done at" (only shown when the clinic has more than one place)
                  (per session for a package); snapshotted onto visit_items
 validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
 created_by, updated_by  uuid (NULLABLE)
@@ -4548,6 +4551,7 @@ duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule
 status                 text NOT NULL — 'confirmed'|'rescheduled'|'no_show'|'cancelled'|'arrived'
 request_id             uuid (NULLABLE, FOREIGN KEY → appointment_requests.id)
 visit_id               uuid (NULLABLE, FOREIGN KEY → visits.id)
+location               text NOT NULL (default 'clinic'; clinic|home|ward) — where it happens; set by the booking sheet's Where row (`defaultBookingLocation`), carried by the booking RPCs' `p_location`. Home appointments show a Home badge (list rows, calendar blocks, the appointment panel) and the panel shows the patient's address with Copy address — all only while the clinic has more than one place on (`useShowsHome`). Inpatient is not bookable yet
 reschedule_count       integer NOT NULL (default 0)
 previous_scheduled_at  timestamptz (NULLABLE)
 created_by, updated_by uuid (NULLABLE)

@@ -33,3 +33,21 @@ export function homeCareOn(clinic: { careLocations?: readonly string[] | null } 
 export function locationOf(record: { location?: string | null } | null | undefined): CareLocation {
   return ALL.find((l) => l === record?.location) ?? 'clinic';
 }
+
+/** Places an appointment or visit can be booked at today (inpatient is not bookable yet). */
+export function bookableLocations(clinic: { careLocations?: readonly string[] | null } | null | undefined): CareLocation[] {
+  return clinicCareLocations(clinic).filter((l) => l !== 'ward');
+}
+
+/**
+ * Where a new booking starts: the service's own default when the clinic offers it, else Clinic when the clinic offers
+ * it, else the clinic's first place (a home-only clinic starts on Home).
+ */
+export function defaultBookingLocation(
+  clinic: { careLocations?: readonly string[] | null } | null | undefined,
+  service?: { defaultLocation?: string | null } | null
+): CareLocation {
+  const offered = bookableLocations(clinic);
+  const fromService = offered.find((l) => l === service?.defaultLocation);
+  return fromService ?? (offered.includes('clinic') ? 'clinic' : offered[0] ?? 'clinic');
+}

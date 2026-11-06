@@ -7,6 +7,7 @@ import { appointmentMinutes, assignLanes, blockGeometry, PLACE_STEP_MINUTES, len
 import { CLOSED_HATCH_STYLE, appointmentFill } from './scheduleColors';
 import { patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 import { BlockFlagBadges } from './BlockFlagBadges';
+import { HomeGlyph } from './LocationBadge';
 import { WideBlock } from './WideBlock';
 import { RequestGhostBlock, type RequestGhost } from './RequestGhostBlock';
 import { useElementWidth } from './useElementWidth';
@@ -394,6 +395,7 @@ export function DayColumn({
                   )}
                   <span className="block truncate font-medium">
                     {style.mark && <span aria-hidden>{style.mark} </span>}
+                    <HomeGlyph record={appointment} />
                     {appointment.patientName}
                   </span>
                   {geometry.height >= 45 * pxPerMinute && (
@@ -407,12 +409,14 @@ export function DayColumn({
                 {compact ? (
                   <span className="block truncate">
                     {style.mark && <span aria-hidden>{style.mark} </span>}
+                    <HomeGlyph record={appointment} />
                     {minutesLabel(start)} {appointment.patientName}
                   </span>
                 ) : (
                   <>
                     <span className="block truncate font-medium">
                       {style.mark && <span aria-hidden>{style.mark} </span>}
+                    <HomeGlyph record={appointment} />
                       {appointment.patientName}
                     </span>
                     {(density !== 'compact' || geometry.height >= 45 * pxPerMinute) && (

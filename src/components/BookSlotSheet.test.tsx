@@ -20,7 +20,7 @@ const data = {
     { id: 'p2', name: 'Noor', phone: null },
   ],
   closed: [] as { closedDate: string; label: string | null }[],
-  catalog: [] as { id: string; name: string; active: boolean; durationMinutes?: number | null }[],
+  catalog: [] as { id: string; name: string; active: boolean; durationMinutes?: number | null; defaultLocation?: string }[],
   clinic: {} as Record<string, unknown>,
 };
 const confirmBookingSlot = vi.fn(async () => 'new-id');
@@ -109,6 +109,57 @@ describe('BookSlotSheet', () => {
   it('opens on the length it was given (the stretch the therapist is free for), not the default slot length', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" prefilledLengthMinutes={45} />);
     expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  describe('Where', () => {
+    const fill = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
+      fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Meera' } });
+      fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '9820000002' } });
+    };
+    const book = async () => {
+      fireEvent.click(slot('9:00 AM'));
+      fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+      await waitFor(() => expect(confirmBookingSlot).toHaveBeenCalled());
+    };
+    afterEach(() => {
+      data.clinic = {};
+      data.catalog = [];
+    });
+
+    it('a clinic with one place shows no Where row and books at the clinic', async () => {
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      expect(screen.queryByRole('radiogroup', { name: 'Where' })).toBeNull();
+      fill();
+      await book();
+      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'clinic' }));
+    });
+
+    it('a clinic with Home on offers Clinic and Home visit, starting from the service\'s place, and a tapped choice sticks', async () => {
+      data.clinic = { careLocations: ['clinic', 'home'] };
+      data.catalog = [{ id: 's1', name: 'Home physio', active: true, durationMinutes: 60, defaultLocation: 'home' }];
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      const where = screen.getByRole('radiogroup', { name: 'Where' });
+      expect(within(where).getByRole('radio', { name: 'Clinic' })).toHaveAttribute('aria-checked', 'true');
+      fireEvent.change(screen.getByLabelText(/Visit type/), { target: { value: 's1' } });
+      expect(within(where).getByRole('radio', { name: 'Home visit' })).toHaveAttribute('aria-checked', 'true');
+      fireEvent.click(within(where).getByRole('radio', { name: 'Clinic' }));
+      fireEvent.change(screen.getByLabelText(/Visit type/), { target: { value: 's1' } });
+      expect(within(where).getByRole('radio', { name: 'Clinic' })).toHaveAttribute('aria-checked', 'true');
+      fireEvent.click(within(where).getByRole('radio', { name: 'Home visit' }));
+      fill();
+      await book();
+      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'home' }));
+    });
+
+    it('a home-only clinic has no choice to make and books at home', async () => {
+      data.clinic = { careLocations: ['home'] };
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      expect(screen.queryByRole('radiogroup', { name: 'Where' })).toBeNull();
+      fill();
+      await book();
+      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'home' }));
+    });
   });
 
   it('has no visit type picker unless a service has a session length', () => {
@@ -210,6 +261,7 @@ describe('BookSlotSheet', () => {
       scheduledAt,
       requestId: null,
       durationMinutes: 45,
+      location: 'clinic',
     });
     expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'booked', appointmentId: 'new-id', durationMinutes: 45 }));
     expect(onClose).toHaveBeenCalled();

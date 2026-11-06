@@ -40,7 +40,8 @@ import {
   clockTextMinutes,
   minutesToTime,
 } from '@/domain/schedule';
-import type { Appointment, UUID, Patient } from '@/domain/types';
+import type { Appointment, CareLocation, UUID, Patient } from '@/domain/types';
+import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation } from '@/domain/careLocations';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
 import { therapistColor } from '@/components/schedule/scheduleColors';
 
@@ -113,6 +114,9 @@ export function BookSlotSheet({
   rescheduleAppointment,
 }: BookSlotSheetProps) {
   const clinic = useClinic();
+  // The reset below reads the clinic's places but must not rerun when a sync refreshes the clinic.
+  const clinicRef = useRef(clinic);
+  clinicRef.current = clinic;
   const { myTherapistId } = useWorkspaceScope();
   const slotMinutes = clinic.slotDurationMinutes || 30;
   // Staff start times come every 15 minutes; the slot length stays the default length.
@@ -178,6 +182,10 @@ export function BookSlotSheet({
     [services]
   );
   const [visitTypeId, setVisitTypeId] = useState('');
+  const placesOffered = bookableLocations(clinic);
+  const [location, setLocation] = useState<CareLocation>(() => defaultBookingLocation(clinic));
+  // The service's place is only a starting point: once the person taps Where, picking a service never changes it.
+  const [locationTouched, setLocationTouched] = useState(false);
   const { lastVisitOn } = usePatientDirectory(clinic.id, true);
   // A new patient typed in may already be on file: ask before booking them as someone new.
   const similar = useMemo(
@@ -248,6 +256,8 @@ export function BookSlotSheet({
     setShowOffHours(false);
     setConfirmPrompt(null);
     setRepeat(false);
+    setLocation(defaultBookingLocation(clinicRef.current));
+    setLocationTouched(false);
     setRepeatDays([]);
     setRepeatCount(6);
     setRepeatCountTouched(false);
@@ -521,6 +531,7 @@ export function BookSlotSheet({
           therapistId,
           starts,
           durationMinutes: lengthMinutes,
+          location,
         });
         onBooked?.({
           kind: 'booked',
@@ -553,6 +564,7 @@ export function BookSlotSheet({
         scheduledAt,
         requestId: requestId ?? null,
         durationMinutes: lengthMinutes,
+        location,
       });
       onBooked?.({
         kind: 'booked',
@@ -733,6 +745,7 @@ export function BookSlotSheet({
                   onChange={(e) => {
                     const chosen = visitTypes.find((service) => service.id === e.target.value);
                     setVisitTypeId(e.target.value);
+                    if (!locationTouched) setLocation(defaultBookingLocation(clinic, chosen));
                     if (chosen?.durationMinutes) {
                       setLengthMinutes(chosen.durationMinutes);
                       setSelectedTime(null);
@@ -747,6 +760,32 @@ export function BookSlotSheet({
                   ))}
                 </select>
               </label>
+            )}
+            {placesOffered.length > 1 && !isReschedule && (
+              <div className="mb-2">
+                <p className="mb-1 text-xs font-medium text-[var(--muted)]">Where</p>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Where">
+                  {placesOffered.map((place) => (
+                    <button
+                      key={place}
+                      type="button"
+                      role="radio"
+                      aria-checked={location === place}
+                      onClick={() => { setLocation(place); setLocationTouched(true); }}
+                      className={`min-h-9 rounded-lg border px-3 text-xs font-medium ${
+                        location === place ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      {CARE_LOCATION_LABELS[place]}
+                    </button>
+                  ))}
+                </div>
+                {location === 'home' && chosenPatient && (
+                  <p className="mt-1.5 rounded-lg bg-[var(--teal-light)] px-2.5 py-1.5 text-xs text-[var(--teal-strong)]">
+                    {chosenPatient.address ? chosenPatient.address : 'No address on file yet. Add one from the patient profile.'}
+                  </p>
+                )}
+              </div>
             )}
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Length">
               {lengthOptions.map((minutes) => (

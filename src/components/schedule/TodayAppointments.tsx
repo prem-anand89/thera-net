@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { HomeBadge } from './LocationBadge';
 import { Link } from '@tanstack/react-router';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
@@ -157,6 +158,7 @@ export function TodayAppointments({
               <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
               </span>
+              <HomeBadge record={a} />
               {mrnoFor?.(a.patientId) && <span className="hidden shrink-0 font-num text-[11px] text-[var(--muted)] sm:inline" data-patient-id>{mrnoFor(a.patientId)}</span>}
               {a.id === nextUpId && (
                 <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>

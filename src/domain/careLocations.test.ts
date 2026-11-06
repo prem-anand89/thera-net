@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARE_LOCATION_LABELS, clinicCareLocations, homeCareOn, locationOf, offersLocationChoice } from './careLocations';
+import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, locationOf, offersLocationChoice } from './careLocations';
 
 describe('clinicCareLocations', () => {
   it('reads as clinic only until a clinic turns something on, including older rows and bad values', () => {
@@ -40,5 +40,25 @@ describe('locationOf', () => {
 describe('labels', () => {
   it('uses the agreed screen words', () => {
     expect(CARE_LOCATION_LABELS).toEqual({ clinic: 'Clinic', home: 'Home visit', ward: 'Inpatient' });
+  });
+});
+
+describe('booking location', () => {
+  it('a clinic-only clinic books at the clinic whatever the service says', () => {
+    expect(defaultBookingLocation({ careLocations: ['clinic'] }, { defaultLocation: 'home' })).toBe('clinic');
+    expect(defaultBookingLocation({})).toBe('clinic');
+  });
+  it('a clinic that offers both starts from the service, else Clinic', () => {
+    const c = { careLocations: ['clinic', 'home'] };
+    expect(defaultBookingLocation(c, { defaultLocation: 'home' })).toBe('home');
+    expect(defaultBookingLocation(c, { defaultLocation: 'clinic' })).toBe('clinic');
+    expect(defaultBookingLocation(c, null)).toBe('clinic');
+  });
+  it('a home-only clinic starts on Home with no choice to make', () => {
+    expect(defaultBookingLocation({ careLocations: ['home'] }, { defaultLocation: 'clinic' })).toBe('home');
+    expect(bookableLocations({ careLocations: ['home'] })).toEqual(['home']);
+  });
+  it('inpatient is not bookable yet', () => {
+    expect(bookableLocations({ careLocations: ['clinic', 'ward'] })).toEqual(['clinic']);
   });
 });
