@@ -1,4 +1,4 @@
-import type { UUID, WorkingHours } from '@/domain/types';
+import type { CareLocation, UUID, WorkingHours } from '@/domain/types';
 import type { TimeOfDay } from '@/domain/waitlistMatch';
 import { getSupabase } from '@/lib/supabase';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
@@ -38,6 +38,14 @@ import { enqueueAppointmentLink } from '@/sync/pendingLinks';
 /** The series RPC lists clashing starts as UTC ISO times; show them locally. */
 function localiseIsoTimes(message: string): string {
   return message.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z/g, (iso) => whenLabel(iso));
+}
+
+/**
+ * The location argument for a booking call. A clinic booking sends nothing and takes the server's default, so what
+ * every existing clinic sends is exactly what it sent before.
+ */
+export function locationArg(location: CareLocation | undefined): { p_location?: CareLocation } {
+  return location && location !== 'clinic' ? { p_location: location } : {};
 }
 
 function supabaseOrThrow() {
@@ -153,6 +161,7 @@ export const bookingService = {
     requestId: UUID | null;
     /** Omit to use the clinic's slot length. */
     durationMinutes?: number;
+    location?: CareLocation;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('confirm_booking_slot', {
@@ -164,6 +173,7 @@ export const bookingService = {
       p_scheduled_at: params.scheduledAt,
       p_request_id: params.requestId,
       p_duration_minutes: params.durationMinutes ?? null,
+      ...locationArg(params.location),
     });
     if (error) throw new Error(`Could not confirm booking: ${error.message}`);
     syncEngine.schedule(0);
@@ -179,6 +189,7 @@ export const bookingService = {
     therapistId: UUID;
     starts: string[];
     durationMinutes: number;
+    location?: CareLocation;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('confirm_booking_series', {
@@ -189,6 +200,7 @@ export const bookingService = {
       p_starts: params.starts,
       p_patient_id: params.patientId,
       p_duration_minutes: params.durationMinutes,
+      ...locationArg(params.location),
     });
     if (error) throw new Error(`Could not book the sessions: ${localiseIsoTimes(error.message)}`);
     syncEngine.schedule(0);
@@ -215,6 +227,7 @@ export const bookingService = {
     patientName: string;
     patientPhone: string | null;
     patientId: UUID | null;
+    location?: CareLocation;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('start_walk_in', {
@@ -223,6 +236,7 @@ export const bookingService = {
       p_name: input.patientName,
       p_phone: input.patientPhone,
       p_patient_id: input.patientId,
+      ...locationArg(input.location),
     });
     if (error) throw new Error(`Could not start the visit: ${error.message}`);
     syncEngine.schedule(0);

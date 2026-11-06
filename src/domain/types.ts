@@ -148,6 +148,8 @@ export interface Clinic {
   enablePatientComms?: boolean;
   /** The public booking page (`/book/:slug`) is open. Off by default; the public booking RPCs check it. */
   onlineBookingEnabled?: boolean;
+  /** Where this clinic sees patients (`clinics.care_locations`). Read through `clinicCareLocations`; older rows lack it and read as clinic only. */
+  careLocations?: CareLocation[];
   /** Where "Leave a Google review" / "Ask for a Google review" point to —
    *  unset means neither ever shows, even for a 5* response (Slice 3 of
    *  the same doc). Plain URL, not validated beyond what the Settings
@@ -353,6 +355,9 @@ export interface UserSeenMarker {
   updatedAt: string;
 }
 
+/** Where a patient is seen. Screen words are in `CARE_LOCATION_LABELS`. */
+export type CareLocation = 'clinic' | 'home' | 'ward';
+
 export interface CatalogItem {
   id: UUID;
   clinicId: UUID;
@@ -366,6 +371,8 @@ export interface CatalogItem {
   durationMinutes?: number | null;
   /** Package only: "Valid for (days)", 1–730. Optional/null = no expiry. Copied onto each session when it's logged. */
   validityDays?: number | null;
+  /** Where this service usually happens, the starting location when it is booked or logged. Older rows lack it. */
+  defaultLocation?: CareLocation;
   updatedAt: string;
 }
 
@@ -486,6 +493,8 @@ export function referringSourceDetailLabel(
 
 export interface Patient {
   id: UUID;
+  /** One optional free-text address, for home visits. */
+  address?: string | null;
   clinicId: UUID;
   mrno: string;
   mrnoSource: MrnoSource;
@@ -958,6 +967,8 @@ export type AppointmentStatus = 'confirmed' | 'rescheduled' | 'no_show' | 'cance
  */
 export interface Appointment {
   id: UUID;
+  /** Where it happens. Older cached rows lack it: read through `locationOf`. */
+  location?: CareLocation;
   clinicId: UUID;
   patientId: UUID | null;
   patientName: string;

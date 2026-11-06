@@ -1608,6 +1608,7 @@ slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
 timezone                     text NOT NULL DEFAULT 'Asia/Kolkata' — IANA zone for every server-sent time (emails, push, the agenda, the public booking page); a trigger rejects names Postgres does not know (migration `20261021100000_clinic_region.sql`)
 default_country_code         text NOT NULL DEFAULT '+91' — `^\+[0-9]{1,4}$`; the code a phone number without one belongs to (`PhoneField`)
+care_locations               text[] NOT NULL DEFAULT '{clinic}' — where the clinic sees patients: any of clinic, home, ward, never empty. Read through `clinicCareLocations` (`domain/careLocations.ts`). One location means no location choice anywhere; home and ward are off until a clinic turns them on (migration `20261106120000_care_locations.sql`)
 currency_code                text NOT NULL DEFAULT 'INR' — INR, USD, GBP, EUR, AED, AUD, CAD or SGD. **Stored only**: no screen reads it yet (`clinicCurrencyCode` falls back to INR). Never change it per clinic by hand: a clinic set to GBP would still see rupees (migration `20261106110000_clinic_currency_tax.sql`)
 tax_regime                  text NOT NULL DEFAULT 'GST_IN' — GST_IN, GENERIC_TAX or NO_TAX. **Stored only**, same rule (`clinicTaxRegime`, `isGstIndia`)
 agenda_enabled               boolean NOT NULL DEFAULT true — the clinic sends the evening agenda email (migration `20261021130000_clinic_agenda_switch.sql`)
@@ -1768,6 +1769,7 @@ name             text NOT NULL
 session_count    int NOT NULL (default 1, package pricing)
 base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
+default_location text NOT NULL DEFAULT 'clinic' — clinic, home or ward: where this service usually happens
 duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
                  (per session for a package); snapshotted onto visit_items
 validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
@@ -1778,6 +1780,7 @@ updated_at       timestamptz NOT NULL
 #### `patients`
 ```sql
 id                    uuid PRIMARY KEY
+address               text (NULLABLE) — one optional free-text address, for home visits
 clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
 mrno                  text NOT NULL
 mrno_source           text NOT NULL — 'hospital' | 'auto'
@@ -1843,7 +1846,7 @@ patient_signature_url text (NULLABLE)
 clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
 consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
 reauthorization_required  boolean NOT NULL
-location              text (NULLABLE) — 'clinic' | 'home'
+location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`)
 credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
                        visit_credits rows follow the service lines or were edited by hand
 service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
@@ -2518,6 +2521,7 @@ patient_name, patient_phone  text NOT NULL — raw values, kept after patient_id
 therapist_id           uuid (NULLABLE, FOREIGN KEY → therapists.id)
 scheduled_at           timestamptz NOT NULL
 source                 text NOT NULL (default 'booking') — 'booking' | 'walk_in'
+location               text NOT NULL (default 'clinic') — 'clinic' | 'home' | 'ward'. Set by `p_location` on `confirm_booking_slot`, `confirm_booking_series` and `start_walk_in` (optional; the app omits it for a clinic booking). Public online booking is always clinic until staff confirm it
                         (start_walk_in: a visit in progress started at the desk)
 series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
                         repeat booking (confirm_booking_series)
@@ -3618,6 +3622,7 @@ slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
 timezone                     text NOT NULL DEFAULT 'Asia/Kolkata' — IANA zone for every server-sent time (emails, push, the agenda, the public booking page); a trigger rejects names Postgres does not know (migration `20261021100000_clinic_region.sql`)
 default_country_code         text NOT NULL DEFAULT '+91' — `^\+[0-9]{1,4}$`; the code a phone number without one belongs to (`PhoneField`)
+care_locations               text[] NOT NULL DEFAULT '{clinic}' — where the clinic sees patients: any of clinic, home, ward, never empty. Read through `clinicCareLocations` (`domain/careLocations.ts`). One location means no location choice anywhere; home and ward are off until a clinic turns them on (migration `20261106120000_care_locations.sql`)
 currency_code                text NOT NULL DEFAULT 'INR' — INR, USD, GBP, EUR, AED, AUD, CAD or SGD. **Stored only**: no screen reads it yet (`clinicCurrencyCode` falls back to INR). Never change it per clinic by hand: a clinic set to GBP would still see rupees (migration `20261106110000_clinic_currency_tax.sql`)
 tax_regime                  text NOT NULL DEFAULT 'GST_IN' — GST_IN, GENERIC_TAX or NO_TAX. **Stored only**, same rule (`clinicTaxRegime`, `isGstIndia`)
 agenda_enabled               boolean NOT NULL DEFAULT true — the clinic sends the evening agenda email (migration `20261021130000_clinic_agenda_switch.sql`)
@@ -3778,6 +3783,7 @@ name             text NOT NULL
 session_count    int NOT NULL (default 1, package pricing)
 base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
+default_location text NOT NULL DEFAULT 'clinic' — clinic, home or ward: where this service usually happens
 duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
                  (per session for a package); snapshotted onto visit_items
 validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
@@ -3788,6 +3794,7 @@ updated_at       timestamptz NOT NULL
 #### `patients`
 ```sql
 id                    uuid PRIMARY KEY
+address               text (NULLABLE) — one optional free-text address, for home visits
 clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
 mrno                  text NOT NULL
 mrno_source           text NOT NULL — 'hospital' | 'auto'
@@ -3853,7 +3860,7 @@ patient_signature_url text (NULLABLE)
 clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
 consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
 reauthorization_required  boolean NOT NULL
-location              text (NULLABLE) — 'clinic' | 'home'
+location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`)
 credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
                        visit_credits rows follow the service lines or were edited by hand
 service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
@@ -4528,6 +4535,7 @@ patient_name, patient_phone  text NOT NULL — raw values, kept after patient_id
 therapist_id           uuid (NULLABLE, FOREIGN KEY → therapists.id)
 scheduled_at           timestamptz NOT NULL
 source                 text NOT NULL (default 'booking') — 'booking' | 'walk_in'
+location               text NOT NULL (default 'clinic') — 'clinic' | 'home' | 'ward'. Set by `p_location` on `confirm_booking_slot`, `confirm_booking_series` and `start_walk_in` (optional; the app omits it for a clinic booking). Public online booking is always clinic until staff confirm it
                         (start_walk_in: a visit in progress started at the desk)
 series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
                         repeat booking (confirm_booking_series)
