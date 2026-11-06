@@ -20,6 +20,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
+import { homeCareOn } from '@/domain/careLocations';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
@@ -296,6 +297,7 @@ export function NewVisitPage() {
     phone: search.prefillPhone ?? '',
     email: '',
     altPhone: '',
+    address: '',
     primaryCondition: '',
     referringSourceId: '',
     referringSourceDetail: '',
@@ -1077,6 +1079,7 @@ export function NewVisitPage() {
         phone: newPatient.phone || null,
         email: newPatient.email || null,
         altPhone: newPatient.altPhone || null,
+        ...(homeCareOn(clinic) ? { address: newPatient.address || null } : {}),
         primaryCondition: newPatient.primaryCondition || null,
         referringSourceId: newPatient.referringSourceId || null,
         referringSourceDetail: newPatient.referringSourceDetail || null,
@@ -1753,7 +1756,7 @@ export function NewVisitPage() {
                 )}
                 <details
                   className="rounded-lg border border-[var(--border)] px-3 py-2"
-                  open={Boolean(newPatient.email || newPatient.altPhone || newPatient.mrno)}
+                  open={Boolean(newPatient.email || newPatient.altPhone || newPatient.mrno || newPatient.address)}
                 >
                   <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
                     More details <span className="font-normal text-[var(--muted)]">(optional)</span>
@@ -1775,6 +1778,18 @@ export function NewVisitPage() {
                         onChange={(altPhone) => setNewPatient({ ...newPatient, altPhone })}
                       />
                     </Field>
+                    {homeCareOn(clinic) && (
+                      <Field label="Address (optional)" htmlFor="new-visit-address">
+                        <textarea
+                          id="new-visit-address"
+                          rows={2}
+                          className={inputCls}
+                          placeholder="For home visits"
+                          value={newPatient.address}
+                          onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })}
+                        />
+                      </Field>
+                    )}
                     <Field label="Patient ID">
                       <input
                         className={inputCls}

@@ -13,6 +13,7 @@ export interface NewPatientInput {
   phone?: string | null;
   email?: string | null;
   altPhone?: string | null;
+  address?: string | null;
   primaryCondition?: string | null;
   referringSourceId?: UUID | null;
   referringSourceDetail?: string | null;
@@ -26,6 +27,7 @@ export interface UpdatePatientInput {
   phone?: string | null;
   email?: string | null;
   altPhone?: string | null;
+  address?: string | null;
   primaryCondition?: string | null;
   referringSourceId?: UUID | null;
   referringSourceDetail?: string | null;
@@ -106,6 +108,7 @@ export function createPatientService(repos: Repos) {
         phone: input.phone?.trim() || null,
         email: input.email?.trim() || null,
         altPhone: input.altPhone?.trim() || null,
+        address: input.address?.trim() || null,
         primaryCondition: input.primaryCondition?.trim() || null,
         referringSourceId: input.referringSourceId ?? null,
         referringSourceDetail: input.referringSourceDetail?.trim() || null,
@@ -149,6 +152,7 @@ export function createPatientService(repos: Repos) {
         phone: patch.phone !== undefined ? patch.phone?.trim() || null : patient.phone,
         email: patch.email !== undefined ? patch.email?.trim() || null : patient.email ?? null,
         altPhone: patch.altPhone !== undefined ? patch.altPhone?.trim() || null : patient.altPhone ?? null,
+        address: patch.address !== undefined ? patch.address?.trim() || null : patient.address ?? null,
         primaryCondition:
           patch.primaryCondition !== undefined
             ? patch.primaryCondition?.trim() || null

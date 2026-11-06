@@ -6,7 +6,8 @@ import { MONTH_NAMES } from '@/domain/fiscalYear';
 import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
-import { type Clinic } from '@/domain/types';
+import { type CareLocation, type Clinic } from '@/domain/types';
+import { CARE_LOCATION_LABELS, clinicCareLocations } from '@/domain/careLocations';
 import { validateEmail } from '@/domain/publicBookingDays';
 import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { OpenDaysStrip } from './OpenDaysStrip';
@@ -710,6 +711,62 @@ export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: bo
         )}
       </SectionCard>
     </div>
+  );
+}
+
+type CareLocationFields = Pick<Clinic, 'careLocations'>;
+
+/**
+ * Where the clinic sees patients. Clinic and Home visit are switches (at least one stays on); Inpatient is listed as
+ * coming next. With one place on, nothing about location is asked anywhere in the app.
+ */
+export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<CareLocationFields>(
+    (c) => ({ careLocations: clinicCareLocations(c) }),
+    onDirtyChange
+  );
+  const on = clinicCareLocations(form);
+  const toggle = (loc: CareLocation, next: boolean) => {
+    const list = next ? [...on, loc] : on.filter((l) => l !== loc);
+    if (list.length === 0) return;
+    set({ careLocations: clinicCareLocations({ careLocations: list }) });
+  };
+  const onlyOne = on.length === 1;
+
+  return (
+    <SectionCard id="settings-card-care-locations" title="Where you see patients">
+      <fieldset disabled={busy} className="contents">
+        <p className="mb-3 text-sm text-[var(--muted)]">
+          Turn on every place you treat patients. With one place on, nothing about location is asked anywhere in the app.
+        </p>
+        <div className="space-y-3">
+          <SwitchRow
+            label={CARE_LOCATION_LABELS.clinic}
+            hint="Patients come to you."
+            checked={on.includes('clinic')}
+            disabled={onlyOne && on.includes('clinic')}
+            onChange={(v) => toggle('clinic', v)}
+          />
+          <SwitchRow
+            label={CARE_LOCATION_LABELS.home}
+            hint="You go to the patient. Adds an optional address on each patient."
+            checked={on.includes('home')}
+            disabled={onlyOne && on.includes('home')}
+            onChange={(v) => toggle('home', v)}
+          />
+          <div className="flex items-center justify-between gap-3 py-1 text-sm">
+            <div>
+              <p className="font-medium text-[var(--muted)]">{CARE_LOCATION_LABELS.ward}</p>
+              <p className="text-xs text-[var(--muted)]">Admit, ward rounds, discharge bill.</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-[var(--surface-2,#f1f3f2)] px-2.5 py-0.5 text-xs text-[var(--muted)]">Coming next</span>
+          </div>
+        </div>
+      </fieldset>
+      {showSaveBar && (
+        <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+      )}
+    </SectionCard>
   );
 }
 

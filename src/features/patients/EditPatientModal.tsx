@@ -4,6 +4,7 @@ import type { Patient, ReferringSourceItem } from '@/domain/types';
 import { REFERRING_SOURCE_LABELS } from '@/domain/types';
 import { useClinic } from '@/app/clinicContext';
 import { PhoneField } from '@/components/PhoneField';
+import { homeCareOn } from '@/domain/careLocations';
 import { toFriendlyMessage } from '@/lib/errors';
 import { patientService, repos } from '@/services';
 
@@ -32,6 +33,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
     phone: patient.phone ?? '',
     email: patient.email ?? '',
     altPhone: patient.altPhone ?? '',
+    address: patient.address ?? '',
     referringSourceId: patient.referringSourceId ?? '',
     referringSourceDetail: patient.referringSourceDetail ?? '',
   });
@@ -73,6 +75,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
       phone: patient.phone ?? '',
       email: patient.email ?? '',
       altPhone: patient.altPhone ?? '',
+      address: patient.address ?? '',
       referringSourceId: matchedLegacyId,
       referringSourceDetail: patient.referringSourceDetail ?? '',
     });
@@ -91,6 +94,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
         phone: formData.phone || null,
         email: formData.email || null,
         altPhone: formData.altPhone || null,
+        ...(homeCareOn(clinic) ? { address: formData.address || null } : {}),
         referringSourceId: formData.referringSourceId || null,
         referringSourceDetail: formData.referringSourceDetail || null,
       });
@@ -229,7 +233,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
             </div>
           )}
 
-          <details className="field-block rounded-lg border border-[var(--border)] px-3 py-2" open={Boolean(patient.email || patient.altPhone)}>
+          <details className="field-block rounded-lg border border-[var(--border)] px-3 py-2" open={Boolean(patient.email || patient.altPhone || (homeCareOn(clinic) && patient.address))}>
             <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
               More details <span className="font-normal text-[var(--muted)]">(optional)</span>
             </summary>
@@ -254,6 +258,20 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
                   ariaLabel="Alternate phone"
                 />
               </div>
+              {homeCareOn(clinic) && (
+                <div className="field-block">
+                  <label className="field-label" htmlFor="edit-patient-address">Address (optional)</label>
+                  <textarea
+                    id="edit-patient-address"
+                    rows={2}
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="field-input"
+                    disabled={saving}
+                    placeholder="For home visits"
+                  />
+                </div>
+              )}
               <div className="field-block">
                 <label className="field-label">Patient ID</label>
                 <input
