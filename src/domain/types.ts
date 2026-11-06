@@ -12,6 +12,8 @@ export interface Clinic {
   phone: string | null;
   email: string | null;
   gstNo: string | null;
+  /** Optional one line under the clinic's name on its letterhead (max 60 characters). */
+  tagline?: string | null;
   logoPath: string | null;
   partnerHospitalName: string | null;
   partnerHospitalLogoPath: string | null;

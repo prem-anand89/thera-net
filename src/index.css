@@ -148,6 +148,32 @@ body {
   }
 }
 
+/* Clinic documents (bills, receipts, and later clinical notes). The shared PDF and the screen use the app's teal;
+   printing is pure black and white, and nothing relies on a fill, since browsers drop backgrounds by default. */
+.doc-paper {
+  --doc-rule: var(--teal);
+  --doc-name: var(--teal-deep);
+  --doc-head: var(--teal-strong);
+  --doc-fill: var(--teal-mist);
+  --doc-fill-strong: var(--teal-light);
+  --doc-good: var(--moss-strong);
+  --doc-due: var(--rust);
+}
+@media print {
+  .doc-paper {
+    --ink: black;
+    --muted: rgb(51 51 51);
+    --border: rgb(153 153 153);
+    --doc-rule: black;
+    --doc-name: black;
+    --doc-head: black;
+    --doc-fill: transparent;
+    --doc-fill-strong: transparent;
+    --doc-good: black;
+    --doc-due: black;
+  }
+}
+
 /* ==========================================================================
    Core Assessment / Note Editor — ported wholesale from TheraNet-OS's
    index.css rather than hand-translated to Tailwind (docs/CORE-ASSESSMENT-

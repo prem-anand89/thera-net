@@ -1,6 +1,6 @@
 /**
  * Renders a DOM node — the same content the browser's own "Print / Save
- * PDF" button shows — into a paginated PDF entirely on-device, no server
+ * PDF" button shows, in colour — into a paginated PDF entirely on-device, no server
  * round trip, consistent with this app's offline-first design. `paper`
  * matches the page's own A4/A5 toggle so the shared file matches what
  * printing would produce. `scale: 2` renders at roughly double CSS pixel
@@ -19,6 +19,74 @@
 import { notify } from '@/lib/notify';
 import { activeCountryCode } from '@/domain/clinicRuntime';
 import { splitPhone } from '@/domain/countryCodes';
+const PAGE = {
+  A4: { widthMm: 210, heightMm: 297, widthPx: 794, heightPx: 1123, padXPx: 48, padYPx: 45 },
+  A5: { widthMm: 148, heightMm: 210, widthPx: 559, heightPx: 794, padXPx: 36, padYPx: 36 },
+} as const;
+
+export interface PageSlice {
+  from: number;
+  to: number;
+}
+
+/**
+ * Where to cut one tall rendered document into pages, in CSS pixels, so no row or block is sliced in half. A document
+ * that fits stays whole. `blocks` are the things that must not split (table rows, the totals, the signature block);
+ * the first page already carries its own top margin, and later pages get `margin` added at the top when drawn.
+ */
+export function computePageSlices(
+  blocks: { top: number; bottom: number }[],
+  totalHeight: number,
+  pageHeight: number,
+  margin: number
+): PageSlice[] {
+  if (totalHeight <= pageHeight + 2) return [{ from: 0, to: totalHeight }];
+  const slices: PageSlice[] = [];
+  let from = 0;
+  while (from < totalHeight) {
+    const limit = from + (from === 0 ? pageHeight - margin : pageHeight - 2 * margin);
+    if (limit >= totalHeight) {
+      slices.push({ from, to: totalHeight });
+      break;
+    }
+    const straddling = blocks.filter((b) => b.top > from && b.top < limit && b.bottom > limit);
+    const to = straddling.length > 0 ? Math.min(...straddling.map((b) => b.top)) : limit;
+    slices.push({ from, to });
+    from = to;
+  }
+  return slices;
+}
+
+/**
+ * An off-screen copy of the document laid out as one fixed page, whatever the viewer's screen. The on-screen node can't
+ * be used directly: its width follows the device and its `min-h-[calc(100vh-80px)]` follows the screen height, which
+ * could spill a short bill onto a second page on a tall tablet.
+ */
+function offscreenCopy(element: HTMLElement, paper: 'A4' | 'A5'): { copy: HTMLElement; remove: () => void } {
+  const page = PAGE[paper];
+  const holder = document.createElement('div');
+  holder.setAttribute('aria-hidden', 'true');
+  Object.assign(holder.style, { position: 'absolute', left: '-10000px', top: '0', width: `${page.widthPx}px` });
+  const copy = element.cloneNode(true) as HTMLElement;
+  Object.assign(copy.style, {
+    width: `${page.widthPx}px`,
+    maxWidth: 'none',
+    minHeight: `${page.heightPx}px`,
+    margin: '0',
+    padding: `${page.padYPx}px ${page.padXPx}px`,
+    boxSizing: 'border-box',
+  });
+  copy.querySelectorAll<HTMLElement>('.overflow-x-auto').forEach((el) => {
+    el.style.overflow = 'visible';
+  });
+  copy.querySelectorAll<HTMLElement>('table').forEach((el) => {
+    el.style.minWidth = '0';
+  });
+  holder.appendChild(copy);
+  document.body.appendChild(holder);
+  return { copy, remove: () => holder.remove() };
+}
+
 export async function renderElementToPdf(
   element: HTMLElement,
   fileName: string,
@@ -28,82 +96,104 @@ export async function renderElementToPdf(
     import('jspdf'),
     import('html2canvas'),
   ]);
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    // Without this, html2canvas lays the cloned document out at whatever
-    // width the *viewer's* screen happens to be — on a phone that's the
-    // same narrow layout the on-screen page uses (line-item tables
-    // scrolling horizontally, etc.), so the shared PDF would inherit
-    // whatever's actually visible in that narrow viewport rather than the
-    // full, properly-laid-out document. Forcing a desktop-width window
-    // here means the shared file always renders the same way regardless
-    // of which device issued it.
-    windowWidth: 900,
-  });
+  const page = PAGE[paper];
+  const { copy, remove } = offscreenCopy(element, paper);
+  try {
+    await document.fonts?.ready;
+    await Promise.all(Array.from(copy.querySelectorAll('img')).map((img) => img.decode().catch(() => undefined)));
 
-  const pageWidthMm = paper === 'A4' ? 210 : 148;
-  const pageHeightMm = paper === 'A4' ? 297 : 210;
-  const imgWidthMm = pageWidthMm;
-  const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
-  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const origin = copy.getBoundingClientRect().top;
+    const blocks = Array.from(copy.querySelectorAll('tr, [data-pdf-block]')).map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: r.top - origin, bottom: r.bottom - origin };
+    });
+    const totalHeight = copy.offsetHeight;
 
-  const pdf = new jsPDF({ unit: 'mm', format: paper.toLowerCase() as 'a4' | 'a5' });
+    const canvas = await html2canvas(copy, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      windowWidth: 900,
+    });
 
-  // One long image sliced across as many pages as it takes — each page
-  // paints the same full image shifted up by one page-height, so only the
-  // slice inside that page's own bounds ends up visible (jsPDF clips to
-  // the page automatically).
-  let heightLeftMm = imgHeightMm;
-  let positionMm = 0;
-  pdf.addImage(imgData, 'JPEG', 0, positionMm, imgWidthMm, imgHeightMm);
-  heightLeftMm -= pageHeightMm;
-  while (heightLeftMm > 0) {
-    positionMm -= pageHeightMm;
-    pdf.addPage();
-    pdf.addImage(imgData, 'JPEG', 0, positionMm, imgWidthMm, imgHeightMm);
-    heightLeftMm -= pageHeightMm;
+    const pdf = new jsPDF({ unit: 'mm', format: paper.toLowerCase() as 'a4' | 'a5' });
+    const pxToCanvas = canvas.height / totalHeight;
+    const pxToMm = page.widthMm / page.widthPx;
+    computePageSlices(blocks, totalHeight, page.heightPx, page.padYPx).forEach((slice, i) => {
+      const piece = document.createElement('canvas');
+      piece.width = canvas.width;
+      piece.height = Math.round((slice.to - slice.from) * pxToCanvas);
+      piece.getContext('2d')?.drawImage(canvas, 0, -Math.round(slice.from * pxToCanvas));
+      if (i > 0) pdf.addPage();
+      pdf.addImage(
+        piece.toDataURL('image/jpeg', 0.92),
+        'JPEG',
+        0,
+        i === 0 ? 0 : page.padYPx * pxToMm,
+        page.widthMm,
+        Math.min((slice.to - slice.from) * pxToMm, page.heightMm)
+      );
+    });
+    return new File([pdf.output('blob')], fileName, { type: 'application/pdf' });
+  } finally {
+    remove();
   }
+}
 
-  return new File([pdf.output('blob')], fileName, { type: 'application/pdf' });
+type FileSharingNavigator = Navigator & {
+  share?: (data: ShareData) => Promise<void>;
+  canShare?: (data: ShareData) => boolean;
+};
+
+/** Whether this browser can hand a file to the system share sheet (phones and tablets, mainly; not most desktops). */
+export function canShareFiles(): boolean {
+  const nav = navigator as FileSharingNavigator;
+  if (!nav.share || !nav.canShare) return false;
+  try {
+    return nav.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] });
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Web Share API's `files` support is what makes WhatsApp (and every other
- * installed app) show up as a share target with the actual PDF attached —
- * but it's mobile-browser-only (recent Chrome/Android, Safari/iOS) and
- * unavailable on desktop. Where it's not supported, falls back to a
- * `wa.me` deep link with just a text summary — WhatsApp's own click-to-chat
- * scheme has no way to carry a file, so the fallback is deliberately
- * text-only rather than silently doing nothing.
+ * Hands the PDF to the share sheet, so WhatsApp can receive the actual file. Must run straight after a tap: browsers
+ * refuse it once that tap has gone stale (`needs-tap`), and the caller then asks for one more tap. It never silently
+ * degrades to a text message, which is how bills used to reach patients as a line of text with no bill attached.
  */
-export async function shareFileToWhatsApp(
+export async function shareBillFile(
   file: File,
-  title: string,
-  fallbackText: string,
-  patientPhone?: string | null
-): Promise<'shared' | 'fallback'> {
-  const nav = navigator as Navigator & {
-    share?: (data: ShareData) => Promise<void>;
-    canShare?: (data: ShareData) => boolean;
-  };
-  if (nav.share && nav.canShare?.({ files: [file] })) {
-    try {
-      await nav.share({ files: [file], title });
-      return 'shared';
-    } catch (e) {
-      // AbortError = the user backed out of the share sheet — not a
-      // failure worth surfacing as an error.
-      if (e instanceof Error && e.name === 'AbortError') return 'shared';
-      console.warn('Web Share failed or user gesture expired, falling back to WhatsApp link:', e);
-    }
+  title: string
+): Promise<'shared' | 'cancelled' | 'needs-tap' | 'failed'> {
+  const nav = navigator as FileSharingNavigator;
+  try {
+    await nav.share?.({ files: [file], title });
+    return 'shared';
+  } catch (e) {
+    const name = e instanceof Error ? e.name : '';
+    if (name === 'AbortError') return 'cancelled';
+    if (name === 'NotAllowedError') return 'needs-tap';
+    console.warn('Could not share the bill file:', e);
+    return 'failed';
   }
-  const url = buildWhatsAppSendUrl(fallbackText, patientPhone);
-  openWhatsAppUrl(url, fallbackText);
-  return 'fallback';
 }
 
+/** Saves the file to the device (desktop, where a file can't be passed to WhatsApp). */
+export function downloadFile(file: File): void {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Opens WhatsApp with a message; with no phone on file, the person picks the chat there. */
+export function openWhatsAppWithText(text: string, toPhone?: string | null): boolean {
+  return openWhatsAppUrl(buildWhatsAppSendUrl(text, toPhone), text);
+}
 
 /** Same entry as visit-row "Send WhatsApp reminder" — direct wa.me, no blank tab. */
 export function openPatientWhatsAppChat(

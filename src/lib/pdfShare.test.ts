@@ -6,7 +6,9 @@ import {
   normalizePhoneForWaMe,
   openPatientWhatsAppChat,
   openWhatsAppChat,
-  shareFileToWhatsApp,
+  canShareFiles,
+  computePageSlices,
+  shareBillFile,
   shareTextViaWhatsApp,
 } from './pdfShare';
 
@@ -105,49 +107,61 @@ describe('openPatientWhatsAppChat', () => {
   });
 });
 
-describe('shareFileToWhatsApp', () => {
-  const dummyFile = new File(['content'], 'invoice.pdf', { type: 'application/pdf' });
+describe('shareBillFile', () => {
+  const file = new File(['content'], 'bill.pdf', { type: 'application/pdf' });
 
-  it('falls back to wa.me URL with direct patient phone when Web Share is unsupported', async () => {
-    const fakeWindow = { opener: {} as unknown, closed: false };
-    const open = vi.fn().mockReturnValue(fakeWindow);
-    vi.stubGlobal('window', { open });
-    vi.stubGlobal('navigator', {});
-
-    const result = await shareFileToWhatsApp(dummyFile, 'Invoice 101', 'Invoice summary', '9876543210');
-    expect(result).toBe('fallback');
-    expect(open).toHaveBeenCalledWith(
-      expect.stringContaining('https://wa.me/919876543210?text='),
-      '_blank'
-    );
+  it('hands the file to the share sheet', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { share });
+    await expect(shareBillFile(file, 'Bill 101')).resolves.toBe('shared');
+    expect(share).toHaveBeenCalledWith({ files: [file], title: 'Bill 101' });
   });
 
-  it('falls back to wa.me URL when nav.share throws NotAllowedError (expired user gesture)', async () => {
-    const fakeWindow = { opener: {} as unknown, closed: false };
-    const open = vi.fn().mockReturnValue(fakeWindow);
-    vi.stubGlobal('window', { open });
-    const share = vi.fn().mockRejectedValue(new DOMException('User gesture expired', 'NotAllowedError'));
-    const canShare = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('navigator', { share, canShare });
-
-    const result = await shareFileToWhatsApp(dummyFile, 'Invoice 101', 'Invoice summary', '9876543210');
-    expect(result).toBe('fallback');
-    expect(open).toHaveBeenCalledWith(
-      expect.stringContaining('https://wa.me/919876543210?text='),
-      '_blank'
-    );
-  });
-
-  it('returns shared when user cancels share sheet without falling back to url', async () => {
+  it('asks for another tap on a stale gesture, and never opens a text-only chat', async () => {
     const open = vi.fn();
     vi.stubGlobal('window', { open });
-    const share = vi.fn().mockRejectedValue(new DOMException('User aborted', 'AbortError'));
-    const canShare = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('navigator', { share, canShare });
-
-    const result = await shareFileToWhatsApp(dummyFile, 'Invoice 101', 'Invoice summary', '9876543210');
-    expect(result).toBe('shared');
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(new DOMException('stale', 'NotAllowedError')) });
+    await expect(shareBillFile(file, 'Bill 101')).resolves.toBe('needs-tap');
     expect(open).not.toHaveBeenCalled();
+  });
+
+  it('treats backing out of the sheet as cancelled, and other errors as failed', async () => {
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(new DOMException('no', 'AbortError')) });
+    await expect(shareBillFile(file, 'Bill 101')).resolves.toBe('cancelled');
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(new Error('boom')) });
+    await expect(shareBillFile(file, 'Bill 101')).resolves.toBe('failed');
+  });
+});
+
+describe('canShareFiles', () => {
+  it('needs both share and canShare to accept a file', () => {
+    vi.stubGlobal('navigator', {});
+    expect(canShareFiles()).toBe(false);
+    vi.stubGlobal('navigator', { share: vi.fn(), canShare: () => false });
+    expect(canShareFiles()).toBe(false);
+    vi.stubGlobal('navigator', { share: vi.fn(), canShare: () => true });
+    expect(canShareFiles()).toBe(true);
+  });
+});
+
+describe('computePageSlices', () => {
+  const row = (top: number, bottom: number) => ({ top, bottom });
+
+  it('keeps a document that fits as one page, including one exactly a page tall', () => {
+    expect(computePageSlices([], 700, 1123, 45)).toEqual([{ from: 0, to: 700 }]);
+    expect(computePageSlices([], 1123, 1123, 45)).toEqual([{ from: 0, to: 1123 }]);
+  });
+
+  it('cuts before a row that would straddle the page end', () => {
+    const slices = computePageSlices([row(1000, 1060), row(1060, 1120), row(1200, 1300)], 1300, 1123, 45);
+    expect(slices[0]).toEqual({ from: 0, to: 1060 });
+    expect(slices[1]).toEqual({ from: 1060, to: 1300 });
+  });
+
+  it('cuts at the limit when one block is taller than a page, and always finishes', () => {
+    const slices = computePageSlices([row(10, 3000)], 3000, 1123, 45);
+    expect(slices.at(-1)!.to).toBe(3000);
+    slices.forEach((s) => expect(s.to).toBeGreaterThan(s.from));
   });
 });
 

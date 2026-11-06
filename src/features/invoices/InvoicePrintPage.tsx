@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatAmount } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { buildInvoicePaymentLedger, type InvoiceLedger } from '@/domain/invoicePaymentLedger';
+import { buildInvoicePaymentLedger } from '@/domain/invoicePaymentLedger';
 import {
   isV2Line,
   lineRatePerSessionPaise,
@@ -19,13 +19,14 @@ import {
 } from '@/domain/invoiceLine';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
+import { btnPrimary, btnSecondary } from '@/components/ui';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
-import { openPatientWhatsAppChat, renderElementToPdf, shareFileToWhatsApp } from '@/lib/pdfShare';
-import { toFriendlyMessage } from '@/lib/errors';
-import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
+import { openWhatsAppWithText } from '@/lib/pdfShare';
+import { BillTotals, PrintLetterhead, PrintSignatureFooter } from './printChrome';
+import { ShareBillDialog } from './ShareBillDialog';
+import { useBillShare } from './useBillShare';
 
 /** Page-specific wording, not a general-purpose helper — the "delivered of
  *  … authorised" framing and the two distinct non-reconciling explanations
@@ -69,17 +70,11 @@ function sessionsCellText(li: InvoiceLineItem): string {
 function LegacyLineItemsTable({
   lineItems,
   hasAdjustments,
-  totalPaise,
   paper,
-  isSharing,
-  paymentLedger,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
-  totalPaise: number;
   paper: 'A4' | 'A5';
-  isSharing?: boolean;
-  paymentLedger?: InvoiceLedger;
 }) {
   const isA5 = paper === 'A5';
   return (
@@ -87,7 +82,7 @@ function LegacyLineItemsTable({
     // scrolling the table on its own axis on a narrow phone keeps every
     // column readable instead of letting service names and rupee figures
     // fight each other for space.
-    <div className={`mt-6 ${isSharing ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
+    <div className="mt-3.5 overflow-x-auto print:overflow-visible">
       <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[560px] print:min-w-full text-sm'}`}>
         <thead>
           <tr className={`border-b border-[var(--border)] text-left font-medium text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
@@ -95,7 +90,7 @@ function LegacyLineItemsTable({
             <th className="py-2">Sessions</th>
             <th className="py-2 text-right">Catalog price</th>
             {hasAdjustments && <th className="py-2 text-right">Adjustment</th>}
-            <th className="py-2 text-right">Amount</th>
+            <th className="py-2 pr-3 text-right">Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -128,213 +123,66 @@ function LegacyLineItemsTable({
                     )}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium whitespace-nowrap">{formatAmount(li.totalPaise)}</td>
+                <td className="font-num py-2 pr-3 text-right font-medium whitespace-nowrap">{formatAmount(li.totalPaise)}</td>
               </tr>
             );
           })}
         </tbody>
-        <tfoot className="print:break-inside-avoid">
-          {hasAdjustments && (
-            <>
-              <tr>
-                <td
-                  colSpan={4}
-                  className="pt-3 pb-1 text-right font-medium text-[var(--muted)]"
-                >
-                  Subtotal
-                </td>
-                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap">
-                  {formatAmount(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
-                </td>
-              </tr>
-              <tr>
-                <td
-                  colSpan={4}
-                  className="py-1 text-right font-medium text-[var(--muted)]"
-                >
-                  Total Adjustment
-                </td>
-                <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap">
-                  {(() => {
-                    const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
-                    return adj < 0 ? `-${formatAmount(Math.abs(adj))}` : formatAmount(adj);
-                  })()}
-                </td>
-              </tr>
-            </>
-          )}
-          <tr>
-            <td
-              colSpan={hasAdjustments ? 4 : 3}
-              className={`py-3 text-right font-semibold text-[var(--ink)] ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}
-            >
-              Total
-            </td>
-            <td className={`font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}>
-              {formatAmount(totalPaise)}
-            </td>
-          </tr>
-          {paymentLedger && paymentLedger.paidPaise > 0 && (
-            <>
-              <tr>
-                <td
-                  colSpan={hasAdjustments ? 4 : 3}
-                  className="py-2 text-right font-medium text-[var(--muted)]"
-                >
-                  Amount Paid
-                </td>
-                <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">
-                  {formatAmount(paymentLedger.paidPaise)}
-                </td>
-              </tr>
-              <tr>
-                <td
-                  colSpan={hasAdjustments ? 4 : 3}
-                  className="py-2 text-right font-medium text-[var(--ink)]"
-                >
-                  Balance Due
-                </td>
-                <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">
-                  {formatAmount(paymentLedger.balancePaise)}
-                </td>
-              </tr>
-            </>
-          )}
-        </tfoot>
       </table>
     </div>
   );
 }
 
-function LineItemsTable({
+export function LineItemsTable({
   lineItems,
   hasAdjustments,
-  totalPaise,
   paper,
-  isSharing,
-  paymentLedger,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
-  totalPaise: number;
   paper: 'A4' | 'A5';
-  isSharing?: boolean;
-  paymentLedger?: InvoiceLedger;
 }) {
   const isA5 = paper === 'A5';
+  const longSessionsText = lineItems.some((li) => sessionsCellText(li).length > 12);
   return (
-    <div className={`mt-6 ${isSharing ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
-      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] print:min-w-full text-sm table-fixed'} border-b-2 border-[var(--border)] pb-2`}>
+    <div className="mt-3.5 overflow-x-auto print:overflow-visible">
+      <table className={`w-full table-fixed border-collapse ${isA5 ? 'text-[10.5px]' : 'min-w-[680px] text-[12px] print:min-w-full'}`}>
         <thead>
-          <tr className={`border-y-2 border-[var(--border)] bg-[var(--teal-mist)] text-left font-medium text-[var(--ink)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
-            <th className={`py-2 ${hasAdjustments ? 'w-[28%]' : 'w-[35%]'}`}>Service</th>
-            <th className={`py-2 ${hasAdjustments ? 'w-[20%]' : 'w-[25%]'}`}>Dates of service</th>
-            <th className={`py-2 ${hasAdjustments ? 'w-[11%]' : 'w-[12%]'}`}>Sessions</th>
-            <th className={`py-2 text-right ${hasAdjustments ? 'w-[14%]' : 'w-[14%]'} pr-4`}>Unit Price</th>
-            {hasAdjustments && <th className="py-2 w-[13%] text-right pr-4">Adjustment</th>}
-            <th className={`py-2 text-right ${hasAdjustments ? 'w-[14%]' : 'w-[14%]'} pr-2`}>Amount</th>
+          <tr className={`border-y border-[var(--doc-rule)] bg-[var(--doc-fill)] text-left font-semibold text-[var(--doc-head)] ${isA5 ? 'text-[9.5px]' : 'text-[10.5px]'}`}>
+            <th className={`py-1.5 pl-3 pr-2 ${hasAdjustments ? 'w-[26%]' : isA5 ? 'w-[30%]' : 'w-[32%]'}`}>Service</th>
+            <th className={`py-1.5 pr-2 ${hasAdjustments ? 'w-[20%]' : isA5 ? 'w-[23%]' : 'w-[26%]'}`}>Dates of service</th>
+            <th className={`py-1.5 pr-2 ${longSessionsText ? 'w-[15%]' : isA5 ? 'w-[14%]' : 'w-[11%]'}`}>Sessions</th>
+            <th className="py-1.5 pr-3 text-right">Unit Price</th>
+            {hasAdjustments && <th className="py-1.5 pr-3 text-right">Adjustment</th>}
+            <th className="py-1.5 pr-3 text-right">Amount</th>
           </tr>
         </thead>
-        <tbody className="align-top border-b border-[var(--border)]">
+        <tbody className="align-top">
           {lineItems.map((li, i) => {
             const caption = lineCaption(li);
             return (
               <tr key={i} className="border-b border-[var(--border)] align-top print:break-inside-avoid">
-                <td className="py-2 font-medium text-[var(--ink)]">
+                <td className="py-2 pl-3 pr-2 font-medium text-[var(--ink)]">
                   {li.serviceName}
                   {caption && (
-                    <div className="mt-0.5 text-xs font-normal text-[var(--muted)]">{caption}</div>
+                    <div className={`mt-0.5 font-normal text-[var(--muted)] ${isA5 ? 'text-[9.5px]' : 'text-[10.5px]'}`}>{caption}</div>
                   )}
                 </td>
-                <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
-                <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
-                <td className="font-num py-2 text-right whitespace-nowrap pr-4">
+                <td className={`py-2 pr-2 text-[var(--muted)] ${isA5 ? 'text-[9.5px]' : 'text-[10.5px]'}`}>{sessionDatesCellText(li)}</td>
+                <td className="py-2 pr-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
+                <td className="font-num whitespace-nowrap py-2 pr-3 text-right">
                   {formatAmount(lineRatePerSessionPaise(li))}
                 </td>
                 {hasAdjustments && (
-                  <td className="font-num py-2 text-right whitespace-nowrap pr-4">
-                    {li.adjustmentPaise !== 0 ? (
-                      <>
-                        {formatAmount(li.adjustmentPaise)}
-                      </>
-                    ) : (
-                      '—'
-                    )}
+                  <td className="font-num whitespace-nowrap py-2 pr-3 text-right">
+                    {li.adjustmentPaise !== 0 ? formatAmount(li.adjustmentPaise) : '—'}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatAmount(li.totalPaise)}</td>
+                <td className="font-num whitespace-nowrap py-2 pr-3 text-right font-medium">{formatAmount(li.totalPaise)}</td>
               </tr>
             );
           })}
         </tbody>
-        <tfoot className="print:break-inside-avoid">
-          {hasAdjustments && (
-            <>
-              <tr>
-                <td
-                  colSpan={5}
-                  className="pt-3 pb-1 text-right font-medium text-[var(--muted)]"
-                >
-                  Subtotal
-                </td>
-                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">
-                  {formatAmount(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
-                </td>
-              </tr>
-              <tr>
-                <td
-                  colSpan={5}
-                  className="py-1 text-right font-medium text-[var(--muted)]"
-                >
-                  Total Adjustment
-                </td>
-                <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">
-                  {(() => {
-                    const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
-                    return adj < 0 ? `-${formatAmount(Math.abs(adj))}` : formatAmount(adj);
-                  })()}
-                </td>
-              </tr>
-            </>
-          )}
-          <tr>
-            <td
-              colSpan={hasAdjustments ? 5 : 4}
-              className={`py-3 text-right font-semibold text-[var(--ink)] ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}
-            >
-              Total
-            </td>
-            <td className={`font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''} ${hasAdjustments ? '' : 'pr-2'}`}>
-              {formatAmount(totalPaise)}
-            </td>
-          </tr>
-          {paymentLedger && paymentLedger.paidPaise > 0 && (
-            <>
-              <tr>
-                <td
-                  colSpan={hasAdjustments ? 5 : 4}
-                  className="py-2 text-right font-medium text-[var(--muted)]"
-                >
-                  Amount Paid
-                </td>
-                <td className={`font-num py-2 text-right text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
-                  {formatAmount(paymentLedger.paidPaise)}
-                </td>
-              </tr>
-              <tr>
-                <td
-                  colSpan={hasAdjustments ? 5 : 4}
-                  className="py-2 text-right font-medium text-[var(--ink)]"
-                >
-                  Balance Due
-                </td>
-                <td className={`font-num py-2 text-right text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
-                  {formatAmount(paymentLedger.balancePaise)}
-                </td>
-              </tr>
-            </>
-          )}
-        </tfoot>
       </table>
     </div>
   );
@@ -389,8 +237,6 @@ export function InvoicePrintPage() {
   const [amending, setAmending] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
@@ -413,6 +259,33 @@ export function InvoicePrintPage() {
       document.title = previousTitle;
     };
   }, [invoice]);
+
+  // Anything printed on the bill is in this key, so a PDF prepared earlier is never sent after one of them changes.
+  const billShare = useBillShare({
+    contentRef,
+    fileName: `${(invoice?.invoiceNo ?? 'bill').replace(/\//g, '-')}.pdf`,
+    title: `Bill ${invoice?.invoiceNo ?? ''}`,
+    paper,
+    ready: Boolean(invoice) && invoicePaymentQuery !== undefined && paymentLedger !== undefined && therapists !== undefined,
+    freshnessKey: JSON.stringify([
+      invoice,
+      paymentLedger,
+      invoicePayment?.status,
+      supersededBy?.id,
+      paper,
+      therapists?.map((t) => [t.id, t.name, t.registrationNo]),
+      clinic.name,
+      clinic.tagline,
+      clinic.address,
+      clinic.phone,
+      clinic.email,
+      clinic.gstNo,
+      clinic.partnerHospitalName,
+      logoUrl,
+      partnerLogoUrl,
+      signatureUrl,
+    ]),
+  });
 
   if (!invoice) {
     return (
@@ -439,44 +312,11 @@ export function InvoicePrintPage() {
         (t): t is Therapist => t !== undefined
       );
 
-  // Renders the same content node "Print / Save PDF" shows into a PDF
-  // on-device (renderElementToPdf), then hands it to the OS share sheet so
-  // WhatsApp (or any other installed app) can receive the actual file —
-  // falling back to a text-only wa.me link on a browser without Web Share
-  // API file support (desktop, mainly). See src/lib/pdfShare.ts.
-  async function shareViaWhatsApp() {
-    if (!contentRef.current || !invoice) return;
-    setSharing(true);
-    setShareError(null);
-    const summary = `Invoice ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatAmount(invoice.totalPaise)}. From ${clinic.name}.`;
-    const patientPhone = invoice.patientSnapshot.phone;
-    try {
-      let file: File | null = null;
-      try {
-        file = await renderElementToPdf(
-          contentRef.current,
-          `${invoice.invoiceNo.replace(/\//g, '-')}.pdf`,
-          paper
-        );
-      } catch (renderErr) {
-        console.warn('Could not generate PDF for WhatsApp share, falling back to text:', renderErr);
-      }
-
-      if (file) {
-        await shareFileToWhatsApp(file, `Invoice ${invoice.invoiceNo}`, summary, patientPhone);
-      } else {
-        openPatientWhatsAppChat(summary, patientPhone);
-      }
-    } catch (e) {
-      setShareError(toFriendlyMessage(e));
-    } finally {
-      setSharing(false);
-    }
-  }
+  const shareSummary = `Bill ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatAmount(invoice.totalPaise)}. From ${clinic.name}.`;
 
   return (
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
-      <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
+      <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '12mm'}; }`}</style>
 
       <div className="no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-4 py-3">
         <Link
@@ -509,10 +349,9 @@ export function InvoicePrintPage() {
           <button
             type="button"
             className={btnSecondary}
-            disabled={sharing}
-            onClick={() => void shareViaWhatsApp()}
+            onClick={() => void billShare.send()}
           >
-            {sharing ? 'Preparing…' : 'Share via WhatsApp'}
+            Share via WhatsApp
           </button>
           {/* update_invoice_clinical_details()/amend_invoice() both reject a
               plain therapist when invoicingAccess is 'billing_staff' — canBill
@@ -537,10 +376,20 @@ export function InvoicePrintPage() {
         </div>
       </div>
 
-      {shareError && (
-        <div className="no-print mx-auto max-w-3xl px-4">
-          <ErrorNote message={shareError} />
-        </div>
+      {billShare.phase !== 'closed' && (
+        <ShareBillDialog
+          phase={billShare.phase}
+          patientName={invoice.patientSnapshot.name}
+          patientPhone={invoice.patientSnapshot.phone ?? null}
+          onSend={() => void billShare.send()}
+          onDownload={billShare.download}
+          onOpenChat={() => openWhatsAppWithText(shareSummary, invoice.patientSnapshot.phone)}
+          onSendTextOnly={() => {
+            openWhatsAppWithText(shareSummary, invoice.patientSnapshot.phone);
+            billShare.close();
+          }}
+          onClose={billShare.close}
+        />
       )}
 
       {!entitlementsLoading && !invoicingOnPlan && (
@@ -622,7 +471,7 @@ export function InvoicePrintPage() {
 
       <div
         ref={contentRef}
-        className={`relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] print:min-h-0 bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
+        className={`doc-paper relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:min-h-[184mm] print:max-w-[128mm]' : 'print:min-h-[262mm] print:max-w-[186mm]'}`}
       >
         {isVoid && (
           <div
@@ -634,17 +483,17 @@ export function InvoicePrintPage() {
             </span>
           </div>
         )}
-        <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
+        <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} compact={paper === 'A5'} />
 
         {/* Document Title */}
-        <div className="mt-6 text-center">
-          <h2 className="font-display text-lg font-bold uppercase tracking-wide text-[var(--ink)]">
+        <div className="mt-4 text-center">
+          <h2 className="font-display text-sm font-bold uppercase tracking-widest text-[var(--doc-head)]">
             {isVoid ? 'BILL (VOID)' : supersededBy ? 'BILL (SUPERSEDED)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
           </h2>
         </div>
 
         {/* Invoice meta + patient grid */}
-        <section className="mt-6 grid grid-cols-2 gap-x-8 gap-y-1 text-[11px]">
+        <section className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1 text-[11px]">
           {/* Left Column: Patient Info */}
           <div>
             <table className="w-full text-left table-fixed">
@@ -706,10 +555,10 @@ export function InvoicePrintPage() {
                 {footerTherapists.length > 0 && (
                   <tr>
                     <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">
-                      {footerTherapists.length === 1 ? 'Consultant' : 'Consultants'}
+                      {footerTherapists.length === 1 ? 'Therapist' : 'Therapists'}
                     </th>
-                    <td className="py-0.5 text-[var(--ink)] align-top truncate">
-                      : {footerTherapists.map((t) => t.name).join(', ')}
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      : {footerTherapists.map((t) => `${t.name}${t.registrationNo ? ` · Reg. ${t.registrationNo}` : ''}`).join(', ')}
                     </td>
                   </tr>
                 )}
@@ -718,7 +567,7 @@ export function InvoicePrintPage() {
                     <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Status</th>
                     <td className="py-0.5 font-semibold align-top">
                       :{' '}
-                      <span className={supersededBy ? 'text-[var(--muted)]' : isPaid ? 'text-[var(--moss-strong)]' : 'text-[var(--rust)]'}>
+                      <span className={supersededBy ? 'text-[var(--muted)]' : isPaid ? 'text-[var(--doc-good)]' : 'text-[var(--doc-due)]'}>
                         {isVoid ? 'VOID' : supersededBy ? 'SUPERSEDED' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
                       </span>
                     </td>
@@ -733,7 +582,7 @@ export function InvoicePrintPage() {
             field; bulk-issued invoices carry no snapshot by design, see
             the Phase 1 plan's 1.4 section). */}
         {(invoice.clinicalSnapshot) && (
-          <section className="mt-4 pt-4 border-t border-[var(--border)] text-[11px] text-[var(--ink)]">
+          <section className="mt-3 pt-2.5 border-t border-[var(--border)] text-[11px] text-[var(--ink)]">
             <h3 className="mb-2 font-medium text-[var(--muted)] uppercase tracking-wide text-[10px]">
               Clinical details
             </h3>
@@ -784,88 +633,37 @@ export function InvoicePrintPage() {
 
         {/* Line items */}
         {isV2Invoice ? (
-          <LineItemsTable
-            lineItems={invoice.lineItems}
-            hasAdjustments={hasAdjustments}
-            totalPaise={invoice.totalPaise}
-            paper={paper}
-            isSharing={sharing}
-            paymentLedger={paymentLedger}
-          />
+          <LineItemsTable lineItems={invoice.lineItems} hasAdjustments={hasAdjustments} paper={paper} />
         ) : (
-          <LegacyLineItemsTable
-            lineItems={invoice.lineItems}
-            hasAdjustments={hasAdjustments}
-            totalPaise={invoice.totalPaise}
-            paper={paper}
-            isSharing={sharing}
-            paymentLedger={paymentLedger}
-          />
+          <LegacyLineItemsTable lineItems={invoice.lineItems} hasAdjustments={hasAdjustments} paper={paper} />
         )}
 
-        {/* Payment Ledger */}
-        {paymentLedger && paymentLedger.rows.length > 0 && (
-          <div className="mt-8 flex justify-between items-start">
-            <div className="w-[55%] pr-8">
-              <p className="mb-2 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1 text-xs">
-                Payment Details
-              </p>
-              <table className="w-full text-left text-[11px] mb-4">
-                <thead>
-                  <tr className="text-[var(--muted)]">
-                    <th className="py-1 w-[30%] font-medium">Date</th>
-                    <th className="py-1 w-[40%] font-medium">Mode</th>
-                    <th className="py-1 w-[30%] font-medium text-right pr-2">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="align-top">
-                  {paymentLedger.rows.map((row, idx) => (
-                    <tr key={idx} className="border-b border-[var(--border)] border-dashed last:border-0">
-                      <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
-                      <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
-                      <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
-                        {formatAmount(row.amountPaise)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        <BillTotals
+          subtotalPaise={invoice.lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0)}
+          adjustmentPaise={invoice.lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0)}
+          totalPaise={invoice.totalPaise}
+          ledger={paymentLedger}
+          compact={paper === 'A5'}
+        />
 
-        <p className="mt-4 text-[11px] text-[var(--muted)]">
+        <p className="mt-2.5 pl-3 text-[11px] text-[var(--muted)]">
           {paymentLedger && paymentLedger.balancePaise === 0 ? 'Received with thanks: ' : 'Amount in words: '}
           {amountInWords(paymentLedger ? (paymentLedger.balancePaise === 0 ? paymentLedger.paidPaise : paymentLedger.grossPaise) : invoice.totalPaise)}
         </p>
 
-        {/* Push everything below this to the bottom of the page */}
-        <div className="mt-auto pt-12">
-          {/* Terms & Conditions */}
-          <div className="mb-8 border-t border-[var(--border)] pt-4 text-[10px] text-[var(--muted)]">
-            <h4 className="font-semibold text-[var(--ink)] mb-1">Terms & Conditions</h4>
-            <ul className="list-disc pl-4 space-y-0.5">
-              <li>All payments are final and non-refundable.</li>
-            </ul>
-          </div>
-
+        {/* Terms and signature stay together as one block, at the foot of the page. */}
+        <div className="mt-auto pt-3 print:break-inside-avoid" data-pdf-block>
           <PrintSignatureFooter
             signatureUrl={signatureUrl}
             left={
               <>
+                <h4 className="mb-0.5 font-semibold text-[var(--ink)]">Terms & Conditions</h4>
+                <ul className="mb-1.5 list-disc space-y-0.5 pl-3.5">
+                  <li>All payments are final and non-refundable.</li>
+                </ul>
                 <p>
                   {invoice.invoiceNo} · issued {formatDateDMY(invoice.issuedAt)}
                 </p>
-                {footerTherapists.length > 0 && (
-                  <p>
-                    {footerTherapists.length === 1 ? 'Therapist: ' : 'Therapists: '}
-                    {footerTherapists
-                      .map(
-                        (t) => `${t.name}${t.registrationNo ? ` (Reg. No. ${t.registrationNo})` : ''}`
-                      )
-                      .join(', ')}
-                  </p>
-                )}
               </>
             }
           />

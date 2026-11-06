@@ -25,6 +25,7 @@ type ProfileFields = Pick<
   | 'email'
   | 'invoicePrefix'
   | 'walkInMrnoPrefix'
+  | 'tagline'
   | 'logoPath'
   | 'signaturePath'
 
@@ -35,6 +36,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
     useClinicSectionForm<ProfileFields>(
       (c) => ({
         name: c.name,
+        tagline: c.tagline ?? null,
         address: c.address,
         phone: c.phone,
         email: c.email,
@@ -143,7 +145,18 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
                         </Field>
                       </div>
                     </div>
-                    
+
+                    <Field label="Tagline (optional)" htmlFor="clinic-tagline" hint="One line under your clinic name on bills and receipts.">
+                      <input
+                        id="clinic-tagline"
+                        className={inputCls}
+                        maxLength={60}
+                        value={form.tagline ?? ''}
+                        onChange={(e) => set({ tagline: e.target.value || null })}
+                        placeholder="e.g. Physiotherapy and Sports Rehabilitation"
+                      />
+                    </Field>
+
                     <Field label="Address" htmlFor="clinic-address" hint="Printed on bills and receipts, one line per row.">
                       <textarea
                         id="clinic-address"
@@ -274,6 +287,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
         <LetterheadPreview
           draft={{
             name: form.name,
+            tagline: form.tagline,
             address: form.address,
             phone: form.phone,
             email: form.email,

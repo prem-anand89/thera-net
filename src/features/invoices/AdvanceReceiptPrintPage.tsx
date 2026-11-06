@@ -75,7 +75,7 @@ export function AdvanceReceiptPrintPage() {
       </div>
 
       <div className="mx-auto max-w-3xl bg-[var(--surface)] p-4 sm:p-8 print:max-w-[128mm] print:p-0">
-        <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
+        <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} compact />
 
         <section className="mt-4 flex flex-wrap justify-between gap-x-4 gap-y-2 text-sm">
           <div>

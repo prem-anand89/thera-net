@@ -1,6 +1,6 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useClinic } from '@/app/clinicContext';
-import { PrintLetterhead, PrintSignatureFooter } from '@/features/invoices/printChrome';
+import { BillTotals, PrintLetterhead, PrintSignatureFooter } from '@/features/invoices/printChrome';
 import { publicLogoUrl } from '@/lib/supabase';
 import type { Clinic } from '@/domain/types';
 import { createPortal } from 'react-dom';
@@ -8,14 +8,14 @@ import { useEffect, useRef, useState } from 'react';
 import { formatAmount } from '@/domain/money';
 
 export interface LetterheadPreviewProps {
-  draft: Pick<Clinic, 'name' | 'address' | 'phone' | 'email' | 'gstNo' | 'partnerHospitalName'>;
+  draft: Pick<Clinic, 'name' | 'tagline' | 'address' | 'phone' | 'email' | 'gstNo' | 'partnerHospitalName'>;
   logoUrl: string | null;
   partnerLogoUrl: string | null;
 }
 
 function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clinic, logoUrl: string | null, partnerLogoUrl: string | null }) {
   return (
-    <div className="w-[794px] h-[1123px] bg-[var(--surface)] p-12 flex flex-col relative text-[var(--ink)]">
+    <div className="doc-paper w-[794px] h-[1123px] bg-[var(--surface)] p-12 flex flex-col relative text-[var(--ink)]">
       <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
 
       <div className="mt-6 text-center">
@@ -71,7 +71,7 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
                 <td className="py-0.5 text-[var(--ink)] align-top">: 15 Aug 2026</td>
               </tr>
               <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Consultant</th>
+                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Therapist</th>
                 <td className="py-0.5 text-[var(--ink)] align-top truncate">: Dr. Smith</td>
               </tr>
               <tr>
@@ -116,62 +116,30 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
               <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatAmount(25000)}</td>
             </tr>
           </tbody>
-          <tfoot className="print:break-inside-avoid">
-            <tr>
-              <td colSpan={5} className="pt-3 pb-1 text-right font-medium text-[var(--muted)]">Subtotal</td>
-              <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">{formatAmount(830000)}</td>
-            </tr>
-            <tr>
-              <td colSpan={5} className="py-1 text-right font-medium text-[var(--muted)]">Total Adjustment</td>
-              <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">-{formatAmount(5000)}</td>
-            </tr>
-            <tr>
-              <td colSpan={5} className="py-3 text-right font-semibold text-[var(--ink)] border-b border-[var(--border)] border-dashed">Total</td>
-              <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap border-b border-[var(--border)] border-dashed">{formatAmount(825000)}</td>
-            </tr>
-          </tfoot>
         </table>
       </div>
       
-      <div className="mt-8 flex justify-between items-start">
-        <div className="w-[55%] pr-8">
-          <p className="mb-2 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1 text-xs">Payment Details</p>
-          <table className="w-full text-left text-[11px] mb-4">
-            <thead>
-              <tr className="text-[var(--muted)]">
-                <th className="py-1 w-[30%] font-medium">Date</th>
-                <th className="py-1 w-[40%] font-medium">Mode</th>
-                <th className="py-1 w-[30%] font-medium text-right pr-2">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="align-top">
-              <tr className="border-b border-[var(--border)] border-dashed last:border-0">
-                <td className="py-1.5 text-[var(--ink)]">15 Aug 2026</td>
-                <td className="py-1.5 text-[var(--ink)]">UPI</td>
-                <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">{formatAmount(825000)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <BillTotals
+        subtotalPaise={830000}
+        adjustmentPaise={-5000}
+        totalPaise={825000}
+        ledger={{ rows: [{ date: '2026-08-15', mode: 'UPI', amountPaise: 825000 }], paidPaise: 825000, balancePaise: 0 }}
+      />
 
       <p className="mt-4 text-[11px] text-[var(--muted)]">
         Received with thanks: Rupees Eight Thousand Two Hundred Fifty Only
       </p>
 
-      <div className="mt-auto pt-12">
-        <div className="mb-8 border-t border-[var(--border)] pt-4 text-[10px] text-[var(--muted)]">
-          <h4 className="font-semibold text-[var(--ink)] mb-1">Terms & Conditions</h4>
-          <ul className="list-disc pl-4 space-y-0.5">
-            <li>All payments are final and non-refundable.</li>
-          </ul>
-        </div>
-        <PrintSignatureFooter 
+      <div className="mt-auto pt-3">
+        <PrintSignatureFooter
           left={<>
+            <h4 className="mb-0.5 font-semibold text-[var(--ink)]">Terms & Conditions</h4>
+            <ul className="mb-1.5 list-disc space-y-0.5 pl-3.5">
+              <li>All payments are final and non-refundable.</li>
+            </ul>
             <p>INV-2026-001 · issued 15 Aug 2026</p>
-            <p>Therapist: Dr. Smith</p>
-          </>} 
-          signatureUrl={clinic.signaturePath ? publicLogoUrl(clinic.signaturePath) : null} 
+          </>}
+          signatureUrl={clinic.signaturePath ? publicLogoUrl(clinic.signaturePath) : null}
         />
       </div>
     </div>

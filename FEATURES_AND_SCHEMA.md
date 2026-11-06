@@ -350,6 +350,14 @@ queued with a visible error.
 - **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
 - **Immutable once issued** via DB triggers
 - **Printable** on A4/A5 with clinic letterhead + optional partner-hospital branding
+- **Letterhead** (`PrintLetterhead`, shared by bills, advance receipts and the Settings preview; clinical notes later):
+  logo and clinic name on the left, with the optional tagline (Settings → Clinic profile, 60 characters) and, if any, one
+  small "In partnership with" line under the name; address, phone, email and GSTIN always on the right
+- **Colour:** `.doc-paper` tokens give the screen and the shared PDF the app's teal; printing is pure black and white and
+  relies on rules and bold text, not fills
+- **Bill layout:** the therapist (with registration number) appears once, in the top block. Under the service table,
+  `BillTotals` shows subtotal, adjustment and Total, then Payment details against Amount Paid and Balance Due. Terms and
+  signature are one block at the foot of the page, and move to page 2 together on a long bill
 - **Document title**: "BILL" while outstanding, "BILL CUM RECEIPT" once paid — not
   "Invoice"/"Tax Invoice", which reads as GST terminology that doesn't apply to
   (generally GST-exempt) healthcare services and doesn't match how insurers/TPAs
@@ -1575,6 +1583,7 @@ around.*
 id                          uuid PRIMARY KEY
 name                        text NOT NULL
 address, phone, email, gst_no, logo_path  text (NULLABLE)
+tagline                   text (NULLABLE, max 60) — optional line under the clinic's name on its letterhead
 partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
 invoice_prefix              text NOT NULL (e.g., "BM") — the Clinic code (invoice half); made from the clinic name at sign-up
 bm_split_pct                numeric NOT NULL (default 75)
@@ -2105,20 +2114,16 @@ clinical-fields form itself (`InvoiceClinicalFieldsForm`,
 `src/components/InvoiceClinicalFields.tsx`) is shared between this dialog
 and `IssueInvoiceDialog` rather than duplicated.
 
-**Share via WhatsApp.** "Share via WhatsApp" on `InvoicePrintPage` renders
-the same DOM node "Print / Save PDF" shows into an actual PDF, entirely
-on-device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
-+ `jsPDF` — no server round trip, matching this app's offline-first
-design), then hands that file to the Web Share API so WhatsApp — or any
-other installed app — shows up in the OS share sheet with the real PDF
-attached (`shareFileToWhatsApp`). Both libraries are dynamically imported
-only when the button is clicked (a ~180KB-gzip chunk that every invoice
-view would otherwise pay for, whether or not Share is ever used). Web
-Share API's `files` support is mobile-browser-only (recent Chrome/Android,
-Safari/iOS); on a browser without it (desktop, mainly), this falls back to
-a `wa.me` click-to-chat link carrying just a text summary — WhatsApp's own
-link scheme has no way to carry a file, so the fallback is deliberately
-text-only rather than silently doing nothing.
+**Share via WhatsApp.** Builds a real PDF on the device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
++ `jsPDF`, dynamically imported), in colour, from an off-screen copy laid out as a fixed A4/A5 page, so it matches
+whichever device issued it. Pages are cut between rows (`computePageSlices`), never through one. Building takes seconds
+and browsers refuse the share sheet that long after a tap, so `useBillShare` works like this: a device that can share
+files prepares the PDF while the page is idle and one tap sends it; if it isn't ready, the first tap prepares and
+`ShareBillDialog` offers "Send PDF" (a fresh tap). A desktop downloads the file and then offers "Open WhatsApp chat",
+since a `wa.me` link can't carry a file. A refused share never turns silently into a text message; text only is an
+explicit choice after a failure. **Never send a stale bill:** a prepared PDF is used only while `freshnessKey` still
+matches, so anything printed on the bill must be in that key. The share sheet can't pre-select a contact, so the dialog
+names the patient.
 
 **UPI listed and defaulted first.** `PAYMENT_MODES` in `IssueInvoiceDialog`/
 `AmendInvoiceDialog` and `PAYMENT_METHODS` in `NewVisitPage`'s direct-
@@ -3589,6 +3594,7 @@ around.*
 id                          uuid PRIMARY KEY
 name                        text NOT NULL
 address, phone, email, gst_no, logo_path  text (NULLABLE)
+tagline                   text (NULLABLE, max 60) — optional line under the clinic's name on its letterhead
 partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
 invoice_prefix              text NOT NULL (e.g., "BM") — the Clinic code (invoice half); made from the clinic name at sign-up
 bm_split_pct                numeric NOT NULL (default 75)
@@ -4119,20 +4125,16 @@ clinical-fields form itself (`InvoiceClinicalFieldsForm`,
 `src/components/InvoiceClinicalFields.tsx`) is shared between this dialog
 and `IssueInvoiceDialog` rather than duplicated.
 
-**Share via WhatsApp.** "Share via WhatsApp" on `InvoicePrintPage` renders
-the same DOM node "Print / Save PDF" shows into an actual PDF, entirely
-on-device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
-+ `jsPDF` — no server round trip, matching this app's offline-first
-design), then hands that file to the Web Share API so WhatsApp — or any
-other installed app — shows up in the OS share sheet with the real PDF
-attached (`shareFileToWhatsApp`). Both libraries are dynamically imported
-only when the button is clicked (a ~180KB-gzip chunk that every invoice
-view would otherwise pay for, whether or not Share is ever used). Web
-Share API's `files` support is mobile-browser-only (recent Chrome/Android,
-Safari/iOS); on a browser without it (desktop, mainly), this falls back to
-a `wa.me` click-to-chat link carrying just a text summary — WhatsApp's own
-link scheme has no way to carry a file, so the fallback is deliberately
-text-only rather than silently doing nothing.
+**Share via WhatsApp.** Builds a real PDF on the device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
++ `jsPDF`, dynamically imported), in colour, from an off-screen copy laid out as a fixed A4/A5 page, so it matches
+whichever device issued it. Pages are cut between rows (`computePageSlices`), never through one. Building takes seconds
+and browsers refuse the share sheet that long after a tap, so `useBillShare` works like this: a device that can share
+files prepares the PDF while the page is idle and one tap sends it; if it isn't ready, the first tap prepares and
+`ShareBillDialog` offers "Send PDF" (a fresh tap). A desktop downloads the file and then offers "Open WhatsApp chat",
+since a `wa.me` link can't carry a file. A refused share never turns silently into a text message; text only is an
+explicit choice after a failure. **Never send a stale bill:** a prepared PDF is used only while `freshnessKey` still
+matches, so anything printed on the bill must be in that key. The share sheet can't pre-select a contact, so the dialog
+names the patient.
 
 **UPI listed and defaulted first.** `PAYMENT_MODES` in `IssueInvoiceDialog`/
 `AmendInvoiceDialog` and `PAYMENT_METHODS` in `NewVisitPage`'s direct-
