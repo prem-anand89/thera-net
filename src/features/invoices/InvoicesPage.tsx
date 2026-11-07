@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { canMarkOutstanding, invoiceRowStatus } from '@/domain/invoiceStatus';
+import { canMarkOutstanding, invoiceDisplayStatus, invoiceRowStatus } from '@/domain/invoiceStatus';
 import { toLocalDateStr } from '@/domain/schedule';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -413,7 +413,8 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
               const isSuperseded = supersededInvoiceIds.has(inv.id);
               const status = invoiceStatus(inv.id);
               const { paidPaise, remainingPaise } = balanceFor(inv);
-              const isPartial = !isSuperseded && status === 'outstanding' && paidPaise > 0;
+              const display = invoiceDisplayStatus({ isSuperseded, status, paidPaise });
+              const isPartial = display.isPartial;
               const initials = inv.patientSnapshot.name
                 .split(/\s+/)
                 .slice(0, 2)
@@ -445,9 +446,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                       <span className="font-num text-sm font-medium text-[var(--ink)]">
                         {formatAmount(inv.totalPaise)}
                       </span>
-                      <Pill tone={isSuperseded ? 'slate' : status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
-                        {isSuperseded ? 'Superseded' : status === 'paid' ? 'Paid' : status === 'void' ? 'Void' : isPartial ? 'Partially paid' : 'Outstanding'}
-                      </Pill>
+                      <Pill tone={display.tone}>{display.label}</Pill>
                     </div>
                     <div className="flex items-center gap-2">
                       {!isSuperseded && status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
@@ -537,7 +536,8 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                   const isSuperseded = supersededInvoiceIds.has(inv.id);
                   const status = invoiceStatus(inv.id);
                   const { paidPaise, remainingPaise } = balanceFor(inv);
-                  const isPartial = !isSuperseded && status === 'outstanding' && paidPaise > 0;
+                  const display = invoiceDisplayStatus({ isSuperseded, status, paidPaise });
+              const isPartial = display.isPartial;
                   return (
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
@@ -547,17 +547,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                       <td className={tdNum}>{formatAmount(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
-                        <Pill tone={isSuperseded ? 'slate' : status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
-                          {isSuperseded
-                            ? 'Superseded'
-                            : status === 'paid'
-                              ? 'Paid'
-                              : status === 'void'
-                                ? 'Void'
-                                : isPartial
-                                  ? 'Partially paid'
-                                  : 'Outstanding'}
-                        </Pill>
+                        <Pill tone={display.tone}>{display.label}</Pill>
                         {isPartial && (
                           <div className="mt-1 text-xs text-[var(--muted)]">
                             {formatAmount(paidPaise)} of {formatAmount(inv.totalPaise)} ·{' '}

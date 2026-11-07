@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canMarkOutstanding, invoiceRowStatus } from './invoiceStatus';
+import { canMarkOutstanding, invoiceDisplayStatus, invoiceRowStatus } from './invoiceStatus';
 
 describe('invoiceRowStatus', () => {
   it('reads a missing status row as paid, like the rest of the app', () => {
@@ -15,5 +15,22 @@ describe('canMarkOutstanding', () => {
     expect(canMarkOutstanding('paid', 50000)).toBe(false);
     expect(canMarkOutstanding('outstanding', 0)).toBe(false);
     expect(canMarkOutstanding('void', 0)).toBe(false);
+  });
+});
+
+describe('invoiceDisplayStatus', () => {
+  const d = (isSuperseded: boolean, status: 'paid' | 'outstanding' | 'void', paidPaise = 0) =>
+    invoiceDisplayStatus({ isSuperseded, status, paidPaise });
+
+  it('shows each state', () => {
+    expect(d(false, 'paid')).toEqual({ label: 'Paid', tone: 'green', isPartial: false });
+    expect(d(false, 'void')).toEqual({ label: 'Void', tone: 'slate', isPartial: false });
+    expect(d(false, 'outstanding')).toEqual({ label: 'Outstanding', tone: 'amber', isPartial: false });
+    expect(d(false, 'outstanding', 100)).toEqual({ label: 'Partially paid', tone: 'amber', isPartial: true });
+  });
+
+  it('lets superseded win over the bill\'s own status', () => {
+    expect(d(true, 'paid').label).toBe('Superseded');
+    expect(d(true, 'outstanding', 100)).toEqual({ label: 'Superseded', tone: 'slate', isPartial: false });
   });
 });
