@@ -352,7 +352,7 @@ queued with a visible error.
   the visits are stamped): at least one visit; all visits one patient, whose ID is the one on the invoice; a total above
   zero ("Nothing to bill"); the total equals the sum of the visits' bills; the line items add up to the total. A refusal
   rolls back the call, so the gap-free counter is not used. Existing invoices (three ₹0 ones among them) are untouched
-- **Clinical details come from every visit billed** (`src/domain/invoiceClinical.ts`): place of service is the one place all
+- **Clinical details come from every visit billed**, including the package sessions issuing pulls in (`invoiceService.visitsOnInvoice`; `src/domain/invoiceClinical.ts`): place of service is the one place all
   the visits were at, or `mixed` (with `locations`, printed "Clinic and Home"); `ward` is a third place; treatments are
   every treatment done, once each, plus each visit's own words (200 characters at most); the referral block (diagnosis,
   ICD code, referring physician) is read from the note written for the visits, else the latest completed note up to the
@@ -365,7 +365,10 @@ queued with a visible error.
   referral has no gap, and a bill with a line whose dates are shown as a range
   ("01/11/26 – 30/11/26 (12 sessions)") says "Full session dates are in the session log." Editing the clinical details
   after issue (EditInvoiceDetailsDialog) changes the printed bill silently: nothing on it says it was edited (corrections
-  are not advertised); the before/after is in `audit_log` and `editedByBiller` stays in the snapshot
+  are not advertised), and changing the diagnosis text there drops its ICD code too; the before/after is in `audit_log` and
+  `editedByBiller` stays in the snapshot. A bill with nothing else still saves the section when the place is not the clinic
+  (`hasClinicalContent`), so a home visit always says where. "Up to the last visit" is decided by the clinic's date. A
+  package spanning several places shows no place tag; the review step and insurer packet show the same tags as the bill
 - **Bill lines group by place as well as service and price**: a home visit and a clinic visit of the same service are
   separate rows (`unitGroupKey`: a clinic visit's key is unchanged, home and ward add their name). Packages still group by
   their package. Issued invoices are never regrouped
@@ -5358,6 +5361,7 @@ Amounts go through **`formatAmount(paise)`** and a symbol typed or labelled by h
 The app is built for India and works only there today. This is what is India-only, so a later project to serve another country starts here and nothing is a surprise. None of it matters until a clinic outside India is signed; the rule for new code is in `CLAUDE.md`.
 - **Money:** every amount goes through `formatAmount` and `currencySymbol()` (section 0d), but both still print rupees. The `*_paise` columns and the `Paise` type mean "1/100 of the currency": **never rename them**. Currencies without 100 minor units (Japanese yen, Kuwaiti dinar) are out of scope by design. `clinics.currency_code` and `clinics.tax_regime` exist but nothing reads them.
 - **UPI:** about 30 files (the QR, the payment method, Settings → Payments), `UpiQrModal` and `upiPay.ts`, which are the only places allowed to name rupees directly.
+- **Payment reference hints:** `paymentReferenceField` (`domain/paymentMethods.ts`) says "UTR / transaction ID", "NEFT / IMPS reference" and "004512 · HDFC" on the payment forms.
 - **Tax wording:** GST and TDS appear in about 17 files; the partner split's TDS basis; invoice labels ("Bill cum receipt", GST number); `amountInWords` (rupees, lakh, crore); Indian digit grouping.
 - **Money text the lint rule cannot see:** `toLocaleString('en-IN')` grouping (`BillAdjustmentFields`, `VisitSharedSplit`), the word "rupee" in text and screen-reader labels ("Every rupee that moved", "Price in rupees"), the letterhead preview's "Rupees … Only", two e2e specs that look for `₹`, and `SHARE_BELOW_ZERO` / `SHARE_MISSING` (`domain/visitLines.ts`), which are fixed when the app loads and so would not follow a per-clinic currency.
 - **Changing a clinic's currency later:** `currency_code` is its own setting, not derived from the phone country code (+1 is both the US and Canada, +91 and +971 are one country each, the euro spans many codes, and a clinic's staff may hold foreign numbers). A picker could suggest one from the country. **Visits, invoices and payments carry no currency today**, so a clinic that already has history must not be switched, or its past rupee bills would be relabelled: either stamp each invoice and payment with its currency first, or lock the setting once a clinic has any visit.

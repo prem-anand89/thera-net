@@ -60,7 +60,7 @@ describe('pickReferralNote', () => {
 
   it('prefers a note linked to one of the visits, the latest visit first', () => {
     const notes = [note('linked1', { visitId: 'v1' }), note('linked2', { visitId: 'v2' }), note('other', { updatedAt: '2026-11-09T00:00:00Z' })];
-    expect(pickReferralNote(notes, visits)?.id).toBe('linked2');
+    expect(pickReferralNote(notes, visits, 'Asia/Kolkata')?.id).toBe('linked2');
   });
   it('else the latest completed heavy note updated on or before the last visit', () => {
     const notes = [
@@ -68,11 +68,20 @@ describe('pickReferralNote', () => {
       note('inperiod', { updatedAt: '2026-11-08T00:00:00Z' }),
       note('afterwards', { updatedAt: '2026-12-01T00:00:00Z' }),
     ];
-    expect(pickReferralNote(notes, visits)?.id).toBe('inperiod');
+    expect(pickReferralNote(notes, visits, 'Asia/Kolkata')?.id).toBe('inperiod');
+  });
+  it('decides "up to the last visit" by the clinic\'s date, not UTC\'s', () => {
+    // The last visit is 2026-11-10 (see `visits`). 20:00 UTC that day is already the 11th in India, and 18:00 UTC is still the 10th.
+    const nextDay = note('nextDay', { updatedAt: '2026-11-10T20:00:00Z' });
+    const sameDay = note('sameDay', { updatedAt: '2026-11-10T18:00:00Z' });
+    const earlier = note('earlier', { updatedAt: '2026-11-01T00:00:00Z' });
+    expect(pickReferralNote([nextDay, earlier], visits, 'Asia/Kolkata')?.id).toBe('earlier');
+    expect(pickReferralNote([sameDay, earlier], visits, 'Asia/Kolkata')?.id).toBe('sameDay');
+    expect(pickReferralNote([nextDay, earlier], visits, 'America/New_York')?.id).toBe('nextDay');
   });
   it('else the latest completed note overall', () => {
     const notes = [note('a', { updatedAt: '2026-12-01T00:00:00Z' }), note('b', { updatedAt: '2026-12-05T00:00:00Z' })];
-    expect(pickReferralNote(notes, visits)?.id).toBe('b');
+    expect(pickReferralNote(notes, visits, 'Asia/Kolkata')?.id).toBe('b');
   });
   it('never returns a session note, a draft, or a note without a referral', () => {
     const notes = [
@@ -80,11 +89,11 @@ describe('pickReferralNote', () => {
       note('draft', { status: 'draft' }),
       note('nref', { assessmentPayload: { chiefComplaint: {} } }),
     ];
-    expect(pickReferralNote(notes, visits)).toBeUndefined();
+    expect(pickReferralNote(notes, visits, 'Asia/Kolkata')).toBeUndefined();
   });
   it('a linked note without a referral does not block the fallbacks', () => {
     const notes = [note('linked', { visitId: 'v1', assessmentPayload: { chiefComplaint: {} } }), note('fallback', { updatedAt: '2026-11-05T00:00:00Z' })];
-    expect(pickReferralNote(notes, visits)?.id).toBe('fallback');
+    expect(pickReferralNote(notes, visits, 'Asia/Kolkata')?.id).toBe('fallback');
   });
 });
 

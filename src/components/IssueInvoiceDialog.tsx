@@ -24,11 +24,13 @@ import { clinicCareLocations } from '@/domain/careLocations';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { formatAmount } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
-import { sessionCountLabel, treatmentPeriodOf } from '@/domain/invoiceLine';
+import { billMixesPlaces, linePlaceLabel, sessionCountLabel, treatmentPeriodOf } from '@/domain/invoiceLine';
+import { clinicTimezone } from '@/domain/clinicRegion';
 import {
   EMPTY_CLINICAL_FIELDS,
   InvoiceClinicalFieldsForm,
   type ClinicalFields,
+  hasClinicalContent,
 } from '@/components/InvoiceClinicalFields';
 
 // UPI first — the most common collection method at an Indian clinic front
@@ -105,16 +107,16 @@ export function IssueInvoiceDialog({
   // never synced this patient's notes); it never blocks issuance either
   // way, since every field here stays editable and is entirely optional
   // server-side (`p_clinical_snapshot` defaults to null).
-  // Every visit on the invoice: the details printed on it come from all of them, not only the first.
+  // Every visit on the invoice, including the package sessions issuing pulls in: the details printed on it come from all of them.
   const visitIds = target.visitIds ?? [target.visitId];
   const visitIdsKey = visitIds.join(',');
   const visits = useLiveQuery(
-    async () => {
-      const rows = await Promise.all(visitIds.map((id) => repos.visits.get(id)));
-      return rows.filter((v): v is NonNullable<typeof v> => v !== undefined);
-    },
+    // A visit taken by another bill meanwhile: nothing to pre-fill from, and the review step reports it.
+    () => invoiceService.visitsOnInvoice(visitIds).catch(() => []),
     [visitIdsKey]
   );
+  const billedIdsKey = (visits ?? []).map((v) => v.id).join(',');
+  const clinicRow = useLiveQuery(() => repos.clinics.get(clinicId), [clinicId]);
   const patientNotes = useLiveQuery(
     () => repos.consultationNotes.listByPatient(clinicId, target.patientId),
     [clinicId, target.patientId]
@@ -126,20 +128,19 @@ export function IssueInvoiceDialog({
 
   // The note written for these visits, else the latest completed one up to the last visit (see pickReferralNote).
   const sourceNote = useMemo(
-    () => (visits ? pickReferralNote(patientNotes ?? [], visits) : undefined),
-    [visits, patientNotes]
+    () => (visits ? pickReferralNote(patientNotes ?? [], visits, clinicTimezone(clinicRow)) : undefined),
+    [visits, patientNotes, clinicRow]
   );
 
   // Front desk has no notes on the device; the server hands over just the referral block instead.
   const { canViewClinicalNotes, isAdmin } = usePermissions();
   // The address is optional at sign-up but prints on every bill: prompt for it here instead of failing later.
-  const clinicRow = useLiveQuery(() => repos.clinics.get(clinicId), [clinicId]);
   const addressMissing = clinicRow !== undefined && !clinicRow.address?.trim();
   const [serverReferral, setServerReferral] = useState<CoreAssessmentPayload['referral'] | null>(null);
   useEffect(() => {
-    if (canViewClinicalNotes) return;
+    if (canViewClinicalNotes || !visits || visits.length === 0) return;
     let live = true;
-    void invoiceService.referralForVisits(visitIds).then((r) => {
+    void invoiceService.referralForVisits(visits.map((v) => v.id)).then((r) => {
       if (live && r) {
         setServerReferral({
           diagnosis: r.diagnosis ?? '',
@@ -153,7 +154,7 @@ export function IssueInvoiceDialog({
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canViewClinicalNotes, visitIdsKey]);
+  }, [canViewClinicalNotes, billedIdsKey]);
 
   const referral = canViewClinicalNotes ? noteReferral(sourceNote) : (serverReferral ?? undefined);
 
@@ -193,12 +194,7 @@ export function IssueInvoiceDialog({
   }
 
   function clinicalSnapshotFromFields(): InvoiceClinicalSnapshot | null {
-    const hasAnyClinicalField =
-      fields.diagnosis.trim() ||
-      fields.referringPhysician.trim() ||
-      fields.physicianRegistrationNo.trim() ||
-      fields.treatmentPerformed.trim();
-    if (!hasAnyClinicalField) return null;
+    if (!hasClinicalContent(fields)) return null;
     return {
       diagnosis: fields.diagnosis.trim() || null,
       // The code belongs to the diagnosis the note gave: once the biller changes that text it no longer applies.
@@ -343,7 +339,12 @@ export function IssueInvoiceDialog({
               <tbody>
                 {(preview?.lineItems ?? []).map((li, i) => (
                   <tr key={i} className="border-b border-[var(--border)] align-top">
-                    <td className="py-1.5 font-medium text-[var(--ink)]">{li.serviceName}</td>
+                    <td className="py-1.5 font-medium text-[var(--ink)]">
+                      {li.serviceName}
+                      {linePlaceLabel(li, billMixesPlaces(preview?.lineItems ?? [])) && (
+                        <div className="text-xs font-normal text-[var(--muted)]">{linePlaceLabel(li, billMixesPlaces(preview?.lineItems ?? []))}</div>
+                      )}
+                    </td>
                     <td className="py-1.5 text-[var(--muted)]">{sessionCountLabel(li)}</td>
                     <td className="font-num py-1.5 text-right">{formatAmount(li.totalPaise)}</td>
                   </tr>
@@ -372,6 +373,12 @@ export function IssueInvoiceDialog({
                   : 'No payment will be recorded; the bill is issued as unpaid.'}
               </p>
               <div className="mt-1.5 space-y-0.5 border-t border-[var(--border)] pt-1.5 text-xs text-[var(--muted)]">
+                {hasClinicalContent(fields) && (
+                  <p>
+                    Place of service: {placeOfServiceLabel({ placeOfService: fields.placeOfService, locations: fields.locations })}
+                  </p>
+                )}
+                {fields.treatmentPerformed && <p>Treatment: {fields.treatmentPerformed}</p>}
                 {period && (
                   <p>
                     Treatment period: {formatDateDMY(period.from)} – {formatDateDMY(period.to)}
@@ -380,14 +387,10 @@ export function IssueInvoiceDialog({
                 {fields.diagnosis && <p>Diagnosis: {fields.diagnosis}</p>}
                 {fields.referringPhysician && (
                   <p>
-                    Referring physician: {fields.referringPhysician}
+                    Ref. Physician: {fields.referringPhysician}
                     {fields.physicianRegistrationNo && ` (Reg. No. ${fields.physicianRegistrationNo})`}
                   </p>
                 )}
-                <p>
-                  Place of service: {placeOfServiceLabel({ placeOfService: fields.placeOfService, locations: fields.locations })}
-                </p>
-                {fields.treatmentPerformed && <p>Treatment performed: {fields.treatmentPerformed}</p>}
               </div>
             </div>
 

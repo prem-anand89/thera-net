@@ -17,10 +17,11 @@ import {
   normalizeAuthorizedCount,
   sessionCountLabel,
   sessionDatesDisplay,
+  billMixesPlaces,
   hasCondensedSessionDates,
+  linePlaceLabel,
   treatmentPeriodOf,
 } from '@/domain/invoiceLine';
-import { CARE_LOCATION_LABELS, locationOf } from '@/domain/careLocations';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary } from '@/components/ui';
@@ -36,11 +37,6 @@ import { useBillShare } from './useBillShare';
  *  … authorised" framing and the two distinct non-reconciling explanations
  *  only make sense on a printed bill, not in InsurerPacketPage's summary
  *  (which uses plain `sessionCountLabel` instead). */
-/** Where a line's sessions were, shown under its service name only when the bill mixes places (clinic and home). */
-function lineLocationLabel(li: InvoiceLineItem, mixed: boolean): string | null {
-  return mixed ? CARE_LOCATION_LABELS[locationOf(li)] : null;
-}
-
 function lineCaption(li: InvoiceLineItem): string | null {
   if (!isV2Line(li) || lineReconciles(li)) return null;
   const authorized = normalizeAuthorizedCount(li.authorizedSessionCount ?? null);
@@ -153,7 +149,7 @@ export function LineItemsTable({
 }) {
   const isA5 = paper === 'A5';
   const longSessionsText = lineItems.some((li) => sessionsCellText(li).length > 12);
-  const mixedPlaces = new Set(lineItems.map((li) => locationOf(li))).size > 1;
+  const mixedPlaces = billMixesPlaces(lineItems);
   return (
     <div className="mt-3.5 overflow-x-auto print:overflow-visible">
       <table className={`w-full table-fixed border-collapse ${isA5 ? 'text-[10.5px]' : 'min-w-[680px] text-[12px] print:min-w-full'}`}>
@@ -170,7 +166,7 @@ export function LineItemsTable({
         <tbody className="align-top">
           {lineItems.map((li, i) => {
             const caption = lineCaption(li);
-            const where = lineLocationLabel(li, mixedPlaces);
+            const where = linePlaceLabel(li, mixedPlaces);
             return (
               <tr key={i} className="border-b border-[var(--border)] align-top print:break-inside-avoid">
                 <td className="py-2 pl-3 pr-2 font-medium text-[var(--ink)]">
@@ -284,11 +280,12 @@ export function InvoicePrintPage() {
     fileName: `${(invoice?.invoiceNo ?? 'bill').replace(/\//g, '-')}.pdf`,
     title: `Bill ${invoice?.invoiceNo ?? ''}`,
     paper,
-    ready: Boolean(invoice) && invoicePaymentQuery !== undefined && paymentLedger !== undefined && therapists !== undefined,
+    ready: Boolean(invoice) && invoicePaymentQuery !== undefined && paymentLedger !== undefined && balance !== undefined && therapists !== undefined,
     freshnessKey: JSON.stringify([
       invoice,
       paymentLedger,
       invoicePayment?.status,
+      balance?.paidPaise,
       supersededBy?.id,
       paper,
       therapists?.map((t) => [t.id, t.name, t.registrationNo]),
@@ -298,6 +295,7 @@ export function InvoicePrintPage() {
       clinic.phone,
       clinic.email,
       clinic.gstNo,
+      clinic.hasPartner,
       clinic.partnerHospitalName,
       logoUrl,
       partnerLogoUrl,

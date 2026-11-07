@@ -10,6 +10,7 @@ import {
   EMPTY_CLINICAL_FIELDS,
   InvoiceClinicalFieldsForm,
   type ClinicalFields,
+  hasClinicalContent,
 } from '@/components/InvoiceClinicalFields';
 
 function fieldsFromSnapshot(snapshot: InvoiceClinicalSnapshot | null | undefined): ClinicalFields {
@@ -60,15 +61,14 @@ export function EditInvoiceDetailsDialog({
     setBusy(true);
     setError(null);
     try {
-      const hasAnyClinicalField =
-        fields.diagnosis.trim() ||
-        fields.referringPhysician.trim() ||
-        fields.physicianRegistrationNo.trim() ||
-        fields.treatmentPerformed.trim();
-      const clinicalSnapshot: InvoiceClinicalSnapshot | null = hasAnyClinicalField
+      const clinicalSnapshot: InvoiceClinicalSnapshot | null = hasClinicalContent(fields)
         ? {
             diagnosis: fields.diagnosis.trim() || null,
-            diagnosisIcdCode: invoice.clinicalSnapshot?.diagnosisIcdCode ?? null,
+            // The code belongs to the diagnosis it came with: once that text changes it no longer applies.
+            diagnosisIcdCode:
+              fields.diagnosis.trim() === (invoice.clinicalSnapshot?.diagnosis ?? '').trim()
+                ? (invoice.clinicalSnapshot?.diagnosisIcdCode ?? null)
+                : null,
             referringPhysician: fields.referringPhysician.trim() || null,
             physicianRegistrationNo: fields.physicianRegistrationNo.trim() || null,
             placeOfService: fields.placeOfService,

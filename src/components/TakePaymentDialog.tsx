@@ -120,7 +120,8 @@ export function TakePaymentDialog({
   }
 
   async function recordOne(amount: Paise, forMethod: PaymentMethod, forReference: string) {
-    const notes = forReference.trim() || null;
+    // A method with no reference field (partner) saves none, even if one was typed before switching to it.
+    const notes = paymentReferenceField(forMethod) ? forReference.trim() || null : null;
     if (invoiceId && invoice) {
       await paymentService.recordInvoicePayment(clinicId, invoice, amount, forMethod, receivedDate, notes);
     } else {

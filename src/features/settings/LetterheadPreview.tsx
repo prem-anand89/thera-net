@@ -47,8 +47,8 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
       <section className="mt-2.5 border-t border-[var(--border)] pt-1.5">
         <h3 className="mb-0.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Clinical details</h3>
         <div className="grid grid-cols-2 gap-x-7">
-          <DocFieldList rows={[{ label: 'Ref. Physician', value: 'Dr. Sarah Connor (Reg. No. 12345)' }]} />
           <DocFieldList rows={[{ label: 'Place of service', value: 'Clinic' }, { label: 'Treatment', value: 'Post-Op Care' }]} />
+          <DocFieldList rows={[{ label: 'Ref. Physician', value: 'Dr. Sarah Connor (Reg. No. 12345)' }]} />
         </div>
       </section>
 

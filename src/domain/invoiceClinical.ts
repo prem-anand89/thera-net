@@ -55,7 +55,8 @@ function hasReferral(n: ConsultationNote): boolean {
  */
 export function pickReferralNote(
   notes: ConsultationNote[],
-  visits: Pick<Visit, 'id' | 'visitDate'>[]
+  visits: Pick<Visit, 'id' | 'visitDate'>[],
+  timeZone: string
 ): ConsultationNote | undefined {
   const usable = notes.filter((n) => n.status === 'completed' && n.noteMode !== 'session' && hasReferral(n));
   const newestFirst = [...visits].sort((a, b) => b.visitDate.localeCompare(a.visitDate));
@@ -65,8 +66,13 @@ export function pickReferralNote(
   }
   const byRecency = [...usable].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const lastVisitDate = newestFirst[0]?.visitDate;
-  const inPeriod = lastVisitDate ? byRecency.find((n) => n.updatedAt.slice(0, 10) <= lastVisitDate) : undefined;
+  const inPeriod = lastVisitDate ? byRecency.find((n) => dateInZone(n.updatedAt, timeZone) <= lastVisitDate) : undefined;
   return inPeriod ?? byRecency[0];
+}
+
+/** A timestamp's calendar date in the clinic's zone (visit dates are clinic dates; a timestamp's own date is UTC's). */
+function dateInZone(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 }
 
 const PLACE_LABEL: Record<CareLocation, string> = { clinic: 'Clinic', home: 'Home (domiciliary)', ward: 'Ward' };

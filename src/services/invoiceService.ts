@@ -238,6 +238,7 @@ export function createInvoiceService(repos: Repos) {
         p_clinic_id: clinic.id,
         p_fy_label: fy.label,
         p_patient_snapshot: {
+          patientId: patient.id,
           mrno: patient.mrno,
           name: patient.name,
           age: patient.age,
@@ -381,6 +382,11 @@ export function createInvoiceService(repos: Repos) {
      * guaranteed to match the real thing rather than an approximation of
      * it. Read-only: touches no visit/invoice state.
      */
+    /** Every visit an invoice for these would cover, including the package sessions issuing pulls in. */
+    visitsOnInvoice(visitIds: UUID[]): Promise<Visit[]> {
+      return resolveVisits(visitIds);
+    },
+
     async previewLineItems(visitIds: UUID[]): Promise<{
       lineItems: ReturnType<typeof buildLineItemsPure>['lineItems'];
       totalPaise: number;

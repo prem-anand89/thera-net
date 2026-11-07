@@ -1,4 +1,4 @@
-import { locationOf } from './careLocations';
+import { CARE_LOCATION_LABELS, locationOf } from './careLocations';
 import type { InvoiceLineItem, UUID, Visit, VisitItem } from './types';
 import type { Paise } from './money';
 import { lineNets } from './visitLines';
@@ -351,6 +351,20 @@ export function buildLineItems(
 export function treatmentPeriodOf(lineItems: InvoiceLineItem[]): DatePeriod | null {
   const period = invoicePeriod(lineItems);
   return period && period.from < period.to ? period : null;
+}
+
+/**
+ * Whether a bill's lines were in more than one place, so each should say where. Older bills record no place on any line and
+ * read as not mixed. A line with no place on a bill that has places is a package spanning several, which is mixed by itself.
+ */
+export function billMixesPlaces(lineItems: InvoiceLineItem[]): boolean {
+  const known = new Set(lineItems.flatMap((li) => (li.location ? [li.location] : [])));
+  return known.size > 1 || (known.size === 1 && lineItems.some((li) => !li.location));
+}
+
+/** The place printed under a line's service name on a mixed bill. Null for a line spanning places: no one place is claimed. */
+export function linePlaceLabel(li: InvoiceLineItem, mixed: boolean): string | null {
+  return mixed && li.location ? CARE_LOCATION_LABELS[li.location] : null;
 }
 
 /** Whether any line shows its dates as a range ("01/11/26 – 30/11/26 (12 sessions)"): the bill then points to the session log. */

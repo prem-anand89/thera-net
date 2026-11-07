@@ -20,6 +20,13 @@ export const EMPTY_CLINICAL_FIELDS: ClinicalFields = {
   treatmentPerformed: '',
 };
 
+/** Whether the fields are worth saving on the bill. A clinic visit with nothing else needs no section; a home or mixed place does, or the bill would not say where. */
+export function hasClinicalContent(f: ClinicalFields): boolean {
+  return Boolean(
+    f.diagnosis.trim() || f.referringPhysician.trim() || f.physicianRegistrationNo.trim() || f.treatmentPerformed.trim() || f.placeOfService !== 'clinic'
+  );
+}
+
 /**
  * The diagnosis/referring-physician/place-of-service/treatment-performed
  * form, shared by `IssueInvoiceDialog` (pre-filled from the patient's note,

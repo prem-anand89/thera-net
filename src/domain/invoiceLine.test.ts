@@ -12,7 +12,9 @@ import {
   normalizeAuthorizedCount,
   sessionCountLabel,
   sessionDatesDisplay,
+  billMixesPlaces,
   hasCondensedSessionDates,
+  linePlaceLabel,
   treatmentPeriodOf,
 } from './invoiceLine';
 import type { InvoiceLineItem, Visit, VisitItem } from './types';
@@ -778,6 +780,24 @@ describe('invoice lines per service', () => {
     expect(lineItems.find((l) => l.authorizedSessionCount === 5)?.totalPaise).toBe(0);
     expect(totalPaise).toBe(rs(400));
     for (const l of lineItems) expect(lineReconciles(l)).toBe(true);
+  });
+});
+
+describe('billMixesPlaces / linePlaceLabel', () => {
+  const line = (location?: 'clinic' | 'home') => ({ serviceName: 'S', sessionCount: 1, sessionDates: [], catalogPricePaise: 0, adjustmentPaise: 0, adjustmentReason: null, totalPaise: 0, location }) as InvoiceLineItem;
+
+  it('older bills with no places, and bills in one place, are not mixed', () => {
+    expect(billMixesPlaces([line(), line()])).toBe(false);
+    expect(billMixesPlaces([line('home'), line('home')])).toBe(false);
+  });
+  it('two places, or a package spanning places beside a placed line, are mixed', () => {
+    expect(billMixesPlaces([line('clinic'), line('home')])).toBe(true);
+    expect(billMixesPlaces([line(), line('home')])).toBe(true);
+  });
+  it('a package spanning places claims no one place', () => {
+    expect(linePlaceLabel(line(), true)).toBeNull();
+    expect(linePlaceLabel(line('home'), true)).toBe('Home visit');
+    expect(linePlaceLabel(line('home'), false)).toBeNull();
   });
 });
 

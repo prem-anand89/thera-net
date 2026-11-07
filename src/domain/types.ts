@@ -691,6 +691,8 @@ export interface InvoicePatientSnapshot {
   age: number | null;
   sex: string | null;
   phone?: string | null;
+  /** The patient's permanent id, which the server checks: the Patient ID above can be edited later. Absent on older invoices. */
+  patientId?: UUID;
 }
 
 /**

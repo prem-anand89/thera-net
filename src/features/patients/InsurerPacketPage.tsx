@@ -7,7 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { LockedSectionNotice } from '@/features/settings/settingsShared';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { sessionCountLabel } from '@/domain/invoiceLine';
+import { billMixesPlaces, linePlaceLabel, sessionCountLabel } from '@/domain/invoiceLine';
 import { formatAmount } from '@/domain/money';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -36,7 +36,12 @@ function InvoiceSummary({ invoice }: { invoice: Invoice }) {
         <tbody>
           {invoice.lineItems.map((li, i) => (
             <tr key={i} className="border-t border-[var(--border)]">
-              <td className="py-1 text-[var(--ink)]">{li.serviceName}</td>
+              <td className="py-1 text-[var(--ink)]">
+                {li.serviceName}
+                {linePlaceLabel(li, billMixesPlaces(invoice.lineItems)) && (
+                  <span className="text-[var(--muted)]"> · {linePlaceLabel(li, billMixesPlaces(invoice.lineItems))}</span>
+                )}
+              </td>
               <td className="py-1 text-[var(--ink)]">{sessionCountLabel(li)}</td>
               <td className="font-num py-1 text-right text-[var(--ink)]">
                 {formatAmount(li.totalPaise)}

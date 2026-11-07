@@ -66,8 +66,10 @@ function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreate
   const [differentKey, setDifferentKey] = useState<string | null>(null);
   const differentConfirmed = similar.length > 0 && differentKey === similarKey;
 
-  // Anything typed beyond what the sheet opened with.
-  const dirty = newPatient.name !== initialName || newPatient.phone !== initialPhone || Boolean(newPatient.age || newPatient.primaryCondition || newPatient.email || newPatient.address);
+  // Anything entered in any field beyond what the sheet opened with.
+  const dirty = Object.entries(newPatient).some(
+    ([key, value]) => value !== (key === 'name' ? initialName : key === 'phone' ? initialPhone : '')
+  );
   useUnsavedWorkProbe(() => dirty);
   async function requestClose() {
     if (busy) return;

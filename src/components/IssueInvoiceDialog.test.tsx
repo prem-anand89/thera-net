@@ -32,6 +32,7 @@ vi.mock('@/services', () => ({
     treatmentCatalog: { list: () => [] },
   },
   invoiceService: {
+    visitsOnInvoice: async () => [],
     previewLineItems: (...a: unknown[]) => (previewLineItems as (...x: unknown[]) => unknown)(...a),
     issueForVisit: (...a: unknown[]) => (issueForVisit as (...x: unknown[]) => unknown)(...a),
     issueForVisits: (...a: unknown[]) => (issueForVisits as (...x: unknown[]) => unknown)(...a),
