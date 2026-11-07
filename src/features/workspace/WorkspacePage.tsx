@@ -53,6 +53,10 @@ import {
   StatStrip,
   ConfirmDialog,
   Pill,
+  pillAccent,
+  pillNeutral,
+  chipSelect,
+  chipSelectChevron,
   PackageThread,
   th,
   thNum,
@@ -78,6 +82,8 @@ import { splitDisplay, useVisitDetails, type VisitDetails } from '@/features/vis
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 import { MyCreditsCard } from './MyCreditsCard';
+
+const EMPTY_SET = new Set<string>();
 
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -494,6 +500,36 @@ export function WorkspacePage() {
     // Stable sort: attention rows first, otherwise the service's own order.
     return [...scopedPackages].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
   }, [scopedPackages, pkgStatusFilter]);
+  const hasMoreThanFiveFollowUps =
+    followTab === 'reviews'
+      ? Math.max(followUp.due.length, followUp.missed.length, followUp.noShows.length) > 5
+      : filteredPackages.length > 5;
+  const followUpReviewCount =
+    followUp.due.length + followUp.missed.length + followUp.noShows.length;
+  const stalePackagesCount = scopedPackages.filter((p) => p.stale).length;
+  const renewPackagesCount = scopedPackages.filter((p) => !p.stale && p.nearingCompletion).length;
+  const expiringPackagesCount = scopedPackages.filter(
+    (p) => !p.stale && !p.nearingCompletion && p.expiry !== null
+  ).length;
+
+  const followUpBadge = useMemo(() => {
+    const parts: string[] = [];
+    if (followUpReviewCount > 0) {
+      parts.push(`${followUpReviewCount} due`);
+    }
+    if (stalePackagesCount > 0) {
+      parts.push(`${stalePackagesCount} stale`);
+    } else if (renewPackagesCount > 0) {
+      parts.push(`${renewPackagesCount} renew`);
+    } else if (expiringPackagesCount > 0) {
+      parts.push(`${expiringPackagesCount} expiring`);
+    }
+    if (parts.length === 0) {
+      return <Pill tone="slate">All caught up</Pill>;
+    }
+    return <Pill tone="amber">{parts.join(' · ')}</Pill>;
+  }, [followUpReviewCount, stalePackagesCount, renewPackagesCount, expiringPackagesCount]);
+
   const packageList = useShowMore(filteredPackages, `${pkgStatusFilter}|${pkgMineOnly}`, followPageSize);
 
   const now = new Date();
@@ -634,7 +670,7 @@ export function WorkspacePage() {
       })
     );
     return result;
-  }, [candidatePendingGroupIds]) ?? new Set<string>();
+  }, [candidatePendingGroupIds]) ?? EMPTY_SET;
 
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
@@ -724,9 +760,32 @@ export function WorkspacePage() {
   };
   const statCells = showDues ? [collectedCell, duesCell] : [collectedCell];
 
-  const todayCardFor = (row: TodayVisitRow) =>
-    todayRowToCardData(
-      row,
+  const todayRows = useMemo(
+    () =>
+      today
+        ? today.visits.map((row) =>
+            todayRowToCardData(
+              row,
+              openPackageGroupIds,
+              scope.isAdmin,
+              scope.isFrontDesk,
+              scope.myTherapistId,
+              canViewClinicalNotes,
+              canShareRevenue,
+              treatmentName,
+              invoicedSiblingGroupIds,
+              consultationNotes,
+              clinic.enablePatientComms ?? false,
+              feedbackRequestByVisitId,
+              responseByRequestId,
+              googleReviewEligibleIds,
+              clinic.googleReviewUrl ?? null,
+              todayDetails.get(row.visitId)
+            )
+          )
+        : [],
+    [
+      today,
       openPackageGroupIds,
       scope.isAdmin,
       scope.isFrontDesk,
@@ -734,15 +793,17 @@ export function WorkspacePage() {
       canViewClinicalNotes,
       canShareRevenue,
       treatmentName,
-      invoicedSiblingGroupIds ?? new Set(),
+      invoicedSiblingGroupIds,
       consultationNotes,
-      clinic.enablePatientComms ?? false,
+      clinic.enablePatientComms,
       feedbackRequestByVisitId,
       responseByRequestId,
       googleReviewEligibleIds,
-      clinic.googleReviewUrl ?? null,
-      todayDetails.get(row.visitId)
-    );
+      clinic.googleReviewUrl,
+      todayDetails,
+    ]
+  );
+  const todayList = useShowMore(todayRows, todayStr, 10);
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
   const dueByVisitId = new Map((today?.visits ?? []).map((row) => [row.visitId, hasDue(row.paymentState)]));
@@ -992,21 +1053,31 @@ export function WorkspacePage() {
       )}
 
         <SectionCard
-          title={
-            appointmentsLeft > 0
-              ? `Appointments · ${appointmentsLeft} left`
-              : appointmentsForList.some((a) => a.status !== 'cancelled')
-                ? 'Appointments · all done'
-                : 'Appointments · none today'
+          title="Appointments"
+          badge={
+            appointmentsLeft > 0 ? (
+              <Pill tone="teal">{appointmentsLeft} left</Pill>
+            ) : appointmentsForList.some((a) => a.status !== 'cancelled') ? (
+              <Pill tone="slate">All done</Pill>
+            ) : (
+              <Pill tone="slate">None today</Pill>
+            )
           }
           action={
-            <span className="flex shrink-0 items-center gap-2.5">
+            <span className="flex shrink-0 items-center gap-2">
               {canManageBookings && (
-                <button type="button" className="min-h-9 whitespace-nowrap px-1 text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => setAddAwaitingOpen(true)}>
+                <button
+                  type="button"
+                  className={pillAccent}
+                  onClick={() => setAddAwaitingOpen(true)}
+                >
                   + Awaiting
                 </button>
               )}
-              <Link to="/schedule" className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline">
+              <Link
+                to="/schedule"
+                className={pillNeutral}
+              >
                 <span className="sm:hidden">Schedule →</span>
                 <span className="hidden sm:inline">Open schedule →</span>
               </Link>
@@ -1056,7 +1127,14 @@ export function WorkspacePage() {
         </SectionCard>
 
       <SectionCard
-        title={today ? `Today's visits · ${today.visits.length}` : "Today's visits"}
+        title="Today's visits"
+        badge={
+          today && today.visits.length > 0 ? (
+            <span className="font-num rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-semibold text-[var(--ink)]">
+              {today.visits.length}
+            </span>
+          ) : null
+        }
         action={
           today && today.visits.length > 0 ? (
             <div className="hidden tab:block">
@@ -1075,62 +1153,72 @@ export function WorkspacePage() {
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
         ) : (
-          <ResponsiveVisitList
-            rows={today.visits.map(todayCardFor)}
-            showDate={false}
-            showPatient={true}
-            showColumnPicker={false}
-            onInvoice={(row) => openInvoiceFor(row)}
-            onTakePayment={(row) => setTakingPayment(row)}
-            onEditPatient={(row) => setEditPatientId(row.patientId)}
-            onEdit={(row) => {
-              setVisitEditError(null);
-              setEditingVisitId(row.visitId);
-            }}
-            onSplit={
-              canShareRevenue
-                ? (row) => {
-                  void repos.visits.get(row.visitId).then((v) => {
-                    if (v) setSplitting(v);
-                  });
-                }
-                : undefined
-            }
-            onDelete={(row) => void confirmAndDeleteVisit(row.visitId)}
-            onAskForFeedback={(row) => {
-              void feedbackService
-                .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
-                .catch((e) => notify.error(toFriendlyMessage(e)));
-            }}
-            onResendFeedback={(row) => {
-              const request = feedbackRequestByVisitId.get(row.visitId);
-              if (!request?.token) return;
-              void feedbackService
-                .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
-                .catch((e) => notify.error(toFriendlyMessage(e)));
-            }}
-            onAskForGoogleReview={(row) => {
-              if (!row.googleReviewUrl) return;
-              void feedbackService
-                .askForGoogleReview(
-                  clinic.id,
-                  row.patientName,
-                  row.patientPhone ?? null,
-                  clinic.name,
-                  row.googleReviewUrl
-                )
-                .catch((e) => notify.error(toFriendlyMessage(e)));
-            }}
-            canInvoice={canBill}
-            canCollect={canCollectPayment}
-            backTo="/workspace"
-          />
+          <>
+            <ResponsiveVisitList
+              rows={todayList.visible}
+              showDate={false}
+              showPatient={true}
+              showColumnPicker={false}
+              onInvoice={(row) => openInvoiceFor(row)}
+              onTakePayment={(row) => setTakingPayment(row)}
+              onEditPatient={(row) => setEditPatientId(row.patientId)}
+              onEdit={(row) => {
+                setVisitEditError(null);
+                setEditingVisitId(row.visitId);
+              }}
+              onSplit={
+                canShareRevenue
+                  ? (row) => {
+                    void repos.visits.get(row.visitId).then((v) => {
+                      if (v) setSplitting(v);
+                    });
+                  }
+                  : undefined
+              }
+              onDelete={(row) => void confirmAndDeleteVisit(row.visitId)}
+              onAskForFeedback={(row) => {
+                void feedbackService
+                  .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
+                  .catch((e) => notify.error(toFriendlyMessage(e)));
+              }}
+              onResendFeedback={(row) => {
+                const request = feedbackRequestByVisitId.get(row.visitId);
+                if (!request?.token) return;
+                void feedbackService
+                  .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
+                  .catch((e) => notify.error(toFriendlyMessage(e)));
+              }}
+              onAskForGoogleReview={(row) => {
+                if (!row.googleReviewUrl) return;
+                void feedbackService
+                  .askForGoogleReview(
+                    clinic.id,
+                    row.patientName,
+                    row.patientPhone ?? null,
+                    clinic.name,
+                    row.googleReviewUrl
+                  )
+                  .catch((e) => notify.error(toFriendlyMessage(e)));
+              }}
+              canInvoice={canBill}
+              canCollect={canCollectPayment}
+              backTo="/workspace"
+            />
+            <ShowMoreFooter list={todayList} noun="visits" />
+          </>
         )}
       </SectionCard>
 
 
       {assistedToday.length > 0 && (
-        <SectionCard title={`Assisted today · ${assistedToday.length}`}>
+        <SectionCard
+          title="Assisted today"
+          badge={
+            <span className="font-num rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-semibold text-[var(--ink)]">
+              {assistedToday.length}
+            </span>
+          }
+        >
           <AssistedVisitList
             rows={assistedToday}
             patientName={patientNameOf}
@@ -1149,14 +1237,18 @@ export function WorkspacePage() {
 
       <SectionCard
         title="Follow up"
+        badge={followUpBadge}
         action={
           <button
             type="button"
             aria-expanded={followOpen}
-            className="min-h-8 text-xs font-medium text-[var(--teal)] hover:underline"
+            className={pillNeutral}
             onClick={() => setFollowOpen(!followOpen)}
           >
-            {followOpen ? 'Hide ▴' : 'Show ▾'}
+            <span>{followOpen ? 'Hide' : 'Show'}</span>
+            <span className="text-[10px] text-[var(--muted)]" aria-hidden="true">
+              {followOpen ? '▴' : '▾'}
+            </span>
           </button>
         }
       >
@@ -1201,20 +1293,21 @@ export function WorkspacePage() {
               );
             })}
           </div>
-          <span className="flex items-center gap-1 text-xs text-[var(--muted)]" role="group" aria-label="Rows to show">
-            Rows
-            {([5, 10] as const).map((size) => (
-              <button
-                key={size}
-                type="button"
-                aria-pressed={followPageSize === size}
-                onClick={() => setFollowPageSize(size)}
-                className={`min-h-7 rounded-full px-2 text-xs font-medium ${followPageSize === size ? 'bg-[var(--teal-light)] text-[var(--teal)]' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
+          {hasMoreThanFiveFollowUps && (
+            <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+              Rows
+              <select
+                aria-label="Rows per page"
+                className={chipSelect}
+                style={chipSelectChevron}
+                value={followPageSize}
+                onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
               >
-                {size}
-              </button>
-            ))}
-          </span>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+              </select>
+            </label>
+          )}
         </div>
         {followTab === 'reviews' ? (
           <ReviewsPanel
@@ -1227,10 +1320,6 @@ export function WorkspacePage() {
           />
         ) : (
           <>
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone
-          quiet.
-        </p>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             {(
@@ -1243,12 +1332,11 @@ export function WorkspacePage() {
                 key={opt.key}
                 type="button"
                 onClick={() => setPkgStatusFilter(opt.key)}
-                className="rounded-full border px-3 py-1 text-xs font-medium"
-                style={{
-                  background: pkgStatusFilter === opt.key ? 'var(--teal-light)' : 'var(--surface)',
-                  borderColor: pkgStatusFilter === opt.key ? 'transparent' : 'var(--border)',
-                  color: pkgStatusFilter === opt.key ? 'var(--teal)' : 'var(--muted)',
-                }}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  pkgStatusFilter === opt.key
+                    ? 'border-transparent bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
               >
                 {opt.label}
               </button>
@@ -1364,7 +1452,14 @@ export function WorkspacePage() {
                   {packageList.visible.map((p) => (
                     <tr key={p.packageGroupId}>
                       <td className={td}>
-                        <span className="font-display font-medium">{p.patientName}</span>{' '}
+                        <Link
+                          to="/patients/$patientId"
+                          params={{ patientId: p.patientId }}
+                          search={{ from: '/workspace' }}
+                          className="font-display font-medium text-[var(--ink)] hover:underline hover:text-[var(--teal)]"
+                        >
+                          {p.patientName}
+                        </Link>{' '}
                         <span className="font-num text-xs text-[var(--muted)]">{p.mrno}</span>
                       </td>
                       <td className={td}>{p.serviceName}</td>

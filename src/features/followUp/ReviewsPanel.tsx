@@ -203,9 +203,9 @@ export function ReviewsPanel({
             type="button"
             aria-pressed={filter === chip.key}
             onClick={() => setFilter(chip.key)}
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
               filter === chip.key
-                ? 'border-transparent bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                ? 'border-transparent bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                 : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
             }`}
           >

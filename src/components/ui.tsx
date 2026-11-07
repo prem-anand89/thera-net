@@ -88,19 +88,29 @@ export function Field({
 export function SectionCard({
   id,
   title,
+  badge,
+  subtitle,
   action,
   children,
 }: {
   /** Anchor for Settings search: the card scrolls into view at this id. */
   id?: string;
-  title: string;
+  title: ReactNode;
+  badge?: ReactNode;
+  subtitle?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section id={id} className="scroll-mt-24 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
+      <div className={`mb-3 flex justify-between gap-2 ${subtitle ? 'items-start' : 'items-center'}`}>
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
+            {badge}
+          </div>
+          {subtitle && <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p>}
+        </div>
         {action}
       </div>
       {children}
