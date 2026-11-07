@@ -1,3 +1,4 @@
+import { CopyAddressButton } from '@/components/CopyAddressButton';
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { notify } from '@/lib/notify';
 import { useEffect, useState } from 'react';
@@ -110,7 +111,6 @@ export function AppointmentDetailsPanel({
   const [confirmSeries, setConfirmSeries] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const [addressCopied, setAddressCopied] = useState(false);
   const isHome = useShowsHome(appointment);
   const homeAddress = useLiveQuery(
     async () => (isHome && appointment?.patientId ? (await repos.patients.get(appointment.patientId))?.address ?? null : null),
@@ -119,7 +119,6 @@ export function AppointmentDetailsPanel({
 
   useEffect(() => {
     setCopied(false);
-    setAddressCopied(false);
   }, [appointment?.id]);
 
   if (!appointment) return null;
@@ -217,13 +216,9 @@ export function AppointmentDetailsPanel({
               {homeAddress === undefined ? null : homeAddress ? (
                 <>
                   <p className="mt-1 whitespace-pre-line text-[var(--ink)]">{homeAddress}</p>
-                  <button
-                    type="button"
-                    className="mt-2 min-h-9 rounded-lg border border-[var(--teal)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--teal-strong)]"
-                    onClick={() => void navigator.clipboard?.writeText(homeAddress).then(() => setAddressCopied(true), () => setAddressCopied(false))}
-                  >
-                    {addressCopied ? 'Address copied ✓' : 'Copy address'}
-                  </button>
+                  <div className="mt-2">
+                    <CopyAddressButton key={appointment.id} address={homeAddress} />
+                  </div>
                 </>
               ) : (
                 <p className="mt-1 text-[var(--muted)]">No address on file. Add one from the patient profile.</p>

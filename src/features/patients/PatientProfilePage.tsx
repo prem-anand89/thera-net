@@ -12,6 +12,7 @@ import {
   advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { PatientAddressLine } from './PatientAddressLine';
 import { useVisitDetails } from '@/features/visits/visitDetails';
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
@@ -568,6 +569,7 @@ export function PatientProfilePage() {
                 </span>
               )}
             </div>
+            <PatientAddressLine clinic={clinic} address={patient.address} />
             <PatientFollowUpLine patient={patient} />
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {billingSummary.outstandingBalance > 0 && (
