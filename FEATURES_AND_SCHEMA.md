@@ -2935,6 +2935,15 @@ No UI reads this yet — Phase 1 only builds the read path. Enforcement
   re-linking an existing account to the clinic (both add a
   `clinic_members` row, both count). Fails open if a clinic somehow has no
   `clinic_plans` row (shouldn't happen — every clinic is seeded one).
+  The same limit is also a database trigger on `clinic_members`
+  (`enforce_member_seat_cap`, migration `20261108100000`), because the
+  table's insert policy lets any clinic admin add a row straight through the
+  API, which skipped the function. It refuses only a NEW login row at or over
+  the limit, and lets through: an existing row (re-link, upsert), a clinic with
+  no plan row (the creator becomes the first admin before the plan is seeded),
+  and everything while `tier_enforcement_enabled` is off. A clinic already over
+  its limit keeps its members; it just cannot add one. Test:
+  `supabase/tests/member_seat_cap.sql`.
 - **Client pre-check** — `NewVisitPage.tsx`'s `save()` reads
   `useEntitlements(clinic.id)` and blocks before attempting to save once
   `visitsThisMonth >= visitCapPerMonth`, so a normal user sees a clear
@@ -2999,7 +3008,7 @@ active therapists), not a `usePermissions()` flag.
 
 Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
-`invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
+`invite-therapist`'s own seat-cap check (Phase 2) and the `clinic_members` trigger are the real boundary.
 
 **Guided setup** (`/setup`, admin-only; replaced the First-Week Checklist card). Eleven steps in three groups. *Essentials:* clinic profile, price services ("Open services & treatments"), invite team (`teamView: 'members'`), link every therapist (`teamView: 'members'`). *Your first week:* log a visit, wait for Synced, decide on clinical notes ("Open After a visit", deep linking to `card=after-visit` with highlight), take a backup. *Optional setup:* Set up payments & billing ("Add your UPI ID for payments, and your GST number if you issue invoices"), Set hours & online booking ("Check your open days and hours, and your booking link"), turn on notifications. Optional steps do not count towards progress or completion.
 - Pure logic in `src/domain/setupGuide.ts` (`buildSetupSteps`, `summarizeSetup`, `isSetupNudgeVisible`); live data in `src/features/setup/useSetupProgress.ts`. All 11 step IDs are preserved across iterations.
@@ -4948,6 +4957,15 @@ No UI reads this yet — Phase 1 only builds the read path. Enforcement
   re-linking an existing account to the clinic (both add a
   `clinic_members` row, both count). Fails open if a clinic somehow has no
   `clinic_plans` row (shouldn't happen — every clinic is seeded one).
+  The same limit is also a database trigger on `clinic_members`
+  (`enforce_member_seat_cap`, migration `20261108100000`), because the
+  table's insert policy lets any clinic admin add a row straight through the
+  API, which skipped the function. It refuses only a NEW login row at or over
+  the limit, and lets through: an existing row (re-link, upsert), a clinic with
+  no plan row (the creator becomes the first admin before the plan is seeded),
+  and everything while `tier_enforcement_enabled` is off. A clinic already over
+  its limit keeps its members; it just cannot add one. Test:
+  `supabase/tests/member_seat_cap.sql`.
 - **Client pre-check** — `NewVisitPage.tsx`'s `save()` reads
   `useEntitlements(clinic.id)` and blocks before attempting to save once
   `visitsThisMonth >= visitCapPerMonth`, so a normal user sees a clear
@@ -5012,7 +5030,7 @@ active therapists), not a `usePermissions()` flag.
 
 Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
-`invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
+`invite-therapist`'s own seat-cap check (Phase 2) and the `clinic_members` trigger are the real boundary.
 
 See **Guided setup** above (`/setup`, `src/domain/setupGuide.ts`).
 
