@@ -11,8 +11,6 @@ function input(over: Partial<NewVisitSignatureInput> = {}): NewVisitSignatureInp
   return {
     rows: [{ key: 'r1', assistingTherapistId: null }],
     patientId: null,
-    creatingPatient: false,
-    newPatientName: '',
     condition: '',
     notes: '',
     pendingNote: '',
@@ -41,7 +39,7 @@ describe('isNewVisitDirty', () => {
   });
 
   it('a touched form that still equals its prefilled start is not dirty (open from a patient / appointment, then Cancel)', () => {
-    const prefilled = sig({ patientId: 'p1', treatmentIds: ['t1'], creatingPatient: true, newPatientName: 'Asha' });
+    const prefilled = sig({ patientId: 'p1', treatmentIds: ['t1'] });
     expect(dirty(prefilled, prefilled)).toBe(false);
   });
 
@@ -58,11 +56,6 @@ describe('isNewVisitDirty', () => {
   it('typing and then undoing is not dirty; whitespace is ignored; treatment order does not matter', () => {
     const start = sig({ treatmentIds: ['a', 'b'] });
     expect(dirty(start, sig({ treatmentIds: ['b', 'a'], notes: '   ' }))).toBe(false);
-  });
-
-  it('a new patient being typed counts, an empty name does not', () => {
-    expect(dirty(sig(), sig({ creatingPatient: true, newPatientName: 'Alice' }))).toBe(true);
-    expect(dirty(sig(), sig({ creatingPatient: true, newPatientName: '   ' }))).toBe(false);
   });
 
   it('is never dirty once the visit is saved', () => {

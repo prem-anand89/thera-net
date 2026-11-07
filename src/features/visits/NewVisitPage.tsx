@@ -7,7 +7,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   repos,
   visitService,
-  patientService,
   directPaymentService,
   dashboardService,
   feedbackService,
@@ -20,15 +19,12 @@ import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
-import { homeCareOn } from '@/domain/careLocations';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { syncEngine } from '@/sync/engine';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { findSimilarPatients } from '@/domain/similarPatients';
-import { SimilarPatients } from '@/components/SimilarPatients';
-import { usePatientDirectory } from '@/components/usePatientDirectory';
+import { AddPatientSheet } from '@/features/patients/AddPatientSheet';
 import { ServiceFormSheet } from '@/features/settings/ServiceFormSheet';
 import { packageExpiresOn } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
@@ -43,7 +39,6 @@ import {
 import type { ServiceUsageCountRow, TreatmentUsageRow } from '@/services/dashboardService';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
-  Field,
   inputCls,
   btnPrimary,
   btnSecondary,
@@ -70,7 +65,6 @@ import {
 } from '@/domain/billAdjustment';
 import { BillAdjustmentFields, billAdjustmentFromFields } from '@/components/BillAdjustmentFields';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
-import { PhoneField } from '@/components/PhoneField';
 import {
   ServiceRows,
   continuationLine,
@@ -186,8 +180,6 @@ export function paymentStillDue(i: {
 export interface NewVisitSignatureInput {
   rows: DraftLine[];
   patientId: string | null;
-  creatingPatient: boolean;
-  newPatientName: string;
   condition: string;
   notes: string;
   pendingNote: string;
@@ -205,7 +197,6 @@ export function newVisitSignature(input: NewVisitSignatureInput): string {
       r.sessionShare ? `${r.sessionShare.therapistId}:${r.sessionShare.pct}` : '',
     ]),
     patientId: input.patientId ?? '',
-    newPatient: input.creatingPatient ? input.newPatientName.trim() : '',
     condition: input.condition.trim(),
     notes: input.notes.trim(),
     pendingNote: input.pendingNote.trim(),
@@ -286,24 +277,10 @@ export function NewVisitPage() {
   // fields are never visible alongside a confirmed patient's summary.
   const [query, setQuery] = useState('');
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [creatingPatient, setCreatingPatient] = useState(false);
+  // The Add patient sheet; opens from "+ New patient" or when an appointment brings a name that isn't on file.
+  const [addingPatient, setAddingPatient] = useState(Boolean(search.prefillName && !search.patientId));
   const [editingPatient, setEditingPatient] = useState(false);
   const [startNoteOpen, setStartNoteOpen] = useState(false);
-  const [newPatient, setNewPatient] = useState({
-    name: search.prefillName ?? '',
-    mrno: '',
-    age: '',
-    sex: '',
-    phone: search.prefillPhone ?? '',
-    email: '',
-    altPhone: '',
-    address: '',
-    primaryCondition: '',
-    referringSourceId: '',
-    referringSourceDetail: '',
-  });
-  const referringSources =
-    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? [];
 
   // Visit fields
   // The local calendar day — the UTC date is yesterday from midnight to 5:30 AM in
@@ -378,8 +355,6 @@ export function NewVisitPage() {
   const signature = newVisitSignature({
     rows,
     patientId: patient?.id ?? null,
-    creatingPatient,
-    newPatientName: newPatient.name,
     condition,
     notes,
     pendingNote,
@@ -450,28 +425,16 @@ export function NewVisitPage() {
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
     [clinic.id, query, patient]
   );
-  const allPatients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
-
-  // Look-alikes of the patient being typed (same phone, or a near-identical name), with what tells
-  // people apart. The receptionist must say "Use this patient" or "Different person" before creating.
-  const { lastVisitOn } = usePatientDirectory(clinic.id, true);
-  const similar = useMemo(
-    () => findSimilarPatients(allPatients ?? [], newPatient.name, newPatient.phone),
-    [allPatients, newPatient.name, newPatient.phone]
-  );
-  const similarKey = similar.map((m) => m.patient.id).join(',');
-  const [differentKey, setDifferentKey] = useState<string | null>(null);
-  const differentConfirmed = similar.length > 0 && differentKey === similarKey;
 
   // Most recently seen patients, for a quick-pick when the search box is
   // empty — the common case of "who's next" rather than "find someone
   // specific". Deduped to one entry per patient, most recent visit first.
   const recentVisitRows = useLiveQuery(
     () =>
-      query.trim() || patient || creatingPatient
+      query.trim() || patient
         ? undefined
         : dashboardService.recentVisits(clinic.id, 20),
-    [clinic.id, query, patient, creatingPatient]
+    [clinic.id, query, patient]
   );
   const recentPatients = useMemo(() => {
     const seen = new Set<UUID>();
@@ -573,17 +536,6 @@ export function NewVisitPage() {
   // surfaces likely-existing-patient candidates for free; staff still
   // pick or create explicitly, never auto-selected (see
   // HANDOFF-patient-comms.md's "no silent find-or-create" rule).
-  useEffect(() => {
-    if (search.prefillName && !patient && !search.patientId && !creatingPatient) {
-      setCreatingPatient(true);
-      setNewPatient((p) => ({
-        ...p,
-        name: p.name || search.prefillName!,
-        phone: p.phone || search.prefillPhone || '',
-      }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.prefillName, search.prefillPhone]);
 
   useEffect(() => {
     if (!repeatVisit || patient) return;
@@ -1049,49 +1001,11 @@ export function NewVisitPage() {
     if (p.primaryCondition) setCondition(p.primaryCondition);
   }
 
-  function startCreatingPatient() {
-    setNewPatient((p) => ({ ...p, name: p.name || query.trim() }));
-    setCreatingPatient(true);
-  }
 
-  function backToSearch() {
-    setCreatingPatient(false);
-    setQuery('');
-  }
-
-  async function createPatient() {
-    setError(null);
-    if (similar.length > 0 && !differentConfirmed) {
-      return setError('This patient may already be on file. Choose "Use this patient" or "Different person".');
-    }
-    if (differentConfirmed && (!newPatient.age || !newPatient.sex)) {
-      return setError('Add age and sex so this patient can be told apart from the similar one.');
-    }
-    if (busy) return;
-    setBusy(true);
-    try {
-      const created = await patientService.create({
-        clinicId: clinic.id,
-        name: newPatient.name,
-        mrno: newPatient.mrno || undefined,
-        age: newPatient.age ? Number(newPatient.age) : null,
-        sex: (newPatient.sex || null) as Patient['sex'],
-        phone: newPatient.phone || null,
-        email: newPatient.email || null,
-        altPhone: newPatient.altPhone || null,
-        ...(homeCareOn(clinic) ? { address: newPatient.address || null } : {}),
-        primaryCondition: newPatient.primaryCondition || null,
-        referringSourceId: newPatient.referringSourceId || null,
-        referringSourceDetail: newPatient.referringSourceDetail || null,
-      });
-      setPatient(created);
-      setCreatingPatient(false);
-      if (created.primaryCondition) setCondition(created.primaryCondition);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setBusy(false);
-    }
+  /** The Add patient sheet saved a patient: choose them here, exactly as if they had been picked from the search. */
+  function patientAdded(created: Patient) {
+    setAddingPatient(false);
+    selectPatientFromSearch(created);
   }
 
   async function save() {
@@ -1503,7 +1417,6 @@ export function NewVisitPage() {
                 className="inline-flex h-8 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface)] hover:text-[var(--teal)] transition-colors"
                 onClick={() => {
                   setPatient(null);
-                  setCreatingPatient(false);
                   setQuery('');
                   touchedRef.current = false;
                 }}
@@ -1655,171 +1568,6 @@ export function NewVisitPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-display text-base font-semibold text-[var(--ink)]">Patient</h2>
           </div>
-          {creatingPatient ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3">
-                <Field label="Name *">
-                  <input
-                    className={inputCls}
-                    value={newPatient.name}
-                    onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                    placeholder="Patient name"
-                    autoFocus
-                  />
-                </Field>
-                <Field label="Phone" htmlFor="new-visit-phone">
-                  <PhoneField
-                    id="new-visit-phone"
-                    placeholder="Recommended"
-                    value={newPatient.phone}
-                    onChange={(phone) => setNewPatient({ ...newPatient, phone })}
-                  />
-                </Field>
-                <SimilarPatients
-                  matches={similar}
-                  lastVisitOn={lastVisitOn}
-                  differentConfirmed={differentConfirmed}
-                  onUse={(p) => {
-                    selectPatientFromSearch(p);
-                    setCreatingPatient(false);
-                  }}
-                  onDifferent={() => setDifferentKey(similarKey)}
-                />
-                {!newPatient.phone.trim() && (
-                  <p className="text-xs text-[var(--muted)]">
-                    No phone on file — fine for a walk-in with none, but it limits later search and duplicate checks.
-                  </p>
-                )}
-                <Field label="Age">
-                  <input
-                    type="number"
-                    className={inputCls}
-                    placeholder="Optional"
-                    value={newPatient.age}
-                    onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-                  />
-                </Field>
-                <Field label="Sex">
-                  <select
-                    className={inputCls}
-                    value={newPatient.sex}
-                    onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
-                  >
-                    <option value="">—</option>
-                    <option value="M">M</option>
-                    <option value="F">F</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </Field>
-                <Field label="Primary condition">
-                  <input
-                    className={inputCls}
-                    placeholder="e.g. Neck Pain"
-                    value={newPatient.primaryCondition}
-                    onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
-                  />
-                </Field>
-                <Field label="Referring source">
-                  <select
-                    className={inputCls}
-                    value={newPatient.referringSourceId}
-                    onChange={(e) =>
-                      setNewPatient({
-                        ...newPatient,
-                        referringSourceId: e.target.value,
-                        referringSourceDetail: '',
-                      })
-                    }
-                  >
-                    <option value="">—</option>
-                    {referringSources.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
-                  <Field
-                    label={
-                      referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!
-                    }
-                  >
-                    <input
-                      className={inputCls}
-                      value={newPatient.referringSourceDetail}
-                      onChange={(e) =>
-                        setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })
-                      }
-                    />
-                  </Field>
-                )}
-                <details
-                  className="rounded-lg border border-[var(--border)] px-3 py-2"
-                  open={Boolean(newPatient.email || newPatient.altPhone || newPatient.mrno || newPatient.address)}
-                >
-                  <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
-                    More details <span className="font-normal text-[var(--muted)]">(optional)</span>
-                  </summary>
-                  <div className="mt-3 grid grid-cols-1 gap-3">
-                    <Field label="Email">
-                      <input
-                        type="email"
-                        className={inputCls}
-                        value={newPatient.email}
-                        onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Alternate phone" htmlFor="new-visit-alt-phone">
-                      <PhoneField
-                        id="new-visit-alt-phone"
-                        placeholder="Family member, landline…"
-                        value={newPatient.altPhone}
-                        onChange={(altPhone) => setNewPatient({ ...newPatient, altPhone })}
-                      />
-                    </Field>
-                    {homeCareOn(clinic) && (
-                      <Field label="Address (optional)" htmlFor="new-visit-address">
-                        <textarea
-                          id="new-visit-address"
-                          rows={2}
-                          className={inputCls}
-                          placeholder="For home visits"
-                          value={newPatient.address}
-                          onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })}
-                        />
-                      </Field>
-                    )}
-                    <Field label="Patient ID">
-                      <input
-                        className={inputCls}
-                        placeholder="Leave blank to auto-generate"
-                        value={newPatient.mrno}
-                        onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
-                      />
-                    </Field>
-                    <p className="text-xs text-[var(--muted)]">Use Patient ID only to keep a number from old records.</p>
-                  </div>
-                </details>
-              </div>
-              <p className="text-xs text-[var(--muted)]">
-                You can complete the rest of these later from the profile.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  disabled={busy || !newPatient.name.trim()}
-                  onClick={() => void createPatient()}
-                >
-                  {busy ? 'Creating…' : 'Create patient'}
-                </button>
-                <button type="button" className={btnSecondary} onClick={backToSearch}>
-                  Back to search
-                </button>
-              </div>
-            </div>
-          ) : (
             <div className="space-y-3">
               <input
                 type="search"
@@ -1890,16 +1638,27 @@ export function NewVisitPage() {
                   </div>
                 )
               )}
-              <button type="button" className={btnSecondary} onClick={startCreatingPatient}>
+              <button type="button" className={btnSecondary} onClick={() => setAddingPatient(true)}>
                 + New patient
               </button>
             </div>
-          )}
         </div>
       )}
 
       {/* 2. Divider between Patient and This Visit */}
       <div className="border-t border-[var(--border)]" />
+      <AddPatientSheet
+        open={addingPatient}
+        onClose={() => setAddingPatient(false)}
+        initialName={query.trim() || search.prefillName || ''}
+        initialPhone={search.prefillPhone ?? ''}
+        onCreated={patientAdded}
+        onUseExisting={(existing) => {
+          setAddingPatient(false);
+          selectPatientFromSearch(existing);
+        }}
+      />
+
 
       {/* 3. This visit interactive inputs */}
       <div className="space-y-3">

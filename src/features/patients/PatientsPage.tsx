@@ -1,6 +1,6 @@
 import { askConfirm, notify } from '@/lib/notify';
 import { useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, patientService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -9,6 +9,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatAmount } from '@/domain/money';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
+import { AddPatientSheet } from './AddPatientSheet';
 import { BookSlotSheet } from '@/components/BookSlotSheet';
 import {
   fiscalYearOf,
@@ -88,6 +89,8 @@ export function PatientsList() {
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
+  const [adding, setAdding] = useState(false);
+  const navigate = useNavigate();
   const [booking, setBooking] = useState<Patient | null>(null);
   const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
@@ -324,6 +327,9 @@ export function PatientsList() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <button type="button" className="h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => setAdding(true)}>
+            + Add patient
+          </button>
           <div className="relative flex-1 sm:w-64 sm:flex-none">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--muted)]">
               <svg
@@ -729,6 +735,24 @@ export function PatientsList() {
           )}
         </div>
       )}
+
+      <AddPatientSheet
+        open={adding}
+        offerStartVisit
+        onClose={() => setAdding(false)}
+        onCreated={(created, { startVisit }) => {
+          setAdding(false);
+          if (startVisit) void navigate({ to: '/visits/new', search: { patientId: created.id, from: '/patients' } });
+          else {
+            setQuery(created.name);
+            notify.info(`${created.name} added`);
+          }
+        }}
+        onUseExisting={(existing) => {
+          setAdding(false);
+          setQuery(existing.mrno);
+        }}
+      />
 
       {editing && (
         <EditPatientModal

@@ -163,8 +163,6 @@ describe('BillAdjustmentFields', () => {
     const formInput = {
       rows: [{ key: 'r1', assistingTherapistId: null }],
       patientId: null,
-      creatingPatient: false,
-      newPatientName: '',
       condition: '',
       notes: '',
       pendingNote: '',

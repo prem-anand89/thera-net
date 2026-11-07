@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { PatientsList } from './PatientsPage';
 
 vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
   Link: ({ children, className }: { children: ReactNode; className?: string }) => (
     <a href="#test" className={className}>
       {children}
