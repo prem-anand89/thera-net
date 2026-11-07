@@ -21,6 +21,9 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
+import { placeLabelFor } from '@/domain/careLocations';
+import { clinicTimezone } from '@/domain/clinicRegion';
+import { formatAppointmentWhen } from '@/domain/appointmentWhen';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
@@ -312,6 +315,7 @@ export function PatientProfilePage() {
           sex: patient?.sex,
           condition: v.condition ?? null,
           serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+          placeLabel: placeLabelFor(clinic, v),
           details: visitDetails.get(v.id),
           sessionIndex: v.sessionIndex ?? null,
           packageTotal: v.packageTotal ?? null,
@@ -371,6 +375,7 @@ export function PatientProfilePage() {
       invoicedPackageGroupIds,
       notes,
       visitDetails,
+      clinic,
     ]
   );
 
@@ -600,18 +605,11 @@ export function PatientProfilePage() {
                   <span className="h-2 w-2 rounded-full bg-[var(--teal)]" />
                   <span className="font-medium text-[var(--teal)]">Next appointment:</span>
                   <span className="font-num font-semibold">
-                    {new Date(upcomingAppointments[0].scheduledAt).toLocaleDateString('en-IN', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })}{' '}
-                    at{' '}
-                    {new Date(upcomingAppointments[0].scheduledAt).toLocaleTimeString('en-IN', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                      hour12: true,
-                    })}
+                    {formatAppointmentWhen(upcomingAppointments[0].scheduledAt, clinicTimezone(clinic))}
                   </span>
+                  {placeLabelFor(clinic, upcomingAppointments[0]) && (
+                    <Pill tone="slate">{placeLabelFor(clinic, upcomingAppointments[0])}</Pill>
+                  )}
                   {therapistName.get(upcomingAppointments[0].therapistId ?? '') && (
                     <span className="text-[var(--muted)]">
                       · {therapistName.get(upcomingAppointments[0].therapistId ?? '')}

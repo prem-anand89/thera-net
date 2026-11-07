@@ -25,6 +25,8 @@ export interface VisitCardData {
   sex?: 'M' | 'F' | 'Other' | null;
   condition: string | null;
   serviceName: string;
+  /** Where it happened ("Home visit", "Inpatient"), only for a clinic with more than one place and a visit away from the clinic. */
+  placeLabel?: string | null;
   sessionIndex: number | null;
   packageTotal: number | null;
   therapistName: string;

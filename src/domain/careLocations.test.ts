@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, locationOf, offersLocationChoice } from './careLocations';
+import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, locationOf, offersLocationChoice, placeLabelFor } from './careLocations';
 
 describe('clinicCareLocations', () => {
   it('reads as clinic only until a clinic turns something on, including older rows and bad values', () => {
@@ -62,5 +62,19 @@ describe('booking location', () => {
   });
   it('inpatient is not bookable yet', () => {
     expect(bookableLocations({ careLocations: ['clinic', 'ward'] })).toEqual(['clinic']);
+  });
+});
+
+describe('placeLabelFor', () => {
+  const both = { careLocations: ['clinic', 'home'] };
+  it('names a home or inpatient place only when the clinic offers a choice', () => {
+    expect(placeLabelFor(both, { location: 'home' })).toBe('Home visit');
+    expect(placeLabelFor({ careLocations: ['clinic', 'ward'] }, { location: 'ward' })).toBe('Inpatient');
+  });
+  it('says nothing for a clinic visit, an older record, or a clinic-only clinic', () => {
+    expect(placeLabelFor(both, { location: 'clinic' })).toBeNull();
+    expect(placeLabelFor(both, {})).toBeNull();
+    expect(placeLabelFor({ careLocations: ['clinic'] }, { location: 'home' })).toBeNull();
+    expect(placeLabelFor(null, { location: 'home' })).toBeNull();
   });
 });

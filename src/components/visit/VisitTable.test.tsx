@@ -67,3 +67,13 @@ describe('VisitTable Actions column', () => {
     expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
   });
 });
+
+describe('VisitTable place', () => {
+  it('names the place under the service when the row carries one, and says nothing otherwise', () => {
+    renderTable([row({ serviceName: 'Exercise Therapy', placeLabel: 'Home visit' })]);
+    expect(screen.getByText('Home visit')).toBeInTheDocument();
+    cleanup();
+    renderTable([row({ serviceName: 'Exercise Therapy', placeLabel: null })]);
+    expect(screen.queryByText('Home visit')).not.toBeInTheDocument();
+  });
+});

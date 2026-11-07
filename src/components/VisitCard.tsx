@@ -57,6 +57,7 @@ function VisitCardDetails({ data, onSplit }: { data: VisitCardData; onSplit?: ()
     data.condition ||
     data.treatmentNotes ||
     data.treatmentNames.length > 0 ||
+    data.placeLabel ||
     hasSession;
   if (!hasDetails) return null;
 
@@ -96,6 +97,11 @@ function VisitCardDetails({ data, onSplit }: { data: VisitCardData; onSplit?: ()
         </CardDetailRow>
       ) : (
         data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>
+      )}
+      {data.placeLabel && (
+        <CardDetailRow label="Place">
+          <Pill tone="slate">{data.placeLabel}</Pill>
+        </CardDetailRow>
       )}
       {data.details?.shares && (
         <CardDetailRow label="Share">

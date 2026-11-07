@@ -6,7 +6,7 @@ import {
 } from '@/domain/types';
 import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import { PackageThread, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
+import { PackageThread, Pill, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import type { PatientProfileBackTarget } from '@/app/router';
 
 import type { VisitCardData, VisitSelectionProps } from './types';
@@ -226,6 +226,11 @@ export function VisitTable({
                             <VisitServicesList services={row.details.services} max={2} />
                           ) : (
                             <div>{row.serviceName}</div>
+                          )}
+                          {row.placeLabel && (
+                            <div className="mt-1">
+                              <Pill tone="slate">{row.placeLabel}</Pill>
+                            </div>
                           )}
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">

@@ -51,3 +51,16 @@ export function defaultBookingLocation(
   const fromService = offered.find((l) => l === service?.defaultLocation);
   return fromService ?? (offered.includes('clinic') ? 'clinic' : offered[0] ?? 'clinic');
 }
+
+/**
+ * The place to show beside a visit or appointment: the label for home or inpatient, and nothing for the clinic or when
+ * the clinic only sees patients in one place (so a clinic-only clinic's screens stay as they are).
+ */
+export function placeLabelFor(
+  clinic: { careLocations?: readonly string[] | null } | null | undefined,
+  record: { location?: string | null } | null | undefined
+): string | null {
+  if (!offersLocationChoice(clinic)) return null;
+  const place = locationOf(record);
+  return place === 'clinic' ? null : CARE_LOCATION_LABELS[place];
+}
