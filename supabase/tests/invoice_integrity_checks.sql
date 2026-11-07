@@ -69,6 +69,16 @@ create function pg_temp.amend(p_orig text, p_mrno text, p_total bigint, p_lines 
     (select therapist_id from cfg), p_visits::text)
 $$;
 
+-- The same, naming the patient by permanent id, as the app now does.
+create function pg_temp.issue_by_id(p_patient text, p_mrno text, p_total bigint, p_visits text[]) returns text language sql as $$
+  select format(
+    $f$select public.issue_invoice(%L, 'ZZ-TEST', %L::jsonb, %L::jsonb, %s, 'UPI', %L, (select array_agg(id) from t where k = any(%L::text[])), null)$f$,
+    (select clinic_id from cfg), json_build_object('patientId', (select id from t where k = p_patient), 'mrno', p_mrno, 'name', 'x')::text,
+    json_build_array(json_build_object('totalPaise', p_total, 'serviceName', 'S'))::text, p_total,
+    (select therapist_id from cfg), p_visits::text)
+$$;
+
+select pg_temp.mkvisit('i1', 'pa', 50000), pg_temp.mkvisit('i2', 'pa', 50000), pg_temp.mkvisit('i3', 'pa', 50000), pg_temp.mkvisit('i4', 'pb', 50000);
 select pg_temp.mkvisit('a1', 'pa', 150000), pg_temp.mkvisit('a2', 'pa', 80000), pg_temp.mkvisit('a3', 'pa', 150000),
        pg_temp.mkvisit('a4', 'pa', 50000), pg_temp.mkvisit('a5', 'pa', 50000), pg_temp.mkvisit('a6', 'pa', 50000),
        pg_temp.mkvisit('a7', 'pa', 50000), pg_temp.mkvisit('a8', 'pa', 50000), pg_temp.mkvisit('a9', 'pa', 70000),
@@ -93,6 +103,14 @@ select pg_temp.attempt('no visits is refused', 'No visits', pg_temp.issue('ZZTES
 select pg_temp.attempt('amend: a visit of another patient is refused', 'same patient', pg_temp.amend('inv1', 'ZZTEST-A', 200000, 200000, array['a1','b1']));
 select pg_temp.attempt('amend: a wrong total is refused', 'does not match the visits', pg_temp.amend('inv1', 'ZZTEST-A', 150001, 150001, array['a1']));
 select pg_temp.attempt('amend: same visit plus one more visit of the patient', 'ok', pg_temp.amend('inv1', 'ZZTEST-A', 220000, 220000, array['a1','a9']));
+
+-- The patient is matched by permanent id, so a Patient ID edited later (or not yet synced) does not get in the way.
+select pg_temp.attempt('by id: a Patient ID the server does not have yet still issues', 'ok', pg_temp.issue_by_id('pa', 'NOT-SYNCED-YET', 50000, array['i1']));
+select pg_temp.attempt('by id: another patient''s id is refused', 'does not match its visits', pg_temp.issue_by_id('pb', 'ZZTEST-A', 50000, array['i2']));
+insert into t select 'inv2', id from public.invoices where invoice_no like '%/ZZ-TEST/%' order by seq desc limit 1;
+select pg_temp.attempt('amend: moving the bill to another patient''s visits is refused', 'does not match its visits', pg_temp.amend('inv2', 'ZZTEST-A', 50000, 50000, array['i4']));
+update public.patients set mrno = 'ZZTEST-A-NEW' where id = (select id from t where k = 'pa');
+select pg_temp.attempt('amend: still works after the Patient ID was edited (the bill keeps the old one)', 'ok', pg_temp.amend('inv2', 'ZZTEST-A', 50000, 50000, array['i1']));
 
 select n, name, expected, got, ok from res order by n;
 

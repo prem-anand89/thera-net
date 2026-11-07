@@ -349,7 +349,7 @@ queued with a visible error.
 #### Invoice Issuance
 - **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
 - **An invoice must match its visits** (`check_invoice_matches_visits`, called by `issue_invoice` and `amend_invoice` after
-  the visits are stamped): at least one visit; all visits one patient, whose ID is the one on the invoice; a total above
+  the visits are stamped): at least one visit; all visits one patient, and that patient the invoice's, matched by permanent id (`patientId` on the snapshot; an amendment must keep the original bill's patient), since the Patient ID can be edited after issue; a total above
   zero ("Nothing to bill"); the total equals the sum of the visits' bills; the line items add up to the total. A refusal
   rolls back the call, so the gap-free counter is not used. Existing invoices (three ₹0 ones among them) are untouched
 - **Clinical details come from every visit billed**, including the package sessions issuing pulls in (`invoiceService.visitsOnInvoice`; `src/domain/invoiceClinical.ts`): place of service is the one place all

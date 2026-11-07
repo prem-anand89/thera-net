@@ -57,6 +57,11 @@ select pg_temp.mknote('pa', null, 'session', 'completed', timestamptz '2026-11-0
 select pg_temp.mknote('pa', null, 'initial', 'draft', timestamptz '2026-11-09', 'DRAFT', 'D00');
 
 select pg_temp.check_diag('the latest completed note up to the last visit, not the newest overall', array['v1','v2'], 'IN PERIOD');
+-- The demo clinic is in India: 20:00 UTC on the last visit's date is already the next day there, 18:00 UTC is not.
+select pg_temp.mknote('pa', null, 'followup', 'completed', timestamptz '2026-11-10 20:00+00', 'NEXT DAY THERE', 'N01');
+select pg_temp.check_diag('a note from the next day in the clinic''s zone is after the last visit', array['v1','v2'], 'IN PERIOD');
+select pg_temp.mknote('pa', null, 'followup', 'completed', timestamptz '2026-11-10 18:00+00', 'SAME DAY THERE', 'N02');
+select pg_temp.check_diag('a note late on the last visit''s day in the clinic''s zone counts', array['v1','v2'], 'SAME DAY THERE');
 select pg_temp.mknote('pa', 'v1', 'initial', 'completed', timestamptz '2026-11-02', 'LINKED TO V1', 'L01');
 select pg_temp.check_diag('a note written for one of the visits wins', array['v1','v2'], 'LINKED TO V1');
 select pg_temp.mknote('pa', 'v2', 'followup', 'completed', timestamptz '2026-11-10', 'LINKED TO V2', 'L02');
