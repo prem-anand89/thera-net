@@ -293,6 +293,10 @@ export function buildLineItems(
       catalogPricePaise / Math.max(1, authorizedSessionCount ?? billedSessionCount)
     );
 
+    // One place for the line when every session was there (a package can span places: then none is claimed).
+    const places = new Set(ordered.map((u) => locationOf(u.visit)));
+    const lineLocation = places.size === 1 ? [...places][0] : undefined;
+
     for (const u of ordered) {
       billedByTherapist.set(
         u.visit.therapistId,
@@ -315,9 +319,14 @@ export function buildLineItems(
       rateBasis: authorizedSessionCount ? 'package_upfront' : 'per_session',
       adjustmentReasons: adjustmentReasons.length > 0 ? adjustmentReasons : undefined,
       therapistIds,
+      location: lineLocation,
     });
     totalPaise += groupTotalPaise;
   }
+
+  // Clinic lines first, then home, then inpatient, so a bill that mixes places reads as separate blocks.
+  const placeOrder: Record<string, number> = { clinic: 0, home: 1, ward: 2 };
+  lineItems.sort((a, b) => (placeOrder[a.location ?? 'clinic'] ?? 0) - (placeOrder[b.location ?? 'clinic'] ?? 0));
 
   let therapistId: UUID | undefined;
   let bestAmount = -1;

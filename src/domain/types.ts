@@ -730,6 +730,8 @@ export interface InvoiceLineItem {
   rateBasis?: 'package_upfront' | 'per_session';
   adjustmentReasons?: string[];
   therapistIds?: UUID[];
+  /** Where these sessions were, when all of them were in one place. Older bills lack it and read as clinic. */
+  location?: CareLocation;
 }
 
 /**

@@ -20,6 +20,7 @@ import {
   hasCondensedSessionDates,
   treatmentPeriodOf,
 } from '@/domain/invoiceLine';
+import { CARE_LOCATION_LABELS, locationOf } from '@/domain/careLocations';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary } from '@/components/ui';
@@ -35,6 +36,11 @@ import { useBillShare } from './useBillShare';
  *  … authorised" framing and the two distinct non-reconciling explanations
  *  only make sense on a printed bill, not in InsurerPacketPage's summary
  *  (which uses plain `sessionCountLabel` instead). */
+/** Where a line's sessions were, shown under its service name only when the bill mixes places (clinic and home). */
+function lineLocationLabel(li: InvoiceLineItem, mixed: boolean): string | null {
+  return mixed ? CARE_LOCATION_LABELS[locationOf(li)] : null;
+}
+
 function lineCaption(li: InvoiceLineItem): string | null {
   if (!isV2Line(li) || lineReconciles(li)) return null;
   const authorized = normalizeAuthorizedCount(li.authorizedSessionCount ?? null);
@@ -147,6 +153,7 @@ export function LineItemsTable({
 }) {
   const isA5 = paper === 'A5';
   const longSessionsText = lineItems.some((li) => sessionsCellText(li).length > 12);
+  const mixedPlaces = new Set(lineItems.map((li) => locationOf(li))).size > 1;
   return (
     <div className="mt-3.5 overflow-x-auto print:overflow-visible">
       <table className={`w-full table-fixed border-collapse ${isA5 ? 'text-[10.5px]' : 'min-w-[680px] text-[12px] print:min-w-full'}`}>
@@ -163,10 +170,14 @@ export function LineItemsTable({
         <tbody className="align-top">
           {lineItems.map((li, i) => {
             const caption = lineCaption(li);
+            const where = lineLocationLabel(li, mixedPlaces);
             return (
               <tr key={i} className="border-b border-[var(--border)] align-top print:break-inside-avoid">
                 <td className="py-2 pl-3 pr-2 font-medium text-[var(--ink)]">
                   {li.serviceName}
+                  {where && (
+                    <div className={`mt-0.5 font-normal text-[var(--muted)] ${isA5 ? 'text-[9.5px]' : 'text-[10.5px]'}`}>{where}</div>
+                  )}
                   {caption && (
                     <div className={`mt-0.5 font-normal text-[var(--muted)] ${isA5 ? 'text-[9.5px]' : 'text-[10.5px]'}`}>{caption}</div>
                   )}
@@ -308,18 +319,19 @@ export function InvoicePrintPage() {
   const snap = invoice.clinicalSnapshot;
   const placeLabel = placeOfServiceLabel(snap);
   const period = treatmentPeriodOf(invoice.lineItems);
-  // Left column: what was found and who referred; right column: where and what was done.
+  // Left column: where and what was done (on every bill); right column: what was found and who referred (only some bills
+  // have these). With the common ones on the left, a bill with no diagnosis or referral reads without a gap.
   const clinicalLeft = [
-    ...(snap?.diagnosis ? [{ label: 'Diagnosis', value: `${snap.diagnosis}${snap.diagnosisIcdCode ? ` (${snap.diagnosisIcdCode})` : ''}` }] : []),
-    ...(snap?.referringPhysician
-      ? [{ label: 'Ref. Physician', value: `${snap.referringPhysician}${snap.physicianRegistrationNo ? ` (Reg. No. ${snap.physicianRegistrationNo})` : ''}` }]
-      : []),
-  ];
-  const clinicalRight = [
     ...(placeLabel ? [{ label: 'Place of service', value: placeLabel }] : []),
     ...(snap?.treatmentPerformed ? [{ label: 'Treatment', value: snap.treatmentPerformed }] : []),
     // A bill covering several days says which: first to last session.
     ...(period ? [{ label: 'Treatment period', value: `${formatDateDMY(period.from)} – ${formatDateDMY(period.to)}` }] : []),
+  ];
+  const clinicalRight = [
+    ...(snap?.diagnosis ? [{ label: 'Diagnosis', value: `${snap.diagnosis}${snap.diagnosisIcdCode ? ` (${snap.diagnosisIcdCode})` : ''}` }] : []),
+    ...(snap?.referringPhysician
+      ? [{ label: 'Ref. Physician', value: `${snap.referringPhysician}${snap.physicianRegistrationNo ? ` (Reg. No. ${snap.physicianRegistrationNo})` : ''}` }]
+      : []),
   ];
 
   const isV2Invoice = invoice.lineItems.length > 0 && invoice.lineItems.every(isV2Line);

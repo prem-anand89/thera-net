@@ -358,7 +358,11 @@ queued with a visible error.
   ICD code, referring physician) is read from the note written for the visits, else the latest completed note up to the
   last visit (`pickReferralNote`), and for front desk by `get_invoice_referral_for_visits(visit ids)`, which also returns
   the ICD code. The ICD code is kept only while the diagnosis text is the note's; editing the text drops it. A bill
-  covering more than one day prints a "Treatment period" row, and a bill with a line whose dates are shown as a range
+  covering more than one day prints a "Treatment period" row, each line records its `location` (one place, or none for a
+  package spanning places; older bills lack it and read as clinic), lines are ordered clinic, home, inpatient, and a bill
+  that mixes places prints the place ("Clinic" / "Home visit") under each service name; the clinical block lists Place of
+  service, Treatment and Treatment period on the left and Diagnosis / Ref. Physician on the right, so a bill with no
+  referral has no gap, and a bill with a line whose dates are shown as a range
   ("01/11/26 – 30/11/26 (12 sessions)") says "Full session dates are in the session log." Editing the clinical details
   after issue (EditInvoiceDetailsDialog) changes the printed bill silently: nothing on it says it was edited (corrections
   are not advertised); the before/after is in `audit_log` and `editedByBiller` stays in the snapshot
@@ -371,7 +375,7 @@ queued with a visible error.
   logo and clinic name on the left, with the optional tagline (Settings → Clinic profile, 60 characters) and, if any, one
   small "In partnership with" line under the name; address, phone, email and GSTIN always on the right
 - **One look everywhere:** `.doc-paper` tokens (teal, dark enough to read in grey) serve the screen, the shared PDF and every
-  printer, with no separate black-and-white style. Total has no fill (heavier rules, bold, larger); only the service table
+  printer, with no separate black-and-white style. Total has no fill and no rules (bold, larger, in the heading colour), with a gap before the Payment details table; only the service table
   heading and the Payment details heading carry a very light tint, and both also have rules, so a printer that drops
   backgrounds loses nothing
 - **Bill layout:** top block in `DocFieldList` rows: Patient (name, ID, age/gender, phone) left, Bill (number, date,

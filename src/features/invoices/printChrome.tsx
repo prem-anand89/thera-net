@@ -74,7 +74,7 @@ export function PrintLetterhead({
 /**
  * Everything under the service table. Subtotal, adjustment and Total share one right-hand column (`COL`), and Payment
  * details is one table under its own heading: the payments on the left, Amount paid and Balance due on the right in that
- * same column, so Total sits directly above Amount paid. No fill on Total: it is set apart by rules, weight and size, so
+ * same column, so Total sits directly above Amount paid. No fill on Total: it is set apart by weight, size and colour alone, no rules, so
  * the page reads the same in colour and on a black-and-white printer. Only the headings carry a very light tint.
  */
 const COL = 'w-[42%]';
@@ -110,14 +110,14 @@ export function BillTotals({
           </div>
         )}
         <div
-          className={`mt-0.5 flex justify-between gap-2 border-y-[1.5px] border-[var(--doc-rule)] px-3 py-1.5 font-bold text-[var(--doc-head)] ${compact ? 'text-[13px]' : 'text-[15px]'}`}
+          className={`mt-1 flex justify-between gap-2 px-3 py-1 font-bold text-[var(--doc-head)] ${compact ? 'text-[13px]' : 'text-[15px]'}`}
         >
           <span>Total</span>
           <span>{formatAmount(totalPaise)}</span>
         </div>
       </div>
       {ledger && (
-        <section className="border border-t-0 border-[var(--border)]" aria-label="Payment details">
+        <section className={`border border-[var(--border)] ${compact ? 'mt-2.5' : 'mt-4'}`} aria-label="Payment details">
           <h4
             className={`border-b border-[var(--doc-rule)] bg-[var(--doc-fill)] px-3 py-1 font-semibold tracking-wide text-[var(--doc-head)] ${compact ? 'text-[9.5px]' : 'text-[10.5px]'}`}
           >

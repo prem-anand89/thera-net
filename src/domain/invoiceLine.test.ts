@@ -366,6 +366,11 @@ describe('home and clinic visits of one service', () => {
     expect(lineItems.reduce((a, li) => a + li.totalPaise, 0)).toBe(totalPaise);
   });
 
+  it('each line records its place, and clinic lines come before home lines', () => {
+    const { lineItems } = buildLineItems(groupVisitsForInvoicing([visit('h1', '2026-11-04', 'home'), visit('c1', '2026-11-02', 'clinic')]), CATALOG_NAMES);
+    expect(lineItems.map((li) => li.location)).toEqual(['clinic', 'home']);
+  });
+
   it('visits that were all at one place still merge into one line', () => {
     const { lineItems } = buildLineItems(groupVisitsForInvoicing([visit('h1', '2026-11-04', 'home'), visit('h2', '2026-11-06', 'home')]), CATALOG_NAMES);
     expect(lineItems).toHaveLength(1);
@@ -673,7 +678,7 @@ describe('invoice lines per service', () => {
       catalogPricePaise: rs(1000), adjustmentPaise: -rs(100), adjustmentReason: 'Loyalty',
       totalPaise: rs(900), lineItemVersion: 2, billedSessionCount: 1, authorizedSessionCount: null,
       ratePerSessionPaise: rs(1000), rateBasis: 'per_session', adjustmentReasons: ['Loyalty'],
-      therapistIds: ['therapist-1'],
+      therapistIds: ['therapist-1'], location: 'clinic',
     });
   });
 
