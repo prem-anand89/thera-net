@@ -19,6 +19,7 @@ import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, hasDue } from '@/domain/paymentState';
 import { summariseTotals } from './ledgerTotals';
 import { noteForVisit } from '@/domain/noteLinks';
+import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
@@ -153,7 +154,7 @@ export function visitToCardData(
   // Pre-flight mirror of the visit policies: admin and front desk may correct any visit, a therapist
   // only their own (as its primary); delete stays admin / own, before invoicing. An assisting therapist
   // sees no edit controls on a colleague's visit.
-  const { canModify, canDelete, isOwn } = visitPermissions({
+  const { canModify, canDelete } = visitPermissions({
     isAdmin,
     isFrontDesk,
     myTherapistId,
@@ -211,7 +212,14 @@ export function visitToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    canAskForFeedback: enablePatientComms && (isAdmin || isOwn),
+    // The same rule as the server and Workspace: admin, front desk, or the visit's own therapist.
+    canAskForFeedback: canAskForFeedbackOnVisit({
+      enablePatientComms,
+      isAdmin,
+      isFrontDesk,
+      myTherapistId,
+      visitTherapistId: v.therapistId,
+    }),
     feedbackRequest: feedbackRequest
       ? {
         id: feedbackRequest.id,

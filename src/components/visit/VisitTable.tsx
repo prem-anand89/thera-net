@@ -110,6 +110,9 @@ export function VisitTable({
   backTo?: PatientProfileBackTarget;
   showColumnPicker?: boolean;
 }) {
+  // The Actions column holds the note link and the feedback links. When nobody on screen may use either (front desk with
+  // patient messages off), an empty column would only take width, so it is left out.
+  const showActionsColumn = rows.some((r) => r.canViewNotes || r.canAskForFeedback);
   return (
     <div>
       {showColumnPicker && (
@@ -157,7 +160,7 @@ export function VisitTable({
               >
                 Status
               </th>
-              <th className={th}>Actions</th>
+              {showActionsColumn && <th className={th}>Actions</th>}
               <th className={th}></th>
             </tr>
           </thead>
@@ -287,6 +290,7 @@ export function VisitTable({
                     canCollect={canCollect}
                   />
                 </td>
+                {showActionsColumn && (
                 <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <NoteCell
                     data={row}
@@ -298,6 +302,7 @@ export function VisitTable({
                     }
                   />
                 </td>
+                )}
                 <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <RowActionsMenu
                     data={row}
@@ -319,7 +324,7 @@ export function VisitTable({
                     (showDate ? 1 : 0) +
                     (showPatient ? 1 : 0) +
                     VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length +
-                    4
+                    (showActionsColumn ? 4 : 3)
                   }
                   className="px-3 py-8 text-center text-sm text-[var(--muted)]"
                 >

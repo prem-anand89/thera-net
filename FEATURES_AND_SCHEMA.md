@@ -906,10 +906,14 @@ still falls through to the existing share sheet, unchanged.
   row, next to the existing "+ Note" link (`VisitFeedbackLink` in
   `VisitCard.tsx`, kept inline rather than in the row's kebab menu, same
   convention as Note). Visible only when `enablePatientComms` is on and the
-  viewer may act on that visit (`is_clinic_admin() OR is_own_therapist()`
-  mirrored client-side, same shape as `canEdit`/`canSplit` — a per-row
-  computed boolean, not a flat `Permissions` field, since the underlying
-  RLS check is row-scoped). Also offered as a one-click button on
+  viewer may act on that visit (admin, front desk, or the visit's own
+  therapist: `canAskForFeedbackOnVisit` in `domain/patientComms.ts`, the one
+  rule shared by the Ledger and Workspace and mirroring the server; a
+  per-row computed boolean, not a flat `Permissions` field, since the
+  therapist check is row-scoped). Front desk gets "+ Feedback", "Resend" and
+  the Google review nudge (eligibility from the role-blind RPC, since it
+  cannot read ratings) but not the note link. The Visits table leaves its
+  Actions column out when no row has a note or feedback link to show. Also offered as a one-click button on
   `NewVisitPage`'s post-save screen, right after logging a visit.
   - **Creating a request is an online-only RPC,
     `create_feedback_request(p_visit_id uuid) returns table(...)`**, not
