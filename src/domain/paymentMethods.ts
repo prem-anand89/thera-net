@@ -98,3 +98,24 @@ export function partnerPaymentsByVisit(
 export function isFullyPartnerCollected(billPaise: number, partnerCollectedPaise: number | undefined): boolean {
   return billPaise > 0 && (partnerCollectedPaise ?? 0) >= billPaise;
 }
+
+/**
+ * The label and hint for the optional reference on a payment, by method: what a person would look up later to trace it.
+ * Null where a reference makes no sense (the partner's counter has its own books).
+ */
+export function paymentReferenceField(method: PaymentMethod): { label: string; placeholder: string } | null {
+  switch (method) {
+    case 'upi':
+      return { label: 'UTR / transaction ID (optional)', placeholder: 'e.g. 4093 8821 5577' };
+    case 'card':
+      return { label: 'Approval code (optional)', placeholder: 'e.g. last 4 digits, approval code' };
+    case 'bank_transfer':
+      return { label: 'Transfer reference (optional)', placeholder: 'e.g. NEFT / IMPS reference' };
+    case 'cheque':
+      return { label: 'Cheque number and bank (optional)', placeholder: 'e.g. 004512 · HDFC' };
+    case 'cash':
+      return { label: 'Receipt number (optional)', placeholder: 'e.g. 118' };
+    case 'partner':
+      return null;
+  }
+}

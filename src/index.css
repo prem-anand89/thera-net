@@ -148,30 +148,16 @@ body {
   }
 }
 
-/* Clinic documents (bills, receipts, and later clinical notes). The shared PDF and the screen use the app's teal;
-   printing is pure black and white, and nothing relies on a fill, since browsers drop backgrounds by default. */
+/* Clinic documents (bills, receipts, clinical notes). One look for the screen, the shared PDF and every printer: colours are
+   dark enough to read in grey, Total is set apart by rules and weight, and only the table headings carry a very light tint
+   (a printer or browser that drops backgrounds loses nothing, because those headings also have their own rules). */
 .doc-paper {
   --doc-rule: var(--teal);
   --doc-name: var(--teal-deep);
   --doc-head: var(--teal-strong);
   --doc-fill: var(--teal-mist);
-  --doc-fill-strong: var(--teal-light);
   --doc-good: var(--moss-strong);
   --doc-due: var(--rust);
-}
-@media print {
-  .doc-paper {
-    --ink: black;
-    --muted: rgb(51 51 51);
-    --border: rgb(153 153 153);
-    --doc-rule: black;
-    --doc-name: black;
-    --doc-head: black;
-    --doc-fill: transparent;
-    --doc-fill-strong: transparent;
-    --doc-good: black;
-    --doc-due: black;
-  }
 }
 
 /* ==========================================================================

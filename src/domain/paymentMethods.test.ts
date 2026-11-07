@@ -6,6 +6,7 @@ import {
   partnerPaymentsByVisit,
   paymentMethodLabel,
   paymentMethodOptions,
+  paymentReferenceField,
 } from './paymentMethods';
 
 const solo = { hasPartner: false };
@@ -72,5 +73,14 @@ describe('partner-collected visits', () => {
     expect(isFullyPartnerCollected(50000, 20000)).toBe(false);
     expect(isFullyPartnerCollected(0, 0)).toBe(false);
     expect(isFullyPartnerCollected(50000, undefined)).toBe(false);
+  });
+});
+
+describe('paymentReferenceField', () => {
+  it('names what to record for each method, and none for the partner', () => {
+    expect(paymentReferenceField('upi')?.label).toMatch(/UTR/);
+    expect(paymentReferenceField('cheque')?.label).toMatch(/Cheque number/);
+    expect(paymentReferenceField('card')?.label).toMatch(/Approval/);
+    expect(paymentReferenceField('partner')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useClinic } from '@/app/clinicContext';
-import { BillTotals, PrintLetterhead, PrintSignatureFooter } from '@/features/invoices/printChrome';
+import { BillTotals, DocFieldList, DocSpacer, PrintLetterhead, PrintSignatureFooter } from '@/features/invoices/printChrome';
 import { publicLogoUrl } from '@/lib/supabase';
 import type { Clinic } from '@/domain/types';
 import { createPortal } from 'react-dom';
@@ -17,6 +17,7 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
   return (
     <div className="doc-paper w-[794px] h-[1123px] bg-[var(--surface)] p-12 flex flex-col relative text-[var(--ink)]">
       <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
+      <DocSpacer />
 
       <div className="mt-6 text-center">
         <h2 className="font-display text-lg font-bold uppercase tracking-wide text-[var(--ink)]">
@@ -24,66 +25,35 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
         </h2>
       </div>
 
-      <section className="mt-6 grid grid-cols-2 gap-x-8 gap-y-1 text-[11px]">
-        <div>
-          <table className="w-full text-left table-fixed">
-            <tbody>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Patient Name</th>
-                <td className="py-0.5 text-[var(--ink)] align-top font-semibold truncate">: Jane Doe</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Patient ID</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: P26-0001</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Age / Gender</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: 34 Y / Female</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Phone</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: 9876543210</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Ref. Physician</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: Dr. Sarah Connor (Reg. No. 12345)</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Place of service</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: Clinic</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Treatment</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: Post-Op Care</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div>
-          <table className="w-full text-left table-fixed">
-            <tbody>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Bill No</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: INV-2026-001</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Billing Date</th>
-                <td className="py-0.5 text-[var(--ink)] align-top">: 15 Aug 2026</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Therapist</th>
-                <td className="py-0.5 text-[var(--ink)] align-top truncate">: Dr. Smith</td>
-              </tr>
-              <tr>
-                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Status</th>
-                <td className="py-0.5 font-semibold align-top text-[var(--teal)]">: PAID</td>
-              </tr>
-            </tbody>
-          </table>
+      <section className="mt-3 grid grid-cols-2 gap-x-7">
+        <DocFieldList
+          rows={[
+            { label: 'Patient Name', value: 'Jane Doe', strong: true },
+            { label: 'Patient ID', value: 'P26-0001' },
+            { label: 'Age / Gender', value: '34 Y / Female' },
+            { label: 'Phone', value: '9876543210' },
+          ]}
+        />
+        <DocFieldList
+          rows={[
+            { label: 'Bill No', value: 'INV-2026-001' },
+            { label: 'Billing Date', value: '15 Aug 2026' },
+            { label: 'Therapist', value: 'Dr. Smith · Reg. 12345' },
+            { label: 'Status', value: 'PAID', tone: 'good' },
+          ]}
+        />
+      </section>
+
+      <section className="mt-2.5 border-t border-[var(--border)] pt-1.5">
+        <h3 className="mb-0.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Clinical details</h3>
+        <div className="grid grid-cols-2 gap-x-7">
+          <DocFieldList rows={[{ label: 'Ref. Physician', value: 'Dr. Sarah Connor (Reg. No. 12345)' }]} />
+          <DocFieldList rows={[{ label: 'Place of service', value: 'Clinic' }, { label: 'Treatment', value: 'Post-Op Care' }]} />
         </div>
       </section>
 
-      <div className="mt-6 overflow-x-auto print:overflow-visible">
+      <DocSpacer />
+      <div className="overflow-x-auto print:overflow-visible">
         <table className="w-full min-w-[680px] print:min-w-full text-sm table-fixed border-b-2 border-[var(--border)] pb-2">
           <thead>
             <tr className="border-y-2 border-[var(--border)] bg-[var(--teal-mist)] text-left font-medium text-[var(--ink)] text-xs">
@@ -123,14 +93,15 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
         subtotalPaise={830000}
         adjustmentPaise={-5000}
         totalPaise={825000}
-        ledger={{ rows: [{ date: '2026-08-15', mode: 'UPI', amountPaise: 825000 }], paidPaise: 825000, balancePaise: 0 }}
+        ledger={{ rows: [{ date: '2026-08-15', mode: 'UPI', reference: 'UTR 4093 8821 5577', amountPaise: 825000 }], paidPaise: 825000, balancePaise: 0, excessPaise: 0, grossPaise: 825000 }}
       />
 
-      <p className="mt-4 text-[11px] text-[var(--muted)]">
+      <DocSpacer />
+      <p className="text-[11px] text-[var(--muted)]">
         Received with thanks: Rupees Eight Thousand Two Hundred Fifty Only
       </p>
 
-      <div className="mt-auto pt-3">
+      <div className="mt-10">
         <PrintSignatureFooter
           left={<>
             <h4 className="mb-0.5 font-semibold text-[var(--ink)]">Terms & Conditions</h4>

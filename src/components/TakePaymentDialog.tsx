@@ -9,7 +9,7 @@ import { advanceService, directPaymentService, paymentService, repos } from '@/s
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 import { toLocalDateStr } from '@/domain/schedule';
 import { useClinic } from '@/app/clinicContext';
-import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
+import { defaultPaymentMethod, paymentMethodOptions, paymentReferenceField, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 export function TakePaymentDialog({
   clinicId,
@@ -54,10 +54,12 @@ export function TakePaymentDialog({
   // below is its own independent payments-table write. This just lets staff
   // do it in one sitting instead of three separate round trips.
   const [splitMode, setSplitMode] = useState(false);
-  const [splits, setSplits] = useState<{ method: PaymentMethod; amountRupees: string }[]>([
-    { method: 'cash', amountRupees: '' },
-    { method: 'upi', amountRupees: '' },
+  const [splits, setSplits] = useState<{ method: PaymentMethod; amountRupees: string; reference: string }[]>([
+    { method: 'cash', amountRupees: '', reference: '' },
+    { method: 'upi', amountRupees: '', reference: '' },
   ]);
+  // Optional: what someone would look up later to trace the payment (a UTR, a cheque number). Saved as the payment's note.
+  const [reference, setReference] = useState('');
   const openAdvances = useLiveQuery(
     () => (patientId ? advanceService.openAdvancesWithBalance(clinicId, patientId) : undefined),
     [clinicId, patientId]
@@ -113,15 +115,16 @@ export function TakePaymentDialog({
   const splitMatchesTotal = amountValid && splitTotalPaise === parsedAmountPaise;
   const splitValid = splitRowsValid && splitMatchesTotal;
 
-  function updateSplit(index: number, patch: Partial<{ method: PaymentMethod; amountRupees: string }>) {
+  function updateSplit(index: number, patch: Partial<{ method: PaymentMethod; amountRupees: string; reference: string }>) {
     setSplits((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   }
 
-  async function recordOne(amount: Paise, forMethod: PaymentMethod) {
+  async function recordOne(amount: Paise, forMethod: PaymentMethod, forReference: string) {
+    const notes = forReference.trim() || null;
     if (invoiceId && invoice) {
-      await paymentService.recordInvoicePayment(clinicId, invoice, amount, forMethod, receivedDate, null);
+      await paymentService.recordInvoicePayment(clinicId, invoice, amount, forMethod, receivedDate, notes);
     } else {
-      await directPaymentService.logPayment(clinicId, visitId, amount, forMethod, receivedDate, null);
+      await directPaymentService.logPayment(clinicId, visitId, amount, forMethod, receivedDate, notes);
     }
   }
 
@@ -146,10 +149,10 @@ export function TakePaymentDialog({
         // invoice's paid-so-far total from scratch each call, so the next
         // slice needs the previous one's write to have already landed.
         for (const s of splits) {
-          await recordOne(rupeesToPaise(Number(s.amountRupees)), s.method);
+          await recordOne(rupeesToPaise(Number(s.amountRupees)), s.method, s.reference);
         }
       } else {
-        await recordOne(parsedAmountPaise, method);
+        await recordOne(parsedAmountPaise, method, reference);
         rememberPaymentMethod(clinic.id, method);
       }
       onClose();
@@ -242,7 +245,7 @@ export function TakePaymentDialog({
               </button>
             </div>
             {splits.map((s, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="flex flex-wrap items-center gap-2">
                 <input
                   type="number"
                   min="0.01"
@@ -263,6 +266,15 @@ export function TakePaymentDialog({
                     </option>
                   ))}
                 </select>
+                {paymentReferenceField(s.method) && (
+                  <input
+                    className={`${inputCls} w-full`}
+                    aria-label={`Reference for ${s.method}`}
+                    placeholder={paymentReferenceField(s.method)?.placeholder}
+                    value={s.reference}
+                    onChange={(e) => updateSplit(i, { reference: e.target.value })}
+                  />
+                )}
                 {splits.length > 2 && (
                   <button
                     type="button"
@@ -277,7 +289,7 @@ export function TakePaymentDialog({
             <button
               type="button"
               className="text-xs font-medium text-[var(--teal)] hover:underline"
-              onClick={() => setSplits((rows) => [...rows, { method: 'cash', amountRupees: '' }])}
+              onClick={() => setSplits((rows) => [...rows, { method: 'cash', amountRupees: '', reference: '' }])}
             >
               + Add another method
             </button>
@@ -316,6 +328,17 @@ export function TakePaymentDialog({
                 ))}
               </select>
             </label>
+            {paymentReferenceField(method) && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{paymentReferenceField(method)?.label}</span>
+                <input
+                  className={inputCls}
+                  placeholder={paymentReferenceField(method)?.placeholder}
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                />
+              </label>
+            )}
             {method === 'upi' && (
               <ShowUpiQrButton
                 amountPaise={parsedAmountPaise}

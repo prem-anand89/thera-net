@@ -92,7 +92,7 @@ import { VisitLoggedCard, type SavedVisitInfo } from './VisitLoggedCard';
 import { visitPermissions } from './visitPermissions';
 import { EditVisitModal } from './EditVisitModal';
 import { visitDateHint } from './visitDateHint';
-import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
+import { defaultPaymentMethod, paymentMethodOptions, paymentReferenceField, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 // UPI first — the most common collection method at an Indian clinic front
 // desk, so it's both the default (see paymentMethod's useState below) and
@@ -330,6 +330,8 @@ export function NewVisitPage() {
   const foldedOnceRef = useRef(false);
   const prevServicesRef = useRef(0);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
+  // Optional: a UTR, cheque number or receipt number for the payment, saved as its note and printed on the bill.
+  const [paymentRef, setPaymentRef] = useState('');
   const paymentMethods = paymentMethodOptions(clinic);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
     defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id))
@@ -971,6 +973,7 @@ export function NewVisitPage() {
     setPendingNote('');
     setTreatmentIds([]);
     setPaymentChoice('paid');
+    setPaymentRef('');
     setLocation('clinic');
     setCustomConditionOpen(false);
     setError(null);
@@ -1078,7 +1081,7 @@ export function NewVisitPage() {
             paymentMethod,
             // Cash taken at the visit; a future-dated visit can't have been paid yet.
             receivedDateAtVisit(visitDate, today),
-            null
+            paymentReferenceField(paymentMethod) ? paymentRef.trim() || null : null
           );
           rememberPaymentMethod(clinic.id, paymentMethod);
         } catch (paymentFailure) {
@@ -1645,8 +1648,6 @@ export function NewVisitPage() {
         </div>
       )}
 
-      {/* 2. Divider between Patient and This Visit */}
-      <div className="border-t border-[var(--border)]" />
       <AddPatientSheet
         open={addingPatient}
         onClose={() => setAddingPatient(false)}
@@ -1659,6 +1660,8 @@ export function NewVisitPage() {
         }}
       />
 
+      {/* 2. Divider between Patient and This Visit */}
+      <div className="border-t border-[var(--border)]" />
 
       {/* 3. This visit interactive inputs */}
       <div className="space-y-3">
@@ -1994,6 +1997,17 @@ export function NewVisitPage() {
                     />
                   )}
                 </div>
+
+                {paymentChoice === 'paid' && paymentReferenceField(paymentMethod) && (
+                  <input
+                    className={`${inputCls} w-full`}
+                    aria-label={paymentReferenceField(paymentMethod)?.label}
+                    placeholder={paymentReferenceField(paymentMethod)?.label}
+                    value={paymentRef}
+                    disabled={busy}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                  />
+                )}
 
                 {paymentChoice === 'paid' && paymentMethod === 'upi' && patient && (
                   <div className="flex items-center gap-2.5 pt-0.5">

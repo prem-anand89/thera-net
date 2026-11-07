@@ -24,7 +24,7 @@ import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
 import { openWhatsAppWithText } from '@/lib/pdfShare';
-import { BillTotals, PrintLetterhead, PrintSignatureFooter } from './printChrome';
+import { BillTotals, DocFieldList, DocSpacer, PrintLetterhead, PrintSignatureFooter } from './printChrome';
 import { ShareBillDialog } from './ShareBillDialog';
 import { useBillShare } from './useBillShare';
 
@@ -230,7 +230,11 @@ export function InvoicePrintPage() {
     const visits = await repos.visits.listByInvoiceId(invoice.id);
     const payments = (await Promise.all(visits.map((v) => repos.payments.listByVisit(v.id)))).flat();
     const ip = await repos.invoicePayments.getByInvoiceId(invoice.id);
-    return buildInvoicePaymentLedger(invoice, visits, payments, ip ?? undefined);
+    const advanceIds = Array.from(new Set(payments.map((p) => p.advanceId).filter((id): id is string => Boolean(id))));
+    const advances = (await Promise.all(advanceIds.map((id) => repos.patientAdvances.get(id)))).filter(
+      (a): a is NonNullable<typeof a> => a !== undefined
+    );
+    return buildInvoicePaymentLedger(invoice, visits, payments, ip ?? undefined, new Map(advances.map((a) => [a.id, a])));
   }, [invoice?.id, invoice?.totalPaise, invoice?.issuedAt, invoice?.paymentMode]);
 
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
@@ -298,6 +302,19 @@ export function InvoicePrintPage() {
   const isPaid = invoicePayment?.status !== 'outstanding' && !isVoid;
   const isPartial = !isPaid && !isVoid && !!balance && balance.paidPaise > 0;
   const hasAdjustments = invoice.lineItems.some((li) => li.adjustmentPaise !== 0);
+  const snap = invoice.clinicalSnapshot;
+  // Left column: what was found and who referred; right column: where and what was done.
+  const clinicalLeft = [
+    ...(snap?.diagnosis ? [{ label: 'Diagnosis', value: `${snap.diagnosis}${snap.diagnosisIcdCode ? ` (${snap.diagnosisIcdCode})` : ''}` }] : []),
+    ...(snap?.referringPhysician
+      ? [{ label: 'Ref. Physician', value: `${snap.referringPhysician}${snap.physicianRegistrationNo ? ` (Reg. No. ${snap.physicianRegistrationNo})` : ''}` }]
+      : []),
+  ];
+  const clinicalRight = [
+    ...(snap?.placeOfService ? [{ label: 'Place of service', value: snap.placeOfService === 'home' ? 'Home (domiciliary)' : 'Clinic' }] : []),
+    ...(snap?.treatmentPerformed ? [{ label: 'Treatment', value: snap.treatmentPerformed }] : []),
+  ];
+
   const isV2Invoice = invoice.lineItems.length > 0 && invoice.lineItems.every(isV2Line);
 
   // v2: every distinct therapist across every line (a merged group can span
@@ -484,6 +501,7 @@ export function InvoicePrintPage() {
           </div>
         )}
         <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} compact={paper === 'A5'} />
+        <DocSpacer />
 
         {/* Document Title */}
         <div className="mt-4 text-center">
@@ -493,143 +511,64 @@ export function InvoicePrintPage() {
         </div>
 
         {/* Invoice meta + patient grid */}
-        <section className="mt-3 grid grid-cols-2 gap-x-8 gap-y-1 text-[11px]">
-          {/* Left Column: Patient Info */}
-          <div>
-            <table className="w-full text-left table-fixed">
-              <tbody>
-                <tr>
-                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Patient Name</th>
-                  <td className="py-0.5 text-[var(--ink)] align-top font-semibold truncate">
-                    : {invoice.patientSnapshot.name}
-                  </td>
-                </tr>
-                <tr>
-                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Patient ID</th>
-                  <td className="py-0.5 text-[var(--ink)] align-top">
-                    : {invoice.patientSnapshot.mrno}
-                  </td>
-                </tr>
-                {(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex) && (
-                  <tr>
-                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Age / Gender</th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      :{' '}
-                      {[
-                        invoice.patientSnapshot.age != null ? `${invoice.patientSnapshot.age} Y` : null,
-                        invoice.patientSnapshot.sex,
-                      ]
+        <section className={`mt-3 grid grid-cols-2 ${paper === 'A5' ? 'gap-x-4' : 'gap-x-7'}`}>
+          <DocFieldList
+            compact={paper === 'A5'}
+            rows={[
+              { label: 'Patient Name', value: invoice.patientSnapshot.name, strong: true },
+              { label: 'Patient ID', value: invoice.patientSnapshot.mrno },
+              ...(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex
+                ? [
+                    {
+                      label: 'Age / Gender',
+                      value: [invoice.patientSnapshot.age != null ? `${invoice.patientSnapshot.age} Y` : null, invoice.patientSnapshot.sex]
                         .filter(Boolean)
-                        .join(' / ')}
-                    </td>
-                  </tr>
-                )}
-                {invoice.patientSnapshot.phone && (
-                  <tr>
-                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Phone</th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      : {invoice.patientSnapshot.phone}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Right Column: Bill Info */}
-          <div>
-            <table className="w-full text-left table-fixed">
-              <tbody>
-                <tr>
-                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Bill No</th>
-                  <td className="py-0.5 text-[var(--ink)] align-top">
-                    : {invoice.invoiceNo}
-                  </td>
-                </tr>
-                <tr>
-                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Billing Date</th>
-                  <td className="py-0.5 text-[var(--ink)] align-top">
-                    : {formatDateDMY(invoice.issuedAt)}
-                  </td>
-                </tr>
-                {footerTherapists.length > 0 && (
-                  <tr>
-                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">
-                      {footerTherapists.length === 1 ? 'Therapist' : 'Therapists'}
-                    </th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      : {footerTherapists.map((t) => `${t.name}${t.registrationNo ? ` · Reg. ${t.registrationNo}` : ''}`).join(', ')}
-                    </td>
-                  </tr>
-                )}
-                {statusLoaded && (
-                  <tr>
-                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Status</th>
-                    <td className="py-0.5 font-semibold align-top">
-                      :{' '}
-                      <span className={supersededBy ? 'text-[var(--muted)]' : isPaid ? 'text-[var(--doc-good)]' : 'text-[var(--doc-due)]'}>
-                        {isVoid ? 'VOID' : supersededBy ? 'SUPERSEDED' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
-                      </span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                        .join(' / '),
+                    },
+                  ]
+                : []),
+              ...(invoice.patientSnapshot.phone ? [{ label: 'Phone', value: invoice.patientSnapshot.phone }] : []),
+            ]}
+          />
+          <DocFieldList
+            compact={paper === 'A5'}
+            rows={[
+              { label: 'Bill No', value: invoice.invoiceNo },
+              { label: 'Billing Date', value: formatDateDMY(invoice.issuedAt) },
+              ...(footerTherapists.length > 0
+                ? [
+                    {
+                      label: footerTherapists.length === 1 ? 'Therapist' : 'Therapists',
+                      value: footerTherapists.map((t) => `${t.name}${t.registrationNo ? ` · Reg. ${t.registrationNo}` : ''}`).join(', '),
+                    },
+                  ]
+                : []),
+              ...(statusLoaded
+                ? [
+                    {
+                      label: 'Status',
+                      value: isVoid ? 'VOID' : supersededBy ? 'SUPERSEDED' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE',
+                      tone: (supersededBy ? 'muted' : isPaid ? 'good' : 'due') as 'good' | 'due' | 'muted',
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </section>
 
-        {/* Clinical details — only when set (old invoices predate the
-            field; bulk-issued invoices carry no snapshot by design, see
-            the Phase 1 plan's 1.4 section). */}
-        {(invoice.clinicalSnapshot) && (
-          <section className="mt-3 pt-2.5 border-t border-[var(--border)] text-[11px] text-[var(--ink)]">
-            <h3 className="mb-2 font-medium text-[var(--muted)] uppercase tracking-wide text-[10px]">
-              Clinical details
-            </h3>
-            <table className="w-full text-left table-fixed">
-              <tbody>
-                {invoice.clinicalSnapshot?.diagnosis && (
-                  <tr>
-                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Diagnosis</th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      : {invoice.clinicalSnapshot.diagnosis}
-                      {invoice.clinicalSnapshot.diagnosisIcdCode &&
-                        ` (${invoice.clinicalSnapshot.diagnosisIcdCode})`}
-                    </td>
-                  </tr>
-                )}
-                {invoice.clinicalSnapshot?.referringPhysician && (
-                  <tr>
-                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Ref. Physician</th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      : {invoice.clinicalSnapshot.referringPhysician}
-                      {invoice.clinicalSnapshot.physicianRegistrationNo &&
-                        ` (Reg. No. ${invoice.clinicalSnapshot.physicianRegistrationNo})`}
-                    </td>
-                  </tr>
-                )}
-                {invoice.clinicalSnapshot?.placeOfService && (
-                  <tr>
-                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Place of service</th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      : {invoice.clinicalSnapshot.placeOfService === 'home'
-                        ? 'Home (domiciliary)'
-                        : 'Clinic'}
-                    </td>
-                  </tr>
-                )}
-                {invoice.clinicalSnapshot?.treatmentPerformed && (
-                  <tr>
-                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Treatment</th>
-                    <td className="py-0.5 text-[var(--ink)] align-top">
-                      : {invoice.clinicalSnapshot.treatmentPerformed}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* Clinical details: row by row, only what is filled (old invoices predate the field; bulk-issued invoices
+            carry no snapshot by design). Two columns so it stays short. */}
+        {(clinicalLeft.length > 0 || clinicalRight.length > 0) && (
+          <section className="mt-2.5 border-t border-[var(--border)] pt-1.5">
+            <h3 className="mb-0.5 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Clinical details</h3>
+            <div className={`grid grid-cols-2 ${paper === 'A5' ? 'gap-x-4' : 'gap-x-7'}`}>
+              <DocFieldList compact={paper === 'A5'} rows={clinicalLeft} />
+              <DocFieldList compact={paper === 'A5'} rows={clinicalRight} />
+            </div>
           </section>
         )}
+
+        <DocSpacer />
 
         {/* Line items */}
         {isV2Invoice ? (
@@ -646,15 +585,22 @@ export function InvoicePrintPage() {
           compact={paper === 'A5'}
         />
 
-        <p className="mt-2.5 pl-3 text-[11px] text-[var(--muted)]">
+        <DocSpacer />
+        <p className="pl-3 text-[11px] text-[var(--muted)]">
           {paymentLedger && paymentLedger.balancePaise === 0 ? 'Received with thanks: ' : 'Amount in words: '}
           {amountInWords(paymentLedger ? (paymentLedger.balancePaise === 0 ? paymentLedger.paidPaise : paymentLedger.grossPaise) : invoice.totalPaise)}
         </p>
 
-        {/* Terms and signature stay together as one block, at the foot of the page. */}
-        <div className="mt-auto pt-3 print:break-inside-avoid" data-pdf-block>
+        {/* Terms and signature stay together as one block. They follow the content, with clear space above so the
+            footer reads as separate from the bill (the free height goes to the gaps above and to the page's end). */}
+        <div className={`${paper === 'A5' ? 'mt-7' : 'mt-10'} print:break-inside-avoid`} data-pdf-block>
           <PrintSignatureFooter
             signatureUrl={signatureUrl}
+            signerName={
+              footerTherapists.length === 1
+                ? `${footerTherapists[0].name}${footerTherapists[0].registrationNo ? ` · Reg. ${footerTherapists[0].registrationNo}` : ''}`
+                : null
+            }
             left={
               <>
                 <h4 className="mb-0.5 font-semibold text-[var(--ink)]">Terms & Conditions</h4>

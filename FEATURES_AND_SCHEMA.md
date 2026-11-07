@@ -353,11 +353,25 @@ queued with a visible error.
 - **Letterhead** (`PrintLetterhead`, shared by bills, advance receipts, the clinical note, the session log, the insurer packet and the Settings preview):
   logo and clinic name on the left, with the optional tagline (Settings → Clinic profile, 60 characters) and, if any, one
   small "In partnership with" line under the name; address, phone, email and GSTIN always on the right
-- **Colour:** `.doc-paper` tokens give the screen and the shared PDF the app's teal; printing is pure black and white and
-  relies on rules and bold text, not fills
-- **Bill layout:** the therapist (with registration number) appears once, in the top block. Under the service table,
-  `BillTotals` shows subtotal, adjustment and Total, then Payment details against Amount Paid and Balance Due. Terms and
-  signature are one block at the foot of the page, and move to page 2 together on a long bill
+- **One look everywhere:** `.doc-paper` tokens (teal, dark enough to read in grey) serve the screen, the shared PDF and every
+  printer, with no separate black-and-white style. Total has no fill (heavier rules, bold, larger); only the service table
+  heading and the Payment details heading carry a very light tint, and both also have rules, so a printer that drops
+  backgrounds loses nothing
+- **Bill layout:** top block in `DocFieldList` rows: Patient (name, ID, age/gender, phone) left, Bill (number, date,
+  therapist with registration number, status) right, then a "Clinical details" block (diagnosis with ICD code, referring
+  physician; place of service, treatment) shown row by row only where filled. Under the service table, `BillTotals`:
+  Subtotal / Adjustment / Total in one right-hand column, then ONE "Payment details" table whose left panel lists each
+  payment (date, mode, reference, amount) and whose right panel (same column as the totals) shows Amount paid, "Excess
+  received" if the patient paid more than billed, and Balance due. Terms and signature are one block at the foot, with
+  the therapist's name under the line when the bill has one therapist; a signature image that fails to load prints as a
+  blank line (never a broken-image icon). The block follows the content with clear space above (not pinned to the page foot), so a one-service bill has no gap in
+  the middle; `DocSpacer`s between the header, patient/clinical details, table and totals share the page's free height up
+  to 40px each and shrink to a sliver on a long bill. The footer moves to page 2 together on a long bill
+- **Payment reference:** an optional note on every payment (Take payment, and New Visit's "Collected now"), labelled by
+  method (`paymentReferenceField`: UTR / transaction ID, cheque number and bank, approval code, transfer reference,
+  receipt number; none for the partner). Stored in `payments.notes`, no schema change. The ledger
+  (`buildInvoicePaymentLedger`) carries it as `reference`; a payment drawn from an advance reads "Advance" with the
+  advance's receipt label (`advanceReceiptLabel`)
 - **Document title**: "BILL" while outstanding, "BILL CUM RECEIPT" once paid — not
   "Invoice"/"Tax Invoice", which reads as GST terminology that doesn't apply to
   (generally GST-exempt) healthcare services and doesn't match how insurers/TPAs

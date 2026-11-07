@@ -1,8 +1,11 @@
-import { Invoice, Payment, InvoicePayment, Visit, PaymentMethod } from './types';
+import { Invoice, Payment, InvoicePayment, Visit, PaymentMethod, PatientAdvance } from './types';
+import { advanceReceiptLabel } from './advanceReceipt';
 
 export interface LedgerRow {
   date: string;
   mode: string;
+  /** What lets someone trace the payment: a UTR, a cheque number, a receipt number, an advance's receipt label. */
+  reference: string | null;
   amountPaise: number;
 }
 
@@ -11,6 +14,8 @@ export interface InvoiceLedger {
   grossPaise: number;
   paidPaise: number;
   balancePaise: number;
+  /** Received beyond the bill (never negative). The balance is capped at 0, so this is the only place it shows. */
+  excessPaise: number;
 }
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -31,7 +36,9 @@ export function buildInvoicePaymentLedger(
   invoice: Invoice,
   _visits: Visit[], // Provided if needed in future, currently payments are enough
   payments: Payment[],
-  invoicePayment?: InvoicePayment
+  invoicePayment?: InvoicePayment,
+  /** The advances any payment was drawn from, so its row can name the receipt. */
+  advancesById: Map<string, Pick<PatientAdvance, 'receivedDate' | 'id'>> = new Map()
 ): InvoiceLedger {
   const grossPaise = invoice.totalPaise;
   let paidPaise = 0;
@@ -39,9 +46,12 @@ export function buildInvoicePaymentLedger(
   // Map any explicit payment rows linked to this invoice's visits
   let rows: LedgerRow[] = payments.map((p) => {
     paidPaise += p.amountPaise;
+    const advance = p.advanceId ? advancesById.get(p.advanceId) : undefined;
     return {
       date: p.receivedDate,
-      mode: PAYMENT_METHOD_LABELS[p.method] || p.method,
+      mode: p.advanceId ? 'Advance' : PAYMENT_METHOD_LABELS[p.method] || p.method,
+      // An advance's own note ("Applied from advance received …") is the system's wording, not a reference.
+      reference: p.advanceId ? (advance ? advanceReceiptLabel(advance) : null) : p.notes?.trim() || null,
       amountPaise: p.amountPaise,
     };
   });
@@ -56,6 +66,7 @@ export function buildInvoicePaymentLedger(
       {
         date: invoice.issuedAt.split('T')[0] ?? '',
         mode: invoice.paymentMode,
+        reference: null,
         amountPaise: grossPaise,
       },
     ];
@@ -72,5 +83,6 @@ export function buildInvoicePaymentLedger(
     grossPaise,
     paidPaise,
     balancePaise,
+    excessPaise: Math.max(0, paidPaise - grossPaise),
   };
 }

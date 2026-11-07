@@ -10,6 +10,7 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
+import { advanceReceiptLabel } from '@/domain/advanceReceipt';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
 
 export function AdvanceReceiptPrintPage() {
@@ -54,7 +55,7 @@ export function AdvanceReceiptPrintPage() {
 
   // D4: no gap-free numbered series for advances yet — identified by date +
   // a short slice of the id, same as any other non-invoice record.
-  const receiptLabel = `ADV-${advance.receivedDate.replace(/-/g, '')}-${advance.id.slice(0, 6).toUpperCase()}`;
+  const receiptLabel = advanceReceiptLabel(advance);
 
   return (
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
