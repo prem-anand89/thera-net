@@ -43,6 +43,12 @@ migration history disagree, and the next person (or the next rebuild) can't
 tell what state the schema is actually in. This has been a recurring bug
 class in this repo; don't reintroduce it.
 
+The history table must agree too (checked and repaired on 2026-11-08, 174 entries matching the 174 files). The Supabase
+`apply_migration` tool records the migration under the **time it was applied**, not the file's version, and the SQL
+editor records nothing. So after applying, make `supabase_migrations.schema_migrations` hold the **file's** version and
+name (update the version, or insert the row), or a later `supabase db push` will try to run it again. To check: list the
+live migrations and compare them with `ls supabase/migrations`.
+
 ## Keep the app ready for other countries (no new India-only assumption)
 
 The app is India-only today, but must not get harder to take abroad. In new code:
