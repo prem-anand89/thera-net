@@ -92,6 +92,33 @@ describe('toFriendlyMessage', () => {
   });
 });
 
+describe('toFriendlyMessage: invoice integrity checks', () => {
+  const friendly = (m: string) => toFriendlyMessage(new Error(`Could not issue invoice: ${m}`));
+
+  it('a zero total says there is nothing to bill', () => {
+    expect(friendly('Nothing to bill: these visits have no charge')).toBe(
+      'These visits have no charge, so there is nothing to put on an invoice.'
+    );
+  });
+
+  it('visits of two patients say an invoice covers one patient', () => {
+    expect(friendly('All visits on one invoice must belong to the same patient')).toBe(
+      'An invoice can only cover one patient. Select visits of a single patient.'
+    );
+  });
+
+  it.each([
+    "The invoice total does not match the visits' bills",
+    'The invoice lines do not add up to its total',
+    'The patient on this invoice does not match its visits',
+    'No visits on this invoice',
+  ])('"%s" asks to refresh and try again', (message) => {
+    expect(friendly(message)).toBe(
+      "This invoice doesn't match the visits selected. Refresh the page and try again; if it keeps happening, tell your admin."
+    );
+  });
+});
+
 describe('toFriendlyMessage when Supabase is not configured', () => {
   it('always reports offline', async () => {
     vi.resetModules();

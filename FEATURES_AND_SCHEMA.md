@@ -348,6 +348,10 @@ queued with a visible error.
 
 #### Invoice Issuance
 - **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
+- **An invoice must match its visits** (`check_invoice_matches_visits`, called by `issue_invoice` and `amend_invoice` after
+  the visits are stamped): at least one visit; all visits one patient, whose ID is the one on the invoice; a total above
+  zero ("Nothing to bill"); the total equals the sum of the visits' bills; the line items add up to the total. A refusal
+  rolls back the call, so the gap-free counter is not used. Existing invoices (three ₹0 ones among them) are untouched
 - **Immutable once issued** via DB triggers
 - **Printable** on A4/A5 with clinic letterhead + optional partner-hospital branding
 - **Letterhead** (`PrintLetterhead`, shared by bills, advance receipts, the clinical note, the session log, the insurer packet and the Settings preview):
