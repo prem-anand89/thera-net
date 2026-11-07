@@ -56,3 +56,13 @@ describe('SharedVisitCard place', () => {
     expect(screen.getByText('Inpatient')).toBeInTheDocument();
   });
 });
+
+describe('SharedVisitCard bill link', () => {
+  it('shows the bill number as a link only when the row carries one', () => {
+    renderCard(data({ invoiceId: 'i1', invoiceNo: 'BM/26-27/0004' } as Partial<VisitCardData>));
+    expect(screen.getByText('BM/26-27/0004')).toBeInTheDocument();
+    cleanup();
+    renderCard(data({ invoiceId: 'i1', invoiceNo: null } as Partial<VisitCardData>));
+    expect(screen.queryByText('BM/26-27/0004')).not.toBeInTheDocument();
+  });
+});

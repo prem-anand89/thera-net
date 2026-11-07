@@ -205,9 +205,10 @@ export function InvoicePrintPage() {
   // invoicing access says; a therapist can issue and amend but not void.
   const canVoid = canBill && (role === 'admin' || role === 'front_desk');
   const { invoiceId } = useParams({ strict: false }) as { invoiceId: string };
-  const { from: backTo, tab: backTab } = useSearch({ strict: false }) as {
+  const { from: backTo, tab: backTab, patient: backPatient } = useSearch({ strict: false }) as {
     from?: InvoicePrintBackTarget;
     tab?: 'invoices';
+    patient?: string;
   };
   const invoice = useLiveQuery(() => repos.invoices.get(invoiceId), [invoiceId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -353,13 +354,24 @@ export function InvoicePrintPage() {
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '12mm'}; }`}</style>
 
       <div className="no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-4 py-3">
-        <Link
-          to={backTo ?? '/ledger'}
-          search={backTab ? { tab: backTab } : undefined}
-          className={btnSecondary}
-        >
-          ← Back
-        </Link>
+        {backTo === '/patients' && backPatient ? (
+          <Link
+            to="/patients/$patientId"
+            params={{ patientId: backPatient }}
+            search={{ view: 'invoices' }}
+            className={btnSecondary}
+          >
+            ← Back
+          </Link>
+        ) : (
+          <Link
+            to={backTo ?? '/ledger'}
+            search={backTab ? { tab: backTab } : undefined}
+            className={btnSecondary}
+          >
+            ← Back
+          </Link>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex space-x-1 rounded-md bg-[var(--surface)] p-1 border border-[var(--border)] mr-2">
             <button
@@ -453,7 +465,7 @@ export function InvoicePrintPage() {
               <Link
                 to="/invoices/$invoiceId/print"
                 params={{ invoiceId: supersededBy.id }}
-                search={{ from: backTo, tab: backTab }}
+                search={{ from: backTo, tab: backTab, patient: backPatient }}
                 className="font-medium underline"
               >
                 {supersededBy.invoiceNo}
@@ -467,7 +479,7 @@ export function InvoicePrintPage() {
               <Link
                 to="/invoices/$invoiceId/print"
                 params={{ invoiceId: supersedes.id }}
-                search={{ from: backTo, tab: backTab }}
+                search={{ from: backTo, tab: backTab, patient: backPatient }}
                 className="font-medium underline"
               >
                 {supersedes.invoiceNo}

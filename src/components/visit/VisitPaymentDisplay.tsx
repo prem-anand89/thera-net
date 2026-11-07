@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { Pill } from '@/components/ui';
 import { formatAmount } from '@/domain/money';
 import type { PaymentBadgeKind } from '@/domain/paymentState';
@@ -83,7 +84,9 @@ export function PaymentStatusDisplay({
   const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
   const hasSecondaryRow =
-    (!canCollect && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
+    (!canCollect && paymentActions(data.paymentState).length > 0) ||
+    data.packageInvoicePending ||
+    Boolean(data.invoiceId && data.invoiceNo);
 
   return (
     <div className="flex flex-col items-start gap-1">
@@ -119,6 +122,7 @@ export function PaymentStatusDisplay({
               <span className="whitespace-nowrap">Ask billing</span>
             </Pill>
           )}
+          <VisitBillLink data={data} />
           {data.packageInvoicePending && (
             <Pill tone="amber">
               <span
@@ -132,5 +136,21 @@ export function PaymentStatusDisplay({
         </div>
       )}
     </div>
+  );
+}
+
+/** The visit's bill number as a link that opens the bill (Back returns to this patient's Invoices tab). Nothing without a number. */
+export function VisitBillLink({ data }: { data: VisitCardData }) {
+  if (!data.invoiceId || !data.invoiceNo) return null;
+  return (
+    <Link
+      to="/invoices/$invoiceId/print"
+      params={{ invoiceId: data.invoiceId }}
+      search={{ from: '/patients', patient: data.patientId }}
+      className="whitespace-nowrap text-[10px] font-medium text-[var(--teal)] hover:underline"
+      title="Open the bill"
+    >
+      {data.invoiceNo}
+    </Link>
   );
 }

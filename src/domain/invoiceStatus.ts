@@ -40,3 +40,18 @@ export function invoiceDisplayStatus(args: {
   if (paidPaise > 0) return { label: 'Partially paid', tone: 'amber', isPartial: true };
   return { label: 'Outstanding', tone: 'amber', isPartial: false };
 }
+
+/**
+ * What has been collected and what is still due on an invoice. A paid bill is fully collected whatever the payment rows
+ * say, a void one has nothing due, and an outstanding one owes its total less the money recorded against its visits.
+ */
+export function invoiceBalance(args: {
+  status: PaymentStatus;
+  totalPaise: number;
+  recordedPaise: number;
+}): { paidPaise: number; remainingPaise: number } {
+  const { status, totalPaise, recordedPaise } = args;
+  if (status === 'paid') return { paidPaise: totalPaise, remainingPaise: 0 };
+  if (status === 'void') return { paidPaise: 0, remainingPaise: 0 };
+  return { paidPaise: recordedPaise, remainingPaise: Math.max(0, totalPaise - recordedPaise) };
+}

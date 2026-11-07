@@ -2,7 +2,7 @@ import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
 import { askConfirm } from '@/lib/notify';
 import { useMemo, useState, useCallback } from 'react';
 import { BackLink } from '@/components/BackLink';
-import { Link, useParams, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { patientsBackLink, type PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -13,6 +13,10 @@ import {
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { PatientAddressLine } from './PatientAddressLine';
+import { PatientInvoicesList } from './PatientInvoicesList';
+import { PatientViewTabs, type PatientView } from './PatientViewTabs';
+import { invoicesForPatient } from '@/domain/patientInvoices';
+import { remindToPay } from '@/features/invoices/remindToPay';
 import { useVisitDetails } from '@/features/visits/visitDetails';
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
@@ -32,6 +36,7 @@ import {
   clinicBillingConfig,
   type ConsultationNote,
   type ConsultationNoteStatus,
+  type Invoice,
 } from '@/domain/types';
 import { formatAmount, currencySymbol } from '@/domain/money';
 import { EditPatientModal } from './EditPatientModal';
@@ -67,16 +72,22 @@ const NOTE_STATUS_PILL: Record<
  */
 export function PatientProfilePage() {
   const clinic = useClinic();
-  const { canBill, canCollectPayment, canViewClinicalNotes, canPrintNotes, isAdmin } = usePermissions();
+  const { canBill, canCollectPayment, canViewClinicalNotes, canPrintNotes, isAdmin, invoicingOnPlan, invoiceRoleOk } =
+    usePermissions();
   const { myTherapistId, isClinicWideView } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
-  const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
+  const { from: backTo, view: viewParam } = useSearch({ strict: false }) as {
+    from?: PatientProfileBackTarget;
+    view?: 'invoices';
+  };
+  const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [invoicing, setInvoicing] = useState<IssueInvoiceTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
+  const [takingInvoicePayment, setTakingInvoicePayment] = useState<Invoice | null>(null);
   const [bulkCollecting, setBulkCollecting] = useState(false);
 
   const referringSources = useLiveQuery(
@@ -155,6 +166,40 @@ export function PatientProfilePage() {
     () => new Map((invoices ?? []).map((inv) => [inv.id, inv.issuedAt])),
     [invoices]
   );
+  const invoiceNoById = useMemo(() => new Map((invoices ?? []).map((inv) => [inv.id, inv.invoiceNo])), [invoices]);
+  // The patient's bills: who may see them, which ones are theirs, and what has been collected on each.
+  const showInvoicesTab = invoicingOnPlan && invoiceRoleOk;
+  const activeView: PatientView = showInvoicesTab && viewParam === 'invoices' ? 'invoices' : 'visits';
+  const supersededInvoiceIds = useMemo(
+    () => new Set((invoices ?? []).map((i) => i.supersedesInvoiceId).filter((id): id is string => Boolean(id))),
+    [invoices]
+  );
+  const patientInvoices = useMemo(
+    () => invoicesForPatient(patientId, invoices ?? [], visits ?? []),
+    [patientId, invoices, visits]
+  );
+  const activeInvoiceCount = patientInvoices.filter((i) => !supersededInvoiceIds.has(i.id)).length;
+  const { recordedByInvoiceId, visitIdByInvoiceId } = useMemo(() => {
+    const recorded = new Map<string, number>();
+    const visitIds = new Map<string, string>();
+    for (const v of visits ?? []) {
+      if (v.deleted || !v.invoiceId) continue;
+      recorded.set(v.invoiceId, (recorded.get(v.invoiceId) ?? 0) + (directPaymentByVisitId.get(v.id) ?? 0));
+      if (!visitIds.has(v.invoiceId)) visitIds.set(v.invoiceId, v.id);
+    }
+    return { recordedByInvoiceId: recorded, visitIdByInvoiceId: visitIds };
+  }, [visits, directPaymentByVisitId]);
+  const setView = (next: PatientView) =>
+    void navigate({
+      to: '/patients/$patientId',
+      params: { patientId },
+      search: {
+        ...(backTo ? { from: backTo } : {}),
+        ...(next === 'invoices' ? { view: 'invoices' as const } : {}),
+      },
+      replace: true,
+    });
+
   const nameOfTherapist = useCallback((id: string) => therapistName.get(id) ?? 'Therapist', [therapistName]);
   // Visits a colleague billed where the signed-in therapist delivered a service: shown to them as
   // "Assisted" rows (their share only), not as the colleague's full visit with its bill.
@@ -332,6 +377,7 @@ export function PatientProfilePage() {
             v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
           ),
           invoiceId: v.invoiceId ?? null,
+          invoiceNo: showInvoicesTab && v.invoiceId ? (invoiceNoById.get(v.invoiceId) ?? null) : null,
           collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
           partnerCollectedPaise: partnerPaymentByVisitId.get(v.id) ?? 0,
           issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
@@ -376,6 +422,8 @@ export function PatientProfilePage() {
       notes,
       visitDetails,
       clinic,
+      showInvoicesTab,
+      invoiceNoById,
     ]
   );
 
@@ -679,6 +727,8 @@ export function PatientProfilePage() {
                 billed={billingSummary.totalBilled}
                 collected={billingSummary.totalCollected}
                 outstanding={billingSummary.outstandingBalance}
+                billCount={showInvoicesTab ? activeInvoiceCount : 0}
+                onViewBills={() => setView('invoices')}
               />
             )}
 
@@ -793,6 +843,32 @@ export function PatientProfilePage() {
             </section>
           )}
 
+          {showInvoicesTab && (
+            <PatientViewTabs
+              active={activeView}
+              visitCount={visitRows.length}
+              invoiceCount={activeInvoiceCount}
+              onChange={setView}
+            />
+          )}
+          {activeView === 'invoices' ? (
+            <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+              <PatientInvoicesList
+                invoices={patientInvoices}
+                statusByInvoiceId={statusByInvoiceId}
+                recordedByInvoiceId={recordedByInvoiceId}
+                supersededInvoiceIds={supersededInvoiceIds}
+                visitIdByInvoiceId={visitIdByInvoiceId}
+                patientId={patientId}
+                canCollect={canCollectPayment}
+                onTakePayment={setTakingInvoicePayment}
+                onRemind={(inv, remainingPaise) =>
+                  remindToPay({ clinic, invoice: inv, remainingPaise, phone: patient?.phone ?? inv.patientSnapshot?.phone })
+                }
+              />
+            </section>
+          ) : (
+            <>
           <div className="flex items-center justify-between">
             <SectionLabel>Visit history</SectionLabel>
             {visitRows.length > 0 && (
@@ -901,6 +977,8 @@ export function PatientProfilePage() {
               </div>
             )}
           </section>
+            </>
+          )}
         </div>
       </div>
 
@@ -924,6 +1002,20 @@ export function PatientProfilePage() {
           mrno={takingPayment.mrno}
           patientId={takingPayment.patientId}
           onClose={() => setTakingPayment(null)}
+        />
+      )}
+
+      {takingInvoicePayment && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={visitIdByInvoiceId.get(takingInvoicePayment.id) ?? ''}
+          invoiceId={takingInvoicePayment.id}
+          amountPaise={takingInvoicePayment.totalPaise}
+          visitDate={toLocalDateStr(new Date())}
+          patientLabel={takingInvoicePayment.patientSnapshot.name}
+          mrno={takingInvoicePayment.patientSnapshot.mrno}
+          patientId={patientId}
+          onClose={() => setTakingInvoicePayment(null)}
         />
       )}
 
@@ -1121,10 +1213,15 @@ function PaymentsSummarySection({
   billed,
   collected,
   outstanding,
+  billCount,
+  onViewBills,
 }: {
   billed: number;
   collected: number;
   outstanding: number;
+  /** Bills on the patient; 0 hides the link (the viewer cannot see bills, or there are none). */
+  billCount: number;
+  onViewBills: () => void;
 }) {
   return (
     <SideCard title="Payments">
@@ -1150,6 +1247,15 @@ function PaymentsSummarySection({
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Outstanding</div>
         </div>
       </div>
+      {billCount > 0 && (
+        <button
+          type="button"
+          className="mt-3 text-xs font-medium text-[var(--teal)] hover:underline"
+          onClick={onViewBills}
+        >
+          {billCount} {billCount === 1 ? 'bill' : 'bills'} · View
+        </button>
+      )}
     </SideCard>
   );
 }

@@ -228,10 +228,13 @@ const patientProfileRoute = createRoute({
   // Where "← Back" should return to — set by whichever screen linked here
   // (Patients list, Workspace, Ledger) so it doesn't always land on one
   // fixed page regardless of where the visitor came from.
-  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget } =>
-    PATIENT_PROFILE_BACK_TARGETS.includes(search.from as PatientProfileBackTarget)
+  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget; view?: 'invoices' } => ({
+    ...(PATIENT_PROFILE_BACK_TARGETS.includes(search.from as PatientProfileBackTarget)
       ? { from: search.from as PatientProfileBackTarget }
-      : {},
+      : {}),
+    // 'invoices' opens the Invoices tab; anything else is the Visits tab.
+    ...(search.view === 'invoices' ? { view: 'invoices' as const } : {}),
+  }),
   component: PatientProfilePage,
 });
 
@@ -411,11 +414,13 @@ const invoicePrintRoute = createRoute({
   // here — 'visits' is Ledger's default, so absence already means that).
   validateSearch: (
     search: Record<string, unknown>
-  ): { from?: InvoicePrintBackTarget; tab?: 'invoices' } => ({
+  ): { from?: InvoicePrintBackTarget; tab?: 'invoices'; patient?: string } => ({
     ...(INVOICE_PRINT_BACK_TARGETS.includes(search.from as InvoicePrintBackTarget)
       ? { from: search.from as InvoicePrintBackTarget }
       : {}),
     ...(search.tab === 'invoices' ? { tab: 'invoices' as const } : {}),
+    // The patient profile the bill was opened from, so Back returns to it.
+    ...(typeof search.patient === 'string' && search.patient ? { patient: search.patient } : {}),
   }),
   component: InvoicePrintPage,
 });

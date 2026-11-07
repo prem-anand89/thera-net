@@ -12,7 +12,7 @@ import { treatmentsDisplayText, patientIdentityLine } from './visit/formatters';
 import { PatientNameBlock } from './visit/VisitPatientBlock';
 import { SharedSplitLine, SharesRing } from './visit/VisitSharedSplit';
 import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './visit/VisitServiceDetails';
-import { PAYMENT_CHIP, PartnerCollectedPill } from './visit/VisitPaymentDisplay';
+import { PAYMENT_CHIP, PartnerCollectedPill, VisitBillLink } from './visit/VisitPaymentDisplay';
 import { isFullyPartnerCollected } from '@/domain/paymentMethods';
 import { VisitNoteLink, VisitFeedbackLink } from './visit/VisitNotesFeedback';
 import { RowActionsMenu } from './visit/VisitRowActions';
@@ -267,6 +267,7 @@ export function SharedVisitCard({
           {!canCollect && paymentActions(data.paymentState).length > 0 && (
             <Pill tone="slate">Ask billing</Pill>
           )}
+          <VisitBillLink data={data} />
           {data.packageInvoicePending && (
             <Pill tone="amber">
               <span title="This session isn't on the package's invoice yet — amend the invoice to include it.">

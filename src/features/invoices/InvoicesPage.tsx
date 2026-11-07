@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { canMarkOutstanding, invoiceDisplayStatus, invoiceRowStatus } from '@/domain/invoiceStatus';
+import { canMarkOutstanding, invoiceBalance, invoiceDisplayStatus, invoiceRowStatus } from '@/domain/invoiceStatus';
 import { toLocalDateStr } from '@/domain/schedule';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -13,13 +13,12 @@ const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 import { DatePresetBar, type DatePreset } from '@/components/DatePresetBar';
-import { buildUpiPayUri, clinicCanShowUpiQr, clinicUpiPayeeName } from '@/domain/upiPay';
+import { remindToPay } from './remindToPay';
 import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
-import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 
@@ -121,39 +120,21 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
     [patients]
   );
 
-  async function remindToPay(inv: Invoice, remainingPaise: number) {
+  function sendReminder(inv: Invoice, remainingPaise: number) {
     const patientId = patientIdByInvoiceId.get(inv.id);
     const phone = (patientId ? (phoneByPatientId.get(patientId) ?? null) : null) || inv.patientSnapshot?.phone || null;
     
-    if (!phone) {
+    if (!remindToPay({ clinic, invoice: inv, remainingPaise, phone })) {
       setError('Patient has no phone number on file');
-      return;
     }
-
-    const upiPayUri = clinicCanShowUpiQr(clinic)
-      ? buildUpiPayUri({
-          vpa: clinic.upiVpa ?? '',
-          payeeName: clinicUpiPayeeName(clinic),
-          amountPaise: remainingPaise,
-          note: inv.invoiceNo,
-        })
-      : null;
-
-    let text = `Hi ${inv.patientSnapshot.name},\n\nThis is a reminder from ${clinic.name} regarding your pending bill (${inv.invoiceNo}) of ${formatAmount(remainingPaise)}.`;
-    
-    if (upiPayUri) {
-      text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
-    }
-
-    openPatientWhatsAppChat(text, phone);
   }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
-    const status = invoiceStatus(inv.id);
-    if (status === 'paid') return { paidPaise: inv.totalPaise, remainingPaise: 0 };
-    if (status === 'void') return { paidPaise: 0, remainingPaise: 0 };
-    const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
-    return { paidPaise, remainingPaise: Math.max(0, inv.totalPaise - paidPaise) };
+    return invoiceBalance({
+      status: invoiceStatus(inv.id),
+      totalPaise: inv.totalPaise,
+      recordedPaise: paidByInvoiceId.get(inv.id) ?? 0,
+    });
   }
 
   const filteredInvoices = useMemo(() => {
@@ -468,7 +449,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                         <button
                           type="button"
                           className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                          onClick={() => void remindToPay(inv, remainingPaise)}
+                          onClick={() => sendReminder(inv, remainingPaise)}
                         >
                           Send WhatsApp reminder
                         </button>
@@ -573,7 +554,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                           <button
                             type="button"
                             className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => void remindToPay(inv, remainingPaise)}
+                            onClick={() => sendReminder(inv, remainingPaise)}
                           >
                             Send WhatsApp reminder
                           </button>

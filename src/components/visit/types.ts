@@ -36,6 +36,8 @@ export interface VisitCardData {
   billPaise: Paise;
   paymentState: VisitPaymentState;
   invoiceId: UUID | null;
+  /** The bill's number, set only where the viewer may open the bill (the patient profile): it then shows as a link to the bill. */
+  invoiceNo?: string | null;
   /** Sum of direct `payments` rows against this visit — required (not
    *  optional) so every builder is forced to assign it; only meaningfully
    *  read for the `partially_collected` "of" form and the Collect button's

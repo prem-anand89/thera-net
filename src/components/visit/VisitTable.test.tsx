@@ -77,3 +77,13 @@ describe('VisitTable place', () => {
     expect(screen.queryByText('Home visit')).not.toBeInTheDocument();
   });
 });
+
+describe('VisitTable bill link', () => {
+  it('shows the bill number when the row carries one, and not otherwise', () => {
+    renderTable([row({ invoiceId: 'i1', invoiceNo: 'BM/26-27/0004', paymentState: 'paid' } as Partial<VisitCardData>)]);
+    expect(screen.getByText('BM/26-27/0004')).toBeInTheDocument();
+    cleanup();
+    renderTable([row({ invoiceId: 'i1', invoiceNo: null, paymentState: 'paid' } as Partial<VisitCardData>)]);
+    expect(screen.queryByText('BM/26-27/0004')).not.toBeInTheDocument();
+  });
+});
