@@ -47,6 +47,8 @@ describe('booking location', () => {
   it('a clinic-only clinic books at the clinic whatever the service says', () => {
     expect(defaultBookingLocation({ careLocations: ['clinic'] }, { defaultLocation: 'home' })).toBe('clinic');
     expect(defaultBookingLocation({})).toBe('clinic');
+    // A home-only clinic starts a visit on Home, so New Visit opens already matching its baseline.
+    expect(defaultBookingLocation({ careLocations: ['home'] })).toBe('home');
   });
   it('a clinic that offers both starts from the service, else Clinic', () => {
     const c = { careLocations: ['clinic', 'home'] };

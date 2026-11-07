@@ -20,6 +20,7 @@ import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import { ClinicUtilisationCard } from '@/components/ClinicUtilisationCard';
+import { CareLocationSplitCard } from '@/components/CareLocationSplitCard';
 import { SingleVisitPatientsCard } from '@/components/SingleVisitPatientsCard';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
@@ -747,6 +748,8 @@ export function ReportsOverviewPage() {
             />
           </div>
         )}
+
+        {scope.isAdmin && <CareLocationSplitCard year={focusMonth.year} month={focusMonth.month} />}
 
         {scope.isAdmin && (
           <div

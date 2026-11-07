@@ -20,6 +20,7 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
+import { bookableLocations, defaultBookingLocation, locationOf, offersLocationChoice } from '@/domain/careLocations';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { syncEngine } from '@/sync/engine';
@@ -221,6 +222,11 @@ export function isNewVisitDirty(input: {
   return !input.justSaved && input.touched && input.signature !== input.baseline;
 }
 
+/** Where a new visit starts when nothing else says: Clinic, or Home for a clinic that only does home visits. */
+function startingLocation(clinic: Parameters<typeof defaultBookingLocation>[0]): 'clinic' | 'home' {
+  return defaultBookingLocation(clinic) === 'home' ? 'home' : 'clinic';
+}
+
 export function NewVisitPage() {
   const clinic = useClinic();
   const { canBill, canCollectPayment, role, isAdmin, canViewClinicalNotes: canWriteNotes } = usePermissions();
@@ -288,7 +294,10 @@ export function NewVisitPage() {
   const today = toLocalDateStr(new Date());
   const [visitDate, setVisitDate] = useState(today);
   const [therapistId, setTherapistId] = useState('');
-  const [location, setLocation] = useState<'clinic' | 'home'>('clinic');
+  const [location, setLocation] = useState<'clinic' | 'home'>(() => startingLocation(clinic));
+  // True once something other than the starting default has set the place: the appointment, a repeated visit or a
+  // tap. After that, picking a service never changes it.
+  const locationDecidedRef = useRef(false);
   const [customConditionOpen, setCustomConditionOpen] = useState(false);
   // The services performed, in order; the first is the visit's main service. One empty row to start.
   const [rows, setRows] = useState<DraftLine[]>(() => [emptyDraftLine()]);
@@ -506,7 +515,12 @@ export function NewVisitPage() {
     const prefill = visitPrefillFromAppointment(fromAppointment);
     if (prefill.therapistId) setTherapistId(prefill.therapistId);
     setVisitDate(prefill.visitDate);
-  }, [fromAppointment]);
+    const apptPlace = locationOf(fromAppointment);
+    if (offersLocationChoice(clinic) && bookableLocations(clinic).includes(apptPlace) && apptPlace !== 'ward') {
+      setLocation(apptPlace);
+      locationDecidedRef.current = true;
+    }
+  }, [fromAppointment, clinic]);
 
   // "Repeat last visit": pre-fill patient/therapist/condition from the
   // visit being repeated, then — once that patient's open packages have
@@ -738,6 +752,15 @@ export function NewVisitPage() {
   //   openPackages re-emits.
   // - The repeat-visit shortcut fills its own rows and is skipped here.
   const catalogItems = useMemo(() => catalog ?? [], [catalog]);
+  // The first service's usual place sets Where, unless the appointment, a repeated visit or a tap already did.
+  const firstServiceId = rows[0]?.serviceCatalogId;
+  useEffect(() => {
+    if (locationDecidedRef.current || !offersLocationChoice(clinic) || !firstServiceId) return;
+    const item = catalogItems.find((c) => c.id === firstServiceId);
+    if (!item) return;
+    const place = defaultBookingLocation(clinic, item);
+    setLocation(place === 'home' ? 'home' : 'clinic');
+  }, [firstServiceId, catalogItems, clinic]);
   const rowsPatientRef = useRef<UUID | null>(null);
   useEffect(() => {
     if (!patient) {
@@ -974,7 +997,8 @@ export function NewVisitPage() {
     setTreatmentIds([]);
     setPaymentChoice('paid');
     setPaymentRef('');
-    setLocation('clinic');
+    setLocation(startingLocation(clinic));
+    locationDecidedRef.current = false;
     setCustomConditionOpen(false);
     setError(null);
     setFeedbackRequested(false);
@@ -1365,8 +1389,9 @@ export function NewVisitPage() {
     if (lastVisit.treatmentIds && lastVisit.treatmentIds.length > 0) {
       setTreatmentIds(lastVisit.treatmentIds);
     }
-    if (lastVisit.location) {
+    if (lastVisit.location && offersLocationChoice(clinic)) {
       setLocation(lastVisit.location);
+      locationDecidedRef.current = true;
     }
     if (lastVisit.packageGroupId) {
       const openPkg = openPackages?.find((op) => op.packageGroupId === lastVisit.packageGroupId);
@@ -1667,15 +1692,20 @@ export function NewVisitPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
-          <SegmentedToggle
-            value={location}
-            onChange={setLocation}
-            className="inline-flex shrink-0 w-auto"
-            options={[
-              { value: 'clinic', label: 'Clinic' },
-              { value: 'home', label: 'Home visit' },
-            ]}
-          />
+          {offersLocationChoice(clinic) && (
+            <SegmentedToggle
+              value={location}
+              onChange={(next) => {
+                locationDecidedRef.current = true;
+                setLocation(next);
+              }}
+              className="inline-flex shrink-0 w-auto"
+              options={bookableLocations(clinic).map((l) => ({
+                value: l as 'clinic' | 'home',
+                label: l === 'home' ? 'Home visit' : 'Clinic',
+              }))}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2.5">

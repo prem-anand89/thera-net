@@ -5,6 +5,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
 import type { OutstandingInvoiceRow } from '@/services/dashboardService';
 import { toLocalDateStr } from '@/domain/schedule';
+import { CARE_LOCATION_LABELS, bookableLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
+import type { CareLocation } from '@/domain/types';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
@@ -330,6 +332,8 @@ export function LedgerPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   // A therapist landing from their own Dues sees just their visits.
   const [therapistId, setTherapistId] = useState(prefs.therapistId ?? '');
+  // Where the visit was (Clinic / Home visit); only offered when the clinic sees patients in more than one place.
+  const [where, setWhere] = useState<'' | CareLocation>('');
   // A therapist landing from their own Dues sees just their visits.
   useDueLandingScope({ dueLanding, isClinicWideView, myTherapistId, setTherapistId });
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(prefs.onlyCollectedNoReceipt ?? false);
@@ -372,15 +376,18 @@ export function LedgerPage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const visits = useLiveQuery(
-    () =>
-      repos.visits.list({
+    async () => {
+      const list = await repos.visits.list({
         clinicId: clinic.id,
         from: from || undefined,
         to: to || undefined,
         therapistId: therapistId || undefined,
         patientId: search.patientId,
-      }),
-    [clinic.id, from, to, therapistId, search.patientId]
+      });
+      // A visit saved before locations existed has none and reads as Clinic.
+      return where ? list.filter((v) => locationOf(v) === where) : list;
+    },
+    [clinic.id, from, to, therapistId, search.patientId, where]
   );
 
   const therapistName = useMemo(
@@ -664,10 +671,11 @@ export function LedgerPage() {
   }, [therapistId, therapists]);
 
   const filtersAreDefault =
-    datePreset === 'week' && !therapistId && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented;
+    datePreset === 'week' && !therapistId && !where && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented;
   function resetFilters() {
     applyDatePreset('week');
     setTherapistId('');
+    setWhere('');
     setOnlyCollectedNoReceipt(false);
     setOnlyNotCollected(false);
     setOnlyNotDocumented(false);
@@ -678,14 +686,14 @@ export function LedgerPage() {
   const emptyActions = [
     ...(datePreset !== 'all' && datePreset !== 'lastMonth' ? [{ label: 'Show last month', onClick: () => applyDatePreset('lastMonth') }] : []),
     ...(datePreset !== 'all' ? [{ label: 'Show all time', onClick: () => applyDatePreset('all') }] : []),
-    ...(therapistId || onlyCollectedNoReceipt || onlyNotCollected || onlyNotDocumented
-      ? [{ label: 'Clear filters', onClick: () => { setTherapistId(''); setOnlyCollectedNoReceipt(false); setOnlyNotCollected(false); setOnlyNotDocumented(false); } }]
+    ...(therapistId || where || onlyCollectedNoReceipt || onlyNotCollected || onlyNotDocumented
+      ? [{ label: 'Clear filters', onClick: () => { setTherapistId(''); setWhere(''); setOnlyCollectedNoReceipt(false); setOnlyNotCollected(false); setOnlyNotDocumented(false); } }]
       : []),
   ];
 
   const visitsPager = usePagination(
     visibleRows,
-    `${from}|${to}|${therapistId}|${filteredPatient?.id ?? ''}|${onlyCollectedNoReceipt}|${onlyNotCollected}|${onlyNotDocumented}`,
+    `${from}|${to}|${therapistId}|${where}|${filteredPatient?.id ?? ''}|${onlyCollectedNoReceipt}|${onlyNotCollected}|${onlyNotDocumented}`,
     'ledger-visits'
   );
 
@@ -755,9 +763,10 @@ export function LedgerPage() {
     useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
   const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
   const activeFilterCount =
-    Number(therapistId !== '') + Number(onlyCollectedNoReceipt) + Number(onlyNotCollected) + Number(onlyNotDocumented);
+    Number(therapistId !== '') + Number(where !== '') + Number(onlyCollectedNoReceipt) + Number(onlyNotCollected) + Number(onlyNotDocumented);
   const activeFilterNames = [
     therapistId ? (therapists?.find((t) => t.id === therapistId)?.name ?? 'Selected therapist') : null,
+    where ? CARE_LOCATION_LABELS[where] : null,
     onlyCollectedNoReceipt ? 'Collected, no invoice' : null,
     onlyNotCollected ? 'Not collected' : null,
     onlyNotDocumented ? 'Not documented' : null,
@@ -780,6 +789,23 @@ export function LedgerPage() {
       ))}
     </select>
   );
+  const whereSelect = offersLocationChoice(clinic) ? (
+    <select
+      aria-label="Where"
+      className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+      style={chipSelectChevron}
+      value={where}
+      onChange={(e) => setWhere(e.target.value as '' | CareLocation)}
+    >
+      <option value="">All places</option>
+      {bookableLocations(clinic).map((l) => (
+        <option key={l} value={l}>
+          {CARE_LOCATION_LABELS[l]}
+        </option>
+      ))}
+    </select>
+  ) : null;
+
 
   return (
     <div className="space-y-4">
@@ -923,7 +949,7 @@ export function LedgerPage() {
                   </div>
                 )}
               </div>
-              <div className="hidden sm:block">{therapistSelect}</div>
+              <div className="hidden gap-2 sm:flex">{therapistSelect}{whereSelect}</div>
               <button
                 type="button"
                 aria-expanded={filtersOpen}
@@ -978,7 +1004,7 @@ export function LedgerPage() {
 
           {filtersOpen && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--ink)] shadow-sm">
-              <div className="sm:hidden">{therapistSelect}</div>
+              <div className="flex flex-col gap-2 sm:hidden">{therapistSelect}{whereSelect}</div>
               <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
                 <input
                   type="checkbox"
