@@ -11,6 +11,7 @@ import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { findSimilarPatients, patientSummary } from '@/domain/similarPatients';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
+import { defaultBookingLocation } from '@/domain/careLocations';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -148,6 +149,7 @@ export function StartVisitSheet({
           patientName: patient.name,
           patientPhone: patient.phone,
           patientId: patient.id,
+          location: defaultBookingLocation(clinic),
         });
       }
       onClose();

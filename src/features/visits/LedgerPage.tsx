@@ -673,6 +673,11 @@ export function LedgerPage() {
     });
   }, [clinic.id, dueLanding, recordsView, datePreset, from, to, therapistId, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]);
 
+  // Turning Home off removes the Where control; a filter left on would hide visits with nothing to clear it.
+  useEffect(() => {
+    if (where && !offersLocationChoice(clinic)) setWhere('');
+  }, [where, clinic]);
+
   // A remembered therapist who has since been removed would silently hide every visit.
   useEffect(() => {
     if (therapistId && therapists && !therapists.some((t) => t.id === therapistId)) setTherapistId('');

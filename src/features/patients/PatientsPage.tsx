@@ -744,6 +744,7 @@ export function PatientsList() {
           setAdding(false);
           if (startVisit) void navigate({ to: '/visits/new', search: { patientId: created.id, from: '/patients' } });
           else {
+            setChip('all');
             setQuery(created.name);
             notify.info(`${created.name} added`);
           }

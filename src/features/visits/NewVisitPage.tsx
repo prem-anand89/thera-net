@@ -543,15 +543,13 @@ export function NewVisitPage() {
     if (prefillPatient.primaryCondition) setCondition(prefillPatient.primaryCondition);
   }, [prefillPatient, patient]);
 
-  // An appointment with no linked patient yet (Patient Communications,
-  // Slice 5 — "Create visit" from Requests → Bookings or Workspace's
-  // "Expected today") arrives with ?prefillName=&prefillPhone=… instead —
-  // open the create-patient form directly with both fields already
-  // filled in, rather than dropping just the name into the search box.
-  // The same existing name/phone-match typeahead this effect feeds
-  // surfaces likely-existing-patient candidates for free; staff still
-  // pick or create explicitly, never auto-selected (see
-  // HANDOFF-patient-comms.md's "no silent find-or-create" rule).
+  // An appointment with no linked patient yet ("Create visit" from Requests → Bookings or Workspace's "Expected
+  // today") arrives with ?prefillName=&prefillPhone=… : open the Add patient sheet with both filled in. It also
+  // reopens when another such link lands on this already-open page. Staff pick or create explicitly, never
+  // auto-selected (HANDOFF-patient-comms.md's "no silent find-or-create" rule).
+  useEffect(() => {
+    if (search.prefillName && !search.patientId) setAddingPatient(true);
+  }, [search.prefillName, search.prefillPhone, search.patientId]);
 
   useEffect(() => {
     if (!repeatVisit || patient) return;

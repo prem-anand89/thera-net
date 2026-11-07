@@ -4,11 +4,9 @@ import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { SectionCard } from '@/components/ui';
 import { formatAmount } from '@/domain/money';
-import { monthName } from '@/domain/fiscalYear';
+import { monthDateRange, monthName } from '@/domain/fiscalYear';
 import { offersLocationChoice } from '@/domain/careLocations';
 import { locationSplit, locationSplitLabel } from '@/domain/careLocationSplit';
-
-const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
  * Visits and billed for one month, by place (Clinic / Home visit) and therapist. Counting only: it never changes
@@ -20,8 +18,7 @@ export function CareLocationSplitCard({ year, month }: { year: number; month: nu
   const visits = useLiveQuery(
     async () => {
       if (!on) return [];
-      const last = new Date(year, month, 0).getDate();
-      return repos.visits.list({ clinicId: clinic.id, from: `${year}-${pad(month)}-01`, to: `${year}-${pad(month)}-${pad(last)}` });
+      return repos.visits.list({ clinicId: clinic.id, ...monthDateRange({ year, month }) });
     },
     [clinic.id, on, year, month]
   );
@@ -30,10 +27,13 @@ export function CareLocationSplitCard({ year, month }: { year: number; month: nu
   const split = useMemo(() => locationSplit(visits ?? []), [visits]);
 
   if (!on) return null;
+  const visitsLabel = (n: number) => `${n} ${n === 1 ? 'visit' : 'visits'}`;
   const cols = split.places.length > 0 ? split.places : (['clinic', 'home'] as const);
   return (
     <SectionCard id="reports-by-place" title={`By place · ${monthName(month)} ${year}`}>
-      {visits && visits.length === 0 ? (
+      {visits === undefined ? (
+        <p className="text-sm text-[var(--muted)]">Loading…</p>
+      ) : visits.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">No visits this month.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -58,7 +58,7 @@ export function CareLocationSplitCard({ year, month }: { year: number; month: nu
                       {r.places[l] ? (
                         <>
                           {formatAmount(r.places[l].billedPaise)}
-                          <span className="block text-xs text-[var(--muted)]">{r.places[l].visits} visits</span>
+                          <span className="block text-xs text-[var(--muted)]">{visitsLabel(r.places[l].visits)}</span>
                         </>
                       ) : (
                         <span className="text-[var(--muted)]">–</span>
@@ -67,7 +67,7 @@ export function CareLocationSplitCard({ year, month }: { year: number; month: nu
                   ))}
                   <td className="py-2 pl-2 text-right font-semibold tabular-nums">
                     {formatAmount(r.total.billedPaise)}
-                    <span className="block text-xs font-normal text-[var(--muted)]">{r.total.visits} visits</span>
+                    <span className="block text-xs font-normal text-[var(--muted)]">{visitsLabel(r.total.visits)}</span>
                   </td>
                 </tr>
               ))}
@@ -76,12 +76,12 @@ export function CareLocationSplitCard({ year, month }: { year: number; month: nu
                 {cols.map((l) => (
                   <td key={l} className="py-2 px-2 text-right tabular-nums">
                     {formatAmount(split.totals[l]?.billedPaise ?? 0)}
-                    <span className="block text-xs font-normal text-[var(--muted)]">{split.totals[l]?.visits ?? 0} visits</span>
+                    <span className="block text-xs font-normal text-[var(--muted)]">{visitsLabel(split.totals[l]?.visits ?? 0)}</span>
                   </td>
                 ))}
                 <td className="py-2 pl-2 text-right tabular-nums">
                   {formatAmount(split.totals.all.billedPaise)}
-                  <span className="block text-xs font-normal text-[var(--muted)]">{split.totals.all.visits} visits</span>
+                  <span className="block text-xs font-normal text-[var(--muted)]">{visitsLabel(split.totals.all.visits)}</span>
                 </td>
               </tr>
             </tbody>

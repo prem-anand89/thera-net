@@ -214,7 +214,7 @@ export function AppointmentDetailsPanel({
           {canManage && isHome && (
             <div className="rounded-xl bg-[var(--teal-light)] px-3 py-2.5">
               <p className="text-xs font-semibold text-[var(--teal-strong)]">Home visit</p>
-              {homeAddress ? (
+              {homeAddress === undefined ? null : homeAddress ? (
                 <>
                   <p className="mt-1 whitespace-pre-line text-[var(--ink)]">{homeAddress}</p>
                   <button
