@@ -2,6 +2,8 @@ import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import type { Invoice, InvoiceClinicalSnapshot } from '@/domain/types';
 import { invoiceService } from '@/services';
+import { useClinic } from '@/app/clinicContext';
+import { clinicCareLocations } from '@/domain/careLocations';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import {
@@ -17,6 +19,7 @@ function fieldsFromSnapshot(snapshot: InvoiceClinicalSnapshot | null | undefined
     referringPhysician: snapshot.referringPhysician ?? '',
     physicianRegistrationNo: snapshot.physicianRegistrationNo ?? '',
     placeOfService: snapshot.placeOfService ?? 'clinic',
+    locations: snapshot.locations,
     treatmentPerformed: snapshot.treatmentPerformed ?? '',
   };
 }
@@ -40,6 +43,7 @@ export function EditInvoiceDetailsDialog({
   invoice: Invoice;
   onClose: () => void;
 }) {
+  const clinic = useClinic();
   const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [fields, setFields] = useState<ClinicalFields>(
     fieldsFromSnapshot(invoice.clinicalSnapshot)
@@ -68,6 +72,7 @@ export function EditInvoiceDetailsDialog({
             referringPhysician: fields.referringPhysician.trim() || null,
             physicianRegistrationNo: fields.physicianRegistrationNo.trim() || null,
             placeOfService: fields.placeOfService,
+            ...(fields.placeOfService === 'mixed' && fields.locations ? { locations: fields.locations } : {}),
             treatmentPerformed: fields.treatmentPerformed.trim() || null,
             sourceNoteId: invoice.clinicalSnapshot?.sourceNoteId ?? null,
             editedByBiller: true,
@@ -117,7 +122,7 @@ export function EditInvoiceDetailsDialog({
               the invoice instead.
             </p>
 
-            <InvoiceClinicalFieldsForm fields={fields} onChange={updateField} />
+            <InvoiceClinicalFieldsForm fields={fields} onChange={updateField} placeOptions={clinicCareLocations(clinic)} />
 
             <ErrorNote message={error} />
             <div className="flex justify-end gap-2">

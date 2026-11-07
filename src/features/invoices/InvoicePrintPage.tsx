@@ -9,6 +9,7 @@ import { formatAmount } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { buildInvoicePaymentLedger } from '@/domain/invoicePaymentLedger';
+import { placeOfServiceLabel } from '@/domain/invoiceClinical';
 import {
   isV2Line,
   lineRatePerSessionPaise,
@@ -16,6 +17,8 @@ import {
   normalizeAuthorizedCount,
   sessionCountLabel,
   sessionDatesDisplay,
+  hasCondensedSessionDates,
+  treatmentPeriodOf,
 } from '@/domain/invoiceLine';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
@@ -303,6 +306,8 @@ export function InvoicePrintPage() {
   const isPartial = !isPaid && !isVoid && !!balance && balance.paidPaise > 0;
   const hasAdjustments = invoice.lineItems.some((li) => li.adjustmentPaise !== 0);
   const snap = invoice.clinicalSnapshot;
+  const placeLabel = placeOfServiceLabel(snap);
+  const period = treatmentPeriodOf(invoice.lineItems);
   // Left column: what was found and who referred; right column: where and what was done.
   const clinicalLeft = [
     ...(snap?.diagnosis ? [{ label: 'Diagnosis', value: `${snap.diagnosis}${snap.diagnosisIcdCode ? ` (${snap.diagnosisIcdCode})` : ''}` }] : []),
@@ -311,8 +316,10 @@ export function InvoicePrintPage() {
       : []),
   ];
   const clinicalRight = [
-    ...(snap?.placeOfService ? [{ label: 'Place of service', value: snap.placeOfService === 'home' ? 'Home (domiciliary)' : 'Clinic' }] : []),
+    ...(placeLabel ? [{ label: 'Place of service', value: placeLabel }] : []),
     ...(snap?.treatmentPerformed ? [{ label: 'Treatment', value: snap.treatmentPerformed }] : []),
+    // A bill covering several days says which: first to last session.
+    ...(period ? [{ label: 'Treatment period', value: `${formatDateDMY(period.from)} – ${formatDateDMY(period.to)}` }] : []),
   ];
 
   const isV2Invoice = invoice.lineItems.length > 0 && invoice.lineItems.every(isV2Line);
@@ -575,6 +582,10 @@ export function InvoicePrintPage() {
           <LineItemsTable lineItems={invoice.lineItems} hasAdjustments={hasAdjustments} paper={paper} />
         ) : (
           <LegacyLineItemsTable lineItems={invoice.lineItems} hasAdjustments={hasAdjustments} paper={paper} />
+        )}
+
+        {hasCondensedSessionDates(invoice.lineItems) && (
+          <p className="mt-1.5 pl-3 text-[10px] italic text-[var(--muted)]">Full session dates are in the session log.</p>
         )}
 
         <BillTotals

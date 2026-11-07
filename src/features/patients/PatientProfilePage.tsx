@@ -21,7 +21,7 @@ import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
-import { computeVisitPaymentState, hasDue, isCollected } from '@/domain/paymentState';
+import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import {
   REFERRING_SOURCE_LABELS,
@@ -32,7 +32,9 @@ import {
 import { formatAmount, currencySymbol } from '@/domain/money';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
-import { partnerPaymentsByVisit, isFullyPartnerCollected } from '@/domain/paymentMethods';
+import { partnerPaymentsByVisit } from '@/domain/paymentMethods';
+import { toLocalDateStr } from '@/domain/schedule';
+import { selectableForBilling, unbilledInRange, type BillingRange } from './billingSelection';
 import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
@@ -404,13 +406,11 @@ export function PatientProfilePage() {
   // What a row can be selected for: an invoice (billing users, not yet
   // invoiced) or, without billing, a payment (still owed). Anything else
   // drops out of the selection on its own, e.g. visits that just got invoiced.
-  const isSelectableRow = useCallback(
-    (row: VisitCardData) =>
-      canBill
-        ? !row.invoiceId && !isFullyPartnerCollected(row.billPaise, row.partnerCollectedPaise)
-        : canCollectPayment && hasDue(row.paymentState),
-    [canBill, canCollectPayment]
+  const selectableIds = useMemo(
+    () => new Set(selectableForBilling(visitCardRows, { canBill, canCollect: canCollectPayment }).map((r) => r.visitId)),
+    [visitCardRows, canBill, canCollectPayment]
   );
+  const isSelectableRow = useCallback((row: VisitCardData) => selectableIds.has(row.visitId), [selectableIds]);
   const selectedRows = useMemo(
     () => visibleVisitCardRows.filter((r) => selectedVisitIds.has(r.visitId) && isSelectableRow(r)),
     [visibleVisitCardRows, selectedVisitIds, isSelectableRow]
@@ -806,6 +806,36 @@ export function PatientProfilePage() {
               </label>
             )}
           </div>
+          {selectableIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Select visits">
+              <span className="text-[var(--muted)]">{canBill ? 'Bill' : 'Collect'}:</span>
+              {(
+                [
+                  ['all', 'All unbilled'],
+                  ['this_month', 'This month'],
+                  ['last_month', 'Last month'],
+                ] as [BillingRange, string][]
+              ).map(([range, label]) => (
+                <button
+                  key={range}
+                  type="button"
+                  className="min-h-9 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+                  onClick={() =>
+                    setSelectedVisitIds(
+                      new Set(unbilledInRange(visitCardRows, { canBill, canCollect: canCollectPayment }, range, toLocalDateStr(new Date())))
+                    )
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+              {selectedVisitIds.size > 0 && (
+                <button type="button" className="min-h-9 px-2 text-[var(--muted)] hover:underline" onClick={() => setSelectedVisitIds(new Set())}>
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
           <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
             {selectedRows.length > 0 && (
               <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
@@ -815,10 +845,15 @@ export function PatientProfilePage() {
                 <button
                   type="button"
                   className="rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  disabled={canBill && selectedBillPaise <= 0}
+                  title={canBill && selectedBillPaise <= 0 ? 'These visits have no charge to bill' : undefined}
                   onClick={startBulkAction}
                 >
                   {canBill ? 'Issue invoice / collect' : `Collect ${formatAmount(selectedDuePaise)}`}
                 </button>
+                {canBill && selectedBillPaise <= 0 && (
+                  <span className="text-xs text-[var(--muted)]">These visits have no charge to bill</span>
+                )}
               </div>
             )}
             {assistedVisits.length > 0 && (

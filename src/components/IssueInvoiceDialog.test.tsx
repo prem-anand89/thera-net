@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
+// An async query (the dialog reads every visit on the invoice) reads as "still loading" here, as it does on first render.
+vi.mock('dexie-react-hooks', () => ({
+  useLiveQuery: (q: () => unknown) => {
+    const result = q();
+    return result instanceof Promise ? undefined : result;
+  },
+}));
 const perms = { isAdmin: true };
 vi.mock('@/app/usePermissions', () => ({ usePermissions: () => ({ canViewClinicalNotes: true, isAdmin: perms.isAdmin }) }));
 const clinicRow = { current: { id: 'c1', address: '12 MG Road' } as { id: string; address: string | null } };

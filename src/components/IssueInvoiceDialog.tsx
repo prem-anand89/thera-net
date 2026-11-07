@@ -18,11 +18,13 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { INVOICE_PAYMENT_MODES } from '@/domain/paymentMethods';
 import { usePermissions } from '@/app/usePermissions';
 import { ClinicAddressPrompt } from '@/components/ClinicAddressPrompt';
-import { treatmentsDisplayText } from '@/components/VisitCard';
+import { pickReferralNote, placeOfServiceFor, placeOfServiceLabel, treatmentsFor } from '@/domain/invoiceClinical';
+import { formatDateDMY } from '@/domain/fiscalYear';
+import { clinicCareLocations } from '@/domain/careLocations';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { formatAmount } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
-import { sessionCountLabel } from '@/domain/invoiceLine';
+import { sessionCountLabel, treatmentPeriodOf } from '@/domain/invoiceLine';
 import {
   EMPTY_CLINICAL_FIELDS,
   InvoiceClinicalFieldsForm,
@@ -58,15 +60,9 @@ export interface IssueInvoiceTarget {
   alreadyCollected?: boolean;
 }
 
-/** Extracts the referral block from a note's payload, but only for a heavy
- *  (initial/followup) note — a light session note (Phase 2) has no
- *  `referral` field at all. */
-function noteReferral(
-  note: ConsultationNote | undefined
-): CoreAssessmentPayload['referral'] | undefined {
-  if (!note || note.noteMode === 'session') return undefined;
-  const payload = note.assessmentPayload as CoreAssessmentPayload | null;
-  return payload?.referral;
+/** The referral block of a note `pickReferralNote` chose (it only ever returns a heavy note that has one). */
+function noteReferral(note: ConsultationNote | undefined): CoreAssessmentPayload['referral'] | undefined {
+  return (note?.assessmentPayload as CoreAssessmentPayload | null)?.referral;
 }
 
 export function IssueInvoiceDialog({
@@ -109,10 +105,15 @@ export function IssueInvoiceDialog({
   // never synced this patient's notes); it never blocks issuance either
   // way, since every field here stays editable and is entirely optional
   // server-side (`p_clinical_snapshot` defaults to null).
-  const visit = useLiveQuery(() => repos.visits.get(target.visitId), [target.visitId]);
-  const visitNote = useLiveQuery(
-    () => repos.consultationNotes.getByVisitId(target.visitId),
-    [target.visitId]
+  // Every visit on the invoice: the details printed on it come from all of them, not only the first.
+  const visitIds = target.visitIds ?? [target.visitId];
+  const visitIdsKey = visitIds.join(',');
+  const visits = useLiveQuery(
+    async () => {
+      const rows = await Promise.all(visitIds.map((id) => repos.visits.get(id)));
+      return rows.filter((v): v is NonNullable<typeof v> => v !== undefined);
+    },
+    [visitIdsKey]
   );
   const patientNotes = useLiveQuery(
     () => repos.consultationNotes.listByPatient(clinicId, target.patientId),
@@ -123,18 +124,11 @@ export function IssueInvoiceDialog({
     [clinicId]
   );
 
-  const sourceNote = useMemo((): ConsultationNote | undefined => {
-    if (noteReferral(visitNote)) return visitNote;
-    // Fall back to the most recently updated completed heavy note in the
-    // patient's history — the visit's own note may be a light session note
-    // (Phase 2), or simply not carry a referral block yet.
-    return (patientNotes ?? [])
-      .filter(
-        (n) => n.status === 'completed' && (n.noteMode === 'initial' || n.noteMode === 'followup')
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .find((n) => noteReferral(n));
-  }, [visitNote, patientNotes]);
+  // The note written for these visits, else the latest completed one up to the last visit (see pickReferralNote).
+  const sourceNote = useMemo(
+    () => (visits ? pickReferralNote(patientNotes ?? [], visits) : undefined),
+    [visits, patientNotes]
+  );
 
   // Front desk has no notes on the device; the server hands over just the referral block instead.
   const { canViewClinicalNotes, isAdmin } = usePermissions();
@@ -145,10 +139,11 @@ export function IssueInvoiceDialog({
   useEffect(() => {
     if (canViewClinicalNotes) return;
     let live = true;
-    void invoiceService.referralForVisit(target.visitId).then((r) => {
+    void invoiceService.referralForVisits(visitIds).then((r) => {
       if (live && r) {
         setServerReferral({
           diagnosis: r.diagnosis ?? '',
+          diagnosisIcdCode: r.diagnosisIcdCode ?? undefined,
           referringPhysician: r.referringPhysician ?? '',
           physicianRegistrationNo: r.physicianRegistrationNo ?? '',
         });
@@ -157,24 +152,25 @@ export function IssueInvoiceDialog({
     return () => {
       live = false;
     };
-  }, [canViewClinicalNotes, target.visitId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canViewClinicalNotes, visitIdsKey]);
 
   const referral = canViewClinicalNotes ? noteReferral(sourceNote) : (serverReferral ?? undefined);
 
   const prefill: ClinicalFields = useMemo(() => {
-    if (!visit) return EMPTY_CLINICAL_FIELDS;
-    const treatmentNames = (visit.treatmentIds ?? [])
-      .map((id) => treatmentCatalog?.find((t) => t.id === id)?.name)
-      .filter((n): n is string => !!n);
+    if (!visits || visits.length === 0) return EMPTY_CLINICAL_FIELDS;
+    const place = placeOfServiceFor(visits);
     return {
       diagnosis: referral?.diagnosis ?? '',
       referringPhysician: referral?.referringPhysician ?? '',
       physicianRegistrationNo: referral?.physicianRegistrationNo ?? '',
-      placeOfService: visit.location ?? 'clinic',
-      treatmentPerformed: treatmentsDisplayText(treatmentNames, visit.treatmentNotes),
+      placeOfService: place.place,
+      locations: place.locations,
+      treatmentPerformed: treatmentsFor(visits, treatmentCatalog ?? []),
     };
-  }, [visit, referral, treatmentCatalog]);
+  }, [visits, referral, treatmentCatalog]);
 
+  const period = preview ? treatmentPeriodOf(preview.lineItems) : null;
   const [fields, setFields] = useState<ClinicalFields>(EMPTY_CLINICAL_FIELDS);
   const [touched, setTouched] = useState(false);
 
@@ -205,10 +201,12 @@ export function IssueInvoiceDialog({
     if (!hasAnyClinicalField) return null;
     return {
       diagnosis: fields.diagnosis.trim() || null,
-      diagnosisIcdCode: referral?.diagnosisIcdCode ?? null,
+      // The code belongs to the diagnosis the note gave: once the biller changes that text it no longer applies.
+      diagnosisIcdCode: fields.diagnosis.trim() === prefill.diagnosis.trim() ? (referral?.diagnosisIcdCode ?? null) : null,
       referringPhysician: fields.referringPhysician.trim() || null,
       physicianRegistrationNo: fields.physicianRegistrationNo.trim() || null,
       placeOfService: fields.placeOfService,
+      ...(fields.placeOfService === 'mixed' && fields.locations ? { locations: fields.locations } : {}),
       treatmentPerformed: fields.treatmentPerformed.trim() || null,
       sourceNoteId: sourceNote?.id ?? null,
       editedByBiller:
@@ -368,25 +366,29 @@ export function IssueInvoiceDialog({
                 Payment mode: <span className="font-medium">{paymentMode}</span> —{' '}
                 {collectedNow ? 'collected now' : 'not collected, pay later'}
               </p>
-              {(fields.diagnosis ||
-                fields.referringPhysician ||
-                fields.treatmentPerformed ||
-                fields.placeOfService === 'home') && (
-                <div className="mt-1.5 border-t border-[var(--border)] pt-1.5 text-xs text-[var(--muted)]">
-                  {fields.diagnosis && <p>Diagnosis: {fields.diagnosis}</p>}
-                  {fields.referringPhysician && (
-                    <p>
-                      Referring physician: {fields.referringPhysician}
-                      {fields.physicianRegistrationNo &&
-                        ` (Reg. No. ${fields.physicianRegistrationNo})`}
-                    </p>
-                  )}
-                  <p>Place of service: {fields.placeOfService === 'home' ? 'Home' : 'Clinic'}</p>
-                  {fields.treatmentPerformed && (
-                    <p>Treatment performed: {fields.treatmentPerformed}</p>
-                  )}
-                </div>
-              )}
+              <p className="text-xs text-[var(--muted)]">
+                {collectedNow
+                  ? `Will record ${formatAmount(preview?.totalPaise ?? 0)} as received today by ${METHOD_FOR_MODE[paymentMode].replace('_', ' ')}, less anything already collected on these visits.`
+                  : 'No payment will be recorded; the bill is issued as unpaid.'}
+              </p>
+              <div className="mt-1.5 space-y-0.5 border-t border-[var(--border)] pt-1.5 text-xs text-[var(--muted)]">
+                {period && (
+                  <p>
+                    Treatment period: {formatDateDMY(period.from)} – {formatDateDMY(period.to)}
+                  </p>
+                )}
+                {fields.diagnosis && <p>Diagnosis: {fields.diagnosis}</p>}
+                {fields.referringPhysician && (
+                  <p>
+                    Referring physician: {fields.referringPhysician}
+                    {fields.physicianRegistrationNo && ` (Reg. No. ${fields.physicianRegistrationNo})`}
+                  </p>
+                )}
+                <p>
+                  Place of service: {placeOfServiceLabel({ placeOfService: fields.placeOfService, locations: fields.locations })}
+                </p>
+                {fields.treatmentPerformed && <p>Treatment performed: {fields.treatmentPerformed}</p>}
+              </div>
             </div>
 
             <ErrorNote message={error} />
@@ -461,6 +463,7 @@ export function IssueInvoiceDialog({
               <InvoiceClinicalFieldsForm
                 fields={fields}
                 onChange={updateField}
+                placeOptions={clinicCareLocations(clinicRow)}
                 hints={{
                   diagnosis: referral?.diagnosis
                     ? "From patient's note — edit if needed"
@@ -469,7 +472,9 @@ export function IssueInvoiceDialog({
                     ? "From patient's note — edit if needed"
                     : undefined,
                   treatmentPerformed: prefill.treatmentPerformed
-                    ? "From this visit's record — edit if needed"
+                    ? visitIds.length > 1
+                      ? "From these visits' records — edit if needed"
+                      : "From this visit's record — edit if needed"
                     : undefined,
                 }}
               />

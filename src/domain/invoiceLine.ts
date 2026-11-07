@@ -1,3 +1,4 @@
+import { locationOf } from './careLocations';
 import type { InvoiceLineItem, UUID, Visit, VisitItem } from './types';
 import type { Paise } from './money';
 import { lineNets } from './visitLines';
@@ -166,9 +167,19 @@ function asUnit(x: Visit | BillingUnit): BillingUnit {
  * into one line with one fabricated rate.
  */
 export function invoiceLineGroupKey(
-  v: Pick<Visit, 'packageGroupId' | 'serviceCatalogId' | 'catalogPricePaise'>
+  v: Pick<Visit, 'packageGroupId' | 'serviceCatalogId' | 'catalogPricePaise'> & { location?: string | null }
 ): string {
-  return v.packageGroupId ?? `svc:${v.serviceCatalogId}:${v.catalogPricePaise}`;
+  return v.packageGroupId ?? `svc:${v.serviceCatalogId}:${v.catalogPricePaise}${locationSuffix(v)}`;
+}
+
+/**
+ * Visits of one service at one price on different PLACES (a home visit and a clinic visit) stay separate lines, so the bill
+ * says where each was. A clinic visit adds nothing to the key (so every key from before this stays the same, and a visit with
+ * no location counts as the clinic); home and ward add their name.
+ */
+function locationSuffix(record: { location?: string | null }): string {
+  const where = locationOf(record);
+  return where === 'clinic' ? '' : `:${where}`;
 }
 
 /** A unit's group key: the package group only for the PACKAGE line; any other line of a package
@@ -176,7 +187,7 @@ export function invoiceLineGroupKey(
 export function unitGroupKey(u: BillingUnit): string {
   if (!u.item) return invoiceLineGroupKey(u.visit);
   if (u.item.isPackageLine && u.visit.packageGroupId) return u.visit.packageGroupId;
-  return `svc:${u.item.serviceCatalogId}:${u.item.catalogPricePaise}`;
+  return `svc:${u.item.serviceCatalogId}:${u.item.catalogPricePaise}${locationSuffix(u.visit)}`;
 }
 
 /**
@@ -322,4 +333,18 @@ export function buildLineItems(
   if (!therapistId) throw new Error('No visits to invoice');
 
   return { lineItems, totalPaise, therapistId };
+}
+
+/**
+ * The line printed in an invoice's clinical details when it spans more than one day: first to last session date, as `from`
+ * and `to` ISO dates. Null for a one-day invoice or one with no dates.
+ */
+export function treatmentPeriodOf(lineItems: InvoiceLineItem[]): DatePeriod | null {
+  const period = invoicePeriod(lineItems);
+  return period && period.from < period.to ? period : null;
+}
+
+/** Whether any line shows its dates as a range ("01/11/26 – 30/11/26 (12 sessions)"): the bill then points to the session log. */
+export function hasCondensedSessionDates(lineItems: InvoiceLineItem[]): boolean {
+  return lineItems.some((li) => sessionDatesDisplay(li).mode === 'range');
 }

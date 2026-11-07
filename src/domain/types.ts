@@ -743,7 +743,10 @@ export interface InvoiceClinicalSnapshot {
   diagnosisIcdCode?: string | null;
   referringPhysician: string | null;
   physicianRegistrationNo: string | null;
-  placeOfService: 'clinic' | 'home' | null;
+  /** `mixed` when the visits on the invoice were in more than one place (`locations` then names them). Older invoices have only clinic or home. */
+  placeOfService: 'clinic' | 'home' | 'ward' | 'mixed' | null;
+  /** Every place the billed visits were at, in the order clinic, home, ward. Absent on older invoices. */
+  locations?: CareLocation[];
   treatmentPerformed: string | null;
   sourceNoteId?: UUID | null;
   /** True when the biller changed a value away from its pre-filled

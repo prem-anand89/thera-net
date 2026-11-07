@@ -165,6 +165,25 @@ export function createInvoiceService(repos: Repos) {
     },
 
     /**
+     * The same referral block for ALL the visits on an invoice, with the ICD code, picked to fit the visits (the note written
+     * for them, else the latest completed one up to the last visit). Falls back to the one-visit function when the newer one
+     * is not on the server yet.
+     */
+    async referralForVisits(
+      visitIds: UUID[]
+    ): Promise<{ diagnosis?: string; diagnosisIcdCode?: string; referringPhysician?: string; physicianRegistrationNo?: string } | null> {
+      const supabase = getSupabase();
+      if (!supabase || !navigator.onLine || visitIds.length === 0) return null;
+      const { data, error } = await supabase.rpc('get_invoice_referral_for_visits', { p_visit_ids: visitIds });
+      if (error) {
+        // Function not on this server yet (older deployment): read the first visit's referral instead.
+        if (error.code === 'PGRST202' || error.code === '42883') return this.referralForVisit(visitIds[0]);
+        return null;
+      }
+      return (data as { diagnosis?: string; diagnosisIcdCode?: string; referringPhysician?: string; physicianRegistrationNo?: string } | null) ?? null;
+    },
+
+    /**
      * Issues an invoice for a visit — for package visits, every uninvoiced
      * session in the package group goes on it, so the receipt lists all
      * session dates even though usually only session 1 carried the charge.

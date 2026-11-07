@@ -352,6 +352,19 @@ queued with a visible error.
   the visits are stamped): at least one visit; all visits one patient, whose ID is the one on the invoice; a total above
   zero ("Nothing to bill"); the total equals the sum of the visits' bills; the line items add up to the total. A refusal
   rolls back the call, so the gap-free counter is not used. Existing invoices (three ₹0 ones among them) are untouched
+- **Clinical details come from every visit billed** (`src/domain/invoiceClinical.ts`): place of service is the one place all
+  the visits were at, or `mixed` (with `locations`, printed "Clinic and Home"); `ward` is a third place; treatments are
+  every treatment done, once each, plus each visit's own words (200 characters at most); the referral block (diagnosis,
+  ICD code, referring physician) is read from the note written for the visits, else the latest completed note up to the
+  last visit (`pickReferralNote`), and for front desk by `get_invoice_referral_for_visits(visit ids)`, which also returns
+  the ICD code. The ICD code is kept only while the diagnosis text is the note's; editing the text drops it. A bill
+  covering more than one day prints a "Treatment period" row, and a bill with a line whose dates are shown as a range
+  ("01/11/26 – 30/11/26 (12 sessions)") says "Full session dates are in the session log." Editing the clinical details
+  after issue (EditInvoiceDetailsDialog) changes the printed bill silently: nothing on it says it was edited (corrections
+  are not advertised); the before/after is in `audit_log` and `editedByBiller` stays in the snapshot
+- **Bill lines group by place as well as service and price**: a home visit and a clinic visit of the same service are
+  separate rows (`unitGroupKey`: a clinic visit's key is unchanged, home and ward add their name). Packages still group by
+  their package. Issued invoices are never regrouped
 - **Immutable once issued** via DB triggers
 - **Printable** on A4/A5 with clinic letterhead + optional partner-hospital branding
 - **Letterhead** (`PrintLetterhead`, shared by bills, advance receipts, the clinical note, the session log, the insurer packet and the Settings preview):
@@ -706,7 +719,12 @@ Front desk's `visits_update` reach is the same as an admin's or the visit's own 
 - **Visit history** — responsive table (tab-and-up widths) / card list
   (phone) shared with Ledger and Workspace, with a "hide ₹0 visits"
   filter for package sessions billed as part of the package's own invoice,
-  and bulk visit selection for issuing one invoice across several visits
+  and bulk visit selection for issuing one invoice across several visits.
+  Above the list, "All unbilled", "This month" and "Last month" tick the visits for you (`unbilledInRange`; only what
+  `selectableForBilling` allows: not yet invoiced, not wholly paid at the partner's counter, and never a ₹0 session of a
+  package that is already invoiced). A selection that adds to ₹0 cannot be issued ("These visits have no charge to
+  bill"). The review step shows the clinical details that will print, the treatment period and what "Collected now"
+  will record
 - **Payments summary** — lifetime billed / collected / outstanding for the
   patient, alongside the outstanding-balance pill in the header
 - **Billing-lock indicator** — a small lock icon on invoiced-but-unpaid

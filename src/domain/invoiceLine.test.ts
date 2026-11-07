@@ -12,6 +12,8 @@ import {
   normalizeAuthorizedCount,
   sessionCountLabel,
   sessionDatesDisplay,
+  hasCondensedSessionDates,
+  treatmentPeriodOf,
 } from './invoiceLine';
 import type { InvoiceLineItem, Visit, VisitItem } from './types';
 import { rupeesToPaise as rs } from './money';
@@ -337,6 +339,52 @@ describe('invoiceLineGroupKey', () => {
   it('falls back to a svc: namespaced key of service + price for non-package visits', () => {
     const v = makeVisit({ actualBillPaise: rs(800), serviceCatalogId: 'svc-1' });
     expect(invoiceLineGroupKey(v)).toBe(`svc:svc-1:${rs(800)}`);
+  });
+
+  it('a clinic visit keeps the key it always had; home and ward add their name', () => {
+    const base = { actualBillPaise: rs(800), serviceCatalogId: 'svc-1' };
+    expect(invoiceLineGroupKey(makeVisit({ ...base, location: 'clinic' }))).toBe(`svc:svc-1:${rs(800)}`);
+    expect(invoiceLineGroupKey(makeVisit(base))).toBe(`svc:svc-1:${rs(800)}`);
+    expect(invoiceLineGroupKey(makeVisit({ ...base, location: 'home' }))).toBe(`svc:svc-1:${rs(800)}:home`);
+  });
+
+  it('a package keeps its package key whatever the place', () => {
+    expect(invoiceLineGroupKey(makeVisit({ actualBillPaise: rs(500), packageGroupId: 'pkg-1', location: 'home' }))).toBe('pkg-1');
+  });
+});
+
+describe('home and clinic visits of one service', () => {
+  const visit = (id: string, date: string, location?: 'clinic' | 'home') =>
+    makeVisit({ id, visitDate: date, serviceCatalogId: 'svc-1', catalogPricePaise: rs(800), actualBillPaise: rs(800), ...(location ? { location } : {}) });
+
+  it('print as separate lines that still add up', () => {
+    const visits = [visit('c1', '2026-11-02', 'clinic'), visit('h1', '2026-11-04', 'home'), visit('h2', '2026-11-06', 'home'), visit('c2', '2026-11-09')];
+    const { lineItems, totalPaise } = buildLineItems(groupVisitsForInvoicing(visits), CATALOG_NAMES);
+    expect(lineItems).toHaveLength(2);
+    expect(lineItems.map((li) => li.billedSessionCount).sort()).toEqual([2, 2]);
+    expect(totalPaise).toBe(rs(3200));
+    expect(lineItems.reduce((a, li) => a + li.totalPaise, 0)).toBe(totalPaise);
+  });
+
+  it('visits that were all at one place still merge into one line', () => {
+    const { lineItems } = buildLineItems(groupVisitsForInvoicing([visit('h1', '2026-11-04', 'home'), visit('h2', '2026-11-06', 'home')]), CATALOG_NAMES);
+    expect(lineItems).toHaveLength(1);
+    expect(lineItems[0].billedSessionCount).toBe(2);
+  });
+
+  it('visits with no location (older rows) merge with clinic visits as before', () => {
+    const { lineItems } = buildLineItems(groupVisitsForInvoicing([visit('a', '2026-11-04'), visit('b', '2026-11-06', 'clinic')]), CATALOG_NAMES);
+    expect(lineItems).toHaveLength(1);
+  });
+
+  it('a service line of a home visit groups apart from the same line at the clinic', () => {
+    const item = (id: string, visitId: string): VisitItem =>
+      ({ id, visitId, clinicId: 'clinic-1', serviceCatalogId: 'svc-1', serviceName: 'Physio', catalogPricePaise: rs(800), pricePaise: rs(800), position: 0, isPackageLine: false, deleted: false, assistingTherapistId: null, durationMinutes: null, updatedAt: '' }) as VisitItem;
+    const v1 = visit('c1', '2026-11-02', 'clinic');
+    const v2 = visit('h1', '2026-11-04', 'home');
+    const units = billingUnits([v1, v2], new Map([[v1.id, [item('i1', v1.id)]], [v2.id, [item('i2', v2.id)]]]));
+    const { lineItems } = buildLineItems(groupVisitsForInvoicing(units), CATALOG_NAMES);
+    expect(lineItems).toHaveLength(2);
   });
 });
 
@@ -725,5 +773,22 @@ describe('invoice lines per service', () => {
     expect(lineItems.find((l) => l.authorizedSessionCount === 5)?.totalPaise).toBe(0);
     expect(totalPaise).toBe(rs(400));
     for (const l of lineItems) expect(lineReconciles(l)).toBe(true);
+  });
+});
+
+describe('treatmentPeriodOf / hasCondensedSessionDates', () => {
+  const line = (dates: string[]): InvoiceLineItem =>
+    ({ serviceName: 'S', sessionCount: dates.length, sessionDates: dates, catalogPricePaise: 0, adjustmentPaise: 0, adjustmentReason: null, totalPaise: 0 }) as InvoiceLineItem;
+
+  it('spans first to last date across the lines, and is null for one day or none', () => {
+    expect(treatmentPeriodOf([line(['2026-11-09', '2026-11-02']), line(['2026-11-30'])])).toEqual({ from: '2026-11-02', to: '2026-11-30' });
+    expect(treatmentPeriodOf([line(['2026-11-02', '2026-11-02'])])).toBeNull();
+    expect(treatmentPeriodOf([line([])])).toBeNull();
+  });
+
+  it('flags a line whose dates are shown as a range (more than 8), not a short list', () => {
+    const many = Array.from({ length: 9 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
+    expect(hasCondensedSessionDates([line(many)])).toBe(true);
+    expect(hasCondensedSessionDates([line(many.slice(0, 8))])).toBe(false);
   });
 });
