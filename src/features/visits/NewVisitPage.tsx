@@ -39,16 +39,7 @@ import {
 } from '@/domain/types';
 import type { ServiceUsageCountRow, TreatmentUsageRow } from '@/services/dashboardService';
 import { toFriendlyMessage } from '@/lib/errors';
-import {
-  inputCls,
-  btnPrimary,
-  btnSecondary,
-  ErrorNote,
-  SectionCard,
-  Pill,
-  MultiToggle,
-  ConfirmDialog,
-} from '@/components/ui';
+import { inputCls, btnPrimary, btnSecondary, ErrorNote, SectionCard, Pill, MultiToggle, ConfirmDialog, pillSmAccent } from '@/components/ui';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
@@ -1455,7 +1446,7 @@ export function NewVisitPage() {
           {patientBalance && patientBalance.duePaise > 0 && (
             <div
               role="status"
-              className="rounded-lg bg-[var(--amber-light)] px-3 py-1.5 text-xs font-medium text-[var(--amber)]"
+              className="rounded-lg bg-[var(--amber-light)] px-3 py-1.5 text-xs font-medium text-[var(--amber-strong)]"
             >
               Balance due {formatAmount(patientBalance.duePaise)} · {patientBalance.unpaidVisits} unpaid{' '}
               {patientBalance.unpaidVisits === 1 ? 'visit' : 'visits'}
@@ -1505,7 +1496,7 @@ export function NewVisitPage() {
                     <span className="text-xs font-medium text-[var(--muted)]">Package</span>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
+                      className={pillSmAccent}
                       onClick={renewFinishedPackage}
                     >
                       + Renew package
@@ -1560,7 +1551,7 @@ export function NewVisitPage() {
                           </div>
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)] transition-colors shadow-2xs"
+                            className={pillSmAccent}
                             onClick={repeatLastVisit}
                             title="Pre-fill therapist, treatments, and service from last visit"
                           >
@@ -1789,6 +1780,7 @@ export function NewVisitPage() {
                     if (!knownConditions.some((c) => c.toLowerCase() === condition.toLowerCase())) setCondition('');
                   }}
                 >
+                      aria-pressed={isSelected}
                   Cancel
                 </button>
               </div>
@@ -2197,7 +2189,7 @@ export function NewVisitPage() {
         </div>
 
         {isDirty && (
-          <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber)]">
+          <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber-strong)]">
             <span
               role="img"
               aria-label="Unsaved changes"

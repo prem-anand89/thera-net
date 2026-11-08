@@ -55,7 +55,7 @@ describe('PatientInvoicesList', () => {
     expect(screen.getAllByText('Outstanding').length).toBeGreaterThan(0);
     fireEvent.click(first('Take payment'));
     expect(onTakePayment).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
-    fireEvent.click(first('Send WhatsApp reminder'));
+    fireEvent.click(first('Send reminder'));
     expect(onRemind).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 100000);
   });
 
@@ -68,7 +68,7 @@ describe('PatientInvoicesList', () => {
   it('hides Take payment and the reminder without the right to collect', () => {
     renderList({ canCollect: false });
     expect(screen.queryByRole('button', { name: 'Take payment' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Send WhatsApp reminder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send reminder' })).not.toBeInTheDocument();
   });
 
   it('offers no payment on a paid bill, a superseded bill, or a bill whose visits were removed', () => {

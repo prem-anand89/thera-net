@@ -74,7 +74,7 @@ export function RequestGhostBlock({
         aria-label={`Booking request from ${ghost.name} for ${minutesLabel(ghost.minutes)}`}
         title={label}
         onClick={() => setOpen((v) => !v)}
-        className={`flex h-6 w-full items-center gap-1 truncate rounded-md border border-dashed border-[var(--amber)] bg-[var(--amber-light)] px-1.5 text-left text-[11px] font-medium text-[var(--amber)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--amber)] ${
+        className={`flex h-6 w-full items-center gap-1 truncate rounded-md border border-dashed border-[var(--amber)] bg-[var(--amber-light)] px-1.5 text-left text-[11px] font-medium text-[var(--amber-strong)] hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--amber)] ${
           ghost.highlight ? 'ring-2 ring-[var(--amber)]' : ''
         }`}
       >

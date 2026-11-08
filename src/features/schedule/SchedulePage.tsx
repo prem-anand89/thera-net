@@ -8,14 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { addDays, toLocalDateStr } from '@/domain/schedule';
-import {
-  SectionCard,
-  Pill,
-  th,
-  td,
-  chipSelect,
-  chipSelectChevron as chevron,
-} from '@/components/ui';
+import { SectionCard, Pill, th, td, chipSelect, chipSelectChevron as chevron, filterChip, ChipCount } from '@/components/ui';
 import type { UUID } from '@/domain/types';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
@@ -58,7 +51,7 @@ function AverageRatingTile({ averageRating }: { averageRating: number | null }) 
       : averageRating >= 4.5
         ? 'border-[var(--moss)] text-[var(--moss-strong)]'
         : averageRating >= 3
-          ? 'border-[var(--amber)] text-[var(--amber)]'
+          ? 'border-[var(--amber)] text-[var(--amber-strong)]'
           : 'border-[var(--rust)] text-[var(--rust)]';
   return (
     <div className={`shrink-0 rounded-lg border bg-[var(--surface)] px-2.5 py-1 ${tone}`}>
@@ -322,18 +315,14 @@ export function SchedulePage() {
                 type="button"
                 aria-pressed={statusFilter === 'all'}
                 onClick={() => setStatusFilter('all')}
-                className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-medium ${
-                  statusFilter === 'all'
-                    ? 'bg-[var(--teal)] text-white'
-                    : 'bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
+                className={`shrink-0 ${filterChip(statusFilter === 'all')}`}
               >
                 All
               </button>
               {(
                 [
                   ['answered', 'Responded', 'bg-[var(--moss-light)] text-[var(--moss-strong)]', statusCounts.answered],
-                  ['awaiting', 'Awaiting', 'bg-[var(--amber-light)] text-[var(--amber)]', statusCounts.awaiting],
+                  ['awaiting', 'Awaiting', 'bg-[var(--amber-light)] text-[var(--amber-strong)]', statusCounts.awaiting],
                   ['expired', 'Expired', 'bg-[var(--slate-light)] text-[var(--slate)]', statusCounts.expired],
                 ] as const
               )
@@ -344,11 +333,12 @@ export function SchedulePage() {
                     type="button"
                     aria-pressed={statusFilter === key}
                     onClick={() => setStatusFilter((current) => (current === key ? 'all' : key))}
-                    className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-medium ${tone} ${
-                      statusFilter === key ? 'ring-2 ring-[var(--teal)] ring-offset-1' : ''
+                    className={`inline-flex min-h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs ${tone} ${
+                      statusFilter === key ? 'font-semibold ring-1 ring-current' : 'font-medium'
                     }`}
                   >
-                    {label} {count}
+                    {label}
+                    <ChipCount n={count} />
                   </button>
                 ))}
               {(therapistFilter || dateRange !== 'all' || statusFilter !== 'all') && (

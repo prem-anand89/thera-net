@@ -8,7 +8,7 @@ import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
-import { Pill, pillAccent, pillDanger, pillNeutral, pillPrimary } from '@/components/ui';
+import { Pill, pillSmAccent, pillSmDanger, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { useShowMore, ShowMoreFooter } from '@/components/ShowMore';
 import { partitionTodayAppointments } from './todayPartition';
 import { AwaitingList } from './AwaitingList';
@@ -239,7 +239,7 @@ export function TodayAppointments({
         <span className="flex items-center gap-2">
           <button
             type="button"
-            className={pillDanger}
+            className={pillSmDanger}
             aria-label={`Undo no-show for ${a.patientName}`}
             disabled={pendingIds.has(a.id)}
             onClick={() => guarded(a.id, () => onUndoNoShow(a))}
@@ -248,7 +248,7 @@ export function TodayAppointments({
           </button>
           <button
             type="button"
-            className={`hidden min-h-9 sm:min-h-8 ${pillNeutral} sm:inline-flex`}
+            className={`hidden ${pillSmNeutral} sm:inline-flex`}
             onClick={() => onSelect(a)}
           >
             Rebook
@@ -331,7 +331,7 @@ export function TodayAppointments({
                   {onUndoArrived && a.source !== 'walk_in' && (
                     <button
                       type="button"
-                      className={`min-h-9 sm:min-h-8 ${pillNeutral}`}
+                      className={pillSmNeutral}
                       aria-label={`Undo arrived for ${a.patientName}`}
                       disabled={pendingIds.has(a.id)}
                       onClick={() => guarded(a.id, () => onUndoArrived(a))}
@@ -348,7 +348,7 @@ export function TodayAppointments({
                       ...(a.patientId ? { patientId: a.patientId } : {}),
                       from: '/workspace',
                     }}
-                    className={`min-h-9 whitespace-nowrap sm:min-h-8 ${pillPrimary}`}
+                    className={pillSmPrimary}
                   >
                     <span className="sm:hidden">Complete</span>
                     <span className="hidden sm:inline">Complete visit</span>
@@ -372,7 +372,7 @@ export function TodayAppointments({
                 onMarkArrived ? (
                   <button
                     type="button"
-                    className={`min-h-9 sm:min-h-8 ${pillAccent}`}
+                    className={pillSmAccent}
                     aria-label={`Mark ${a.patientName} arrived`}
                     disabled={pendingIds.has(a.id)}
                     onClick={() => guarded(a.id, () => onMarkArrived(a))}
@@ -449,7 +449,7 @@ export function TodayAppointments({
                       <button
                         type="button"
                         aria-label={`Restore ${a.patientName}'s appointment`}
-                        className={`min-h-9 sm:min-h-8 ${pillAccent}`}
+                        className={pillSmAccent}
                         disabled={pendingIds.has(a.id)}
                         onClick={() => guarded(a.id, () => onRestoreCancelled(a))}
                       >

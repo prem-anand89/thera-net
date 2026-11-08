@@ -33,20 +33,7 @@ import {
   type UUID,
   type Visit,
 } from '@/domain/types';
-import {
-  btnPrimary,
-  pillPrimary,
-  th,
-  thNum,
-  td,
-  tdNum,
-  SectionCard,
-  StatTile,
-  CountBadge,
-  KebabMenu,
-  menuItem,
-  chipSelectChevron,
-} from '@/components/ui';
+import { btnPrimary, pillPrimary, th, thNum, td, tdNum, SectionCard, StatTile, CountBadge, KebabMenu, menuItem, chipSelectChevron, pillSmPrimary, pillSmNeutral, pillSmDanger } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { loadLedgerPrefs, presetRange, saveLedgerPrefs } from './ledgerPrefs';
@@ -1052,7 +1039,7 @@ export function LedgerPage() {
 
           {/* The header's sync dot covers "all synced"; the caption only
               shows while visits are still waiting to sync. */}
-          {syncCaption && unsyncedVisitCount > 0 && <p className="text-xs text-[var(--amber)]">{syncCaption}</p>}
+          {syncCaption && unsyncedVisitCount > 0 && <p className="text-xs text-[var(--amber-strong)]">{syncCaption}</p>}
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
         </>
@@ -1460,7 +1447,7 @@ function OutstandingInvoiceActions({
     return (
       <button
         type="button"
-        className="inline-flex min-h-8 items-center rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--teal-strong)]"
+        className={pillSmPrimary}
         onClick={() => onTakePayment(row)}
       >
         Take payment
@@ -1471,18 +1458,11 @@ function OutstandingInvoiceActions({
     <div className="space-y-1.5">
       <p className="text-xs text-[var(--muted)]">Its visit was removed, so no payment can be recorded.</p>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="inline-flex min-h-8 items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--rust)] transition-colors hover:bg-[var(--rust-light)]"
-          onClick={() => onVoid(row)}
-        >
-          Void invoice
-        </button>
         <Link
           to="/invoices/$invoiceId/print"
           params={{ invoiceId: row.invoiceId }}
           search={{ from: '/ledger' }}
-          className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+          className={pillSmNeutral}
         >
           Review
         </Link>
@@ -1490,3 +1470,6 @@ function OutstandingInvoiceActions({
     </div>
   );
 }
+        <button type="button" className={pillSmDanger} onClick={() => onVoid(row)}>
+          Void invoice
+        </button>

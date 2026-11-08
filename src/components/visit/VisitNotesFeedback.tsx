@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
+import { pillSmAccent, pillSmAttention, pillSmNeutral } from '@/components/ui';
 import type { VisitCardData } from './types';
 
 export const NOTE_STATUS_CELL: Record<
@@ -11,14 +12,11 @@ export const NOTE_STATUS_CELL: Record<
   archived: { tone: 'slate', label: 'Archived', action: 'View' },
 };
 
-// Plain flush-left text, not `Pill` — this status sits stacked above a
-// plain-text action link (and, in the table's Actions column, a plain-text
-// feedback link below that). `Pill`'s own px-2 padding shifted "Draft"'s
-// text a few pixels right of everything flush-left beneath it, reading as
-// misaligned once there were 2-3 stacked lines instead of 1.
+// A status is plain flush-left text, not a `Pill`: pills are for things you can do (the small ladder pills `pillSm*`
+// from ui.tsx: Note / Edit / Feedback / Google review / Resend), text is for where things stand.
 export const NOTE_STATUS_TEXT_COLOR: Record<'green' | 'amber' | 'slate', string> = {
   green: 'text-[var(--moss)]',
-  amber: 'text-[var(--amber)]',
+  amber: 'text-[var(--amber-strong)]',
   slate: 'text-[var(--muted)]',
 };
 
@@ -47,7 +45,7 @@ export function VisitNoteLink({
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
           search={backTo ? { from: backTo } : undefined}
-          className="text-xs font-medium text-[var(--teal)] hover:underline"
+          className={pillSmAccent}
         >
           {action} note
         </Link>
@@ -58,12 +56,11 @@ export function VisitNoteLink({
         <span className={`whitespace-nowrap text-xs font-medium ${NOTE_STATUS_TEXT_COLOR[tone]}`}>
           {label}
         </span>
-        <span className="text-xs text-[var(--muted)]">·</span>
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
           search={backTo ? { from: backTo } : undefined}
-          className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+          className={pillSmAccent}
         >
           {action}
         </Link>
@@ -76,7 +73,7 @@ export function VisitNoteLink({
       to="/patients/$patientId/notes/new-session"
       params={{ patientId: data.patientId }}
       search={{ visitId: data.visitId, from: backTo }}
-      className="whitespace-nowrap text-xs font-medium text-[var(--amber)] hover:underline"
+      className={pillSmAttention}
       title="Clinical note not started for this visit"
     >
       + Note
@@ -130,7 +127,7 @@ export function VisitFeedbackLink({
         {eligibleForGoogleReview && (
           <button
             type="button"
-            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+            className={pillSmAccent}
             onClick={onAskForGoogleReview}
             title="Ask this patient to leave a Google review"
           >
@@ -146,7 +143,7 @@ export function VisitFeedbackLink({
     return (
       <button
         type="button"
-        className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+        className={pillSmAccent}
         onClick={onAskForFeedback}
         title="Ask this patient for feedback"
       >
@@ -189,7 +186,7 @@ export function VisitFeedbackLink({
   return (
     <button
       type="button"
-      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+      className={pillSmNeutral}
       onClick={onResendFeedback}
       title="Resend the feedback link"
     >

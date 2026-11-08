@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatAmount } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
-import { SectionCard } from '@/components/ui';
+import { SectionCard, filterChip } from '@/components/ui';
 import { useTherapistUtilisation } from '@/components/useTherapistUtilisation';
 import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import {
@@ -308,12 +308,9 @@ export function TherapistComparisonCard({
                     <button
                       key={label}
                       type="button"
+                      aria-pressed={chartMonthIndex === i}
                       onClick={() => setChartMonthIndex(i)}
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                        chartMonthIndex === i
-                          ? 'bg-[var(--teal-light)] text-[var(--teal-strong)] font-semibold ring-1 ring-[var(--teal)]/30'
-                          : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--paper)]'
-                      }`}
+                      className={`shrink-0 ${filterChip(chartMonthIndex === i)}`}
                     >
                       {label}
                       {i === categories.length - 1 && chartMonthIsInProgress && i === chartMonthIndex ? ' · live' : ''}
@@ -406,12 +403,9 @@ export function TherapistComparisonCard({
                       <button
                         key={name}
                         type="button"
+                        aria-pressed={activeTherapistName === name}
                         onClick={() => setSelectedTherapistName(name)}
-                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                          activeTherapistName === name
-                            ? 'bg-[var(--teal-light)] text-[var(--teal-strong)] font-semibold ring-1 ring-[var(--teal)]/30'
-                            : 'bg-[var(--paper)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
-                        }`}
+                        className={`shrink-0 ${filterChip(activeTherapistName === name)}`}
                       >
                         {name}
                       </button>

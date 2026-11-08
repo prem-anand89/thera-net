@@ -60,9 +60,9 @@ describe('ReviewsPanel', () => {
 
   it('opens on Due with counts on every filter', () => {
     setup();
-    expect(screen.getByRole('button', { name: 'Due (1)' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Missed (1)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'No-shows (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Due 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Missed 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No-shows 1' })).toBeInTheDocument();
     expect(screen.getByText('Kavin P')).toBeInTheDocument();
     expect(screen.getByText(/due today/)).toBeInTheDocument();
     expect(screen.getByText('reassess knee')).toBeInTheDocument();

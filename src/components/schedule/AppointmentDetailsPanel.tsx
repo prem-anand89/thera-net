@@ -40,7 +40,7 @@ export function AttendanceNote({ attendance }: { attendance: Attendance | null }
     attendance.cancelled ? `${attendance.cancelled} cancelled` : '',
   ].filter(Boolean);
   return (
-    <p className={`rounded-lg px-3 py-2 text-xs ${attendance.noShows >= 2 ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--amber-light)] text-[var(--amber)]'}`}>
+    <p className={`rounded-lg px-3 py-2 text-xs ${attendance.noShows >= 2 ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--amber-light)] text-[var(--amber-strong)]'}`}>
       ! {parts.join(', ')} in the last 6 months{attendance.attended ? ` · attended ${attendance.attended}` : ''}. Consider calling to confirm.
     </p>
   );
@@ -292,7 +292,7 @@ export function AppointmentDetailsPanel({
               </button>
             )}
             {arrived && (
-              <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]">
                 <span>Complete visit to add service and payment.</span>
                 {/* A walk-in was never booked, so there is nothing to go back to; it can be cancelled instead. */}
                 {appointment.source !== 'walk_in' && (

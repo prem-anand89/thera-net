@@ -3,9 +3,7 @@ import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { invoiceBalance, invoiceDisplayStatus, invoiceRowStatus } from '@/domain/invoiceStatus';
 import type { Invoice, PaymentStatus } from '@/domain/types';
-import { Pill } from '@/components/ui';
-
-const actionCls = 'text-xs font-medium text-[var(--teal)] hover:underline';
+import { Pill, pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
 
 /**
  * One patient's bills, newest first: number, date, total, status, and what the viewer may do next (print, take payment,
@@ -60,22 +58,22 @@ export function PatientInvoicesList({
   });
 
   const actions = (r: (typeof rows)[number]) => (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2">
       {r.canPay && (
-        <button type="button" className={actionCls} onClick={() => onTakePayment(r.inv)}>
+        <button type="button" className={pillSmPrimary} onClick={() => onTakePayment(r.inv)}>
           Take payment
         </button>
       )}
       {r.canRemind && (
-        <button type="button" className={actionCls} onClick={() => onRemind(r.inv, r.remainingPaise)}>
-          Send WhatsApp reminder
+        <button type="button" className={pillSmAccent} onClick={() => onRemind(r.inv, r.remainingPaise)}>
+          Send reminder
         </button>
       )}
       <Link
         to="/invoices/$invoiceId/print"
         params={{ invoiceId: r.inv.id }}
         search={{ from: '/patients', patient: patientId }}
-        className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+        className={pillSmNeutral}
       >
         Print
       </Link>

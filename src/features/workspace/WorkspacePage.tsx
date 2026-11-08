@@ -45,24 +45,7 @@ import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
-import {
-  btnPrimary,
-  btnSecondary,
-  LoadingRows,
-  SectionCard,
-  StatStrip,
-  ConfirmDialog,
-  Pill,
-  pillAccent,
-  pillNeutral,
-  chipSelect,
-  chipSelectChevron,
-  PackageThread,
-  th,
-  thNum,
-  td,
-  tdNum,
-} from '@/components/ui';
+import { btnPrimary, btnSecondary, LoadingRows, SectionCard, StatStrip, ConfirmDialog, Pill, pillAccent, pillNeutral, pillSmAccent, pillSmPrimary, chipSelect, chipSelectChevron, PackageThread, th, thNum, td, tdNum, filterChip, ChipCount, segTrack, segOption } from '@/components/ui';
 import {
   ResponsiveVisitList,
   VisitColumnPicker,
@@ -1266,8 +1249,8 @@ export function WorkspacePage() {
         )}
         {followOpen && (
           <>
-        <div className="mb-3.5 flex items-center justify-between gap-2">
-          <div role="tablist" aria-label="Follow up" className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
+        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
+          <div role="tablist" aria-label="Follow up" className={segTrack}>
             {(
               [
                 { key: 'reviews', label: `Reviews (${followUp.due.length})` },
@@ -1282,11 +1265,7 @@ export function WorkspacePage() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => chooseFollowTab(tab.key)}
-                  className={`min-h-8 rounded-md px-3 text-xs transition-colors ${
-                    active
-                      ? 'bg-[var(--surface)] text-[var(--teal-strong)] font-semibold shadow-sm'
-                      : 'text-[var(--muted)] hover:text-[var(--ink)] font-medium'
-                  }`}
+                  className={`${segOption(active)} gap-1.5`}
                 >
                   {tab.label}
                 </button>
@@ -1332,11 +1311,7 @@ export function WorkspacePage() {
                 key={opt.key}
                 type="button"
                 onClick={() => setPkgStatusFilter(opt.key)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                  pkgStatusFilter === opt.key
-                    ? 'border-transparent bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
+                className={filterChip(pkgStatusFilter === opt.key)}
               >
                 {opt.label}
               </button>
@@ -1375,6 +1350,7 @@ export function WorkspacePage() {
                       params={{ patientId: p.patientId }}
                       search={{ from: '/workspace' }}
                       className="min-w-0"
+                  <ChipCount n={tab.count} />
                     >
                       <div className="font-display text-sm font-medium text-[var(--ink)]">
                         {p.patientName}
@@ -1405,7 +1381,7 @@ export function WorkspacePage() {
                       {p.stale && !p.doNotMessage && (
                         <button
                           type="button"
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                          className={pillSmAccent}
                           onClick={() => {
                             void feedbackService
                               .sendStalePackageReminder(
@@ -1424,10 +1400,11 @@ export function WorkspacePage() {
                       <Link
                         to="/visits/new"
                         search={{ repeatVisitId: p.lastVisitId }}
-                        className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                        className={pillSmPrimary}
                       >
                         Log visit
                       </Link>
+                {opt.count ? <ChipCount n={opt.count} /> : null}
                     </div>
                   </div>
                 </div>
@@ -1488,7 +1465,7 @@ export function WorkspacePage() {
                           {p.stale && !p.doNotMessage && (
                             <button
                               type="button"
-                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                              className={pillSmAccent}
                               onClick={() => {
                                 void feedbackService
                                   .sendStalePackageReminder(
@@ -1507,7 +1484,7 @@ export function WorkspacePage() {
                           <Link
                             to="/visits/new"
                             search={{ repeatVisitId: p.lastVisitId }}
-                            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                            className={pillSmPrimary}
                           >
                             Log visit
                           </Link>

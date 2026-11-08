@@ -3,7 +3,7 @@ import type { PatientFlag } from '@/domain/patientFlags';
 const STYLE: Record<PatientFlag['key'], string> = {
   new: 'bg-[var(--teal-light)] text-[var(--teal-strong)]',
   package: 'bg-[var(--plum-light)] text-[var(--plum)]',
-  balance: 'bg-[var(--amber-light)] text-[var(--amber)]',
+  balance: 'bg-[var(--amber-light)] text-[var(--amber-strong)]',
   noshow: 'bg-[var(--rust-light)] text-[var(--rust)]',
 };
 

@@ -90,10 +90,10 @@ describe('SingleVisitPatientsCard', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /All \(3\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Needs review \(1\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Reason logged \(1\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Closed \/ Resolved \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^All 3$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Needs review 1$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Reason logged 1$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Closed \/ Resolved 1$/i })).toBeInTheDocument();
   });
 
   it('filters rows when a triage pill is clicked', () => {
@@ -115,13 +115,13 @@ describe('SingleVisitPatientsCard', () => {
     expect(screen.getAllByText('Rohan Gupta').length).toBeGreaterThan(0);
 
     // Click Needs Review
-    fireEvent.click(screen.getByRole('button', { name: /Needs review \(1\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Needs review 1$/i }));
     expect(screen.getAllByText('Aarav Patel').length).toBeGreaterThan(0);
     expect(screen.queryByText('Priya Sharma')).not.toBeInTheDocument();
     expect(screen.queryByText('Rohan Gupta')).not.toBeInTheDocument();
 
     // Click Closed / Resolved
-    fireEvent.click(screen.getByRole('button', { name: /Closed \/ Resolved \(1\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Closed \/ Resolved 1$/i }));
     expect(screen.queryByText('Aarav Patel')).not.toBeInTheDocument();
     expect(screen.getAllByText('Rohan Gupta').length).toBeGreaterThan(0);
   });

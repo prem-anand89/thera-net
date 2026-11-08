@@ -22,7 +22,7 @@ import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
-import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
+import { Pill, btnPrimary, btnSecondary, pillSmAccent, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { placeLabelFor } from '@/domain/careLocations';
@@ -613,7 +613,7 @@ export function PatientProfilePage() {
                   <button
                     type="button"
                     onClick={() => openPatientWhatsAppChat(`Hello ${patient.name}, this is ${clinic.name}.`, patient.phone)}
-                    className="inline-flex items-center gap-1 rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal)] hover:text-white"
+                    className={pillSmAccent}
                     title="Chat on WhatsApp"
                   >
                     <IconMessage className="h-3 w-3" />
@@ -895,7 +895,7 @@ export function PatientProfilePage() {
                 <button
                   key={range}
                   type="button"
-                  className="min-h-9 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+                  className={pillSmNeutral}
                   onClick={() =>
                     setSelectedVisitIds(
                       new Set(unbilledInRange(visitCardRows, { canBill, canCollect: canCollectPayment }, range, toLocalDateStr(new Date())))
@@ -920,7 +920,7 @@ export function PatientProfilePage() {
                 </span>
                 <button
                   type="button"
-                  className="rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  className={pillSmPrimary}
                   disabled={canBill && selectedBillPaise <= 0}
                   title={canBill && selectedBillPaise <= 0 ? 'These visits have no charge to bill' : undefined}
                   onClick={startBulkAction}

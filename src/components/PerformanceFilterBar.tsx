@@ -1,3 +1,4 @@
+import { segTrack, segOption } from '@/components/ui';
 import type { UtilisationGranularity } from '@/domain/utilisationPeriods';
 
 const GRANULARITIES: { key: UtilisationGranularity; label: string }[] = [
@@ -34,7 +35,7 @@ export function PerformanceFilterBar({
           <span>{activePeriodLabel}</span>
         </div>
 
-        <div className="flex items-center rounded-full border border-[var(--border)] bg-[var(--paper)] p-0.5" role="group" aria-label="Utilisation granularity">
+        <div className={segTrack} role="group" aria-label="Utilisation granularity">
           {GRANULARITIES.map((g) => {
             const active = granularity === g.key;
             return (
@@ -43,11 +44,7 @@ export function PerformanceFilterBar({
                 type="button"
                 aria-pressed={active}
                 onClick={() => onGranularityChange(g.key)}
-                className={`min-h-7 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors motion-reduce:transition-none ${
-                  active
-                    ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
+className={segOption(active)}
               >
                 {g.label}
               </button>

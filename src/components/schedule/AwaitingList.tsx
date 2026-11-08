@@ -1,3 +1,4 @@
+import { pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
 import type { AppointmentRequest } from '@/domain/types';
 import { awaitingOrder, awaitingWants, isPastDay } from '@/domain/awaiting';
 import { OnlineTag, timeAgo } from './RequestsInbox';
@@ -52,16 +53,16 @@ export function AwaitingList({
                 </a>
               </span>
               <span className="block text-xs text-[var(--muted)]">
-                <span className={past ? 'font-medium text-[var(--amber)]' : undefined}>{awaitingWants(request, today)}</span>
+                <span className={past ? 'font-medium text-[var(--amber-strong)]' : undefined}>{awaitingWants(request, today)}</span>
                 {therapist ? `, with ${therapist}` : ''}
                 {request.notes && <span className="text-[var(--ink)]"> · {request.notes}</span>}
               </span>
               {bookedNoteFor?.(request) && <span className="block text-xs font-medium text-[var(--teal-strong)]">{bookedNoteFor(request)}</span>}
             </span>
-            <span className="flex shrink-0 items-center gap-1.5">
+            <span className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                className="min-h-9 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                className={pillSmPrimary}
                 aria-label={`Book ${request.name}`}
                 onClick={() => onBook(request)}
               >
@@ -70,7 +71,7 @@ export function AwaitingList({
               {canMessage(request) && (
               <button
                 type="button"
-                className="min-h-9 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                className={pillSmAccent}
                 aria-label={`WhatsApp ${request.name}`}
                 onClick={() => onMessage(request)}
               >
@@ -79,7 +80,7 @@ export function AwaitingList({
               )}
               <button
                 type="button"
-                className="min-h-9 px-2 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]"
+                className={pillSmNeutral}
                 aria-label={`Dismiss ${request.name}`}
                 onClick={() => onDismiss(request)}
               >

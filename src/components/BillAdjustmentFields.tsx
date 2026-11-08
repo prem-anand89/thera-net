@@ -208,7 +208,7 @@ export function BillAdjustmentFields({
                 type="button"
                 onClick={() => handleModeSwitch('extra')}
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors ${effectiveType === 'extra'
-                    ? 'bg-[var(--amber-light)] font-semibold text-[var(--amber)]'
+                    ? 'bg-[var(--amber-light)] font-semibold text-[var(--amber-strong)]'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                   }`}
               >
@@ -322,7 +322,8 @@ export function BillAdjustmentFields({
                       onValueTypeChange(preset.type);
                       onValueChange(String(preset.value));
                     }}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium font-num transition-colors shadow-2xs tabular-nums ${isSelected
+                    aria-pressed={isSelected}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium font-num transition-colors shadow-2xs tabular-nums ${isSelected
                         ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                         : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
                       }`}
@@ -336,7 +337,7 @@ export function BillAdjustmentFields({
             {/* Live Computed Delta Badge (Instant feedback when % is selected) */}
             {liveDeltaPaise > 0 && (
               <span
-                className={`font-num text-xs font-semibold tabular-nums ml-0.5 shrink-0 ${effectiveType === 'extra' ? 'text-[var(--amber)]' : 'text-[var(--teal-strong)]'
+                className={`font-num text-xs font-semibold tabular-nums ml-0.5 shrink-0 ${effectiveType === 'extra' ? 'text-[var(--amber-strong)]' : 'text-[var(--teal-strong)]'
                   }`}
               >
                 {effectiveType === 'extra' ? '+' : '−'}
@@ -374,7 +375,8 @@ export function BillAdjustmentFields({
                     }
                     onReasonChange(isSelected ? '' : preset);
                   }}
-                  className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors shadow-2xs ${isSelected
+                  aria-pressed={isSelected}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors shadow-2xs ${isSelected
                       ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
                     }`}
@@ -388,7 +390,7 @@ export function BillAdjustmentFields({
               <button
                 type="button"
                 onClick={() => setCustomReasonActive(true)}
-                className="rounded-full border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--teal-strong)] shadow-2xs"
+                className="rounded-full border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-semibold text-[var(--teal-strong)] shadow-2xs"
               >
                 ✓ {reason}
               </button>
@@ -396,7 +398,7 @@ export function BillAdjustmentFields({
               <button
                 type="button"
                 onClick={() => setCustomReasonActive(true)}
-                className="rounded-full border border-dashed border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--ink)] transition-colors shadow-2xs"
+                className="rounded-full border border-dashed border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-xs font-medium text-[var(--muted)] hover:border-[var(--teal)] hover:text-[var(--ink)] transition-colors shadow-2xs"
               >
                 + Other...
               </button>

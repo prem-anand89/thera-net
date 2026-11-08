@@ -235,7 +235,7 @@ function ShiftsFields({
         <p className="text-xs text-[var(--muted)]" data-testid="hours-summary">
           {formatDuration(openMinutes)} open
           {closed && shifts.s2 && (
-            <span className="font-medium text-[var(--amber)]">
+            <span className="font-medium text-[var(--amber-strong)]">
               {' · '}
               {closed} ({formatDuration(shifts.s2[0] - shifts.s1[1])})
             </span>

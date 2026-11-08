@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pill, chipSelect, chipSelectChevron as chevron } from '@/components/ui';
+import { Pill, chipSelect, chipSelectChevron as chevron, segTrack, segOption } from '@/components/ui';
 import { addDays, filterHistory, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
@@ -119,7 +119,7 @@ export function HistoryView({
     <div className="space-y-2.5">
       {/* Row 1: Past / Upcoming beside the search. */}
       <div className="flex items-center gap-2">
-        <div className="flex shrink-0 gap-0.5 rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5" role="tablist" aria-label="Past or upcoming">
+        <div className={`${segTrack} shrink-0`} role="tablist" aria-label="Past or upcoming">
           {(['past', 'upcoming'] as const).map((candidate) => (
             <button
               key={candidate}
@@ -127,7 +127,7 @@ export function HistoryView({
               role="tab"
               aria-selected={when === candidate}
               onClick={() => switchWhen(candidate)}
-              className={`min-h-9 rounded-full px-3.5 text-sm font-medium ${when === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
+              className={`${segOption(when === candidate)} pointer-coarse:min-h-8`}
             >
               {candidate === 'past' ? 'Past' : 'Upcoming'}
             </button>
@@ -189,7 +189,7 @@ export function HistoryView({
                 type="button"
                 aria-pressed={status === key}
                 onClick={() => setStatus((current) => (current === key ? '' : key))}
-                className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-medium ${tone} ${status === key ? 'ring-2 ring-[var(--teal)] ring-offset-1' : ''}`}
+                className={`inline-flex min-h-[26px] shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs ${tone} ${status === key ? 'font-semibold ring-1 ring-current' : 'font-medium'}`}
               >
                 {label}
               </button>

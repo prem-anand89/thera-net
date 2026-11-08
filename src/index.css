@@ -69,6 +69,8 @@
      screening-concern states, slate = incomplete-note states. */
   --amber: #9c6f1e;
   --amber-light: #f6ecd8;
+  /* Amber text on amber fills (attention pills, due Collect): 5.3:1 on --amber-light, where --amber is 3.8:1. */
+  --amber-strong: #80591a;
   --slate: #55636e;
   --slate-light: #e9edf0;
   /* Stat icon hues only (Workspace stat badges) — never for state. */

@@ -473,7 +473,7 @@ export function ServiceRows({
                   Use a different service
                 </button>
                 {packageExpiryState(row.continuation.expiresOn, visitDate) === 'expired' && (
-                  <span className="w-full text-[var(--amber)]">This package expired on {formatExpiryDate(row.continuation.expiresOn!)}.</span>
+                  <span className="w-full text-[var(--amber-strong)]">This package expired on {formatExpiryDate(row.continuation.expiresOn!)}.</span>
                 )}
               </div>
             )}
@@ -492,7 +492,7 @@ export function ServiceRows({
             )}
             {openSame && !newPackageOk.has(row.key) && (
               // The money guard, kept to one quiet line: this row sells a NEW package while the same one still has a session left.
-              <p role="alert" className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-[var(--amber)]">
+              <p role="alert" className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-[var(--amber-strong)]">
                 <span>
                   {who} still has {sessionsLeft(openSame)} left on this package. This row starts a new one.
                 </span>

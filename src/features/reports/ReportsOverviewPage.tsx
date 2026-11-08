@@ -12,7 +12,7 @@ import {
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, th, td, tdNum, thNum } from '@/components/ui';
+import { SectionCard, th, td, tdNum, thNum, segOption, segTrack, filterChip } from '@/components/ui';
 import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
@@ -526,7 +526,7 @@ export function ReportsOverviewPage() {
           640px up two comfortable rows of 3 in the meantime. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Compare</span>
-        <div className="flex flex-wrap gap-1.5">
+        <div className={segTrack} role="group" aria-label="Compare">
           {([
             { key: 'standard', label: 'Standard' },
             { key: 'pacing', label: 'Pacing' },
@@ -535,13 +535,9 @@ export function ReportsOverviewPage() {
             <button
               key={opt.key}
               type="button"
+              aria-pressed={kpiMode === opt.key}
               onClick={() => setKpiMode(opt.key)}
-              className="rounded-full border px-3 py-1 text-xs font-medium"
-              style={{
-                background: kpiMode === opt.key ? 'var(--teal-light)' : 'var(--paper)',
-                borderColor: kpiMode === opt.key ? 'transparent' : 'var(--border)',
-                color: kpiMode === opt.key ? 'var(--teal)' : 'var(--muted)',
-              }}
+              className={segOption(kpiMode === opt.key)}
             >
               {opt.label}
             </button>
@@ -627,13 +623,9 @@ export function ReportsOverviewPage() {
             <button
               key={key}
               type="button"
+              aria-current={activeSection === key ? 'true' : undefined}
               onClick={() => jumpToSection(key)}
-              className="flex shrink-0 items-center rounded-full border px-3 py-1.5 text-xs font-medium"
-              style={{
-                background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
-                borderColor: activeSection === key ? 'transparent' : 'var(--border)',
-                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-              }}
+              className={`shrink-0 ${filterChip(activeSection === key)}`}
             >
               {label}
             </button>

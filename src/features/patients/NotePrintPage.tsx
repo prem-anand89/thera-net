@@ -201,7 +201,7 @@ export function NoteContent({
               )}
               {yellowFlagsPresent.length > 0 && (
                 <p className="text-sm">
-                  <span className="font-semibold text-[var(--amber)]">Yellow flags: </span>
+                  <span className="font-semibold text-[var(--amber-strong)]">Yellow flags: </span>
                   <span className="text-[var(--ink)]">{yellowFlagsPresent.join(', ')}</span>
                 </p>
               )}

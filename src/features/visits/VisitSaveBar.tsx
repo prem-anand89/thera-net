@@ -110,7 +110,7 @@ export function VisitSaveBar({
                     isFree
                       ? 'border border-[var(--teal)]/30 bg-[var(--teal-light)] text-[var(--teal-strong)]'
                       : payment.kind === 'later'
-                        ? 'border border-[var(--amber)]/30 bg-[var(--amber-light)] text-[var(--amber)] hover:bg-[var(--amber-light)]/80'
+                        ? 'border border-[var(--amber)]/30 bg-[var(--amber-light)] text-[var(--amber-strong)] hover:bg-[var(--amber-light)]/80'
                         : 'border border-[var(--teal)]/30 bg-[var(--teal-light)] text-[var(--teal-strong)] hover:bg-[var(--teal-light)]/80'
                   } ${!isFree && onQuickChangePayment ? 'cursor-pointer' : 'cursor-default'}`}
                   title={!isFree && onQuickChangePayment ? 'Click to quick-switch payment method' : undefined}

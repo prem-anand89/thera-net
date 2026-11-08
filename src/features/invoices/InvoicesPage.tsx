@@ -7,14 +7,14 @@ import { repos, paymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatAmount } from '@/domain/money';
 import { formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
-import { type Invoice } from '@/domain/types';
+import { type Invoice, type PaymentStatus } from '@/domain/types';
 
 const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 import { DatePresetBar, type DatePreset } from '@/components/DatePresetBar';
 import { remindToPay } from './remindToPay';
-import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
+import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard, KebabMenu, menuItem, pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -127,6 +127,61 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
     if (!remindToPay({ clinic, invoice: inv, remainingPaise, phone })) {
       setError('Patient has no phone number on file');
     }
+  }
+
+  /**
+   * A bill's actions, the same on the phone card and in the table: Take payment (the main one), Send reminder and
+   * Print as compact pills, and the rare "Mark outstanding" in the row's ⋮ menu instead of a fourth pill.
+   */
+  function invoiceActions(inv: Invoice, status: PaymentStatus, isSuperseded: boolean, remainingPaise: number) {
+    const open = !isSuperseded && status === 'outstanding';
+    const canUndoPaid = canMarkOutstanding(status, paidByInvoiceId.get(inv.id) ?? 0);
+    return (
+      <>
+        {open && sampleVisitIdByInvoiceId.has(inv.id) && (
+          <button type="button" className={pillSmPrimary} disabled={busy} onClick={() => setTakingPayment(inv)}>
+            Take payment
+          </button>
+        )}
+        {open && !sampleVisitIdByInvoiceId.has(inv.id) && (
+          <span className="text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
+            Visit removed — void to clear
+          </span>
+        )}
+        {open && (
+          <button type="button" className={pillSmAccent} onClick={() => sendReminder(inv, remainingPaise)}>
+            Send reminder
+          </button>
+        )}
+        <Link
+          to="/invoices/$invoiceId/print"
+          params={{ invoiceId: inv.id }}
+          search={{ from: '/ledger', tab: 'invoices' }}
+          className={pillSmNeutral}
+        >
+          Print
+        </Link>
+        {/* Paying goes through Take payment (amount + method, so the cash reaches the Daybook). Only an invoice
+            flagged paid with no payment behind it can be flipped back. */}
+        {canUndoPaid && (
+          <KebabMenu ariaLabel={`More for ${inv.invoiceNo}`}>
+            {(close) => (
+              <button
+                type="button"
+                className={menuItem}
+                disabled={busy}
+                onClick={() => {
+                  close();
+                  void markOutstanding(inv.id);
+                }}
+              >
+                Mark outstanding
+              </button>
+            )}
+          </KebabMenu>
+        )}
+      </>
+    );
   }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
@@ -429,52 +484,8 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                       </span>
                       <Pill tone={display.tone}>{display.label}</Pill>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {!isSuperseded && status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={busy}
-                          onClick={() => setTakingPayment(inv)}
-                        >
-                          Take payment
-                        </button>
-                      )}
-                      {!isSuperseded && status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
-                        <span className="text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
-                          Visit removed — void to clear
-                        </span>
-                      )}
-                      {!isSuperseded && status === 'outstanding' && (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                          onClick={() => sendReminder(inv, remainingPaise)}
-                        >
-                          Send WhatsApp reminder
-                        </button>
-                      )}
-                      {/* Paying goes through Take payment (amount + method, so the
-                          cash reaches the Daybook). Only an invoice flagged paid with
-                          no payment behind it can be flipped back. */}
-                      {canMarkOutstanding(status, paidByInvoiceId.get(inv.id) ?? 0) && (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={busy}
-                          onClick={() => void markOutstanding(inv.id)}
-                        >
-                          Mark outstanding
-                        </button>
-                      )}
-                      <Link
-                        to="/invoices/$invoiceId/print"
-                        params={{ invoiceId: inv.id }}
-                        search={{ from: '/ledger', tab: 'invoices' }}
-                        className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-                      >
-                        Print
-                      </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {invoiceActions(inv, status, isSuperseded, remainingPaise)}
                     </div>
                   </div>
                   {isPartial && (
@@ -489,7 +500,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
           </div>
 
           <div className="hidden tab:block overflow-x-auto">
-            <table className="w-full min-w-[900px] table-fixed text-sm">
+            <table className="w-full min-w-[980px] table-fixed text-sm">
               <colgroup>
                 <col className="w-32" />
                 <col className="w-24" />
@@ -498,7 +509,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                 <col className="w-28" />
                 <col className="w-24" />
                 <col className="w-36" />
-                <col className="w-52" />
+                <col className="w-72" />
               </colgroup>
               <thead>
                 <tr className="border-b border-[var(--border)]">
@@ -535,50 +546,11 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                             {formatAmount(remainingPaise)} due
                           </div>
                         )}
-                        {!isSuperseded && status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
-                          <button
-                            type="button"
-                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => setTakingPayment(inv)}
-                            disabled={busy}
-                          >
-                            Take payment
-                          </button>
-                        )}
-                        {!isSuperseded && status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
-                          <span className="ml-2 text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
-                            Visit removed — void to clear
-                          </span>
-                        )}
-                        {!isSuperseded && status === 'outstanding' && (
-                          <button
-                            type="button"
-                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => sendReminder(inv, remainingPaise)}
-                          >
-                            Send WhatsApp reminder
-                          </button>
-                        )}
-                        {canMarkOutstanding(status, paidByInvoiceId.get(inv.id) ?? 0) && (
-                          <button
-                            type="button"
-                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => void markOutstanding(inv.id)}
-                            disabled={busy}
-                          >
-                            Mark outstanding
-                          </button>
-                        )}
                       </td>
-                      <td className={`${td} text-right`}>
-                        <Link
-                          to="/invoices/$invoiceId/print"
-                          params={{ invoiceId: inv.id }}
-                          search={{ from: '/ledger', tab: 'invoices' }}
-                          className="font-medium text-[var(--teal)] hover:underline"
-                        >
-                          Print
-                        </Link>
+                      <td className={td}>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {invoiceActions(inv, status, isSuperseded, remainingPaise)}
+                        </div>
                       </td>
                     </tr>
                   );

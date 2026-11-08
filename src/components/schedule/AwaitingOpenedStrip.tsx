@@ -1,3 +1,4 @@
+import { pillSmPrimary } from '@/components/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { matchingWaitlistEntries, type WaitlistOpening } from '@/domain/waitlistMatch';
@@ -71,7 +72,7 @@ export function AwaitingOpenedStrip({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="min-h-9 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+          className={pillSmPrimary}
           onClick={() => {
             onBook(first);
             onDismiss();

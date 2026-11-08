@@ -5,7 +5,7 @@ export type LoadSummary = { text: string; ratio: number | null; tone?: DayLoadTo
 
 const CAPTION: Record<DayLoadTone, string> = {
   normal: 'text-[var(--muted)]',
-  busy: 'font-medium text-[var(--amber)]',
+  busy: 'font-medium text-[var(--amber-strong)]',
   full: 'font-medium text-[var(--rust)]',
   off: 'text-[var(--muted)]',
   done: 'text-[var(--muted)]',

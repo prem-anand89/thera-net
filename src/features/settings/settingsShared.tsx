@@ -156,7 +156,7 @@ export function SectionSaveBar({
       <div className="flex items-center gap-2">
         <span
           role="status"
-          className={`min-w-0 flex-1 truncate text-sm ${dirty && !busy ? 'text-[var(--amber)]' : saved && !dirty ? 'text-[var(--moss)]' : 'text-[var(--muted)]'}`}
+          className={`min-w-0 flex-1 truncate text-sm ${dirty && !busy ? 'text-[var(--amber-strong)]' : saved && !dirty ? 'text-[var(--moss)]' : 'text-[var(--muted)]'}`}
         >
           {status}
         </span>

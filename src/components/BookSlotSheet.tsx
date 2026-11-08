@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
-import { ErrorNote, Field, inputCls, btnPrimary, ConfirmDialog } from '@/components/ui';
+import { ErrorNote, Field, inputCls, btnPrimary, ConfirmDialog, pillSmAccent } from '@/components/ui';
 import { PhoneField } from '@/components/PhoneField';
 import { SimilarPatients } from '@/components/SimilarPatients';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
@@ -845,7 +845,7 @@ export function BookSlotSheet({
           <section aria-labelledby="book-time">
             <div className="mb-2 flex items-center justify-between">
               <h3 id="book-time" className={sectionTitle}>Time</h3>
-              <button type="button" className="flex min-h-9 items-center gap-1 rounded-full bg-[var(--teal-light)] px-3 text-xs font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)] hover:text-white" onClick={pickFirstAvailable}>
+              <button type="button" className={pillSmAccent} onClick={pickFirstAvailable}>
                 First available
               </button>
             </div>

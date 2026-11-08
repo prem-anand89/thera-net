@@ -36,10 +36,10 @@ import {
   menuItem,
   TherapistPill,
   chipSelectChevron,
-  pillPrimary,
-  pillAttention,
-  pillAccent,
-  pillNeutral,
+  pillSmPrimary,
+  pillSmAttention,
+  pillSmAccent,
+  pillSmNeutral,
 } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
@@ -644,14 +644,14 @@ export function PatientsList() {
                           <Link
                             to="/visits/new"
                             search={{ patientId: p.id, from: '/patients' }}
-                            className={pillPrimary}
+                            className={pillSmPrimary}
                           >
                             + Visit
                           </Link>
                           {canBook && (
                             <button
                               type="button"
-                              className={pillAccent}
+                              className={pillSmAccent}
                               onClick={() => setBooking(p)}
                             >
                               <IconCalendar className="h-3.5 w-3.5" />
@@ -672,7 +672,7 @@ export function PatientsList() {
                             isStale(stats.lastVisitOn) && (
                               <button
                                 type="button"
-                                className={pillNeutral}
+                                className={pillSmNeutral}
                                 onClick={() => {
                                   void feedbackService
                                     .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
@@ -919,7 +919,7 @@ function PatientCard({
           {onBook && (
             <button
               type="button"
-              className={pillAccent}
+              className={pillSmAccent}
               onClick={onBook}
             >
               <IconCalendar className="h-3.5 w-3.5" />
@@ -929,7 +929,7 @@ function PatientCard({
           {onRemind && (
             <button
               type="button"
-              className={pillNeutral}
+              className={pillSmNeutral}
               onClick={onRemind}
             >
               Remind
@@ -937,11 +937,11 @@ function PatientCard({
           )}
           {nextAction === 'invoice' ? (
             // Opens this patient's visits in the Ledger, where the Invoice action lives.
-            <Link to="/ledger" search={{ tab: 'visits', patientId: p.id }} className={pillAttention}>
+            <Link to="/ledger" search={{ tab: 'visits', patientId: p.id }} className={pillSmAttention}>
               Needs invoice
             </Link>
           ) : (
-            <Link to="/visits/new" search={{ patientId: p.id, from: '/patients' }} className={pillPrimary}>
+            <Link to="/visits/new" search={{ patientId: p.id, from: '/patients' }} className={pillSmPrimary}>
               + Visit
             </Link>
           )}

@@ -9,7 +9,7 @@ import { notify } from '@/lib/notify';
 import { toFriendlyMessage } from '@/lib/errors';
 import { bookingService, patientService } from '@/services';
 import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
-import { TherapistPill } from '@/components/ui';
+import { TherapistPill, pillSmAccent, pillSmNeutral, pillSmPrimary, filterChip, ChipCount } from '@/components/ui';
 import type { FollowUpData } from './useFollowUpData';
 
 type Filter = 'due' | 'missed' | 'no_shows';
@@ -96,7 +96,7 @@ export function ReviewsPanel({
         type="button"
         disabled={blocked}
         title={patient.doNotMessage ? 'This patient asked not to be messaged' : !patient.phone ? 'No phone number on file' : undefined}
-        className="min-h-9 rounded-full border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-40"
+        className={pillSmAccent}
         onClick={() => message(kind, patient, therapistId, date)}
       >
         {sent ? 'Messaged ✓' : 'Message patient'}
@@ -131,16 +131,16 @@ export function ReviewsPanel({
           {kind === 'missed' ? `Missed · was due ${formatDateDMY(row.dueOn)}` : `${dueLine(row)} · ${formatDateDMY(row.dueOn)}`}
         </p>
         {p.followUpNote && <p className="mt-0.5 text-xs text-[var(--ink)]">{p.followUpNote}</p>}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {messageButton(kind, p, therapistId, row.dueOn)}
           <button
             type="button"
-            className="min-h-9 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+            className={pillSmPrimary}
             onClick={() => onBook({ patientId: p.id, therapistId, date: row.dueOn >= today ? row.dueOn : today })}
           >
             Book
           </button>
-          <button type="button" className="min-h-9 px-2 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void dismiss(p.id)}>
+          <button type="button" className={pillSmNeutral} onClick={() => void dismiss(p.id)}>
             Dismiss
           </button>
         </div>
@@ -166,12 +166,12 @@ export function ReviewsPanel({
         <p className="mt-0.5 text-xs text-[var(--muted)]">
           No-show · {formatDateDMY(day)}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {messageButton('no_show', patient, a.therapistId, day)}
           {row.patient && (
             <button
               type="button"
-              className="min-h-9 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+              className={pillSmPrimary}
               onClick={() => onBook({ patientId: row.patient!.id, therapistId: a.therapistId, date: today })}
             >
               Book
@@ -203,14 +203,10 @@ export function ReviewsPanel({
             type="button"
             aria-pressed={filter === chip.key}
             onClick={() => setFilter(chip.key)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              filter === chip.key
-                ? 'border-transparent bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
-            }`}
+            className={filterChip(filter === chip.key)}
           >
             {chip.label}
-            {chip.count ? ` (${chip.count})` : ''}
+            {chip.count ? <ChipCount n={chip.count} /> : null}
           </button>
         ))}
       </div>

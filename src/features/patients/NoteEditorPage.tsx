@@ -950,7 +950,7 @@ export function NoteEditorPage() {
               <span className="text-xs text-[var(--muted)]">Saving…</span>
             )}
             {!readOnly && saveIndicator === 'unsaved' && (
-              <span className="text-xs text-[var(--amber)]">Unsaved changes</span>
+              <span className="text-xs text-[var(--amber-strong)]">Unsaved changes</span>
             )}
             {!readOnly && saveIndicator === 'saved' && (
               <span className="text-xs text-[var(--muted)]">Saved</span>

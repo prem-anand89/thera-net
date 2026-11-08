@@ -1,3 +1,4 @@
+import { pillSmPrimary, pillSmNeutral } from '@/components/ui';
 import type { AppointmentRequest, UUID } from '@/domain/types';
 import { requestWants, timeAgo } from './RequestsInbox';
 
@@ -52,10 +53,10 @@ export function PendingRequestsBar({
         )}
       </span>
       <span className="flex items-center gap-2">
-        <button type="button" className="min-h-8 rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => onConfirm(request)}>
+        <button type="button" className={pillSmPrimary} onClick={() => onConfirm(request)}>
           Book
         </button>
-        <button type="button" className="min-h-8 px-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => onDecline(request)}>
+        <button type="button" className={pillSmNeutral} onClick={() => onDecline(request)}>
           Dismiss
         </button>
         <button type="button" className="min-h-8 px-1 text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => onFocus(request)}>

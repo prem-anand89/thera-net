@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { type Clinic, type UUID } from '@/domain/types';
-import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
+import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip, pillSmAccent } from '@/components/ui';
 import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
 
 type PatientCommsFields = Pick<Clinic, 'bookingSlug' | 'onlineBookingEnabled'>;
@@ -92,7 +92,7 @@ export function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirty
                   <span className="min-w-0 break-all font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
                   <button
                     type="button"
-                    className="whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                    className={pillSmAccent}
                     onClick={() => void copyBookingUrl()}
                   >
                     {slugCopied ? 'Copied!' : 'Copy link'}

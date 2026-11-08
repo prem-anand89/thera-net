@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pill, PackageThread, TherapistPill } from '@/components/ui';
+import { Pill, PackageThread, TherapistPill, pillSmDue, pillSmOverdue } from '@/components/ui';
 import { formatAmount, type Paise } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { toLocalDateStr } from '@/domain/schedule';
@@ -239,9 +239,7 @@ export function SharedVisitCard({
         {showCollect ? (
           <button
             type="button"
-            className={`inline-flex min-h-8 items-center rounded-full px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 ${
-              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
-            }`}
+            className={badge.kind === 'overdue' ? pillSmOverdue : pillSmDue}
             onClick={onTakePayment}
             title={badge.title}
           >

@@ -39,7 +39,7 @@ export function PatientFollowUpLine({ patient }: { patient: Patient }) {
   const today = toLocalDateStr(new Date());
   const { state, daysFromDue } = followUpState(patient, visits ?? [], appointments ?? [], today);
   const tone =
-    state === 'due' || state === 'overdue' ? 'text-[var(--rust)]' : state === 'missed' || state === 'expired' ? 'text-[var(--amber)]' : 'text-[var(--ink)]';
+    state === 'due' || state === 'overdue' ? 'text-[var(--rust)]' : state === 'missed' || state === 'expired' ? 'text-[var(--amber-strong)]' : 'text-[var(--ink)]';
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm" data-testid="patient-follow-up">

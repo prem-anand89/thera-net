@@ -229,19 +229,19 @@ export function VisitLoggedCard({
         {/* Package / Payment Pill with Session Progress Dots */}
         <div>
           {paymentDue > 0 ? (
-            <span className="inline-flex items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] shadow-2xs">
+            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)]">
               Payment due · {formatAmount(paymentDue)}
               {receivedPaise > 0 ? ` (paid ${formatAmount(receivedPaise)})` : ''}
             </span>
           ) : justSaved.alreadyCollected || receivedPaise > 0 ? (
             <span
-              className="inline-flex items-center rounded-full border border-[var(--teal)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)] shadow-2xs"
+              className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--moss-light)] px-2.5 py-1 text-xs font-medium text-[var(--moss-strong)]"
               data-testid="collected-line"
             >
               ✓ {formatAmount(receivedPaise > 0 ? receivedPaise : justSaved.billPaise)} collected{justSaved.alreadyCollected && justSaved.collectedLabel ? ` · ${justSaved.collectedLabel}` : ''}
             </span>
           ) : justSaved.isPackage && justSaved.packageSessionNumber && justSaved.packageTotalSessions ? (
-            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)] shadow-2xs">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--slate-light)] px-2.5 py-1 text-xs font-medium text-[var(--ink)]">
               {justSaved.packageTotalSessions <= 8 && (
                 <span className="flex items-center gap-1" aria-hidden="true">
                   {Array.from({ length: justSaved.packageTotalSessions }).map((_, i) => (
@@ -260,7 +260,7 @@ export function VisitLoggedCard({
               </span>
             </span>
           ) : (
-            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] shadow-2xs">
+            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--slate-light)] px-2.5 py-1 text-xs font-medium text-[var(--muted)]">
               {justSaved.billPaise === 0
                 ? justSaved.isPackage
                   ? `Package session · ${currencySymbol()}0`

@@ -18,7 +18,7 @@ import { formatDateDM } from '@/domain/fiscalYear';
 import { toLocalDateStr } from '@/domain/schedule';
 import { type Clinic, type Therapist, type ShiftTemplate, type TherapistShiftAssignment } from '@/domain/types';
 import { memberOnboardingStatus, MEMBER_ONBOARDING_LABELS, type MemberOnboardingStatus } from '@/domain/memberOnboarding';
-import { Field, inputCls, btnPrimary, ErrorNote, SectionCard, ConfirmDialog, InfoTip } from '@/components/ui';
+import { Field, inputCls, btnPrimary, ErrorNote, SectionCard, ConfirmDialog, InfoTip, filterChip } from '@/components/ui';
 import { describeSchedule } from './shiftUtils';
 import { countTherapistLinkedRecords } from './therapistLinks';
 import { ShiftSheet } from './ShiftSheet';
@@ -926,7 +926,7 @@ export function AddTeamMemberForm({
           </p>
         )}
         {!needsLogin && rosterLocked && (
-          <p role="status" className="-mt-1 ml-6 text-xs text-[var(--amber)]" data-testid="roster-locked">
+          <p role="status" className="-mt-1 ml-6 text-xs text-[var(--amber-strong)]" data-testid="roster-locked">
             {rosterHint}
           </p>
         )}
@@ -1228,7 +1228,7 @@ export function Therapists() {
   return (
     <SectionCard id="settings-card-team-therapists" title="Team members">
       {rosterOver && rosterLimit !== null && (
-        <p role="alert" className="mb-4 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-sm text-[var(--amber)]" data-testid="roster-over-limit">
+        <p role="alert" className="mb-4 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-sm text-[var(--amber-strong)]" data-testid="roster-over-limit">
           Your plan includes {rosterLimit} team member{rosterLimit === 1 ? '' : 's'} without a login; {rosterUsed(rawTherapists ?? [])} are active. Choose who stays active
           {nextForRoster ? `, or upgrade to ${PLAN_TIER_LABELS[nextForRoster]} (${TIER_LIMITS[nextForRoster].rosterWithoutLogin})` : ''}. Visits and existing staff keep working.
         </p>
@@ -1239,13 +1239,9 @@ export function Therapists() {
             <button
               key={f}
               type="button"
+              aria-pressed={filter === f}
               onClick={() => setFilter(f)}
-              className="rounded-full border px-3 py-1 text-xs font-semibold capitalize"
-              style={{
-                borderColor: filter === f ? 'var(--teal)' : 'var(--border)',
-                background: filter === f ? 'var(--teal-light)' : 'var(--surface)',
-                color: filter === f ? 'var(--teal)' : 'var(--muted)',
-              }}
+              className={`capitalize ${filterChip(filter === f)}`}
             >
               {f === 'bookable' ? 'Treats patients' : f}
               {f === 'unlinked' && unlinkedCount > 0 && (

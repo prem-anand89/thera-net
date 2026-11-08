@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Pill } from '@/components/ui';
+import { Pill, pillSmDue, pillSmOverdue } from '@/components/ui';
 import { formatAmount } from '@/domain/money';
 import type { PaymentBadgeKind } from '@/domain/paymentState';
 import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
@@ -99,7 +99,7 @@ export function PaymentStatusDisplay({
         {showCollect ? (
           <button
             type="button"
-            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'}`}
+            className={badge.kind === 'overdue' ? pillSmOverdue : pillSmDue}
             onClick={onTakePayment}
             title={badge.title}
           >

@@ -30,9 +30,58 @@ export const btnSecondary =
 const pillBase =
   'inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50';
 export const pillPrimary = `${pillBase} bg-[var(--teal)] text-white hover:bg-[var(--teal-strong)]`;
-export const pillAttention = `${pillBase} border border-[var(--amber)] bg-[var(--amber-light)] text-[var(--amber)] hover:bg-[var(--amber)] hover:text-white`;
+export const pillAttention = `${pillBase} border border-[var(--amber)] bg-[var(--amber-light)] text-[var(--amber-strong)] hover:bg-[var(--amber)] hover:text-white`;
 export const pillAccent = `${pillBase} border border-[var(--teal)] bg-[var(--surface)] text-[var(--teal)] hover:bg-[var(--teal-light)]`;
 export const pillNeutral = `${pillBase} border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]`;
+/** Compact versions of the same ladder (24px) — the one size for actions on a row (a visit, a bill, a request, a
+ *  follow-up). The full-size pills above stay for actions beside a card title. On a touch screen an invisible band
+ *  (4px above and below, 2px at the sides) makes each one 32px to tap without growing on screen; with the usual 8px gap
+ *  between pills the bands never overlap. Shape: pills are a row's actions, rounded rectangles (`btnPrimary`) the page's. */
+const pillSmBase =
+  "relative inline-flex min-h-6 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 pointer-coarse:before:absolute pointer-coarse:before:-inset-x-0.5 pointer-coarse:before:-inset-y-1 pointer-coarse:before:content-['']";
+export const pillSmPrimary = `${pillSmBase} bg-[var(--teal)] text-white hover:bg-[var(--teal-strong)]`;
+export const pillSmAttention = `${pillSmBase} border border-[var(--amber)] bg-[var(--amber-light)] text-[var(--amber-strong)] hover:bg-[var(--amber)] hover:text-white`;
+export const pillSmAccent = `${pillSmBase} border border-[var(--teal)] bg-[var(--surface)] text-[var(--teal)] hover:bg-[var(--teal-light)]`;
+export const pillSmNeutral = `${pillSmBase} border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]`;
+export const pillSmDanger = `${pillSmBase} border border-[var(--rust)] bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust)] hover:text-white`;
+/** Collect on a visit that still owes money: amber while due, rust once overdue. */
+export const pillSmDue = `${pillSmBase} bg-[var(--amber-strong)] text-white hover:bg-[var(--amber)]`;
+export const pillSmOverdue = `${pillSmBase} bg-[var(--rust)] text-white hover:opacity-90`;
+
+/**
+ * Choices. Three looks, each used for one kind of choice; the selected one never relies on colour alone (a raised
+ * tile, a border or a tick, plus heavier text). Always pair with `aria-pressed` (or `role="tab"` + `aria-selected`).
+ * - `segTrack` + `segOption`: switch a view, one of 2–4 always on (All | Mine, Past | Upcoming).
+ * - `filterChip`: narrow a list (Due / Missed / No-shows) or pick values; only the chosen chip is filled. For a
+ *   multi-pick, put "✓ " before the label of each chosen chip.
+ * - Status-coloured chips (the Schedule status filter) keep their own colour and get `ring-1 ring-current` when chosen.
+ * Put a count inside the chip with `ChipCount`, not as "(3)".
+ */
+export const segTrack = 'inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5 text-xs';
+export function segOption(active: boolean): string {
+  return `inline-flex min-h-6 items-center rounded-md px-3 py-0.5 text-xs transition-colors ${
+    active
+      ? 'bg-[var(--surface)] font-semibold text-[var(--ink)] shadow-2xs ring-1 ring-[var(--border)]'
+      : 'font-medium text-[var(--muted)] hover:text-[var(--ink)]'
+  }`;
+}
+export function filterChip(active: boolean): string {
+  return `inline-flex min-h-[26px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+    active
+      ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+      : 'border-[var(--border)] bg-transparent font-medium text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
+  }`;
+}
+export function ChipCount({ n }: { n: number }) {
+  // The space before keeps the accessible name readable ("Due 3", not "Due3"); a flex chip drops it visually.
+  return (
+    <>
+      {' '}
+      <span className="font-num tabular-nums opacity-80">{n}</span>
+    </>
+  );
+}
+
 export const pillDanger =
   'inline-flex min-h-9 sm:min-h-8 items-center gap-1.5 rounded-full border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-1.5 text-xs font-medium text-[var(--rust)] transition-colors hover:bg-[var(--rust)] hover:text-white disabled:opacity-50';
 /** A row inside a `KebabMenu` dropdown — pair with `menuItemDestructive` for Delete-style actions. */
@@ -297,7 +346,7 @@ const PILL_TONES = {
   // deliberate, coherent fix, not incidental: it now matches how the rest
   // of the app already uses these two colors (screening-banner/flag-pill's
   // amber = caution vs. rust = alert distinction).
-  amber: 'border border-[var(--border)] bg-[var(--amber-light)] text-[var(--amber)]',
+  amber: 'border border-[var(--border)] bg-[var(--amber-light)] text-[var(--amber-strong)]',
   rust: 'border border-[var(--border)] bg-[var(--rust-light)] text-[var(--rust)]',
   // `slate-light` + border — not `paper` fill, which vanished on striped visit rows.
   slate:

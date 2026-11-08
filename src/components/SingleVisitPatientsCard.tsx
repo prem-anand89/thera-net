@@ -5,7 +5,7 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { feedbackService } from '@/services';
 import type { NoReturnReasonItem } from '@/domain/types';
 import type { SingleVisitPatientRow } from '@/services/dashboardService';
-import { SectionCard, Pill } from '@/components/ui';
+import { SectionCard, Pill, pillSmAccent, pillSmNeutral, filterChip, ChipCount } from '@/components/ui';
 import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
 
 type TriageFilter = 'all' | 'needs_review' | 'logged' | 'closed';
@@ -128,7 +128,7 @@ export function SingleVisitPatientsCard({
     }
     if (days <= 60) {
       return (
-        <span className="font-num rounded-md bg-[var(--amber-light)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--amber)]">
+        <span className="font-num rounded-md bg-[var(--amber-light)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--amber-strong)]">
           {days}d ago
         </span>
       );
@@ -187,10 +187,10 @@ export function SingleVisitPatientsCard({
                     setFilter('logged');
                     setIsExpanded(true);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[#d97706]/30 bg-[var(--amber-light)] px-3 py-1 text-xs font-semibold text-[#b45309] shadow-2xs hover:bg-[#d97706] hover:text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--amber)]/30 bg-[var(--amber-light)] px-3 py-1 text-xs font-semibold text-[var(--amber-strong)] shadow-2xs hover:bg-[var(--amber)] hover:text-white transition-colors cursor-pointer"
                   title="Filter to patients with reason logged"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#d97706]" aria-hidden="true" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--amber)]" aria-hidden="true" />
                   <span>{counts.logged} Reason logged</span>
                 </button>
 
@@ -322,46 +322,25 @@ export function SingleVisitPatientsCard({
         <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           {/* Triage filter pills */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setFilter('all')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'all'
-                  ? 'bg-[var(--ink)] text-white shadow-xs'
-                  : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--paper)]'
-                }`}
-            >
-              All ({counts.all})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter('needs_review')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'needs_review'
-                  ? 'bg-[var(--rust)] text-white shadow-xs'
-                  : 'bg-[var(--surface)] text-[var(--rust)] border border-[var(--rust)]/30 hover:bg-[var(--rust-light)]'
-                }`}
-            >
-              Needs review ({counts.needsReview})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter('logged')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'logged'
-                  ? 'bg-[#d97706] text-white shadow-xs'
-                  : 'bg-[var(--surface)] text-[#d97706] border border-[#d97706]/30 hover:bg-[var(--amber-light)]'
-                }`}
-            >
-              Reason logged ({counts.logged})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter('closed')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'closed'
-                  ? 'bg-[var(--teal)] text-white shadow-xs'
-                  : 'bg-[var(--surface)] text-[var(--teal-strong)] border border-[var(--teal)]/30 hover:bg-[var(--teal-light)]'
-                }`}
-            >
-              Closed / Resolved ({counts.closed})
-            </button>
+            {(
+              [
+                ['all', 'All', counts.all],
+                ['needs_review', 'Needs review', counts.needsReview],
+                ['logged', 'Reason logged', counts.logged],
+                ['closed', 'Closed / Resolved', counts.closed],
+              ] as const
+            ).map(([key, label, n]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+                className={filterChip(filter === key)}
+              >
+                {label}
+                <ChipCount n={n} />
+              </button>
+            ))}
           </div>
 
           {/* Search box */}
@@ -473,7 +452,7 @@ export function SingleVisitPatientsCard({
                           className={`rounded-full border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors focus:outline-hidden ${p.noReturnReasonName
                               ? p.noReturnReasonClosed
                                 ? 'bg-[var(--moss-light)] text-[var(--moss-strong)] border-transparent'
-                                : 'bg-[var(--amber-light)] text-[#b45309] border-transparent'
+                                : 'bg-[var(--amber-light)] text-[var(--amber-strong)] border-transparent'
                               : 'bg-[var(--surface)] text-[var(--muted)] border-dashed border-[var(--border)] hover:border-[var(--teal)]'
                             }`}
                         >
@@ -494,7 +473,7 @@ export function SingleVisitPatientsCard({
                           {p.phone ? (
                             <a
                               href={`tel:${p.phone}`}
-                              className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--teal)] hover:bg-[var(--paper)] transition-colors"
+                              className={pillSmNeutral}
                             >
                               📞 {p.phone}
                             </a>
@@ -505,7 +484,7 @@ export function SingleVisitPatientsCard({
                           {!p.doNotMessage && p.phone && (
                             <button
                               type="button"
-                              className="rounded-full bg-[var(--teal-light)] px-2.5 py-1 text-xs font-semibold text-[var(--teal-strong)] hover:bg-[var(--teal)] hover:text-white transition-colors"
+                              className={pillSmAccent}
                               onClick={() => {
                                 void feedbackService
                                   .sendReturnReminder(clinicId, p.patientName, p.phone!, clinicName)
@@ -572,7 +551,7 @@ export function SingleVisitPatientsCard({
                           p.noReturnReasonName
                             ? p.noReturnReasonClosed
                               ? 'bg-[var(--moss-light)] text-[var(--moss-strong)] border-[var(--moss)]/30 font-semibold'
-                              : 'bg-[var(--amber-light)] text-[#b45309] border-[var(--amber)]/30 font-semibold'
+                              : 'bg-[var(--amber-light)] text-[var(--amber-strong)] border-[var(--amber)]/30 font-semibold'
                             : 'bg-[var(--paper)] text-[var(--muted)] border-dashed border-[var(--border)] hover:border-[var(--teal)] font-medium'
                         }`}
                       >

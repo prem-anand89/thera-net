@@ -87,3 +87,12 @@ describe('VisitTable bill link', () => {
     expect(screen.queryByText('BM/26-27/0004')).not.toBeInTheDocument();
   });
 });
+
+describe('VisitTable action pills', () => {
+  it('use the compact ladder: feedback is the accent pill (teal outline, about 24px tall)', () => {
+    renderTable([row({ canAskForFeedback: true })]);
+    const pill = screen.getByRole('button', { name: '+ Feedback' });
+    expect(pill.className).toContain('border-[var(--teal)]');
+    expect(pill.className).toContain('min-h-6');
+  });
+});
