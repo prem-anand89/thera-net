@@ -1,5 +1,7 @@
 # Invoice grouping, clinical details and the multi-visit workflow
 
+**Status (2026-11-08):** Built and live in the database (`20261107100000`, `110000`, `120000`) and in the app (`04aef24`, `8bc12f9`, `8bb2f9b`, `907e4a2`). Waiting on the owner's manual check (3 home visits plus a clinic visit become separate rows with place tags; a ₹0 package follow-up cannot be issued; an edited diagnosis shows no mark; front-desk ICD and referring-physician prefill). Then delete this file and its pointer in `~/.claude/plans/calm-nibbling-stroustrup.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax. Tasks run in order; Task 1 needs the live database and is done by Claude (Opus), not by an agent.
 
 **Goal:** Make a bill that groups several visits (home care, packages, several services) correct on the server and in print, with clinical details taken from all the visits billed, and make grouping easy for the people who do it.

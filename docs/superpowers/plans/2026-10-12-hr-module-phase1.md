@@ -1,5 +1,7 @@
 # HR Module Phase 1 Implementation Plan (Gate, Manager Role, Compensation, Expenses, Payroll)
 
+**Status (2026-11-08):** Not started. Part of the Home visits, therapist pay and HR program in `~/.claude/plans/calm-nibbling-stroustrup.md`, which waits for the owner's go-ahead (after the current app issues are fixed).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship an opt-in HR module for a clinic: an admin enables `clinics.hr_enabled`, invites a `manager`, and admin or manager records therapist compensation, enters clinic expenses (with resized receipt photos in a private bucket), and runs monthly payroll as draft -> locked (only an admin finalizes or unlocks, unlock needs a reason and is audited). Therapists see only their own locked payslips.
