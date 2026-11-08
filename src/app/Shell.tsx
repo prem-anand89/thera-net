@@ -55,6 +55,7 @@ import { requestPersistentStorage } from '@/lib/persistStorage';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
 import { ClinicSwitcher } from './ClinicSwitcher';
+import { DepartmentSwitch, DepartmentBand } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 
 
@@ -480,6 +481,7 @@ export function Shell() {
               </nav>
             )}
             <div className="ml-auto flex min-w-0 items-center gap-2 tab:gap-3">
+              <DepartmentSwitch />
               <div className="flex min-w-0 justify-end">
                 <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} isAdmin={role === 'admin'} />
               </div>
@@ -515,6 +517,7 @@ export function Shell() {
               </div>
             </div>
           </div>
+          <DepartmentBand />
         </header>
         <UpdateBanner />
         <SyncStatusBanners />
