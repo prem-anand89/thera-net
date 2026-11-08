@@ -25,12 +25,14 @@ import { ShiftSheet } from './ShiftSheet';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Accent, ACCENT_VARS } from './settingsShared';
 import { isUnlinked } from './teamLinking';
+import { clinicDepartments, DEPARTMENT_LABELS, DEPARTMENT_NAMES, type Department } from '@/domain/departments';
 
 interface ClinicMember {
   userId: string;
   email: string;
   role: string;
   displayName: string | null;
+  departments?: Department[] | null;
   status: MemberOnboardingStatus;
   invitedAt: string | null;
   lastSignInAt: string | null;
@@ -110,13 +112,13 @@ interface TeamPerson {
 
 function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] | null): TeamPerson[] {
   const map = new Map<string, TeamPerson>();
-  
+
   if (members) {
     for (const m of members) {
       map.set(m.userId, { key: m.userId, member: m, therapist: null });
     }
   }
-  
+
   if (therapists) {
     for (const t of therapists) {
       if (t.userId && map.has(t.userId)) {
@@ -131,7 +133,7 @@ function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] |
       }
     }
   }
-  
+
   return Array.from(map.values()).sort((a, b) => {
     const nameA = (a.member?.displayName || a.therapist?.name || a.member?.email || '').toLowerCase();
     const nameB = (b.member?.displayName || b.therapist?.name || b.member?.email || '').toLowerCase();
@@ -196,7 +198,11 @@ export function TeamMemberCard({
 
   const [editing, setEditing] = useState(false);
   const [showHoursFlow, setShowHoursFlow] = useState(false);
-  
+
+  const clinicDepts = clinicDepartments(clinic);
+  const showDepartments = clinicDepts.length > 1;
+  const initialDepts = (member?.departments ?? therapist?.careLocations ?? []) as Department[];
+  const [deptDraft, setDeptDraft] = useState<Department[]>(initialDepts);
   const [nameDraft, setNameDraft] = useState(displayName);
   // The role the admin picked in the form, null until they pick one. Until then the form follows the real role, so a
   // form opened before the member list arrives can never save a guess over someone's actual role.
@@ -241,6 +247,8 @@ export function TeamMemberCard({
     }
     setSaving(true);
     setError(null);
+    const resolvedDept =
+      deptDraft.length === 0 || deptDraft.length === clinicDepts.length ? null : deptDraft;
     // The plan can fill up while this form is open: a box that now shows locked must not still send what was typed.
     const inviteEmail = loginsLocked ? '' : emailDraft.trim();
     try {
@@ -270,6 +278,7 @@ export function TeamMemberCard({
           .from('clinic_members')
           .update({
             display_name: nameDraft.trim() || null,
+            ...(showDepartments ? { departments: resolvedDept } : {}),
             // Only touch role when the admin actually changed it; a stale
             // draft must never silently demote/promote a member.
             ...(rolePicked !== null && rolePicked !== role ? { role: rolePicked } : {}),
@@ -298,6 +307,7 @@ export function TeamMemberCard({
           phone: phoneDraft.trim() || null,
           color: colorDraft.trim() || null,
           publicBookable: shouldBeBookable ? publicBookableDraft : false,
+          ...(showDepartments ? { careLocations: resolvedDept } : {}),
           updatedAt: new Date().toISOString(),
         });
       } else if (shouldBeBookable && member) {
@@ -313,10 +323,11 @@ export function TeamMemberCard({
           color: colorDraft.trim() || nextUnusedColor(others.map((t) => therapistColor(t.id, t.color))),
           registrationNo: regDraft.trim() || null,
           phone: phoneDraft.trim() || null,
+          ...(showDepartments ? { careLocations: resolvedDept } : {}),
           updatedAt: new Date().toISOString(),
         });
       }
-      
+
       setEditing(false);
       onSaved();
     } catch (e) {
@@ -370,11 +381,11 @@ export function TeamMemberCard({
       {/* Header section */}
       <div className="flex items-start gap-3">
         <div className="shrink-0">{renderPhoto('h-10 w-10')}</div>
-        
+
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <h3 className="truncate text-base font-semibold text-[var(--ink)] tracking-tight">{displayName}</h3>
-            
+
             <div className="flex flex-wrap items-center gap-1.5">
               {member && <RolePill role={role} />}
               {member && member.status !== 'active' && <OnboardingBadge member={member} />}
@@ -400,7 +411,7 @@ export function TeamMemberCard({
               )}
             </div>
           </div>
-          
+
           <div className="flex items-start gap-1.5 mt-1.5 text-xs text-[var(--muted)]">
             <div className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${(!therapist || therapist.active) ? 'bg-[var(--moss-strong)]' : 'bg-[var(--muted)]'}`} />
             <span className="leading-tight">
@@ -413,140 +424,141 @@ export function TeamMemberCard({
 
       <div className="space-y-2.5 text-xs text-[var(--ink)] mt-2">
         {member && (
-            <div className="flex items-center gap-2.5">
-                <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <span className="truncate">{member.email}</span>
-              </div>
-            )}
-            
-            {therapist && (
-              <>
-                <div className="flex items-center gap-2.5">
-                  <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                  </svg>
-                  <span className="truncate">
-                    {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
-                  </span>
-                </div>
-                
-                {scheduleDesc && (
-                  <div className="flex items-center gap-2.5" title={scheduleDesc.headline}>
-                    <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="truncate">{scheduleDesc.summary}</span>
-                  </div>
-                )}
-              </>
-            )}
-        </div>
-        
-        <div className="flex-1" />
-
-        {isLastAdmin && (
-          <p className="text-hint text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
+          <div className="flex items-center gap-2.5">
+            <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="truncate">{member.email}</span>
+          </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 pt-3 mt-1 border-t border-[var(--border)]">
+        {therapist && (
+          <>
+            <div className="flex items-center gap-2.5">
+              <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+              <span className="truncate">
+                {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
+              </span>
+            </div>
+
+            {scheduleDesc && (
+              <div className="flex items-center gap-2.5" title={scheduleDesc.headline}>
+                <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="truncate">{scheduleDesc.summary}</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="flex-1" />
+
+      {isLastAdmin && (
+        <p className="text-hint text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3 pt-3 mt-1 border-t border-[var(--border)]">
+        <button
+          type="button"
+          className="text-xs font-medium text-[var(--teal)] hover:underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            setNameDraft(displayName);
+            setRolePicked(null);
+            setRegDraft(therapist?.registrationNo ?? '');
+            setPhoneDraft(therapist?.phone ?? '');
+            setColorDraft(therapist?.color ?? '');
+            setBookableDraft(therapist ? therapist.active !== false : role !== 'front_desk');
+            setPublicBookableDraft(therapist ? therapist.publicBookable !== false : true);
+            setDeptDraft((member?.departments ?? therapist?.careLocations ?? []) as Department[]);
+            setEditing(true);
+          }}
+        >
+          Edit
+        </button>
+
+        {therapist && role !== 'front_desk' && (
           <button
             type="button"
             className="text-xs font-medium text-[var(--teal)] hover:underline"
             onClick={(e) => {
               e.stopPropagation();
-              setNameDraft(displayName);
-              setRolePicked(null);
-              setRegDraft(therapist?.registrationNo ?? '');
-              setPhoneDraft(therapist?.phone ?? '');
-              setColorDraft(therapist?.color ?? '');
-              setBookableDraft(therapist ? therapist.active !== false : role !== 'front_desk');
-              setPublicBookableDraft(therapist ? therapist.publicBookable !== false : true);
-              setEditing(true);
+              setShowHoursFlow(true);
             }}
           >
-            Edit
+            Edit hours
           </button>
-          
-          {therapist && role !== 'front_desk' && (
+        )}
+
+        {member && member.status !== 'active' && (
+          <button
+            type="button"
+            disabled={resending}
+            className="text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={(e) => { e.stopPropagation(); onResend(); }}
+          >
+            {resending ? 'Sending…' : 'Resend invite'}
+          </button>
+        )}
+
+        <div className="ml-auto flex flex-wrap gap-3 items-center justify-end">
+          {therapist && (
             <button
               type="button"
-              className="text-xs font-medium text-[var(--teal)] hover:underline"
+              className={`text-xs font-medium hover:underline ${therapist.active !== false ? 'text-[var(--rust)]' : 'text-[var(--teal)]'}`}
+              onClick={(e) => { e.stopPropagation(); onDeactivate(); }}
+            >
+              {therapist.active !== false ? 'Deactivate' : 'Reactivate'}
+            </button>
+          )}
+
+          {member && (
+            <button
+              type="button"
+              className={`text-xs font-medium hover:underline ${isLastAdmin ? 'text-[var(--muted)] opacity-70' : 'text-[var(--rust)]'}`}
+              disabled={revoking}
               onClick={(e) => {
                 e.stopPropagation();
-                setShowHoursFlow(true);
+                if (isLastAdmin) {
+                  notify.error('This clinic must keep at least one admin — make someone else admin first to unlock this button.');
+                  return;
+                }
+                onRevoke();
               }}
             >
-              Edit hours
+              {revoking ? 'Revoking…' : 'Revoke access'}
             </button>
           )}
-          
-          {member && member.status !== 'active' && (
+
+          {isUnlinkedTherapist && (
             <button
               type="button"
-              disabled={resending}
-              className="text-xs font-medium text-[var(--teal)] hover:underline"
-              onClick={(e) => { e.stopPropagation(); onResend(); }}
+              className="text-xs font-medium text-[var(--rust)] hover:underline"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
             >
-              {resending ? 'Sending…' : 'Resend invite'}
+              Delete record
             </button>
           )}
-
-          <div className="ml-auto flex flex-wrap gap-3 items-center justify-end">
-            {therapist && (
-              <button
-                type="button"
-                className={`text-xs font-medium hover:underline ${therapist.active !== false ? 'text-[var(--rust)]' : 'text-[var(--teal)]'}`}
-                onClick={(e) => { e.stopPropagation(); onDeactivate(); }}
-              >
-                {therapist.active !== false ? 'Deactivate' : 'Reactivate'}
-              </button>
-            )}
-            
-            {member && (
-              <button
-                type="button"
-                className={`text-xs font-medium hover:underline ${isLastAdmin ? 'text-[var(--muted)] opacity-70' : 'text-[var(--rust)]'}`}
-                disabled={revoking}
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  if (isLastAdmin) {
-                    notify.error('This clinic must keep at least one admin — make someone else admin first to unlock this button.');
-                    return;
-                  }
-                  onRevoke(); 
-                }}
-              >
-                {revoking ? 'Revoking…' : 'Revoke access'}
-              </button>
-            )}
-            
-            {isUnlinkedTherapist && (
-              <button
-                type="button"
-                className="text-xs font-medium text-[var(--rust)] hover:underline"
-                onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              >
-                Delete record
-              </button>
-            )}
-          </div>
         </div>
+      </div>
 
-        {/* Modal Portal */}
-        {editing && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4 backdrop-blur-sm">
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Edit team member"
-              className="dialog-panel relative flex w-full max-w-[500px] flex-col rounded-2xl bg-[var(--surface)] shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Scrolling body; the Save/Cancel footer below stays pinned so a
+      {/* Modal Portal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit team member"
+            className="dialog-panel relative flex w-full max-w-[500px] flex-col rounded-2xl bg-[var(--surface)] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Scrolling body; the Save/Cancel footer below stays pinned so a
                   short phone screen can always reach it. */}
-              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5 sm:flex-row sm:gap-6 sm:p-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5 sm:flex-row sm:gap-6 sm:p-6">
               {/* Left Column: Avatar & Quick Info — a compact row on phones */}
               <div className="flex items-center gap-3 sm:w-1/3 sm:flex-col sm:gap-2 sm:border-r sm:border-[var(--border)] sm:pr-4 sm:text-center">
                 {renderPhoto('h-14 w-14 shrink-0 sm:mb-2 sm:h-24 sm:w-24')}
@@ -575,7 +587,7 @@ export function TeamMemberCard({
                     autoFocus
                   />
                 </Field>
-                
+
                 {roleKnown && (
                   <Field label="Role">
                     <select
@@ -606,6 +618,33 @@ export function TeamMemberCard({
                         Your plan&apos;s logins are all in use{loginsHint ? `; ${loginsHint}` : ''}. They stay on the schedule without a login.
                       </p>
                     )}
+                  </Field>
+                )}
+
+                {showDepartments && (
+                  <Field label={therapist ? 'Works in' : 'Departments'}>
+                    <div className="flex flex-wrap gap-4 pt-1">
+                      {clinicDepts.map((d) => (
+                        <label key={d} className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--ink)] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={deptDraft.includes(d)}
+                            onChange={(e) => {
+                              setDeptDraft((prev) =>
+                                e.target.checked ? [...prev, d] : prev.filter((x) => x !== d)
+                              );
+                            }}
+                            className="h-4 w-4 rounded accent-[var(--teal)] cursor-pointer"
+                          />
+                          <span title={DEPARTMENT_NAMES[d]}>{DEPARTMENT_LABELS[d]}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-hint text-[var(--muted)]">
+                      {deptDraft.length === 0 || deptDraft.length === clinicDepts.length
+                        ? 'All departments (leave unticked or tick all)'
+                        : `Only ${deptDraft.map((d) => DEPARTMENT_LABELS[d]).join(', ')}`}
+                    </p>
                   </Field>
                 )}
 
@@ -687,41 +726,41 @@ export function TeamMemberCard({
                     </div>
                   </>
                 )}
-                
+
                 <ErrorNote message={error} />
               </div>
-              </div>
+            </div>
 
-              <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] px-5 py-3 sm:px-6 sm:py-4">
-                <button
-                  type="button"
-                  className="px-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-                  disabled={saving}
-                  onClick={() => setEditing(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--teal-strong)] disabled:opacity-50"
-                  disabled={saving}
-                  onClick={() => void save()}
-                >
-                  {saving ? 'Saving…' : 'Save changes'}
-                </button>
-              </div>
+            <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] px-5 py-3 sm:px-6 sm:py-4">
+              <button
+                type="button"
+                className="px-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+                disabled={saving}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--teal-strong)] disabled:opacity-50"
+                disabled={saving}
+                onClick={() => void save()}
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {showHoursFlow && therapist && roleDraft !== 'front_desk' && (
-          <ShiftSheet
-            open={showHoursFlow}
-            therapistId={therapist.id}
-            onClose={() => setShowHoursFlow(false)}
-            onSaved={() => onSaved()}
-          />
-        )}
+      {showHoursFlow && therapist && roleDraft !== 'front_desk' && (
+        <ShiftSheet
+          open={showHoursFlow}
+          therapistId={therapist.id}
+          onClose={() => setShowHoursFlow(false)}
+          onSaved={() => onSaved()}
+        />
+      )}
 
     </div>
   );
@@ -799,7 +838,7 @@ export function AddTeamMemberForm({
   const [role, setRole] = useState<Exclude<ClinicRole, 'unknown'>>('therapist');
   const [needsLogin, setNeedsLogin] = useState(!loginsLocked);
   const [bookable, setBookable] = useState(true);
-  
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -909,7 +948,7 @@ export function AddTeamMemberForm({
           </Field>
         )}
       </div>
-      
+
       <div className="flex flex-col gap-2 mt-1 border-t border-[var(--border)] pt-3">
         <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
           <input
@@ -977,19 +1016,28 @@ export function Therapists() {
   const [resendInProgress, setResendInProgress] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<{ therapist: Therapist; upcoming: number } | null>(null);
-  
+
   // Filter states
   const [filter, setFilter] = useState<'all' | 'bookable' | 'staff' | 'invited' | 'inactive' | 'unlinked'>('all');
 
   const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) return;
-    const { data, error } = await supabase.rpc('list_clinic_members_with_email', {
-      p_clinic_id: clinic.id,
-    });
+    const [{ data, error }, memberRows] = await Promise.all([
+      supabase.rpc('list_clinic_members_with_email', {
+        p_clinic_id: clinic.id,
+      }),
+      supabase.from('clinic_members').select('user_id, departments').eq('clinic_id', clinic.id),
+    ]);
     if (error) {
       setMembersError(toFriendlyMessage(new Error(error.message)));
       return;
+    }
+    const deptMap = new Map<string, Department[] | null>();
+    if (!memberRows.error && memberRows.data) {
+      for (const row of memberRows.data as { user_id: string; departments?: Department[] | null }[]) {
+        deptMap.set(row.user_id, row.departments ?? null);
+      }
     }
     setMembers(
       (
@@ -1008,6 +1056,7 @@ export function Therapists() {
         email: m.email,
         role: m.role,
         displayName: m.display_name,
+        departments: deptMap.get(m.user_id) ?? null,
         status: memberOnboardingStatus({
           lastSignInAt: m.last_sign_in_at,
           requirePasswordSetup: m.require_password_setup === true,
@@ -1027,11 +1076,11 @@ export function Therapists() {
     () => buildTeamList(members, rawTherapists ?? null),
     [members, rawTherapists]
   );
-  
+
   const filteredTeam = useMemo(() => {
     return teamList.filter(p => {
       if (filter === 'inactive') return p.therapist?.active === false;
-      
+
       // Hide inactive therapists from all other views
       if (p.therapist && p.therapist.active === false) return false;
 
@@ -1352,16 +1401,15 @@ export function Therapists() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
-      
+
       {deactivateTarget && (
         <ConfirmDialog
           open={true}
           title="Deactivate therapist"
-          message={`${deactivateTarget.therapist.name} will no longer treat patients or appear in the schedule. Past records stay intact; you can reactivate anytime.${
-            deactivateTarget.upcoming > 0
+          message={`${deactivateTarget.therapist.name} will no longer treat patients or appear in the schedule. Past records stay intact; you can reactivate anytime.${deactivateTarget.upcoming > 0
               ? ` They still have ${deactivateTarget.upcoming} upcoming appointment(s) — reassign or cancel those separately.`
               : ''
-          }`}
+            }`}
           confirmLabel="Deactivate"
           cancelLabel="Cancel"
           destructive

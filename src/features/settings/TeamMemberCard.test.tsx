@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 afterEach(cleanup);
 import { TeamMemberCard } from './TeamSection';
+import { repos } from '@/services';
 import type { Clinic, ShiftTemplate, Therapist, TherapistShiftAssignment } from '@/domain/types';
 
 const memberWrites = vi.hoisted(() => ({ updates: [] as Record<string, unknown>[], client: null as unknown }));
@@ -281,5 +282,136 @@ describe('TeamMemberCard — Role in the edit form', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     await waitFor(() => expect(memberWrites.updates).toHaveLength(1));
     expect(memberWrites.updates[0]).toMatchObject({ role: 'admin' });
+  });
+});
+
+describe('TeamMemberCard — Departments in the edit form (G2)', () => {
+  const multiClinic: Clinic = {
+    ...clinic,
+    careLocations: ['clinic', 'home', 'ward'],
+  } as Clinic;
+
+  const linked: Therapist = { id: 't1', clinicId: 'c1', name: 'Dr Linked', active: true, userId: 'u1', updatedAt: '' };
+  const member = (role: string, departments?: string[] | null) => ({
+    userId: 'u1',
+    email: 'a@b.c',
+    role,
+    displayName: 'Dr Linked',
+    departments: departments ?? null,
+    status: 'active',
+    invitedAt: null,
+    lastSignInAt: null,
+    lastActiveAt: null,
+  });
+
+  const card = (
+    c: Clinic,
+    m: ReturnType<typeof member> | null,
+    t: Therapist | null = linked,
+    membersLoaded = true
+  ) => (
+    <TeamMemberCard
+      person={{ key: 'p', therapist: t, member: m } as never}
+      membersLoaded={membersLoaded}
+      clinicId="c1"
+      isLastAdmin={false}
+      revoking={false}
+      resending={false}
+      onRevoke={vi.fn()}
+      onResend={vi.fn()}
+      onSaved={vi.fn()}
+      onDelete={vi.fn()}
+      onPhotoUpload={vi.fn()}
+      onDeactivate={vi.fn()}
+      assignments={[]}
+      templates={[]}
+      clinic={c}
+    />
+  );
+
+  let therapistPutSpy: MockInstance;
+
+  beforeEach(() => {
+    memberWrites.updates = [];
+    memberWrites.client = {
+      from: () => ({
+        update: (row: Record<string, unknown>) => {
+          memberWrites.updates.push(row);
+          return { eq: () => ({ eq: async () => ({ error: null }) }) };
+        },
+      }),
+    };
+    therapistPutSpy = vi.spyOn(repos.therapists, 'put').mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    memberWrites.client = null;
+    therapistPutSpy.mockRestore();
+  });
+
+  it('hides the departments field for a one-department clinic', () => {
+    render(card(clinic, member('therapist')));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByText('Departments')).toBeNull();
+    expect(screen.queryByText('Works in')).toBeNull();
+  });
+
+  it('shows "Works in" for a therapist in a multi-department clinic, and saves a subset of departments', async () => {
+    render(card(multiClinic, member('therapist')));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText('Works in')).toBeInTheDocument();
+
+    const opCheckbox = screen.getByRole('checkbox', { name: 'OP' });
+    const homeCheckbox = screen.getByRole('checkbox', { name: 'Home care' });
+
+    fireEvent.click(opCheckbox);
+    fireEvent.click(homeCheckbox);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(memberWrites.updates).toHaveLength(1));
+    expect(memberWrites.updates[0]).toMatchObject({ departments: ['clinic', 'home'] });
+    expect(therapistPutSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ careLocations: ['clinic', 'home'] })
+    );
+  });
+
+  it('saves null when all departments are ticked', async () => {
+    render(card(multiClinic, member('therapist')));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const opCheckbox = screen.getByRole('checkbox', { name: 'OP' });
+    const homeCheckbox = screen.getByRole('checkbox', { name: 'Home care' });
+    const ipCheckbox = screen.getByRole('checkbox', { name: 'IP' });
+
+    fireEvent.click(opCheckbox);
+    fireEvent.click(homeCheckbox);
+    fireEvent.click(ipCheckbox);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(memberWrites.updates).toHaveLength(1));
+    expect(memberWrites.updates[0]).toMatchObject({ departments: null });
+    expect(therapistPutSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ careLocations: null })
+    );
+  });
+
+  it('saves null when no departments are ticked', async () => {
+    render(card(multiClinic, member('therapist')));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    // None ticked
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(memberWrites.updates).toHaveLength(1));
+    expect(memberWrites.updates[0]).toMatchObject({ departments: null });
+    expect(therapistPutSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ careLocations: null })
+    );
+  });
+
+  it('shows "Departments" for a non-therapist member (front desk)', () => {
+    render(card(multiClinic, member('front_desk'), null));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText('Departments')).toBeInTheDocument();
+    expect(screen.queryByText('Works in')).toBeNull();
   });
 });
