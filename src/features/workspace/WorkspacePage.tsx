@@ -72,6 +72,7 @@ import { therapistsInRows, todayVisitTotals } from './todayTotals';
 import { useClinicRole } from '@/app/useClinicRole';
 import { collectionsLine } from '@/domain/collectionsByMethod';
 import { saveLedgerPrefs } from '@/features/visits/ledgerPrefs';
+import { InpatientsCard } from './InpatientsCard';
 import { WorkspacePlaceToggle, inWorkspacePlace, type WorkspacePlace } from './WorkspacePlaceToggle';
 import { offersBookingChoice } from '@/domain/careLocations';
 
@@ -1178,6 +1179,8 @@ export function WorkspacePage() {
             }
           />
         </SectionCard>
+
+      <InpatientsCard />
 
       <SectionCard
         title="Today's visits"

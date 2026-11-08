@@ -83,6 +83,11 @@ export interface NewVisitInput {
   pendingPaymentNote?: string | null;
   /** Where the visit happened. Defaults to 'clinic'. */
   location?: CareLocation;
+  /**
+   * The inpatient stay this session belongs to. Setting it makes the visit an Inpatient round (location 'ward'); the
+   * stay must be this patient's, in this clinic. Inpatient without a stay is refused (the server holds the same rule).
+   */
+  admissionId?: UUID | null;
 }
 
 export function createVisitService(repos: Repos) {
@@ -430,6 +435,16 @@ export function createVisitService(repos: Repos) {
         pkg = NO_PACKAGE;
       }
 
+      if (input.location === 'ward' && !input.admissionId) {
+        throw new Error('An inpatient session must belong to an admission.');
+      }
+      if (input.admissionId) {
+        const stay = await repos.admissions.get(input.admissionId);
+        if (!stay || stay.deleted || stay.clinicId !== input.clinicId || stay.patientId !== input.patientId) {
+          throw new Error("This session's stay must be the same patient's, in the same clinic.");
+        }
+      }
+
       const visit: Visit = {
         id: visitId,
         clinicId: input.clinicId,
@@ -458,7 +473,8 @@ export function createVisitService(repos: Repos) {
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         creditsMode: 'auto',
         serviceLinesCount: items.length,
-        location: input.location ?? 'clinic',
+        location: input.admissionId ? 'ward' : (input.location ?? 'clinic'),
+        ...(input.admissionId ? { admissionId: input.admissionId } : {}),
         deleted: false,
         // Flags the visit for a clinical note until one is completed against
         // it (see consultationNoteService.saveAssessment, which closes this

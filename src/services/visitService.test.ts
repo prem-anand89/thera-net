@@ -303,6 +303,21 @@ describe('visitService.create', () => {
     expect(v.packageGroupId).toBeTruthy();
   });
 
+  it('a session on a stay is an Inpatient visit; Inpatient without a stay, or on another patient\'s stay, is refused', async () => {
+    const stay = { id: 'stay-1', clinicId: 'clinic-1', patientId: 'pat-1', deleted: false } as unknown as import('@/domain/types').Admission;
+    (fake.repos.admissions as unknown as { get: (id: string) => Promise<unknown> }).get = async (id) => (id === 'stay-1' ? stay : undefined);
+    const svc = createVisitService(fake.repos);
+
+    const v = await svc.create({ ...base, admissionId: 'stay-1' });
+    expect(v.location).toBe('ward');
+    expect(v.admissionId).toBe('stay-1');
+
+    await expect(svc.create({ ...base, location: 'ward' })).rejects.toThrow(/must belong to an admission/);
+    await expect(svc.create({ ...base, patientId: 'pat-2', admissionId: 'stay-1' })).rejects.toThrow(/same patient/);
+    await expect(svc.create({ ...base, admissionId: 'missing' })).rejects.toThrow(/same patient/);
+    expect((await svc.create(base)).admissionId).toBeUndefined();
+  });
+
   it('copies the validity days onto each session; a catalog edit leaves a held package alone', async () => {
     const svc = createVisitService(fake.repos);
     const cat = fake.catalog.find((c) => c.id === 'svc-physio3')!;

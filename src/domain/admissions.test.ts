@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Admission, Visit } from './types';
-import { admissionDateProblem, dayOfStay, isDuplicateOpenAdmission, isOpenAdmission, openAdmissionOf, repointVisits } from './admissions';
+import { wardOf, admissionDateProblem, dayOfStay, isDuplicateOpenAdmission, isOpenAdmission, openAdmissionOf, repointVisits } from './admissions';
 
 const stay = (over: Partial<Admission> = {}): Admission => ({
   id: 'a1', clinicId: 'c', patientId: 'p', ipdNo: null, wardBed: null, admittingDoctor: null,
@@ -48,5 +48,16 @@ describe('repointVisits', () => {
     const v = (id: string, admissionId: string | null) => ({ id, admissionId, updatedAt: 'x' }) as unknown as Visit;
     const out = repointVisits([v('1', 'lose'), v('2', 'other'), v('3', null)], 'lose', 'win', 'now');
     expect(out.map((x) => [x.id, x.admissionId, x.updatedAt])).toEqual([['1', 'win', 'now']]);
+  });
+});
+
+describe('wardOf', () => {
+  it('groups by the text before the comma or a trailing bed number, ignoring case', () => {
+    expect(wardOf('Ortho ward, bed 12').label).toBe('Ortho ward');
+    expect(wardOf('Ortho Ward - bed 3').key).toBe(wardOf('ortho ward, bed 9').key);
+    expect(wardOf('Ortho ward bed 4').label).toBe('Ortho ward');
+    expect(wardOf('ICU').label).toBe('ICU');
+    expect(wardOf('  ').label).toBe('No ward set');
+    expect(wardOf(null).key).toBe('');
   });
 });

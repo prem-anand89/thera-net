@@ -39,3 +39,16 @@ export function repointVisits(visits: readonly Visit[], losingId: string, surviv
     .filter((v) => v.admissionId === losingId)
     .map((v) => ({ ...v, admissionId: survivingId, updatedAt: now }));
 }
+
+/**
+ * The ward a stay is in, for grouping the ward-rounds list. `ward_bed` is one free-text field ("Ortho ward, bed 12"),
+ * so the ward is what comes before the first comma, or before a trailing "bed 12"; with neither, the whole text. Empty
+ * reads as "No ward set". Matching ignores case so "ortho ward" and "Ortho Ward" group together.
+ */
+export function wardOf(wardBed: string | null | undefined): { key: string; label: string } {
+  const text = (wardBed ?? '').trim();
+  if (!text) return { key: '', label: 'No ward set' };
+  const beforeComma = text.split(',')[0].trim();
+  const label = beforeComma.replace(/\s*[-–]?\s*bed\s*\S+$/i, '').trim() || beforeComma;
+  return { key: label.toLowerCase(), label };
+}

@@ -174,6 +174,8 @@ const newVisitRoute = createRoute({
     prefillName?: string;
     prefillPhone?: string;
     appointmentId?: string;
+    /** Log a session on this inpatient stay (the ward-rounds card). */
+    admissionId?: string;
     from?: NewVisitBackTarget;
   } => ({
     ...(typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {}),
@@ -182,6 +184,7 @@ const newVisitRoute = createRoute({
     ...(typeof search.prefillName === 'string' ? { prefillName: search.prefillName } : {}),
     ...(typeof search.prefillPhone === 'string' ? { prefillPhone: search.prefillPhone } : {}),
     ...(typeof search.appointmentId === 'string' ? { appointmentId: search.appointmentId } : {}),
+    ...(typeof search.admissionId === 'string' ? { admissionId: search.admissionId } : {}),
     ...(NEW_VISIT_BACK_TARGETS.includes(search.from as NewVisitBackTarget)
       ? { from: search.from as NewVisitBackTarget }
       : {}),

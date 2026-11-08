@@ -230,6 +230,7 @@ export function NewVisitPage() {
     prefillName?: string;
     prefillPhone?: string;
     appointmentId?: string;
+    admissionId?: string;
     from?: NewVisitBackTarget;
   };
 
@@ -524,10 +525,21 @@ export function NewVisitPage() {
   // Patient Profile's "New visit" button and an Expected-today card linked
   // to a registered patient both arrive with ?patientId=… — skip search and
   // pre-select that patient directly, same as repeatVisit does below.
+  // "Log session" on the ward-rounds card: the visit is an inpatient round on that stay (place fixed to Inpatient, saved
+  // unpaid until the discharge bill). It applies only while the chosen patient is the stay's own patient.
+  const admission = useLiveQuery(
+    async () => (search.admissionId ? ((await repos.admissions.get(search.admissionId)) ?? null) : undefined),
+    [search.admissionId]
+  );
+  const activeAdmission = admission && !admission.deleted && patient?.id === admission.patientId ? admission : null;
   const prefillPatient = useLiveQuery(
     () => (search.patientId ? repos.patients.get(search.patientId) : undefined),
     [search.patientId]
   );
+  const activeAdmissionId = activeAdmission?.id;
+  useEffect(() => {
+    if (activeAdmissionId) setPaymentChoice('pending');
+  }, [activeAdmissionId]);
   useEffect(() => {
     if (!prefillPatient || patient) return;
     setPatient(prefillPatient);
@@ -984,7 +996,7 @@ export function NewVisitPage() {
     setNotes('');
     setPendingNote('');
     setTreatmentIds([]);
-    setPaymentChoice('paid');
+    setPaymentChoice(activeAdmission ? 'pending' : 'paid');
     setPaymentRef('');
     setLocation(startingLocation(clinic));
     locationDecidedRef.current = false;
@@ -1065,7 +1077,8 @@ export function NewVisitPage() {
         patientId: patient.id,
         therapistId,
         visitDate,
-        location,
+        location: activeAdmission ? 'ward' : location,
+        ...(activeAdmission ? { admissionId: activeAdmission.id } : {}),
         lines: built.lines,
         condition,
         treatmentNotes: notes,
@@ -1670,7 +1683,11 @@ export function NewVisitPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
-          {offersBookingChoice(clinic) && (
+          {activeAdmission ? (
+            <Pill tone="teal">
+              Inpatient{activeAdmission.wardBed ? ` · ${activeAdmission.wardBed}` : ''}
+            </Pill>
+          ) : offersBookingChoice(clinic) && (
             <SegmentedToggle
               value={location}
               onChange={(next) => {
