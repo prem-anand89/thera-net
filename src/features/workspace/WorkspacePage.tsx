@@ -344,7 +344,10 @@ export function WorkspacePage() {
   }, [workspaceAppointments, expectedToday, viewTherapistId]);
   // "Next up": the first still-to-come appointment (15 minutes' grace for late arrivals).
   const nextUpId = expectedToday.find(
-    (a) => (a.status === 'confirmed' || a.status === 'rescheduled') && minutesOfDay(a.scheduledAt) >= nowMinutes - 15
+    (a) =>
+      inDepartment('clinic', a) &&
+      (a.status === 'confirmed' || a.status === 'rescheduled') &&
+      minutesOfDay(a.scheduledAt) >= nowMinutes - 15
   )?.id ?? null;
   const appointmentColor = useCallback(
     (a: Appointment) => (a.therapistId && therapistRoster.get(a.therapistId)?.color) || UNASSIGNED_COLOR,
@@ -561,8 +564,14 @@ export function WorkspacePage() {
     [clinic.id, showDues, scope.scopeTherapistId, department]
   );
   const wardVisits = useLiveQuery(
-    () => (department === 'ward' ? repos.visits.list({ clinicId: clinic.id }) : undefined),
-    [clinic.id, department]
+    () =>
+      department === 'ward' && showDues
+        ? repos.visits.list({
+          clinicId: clinic.id,
+          ...(scope.scopeTherapistId ? { therapistId: scope.scopeTherapistId } : {}),
+        })
+        : undefined,
+    [clinic.id, department, showDues, scope.scopeTherapistId]
   );
   const wardRunning = useMemo(
     () => (department === 'ward' && wardVisits ? runningCharges(wardVisits) : null),
@@ -793,7 +802,9 @@ export function WorkspacePage() {
   };
   const statCells =
     department === 'ward'
-      ? [collectedCell, runningChargesCell]
+      ? showDues
+        ? [collectedCell, runningChargesCell]
+        : [collectedCell]
       : showDues
         ? [collectedCell, duesCell]
         : [collectedCell];
@@ -860,12 +871,12 @@ export function WorkspacePage() {
   const todayList = useShowMore(todayRows, `${todayStr}|${workspaceMineOnly}|${visitsFilterId}`, 10);
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
-  const dueByVisitId = new Map(visitsInView.map((row) => [row.visitId, hasDue(row.paymentState)]));
+  const dueByVisitId = new Map(visitsInDept.map((row) => [row.visitId, hasDue(row.paymentState)]));
   // An appointment carried over from an earlier day whose visit was logged today:
   // keep it listed (under Done) so it doesn't vanish when its visit is saved.
   const filterAppointmentsTherapistId = viewTherapistId;
   const appointmentsForList = useMemo(() => {
-    const todayVisitIds = new Set(visitsInView.map((row) => row.visitId));
+    const todayVisitIds = new Set(visitsInDept.map((row) => row.visitId));
     return [
       ...(workspaceAppointments ?? []).filter(
         (a) =>
@@ -876,7 +887,7 @@ export function WorkspacePage() {
       ),
       ...todayAppointments,
     ];
-  }, [workspaceAppointments, visitsInView, filterAppointmentsTherapistId, todayAppointments]);
+  }, [workspaceAppointments, visitsInDept, filterAppointmentsTherapistId, todayAppointments]);
   const clinicAppointments = useMemo(
     () => appointmentsForList.filter((a) => inDepartment('clinic', a)),
     [appointmentsForList]
