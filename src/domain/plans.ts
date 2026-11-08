@@ -9,21 +9,21 @@ import type { PlanTier } from './types';
  * only `notePrinting` (print / save-as-PDF of a note, session log or insurer
  * packet) is.
  */
-export type PlanFeature = 'invoicing' | 'revenueSplit' | 'advancedModules' | 'notePrinting';
+export type PlanFeature = 'invoicing' | 'revenueSplit' | 'advancedModules' | 'notePrinting' | 'inpatient';
 
 /**
  * One row per tier, matching the Settings-page table in the tier plan:
  * Lite has none; Solo adds invoicing and note printing; Clinic adds the
- * hospital revenue split; Clinic+ adds advanced assessment modules.
+ * hospital revenue split and inpatient admissions (ward rounds, discharge bill); Clinic+ adds advanced assessment modules.
  * `advancedModules` is a bucket gate only — its content is a separate,
  * still-open planning pass. How many logins / visits / team members a tier
  * has is a number, not a feature: see `TIER_LIMITS`.
  */
 const TIER_FEATURES: Record<PlanTier, Record<PlanFeature, boolean>> = {
-  lite: { invoicing: false, revenueSplit: false, advancedModules: false, notePrinting: false },
-  solo: { invoicing: true, revenueSplit: false, advancedModules: false, notePrinting: true },
-  clinic: { invoicing: true, revenueSplit: true, advancedModules: false, notePrinting: true },
-  clinic_plus: { invoicing: true, revenueSplit: true, advancedModules: true, notePrinting: true },
+  lite: { invoicing: false, revenueSplit: false, advancedModules: false, notePrinting: false, inpatient: false },
+  solo: { invoicing: true, revenueSplit: false, advancedModules: false, notePrinting: true, inpatient: false },
+  clinic: { invoicing: true, revenueSplit: true, advancedModules: false, notePrinting: true, inpatient: true },
+  clinic_plus: { invoicing: true, revenueSplit: true, advancedModules: true, notePrinting: true, inpatient: true },
 };
 
 /**

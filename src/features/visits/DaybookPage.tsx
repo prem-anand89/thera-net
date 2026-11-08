@@ -6,7 +6,7 @@ import { formatAmount } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
 import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
-import { CARE_LOCATION_LABELS, bookableLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
+import { CARE_LOCATION_LABELS, clinicCareLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
 import type { CareLocation } from '@/domain/types';
 import { DatePresetBar, DAYBOOK_DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
 
@@ -248,7 +248,7 @@ export function DaybookPage() {
           {offersLocationChoice(clinic) && total > 0 && (
             <dl className="mt-3 space-y-1 border-t border-[var(--border)] pt-3 text-sm">
               <dt className="text-xs font-medium text-[var(--muted)]">Of this, by place</dt>
-              {bookableLocations(clinic).map((l) => (
+              {clinicCareLocations(clinic).map((l) => (
                 <div key={l} className="flex justify-between">
                   <dd className="text-[var(--ink)]">{CARE_LOCATION_LABELS[l]}</dd>
                   <dd className="tabular-nums">{formatAmount(byPlace[l] ?? 0)}</dd>

@@ -30,6 +30,7 @@ import type {
   UUID,
   ShiftTemplate,
   TherapistShiftAssignment,
+  Admission,
 } from '@/domain/types';
 
 /**
@@ -251,6 +252,18 @@ export interface PatientModuleEnrollmentRepo {
   put(enrollment: PatientModuleEnrollment): Promise<void>;
 }
 
+/** Inpatient stays. Reads skip soft-deleted rows. */
+export interface AdmissionRepo {
+  get(id: UUID): Promise<Admission | undefined>;
+  /** Every stay in the clinic, newest admission first. */
+  listByClinic(clinicId: UUID): Promise<Admission[]>;
+  /** One patient's stays, newest admission first. */
+  listByPatient(clinicId: UUID, patientId: UUID): Promise<Admission[]>;
+  /** The stays with no discharge date yet: the ward-rounds list. */
+  listOpen(clinicId: UUID): Promise<Admission[]>;
+  put(admission: Admission): Promise<void>;
+}
+
 export interface PatientAdvanceRepo {
   get(id: UUID): Promise<PatientAdvance | undefined>;
   /** A patient's advances, most-recently-received first. */
@@ -330,6 +343,7 @@ export interface Repos {
   referringSourceCatalog: ReferringSourceCatalogRepo;
   treatmentCatalog: TreatmentCatalogRepo;
   patients: PatientRepo;
+  admissions: AdmissionRepo;
   visits: VisitRepo;
   visitItems: VisitItemRepo;
   visitCredits: VisitCreditRepo;

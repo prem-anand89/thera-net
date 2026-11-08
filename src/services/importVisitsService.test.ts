@@ -123,6 +123,7 @@ function makeFakeRepos() {
       markInvoiced: async () => {},
       markUninvoiced: async () => {},
     },
+    admissions: { get: async () => undefined, listByClinic: async () => [], listByPatient: async () => [], listOpen: async () => [], put: async () => {} },
     visitItems: { listByVisitIds: async () => [], listByClinic: async () => [], listByClinicIncludingDeleted: async () => [], bulkPut: async () => {} },
     visitCredits: { listByVisitIds: async () => [], listByClinic: async () => [], listByClinicIncludingDeleted: async () => [], bulkPut: async () => {} },
     invoices: {

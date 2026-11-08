@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, locationOf, offersLocationChoice, placeLabelFor } from './careLocations';
+import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, locationOf, offersBookingChoice, offersLocationChoice, placeLabelFor } from './careLocations';
 
 describe('clinicCareLocations', () => {
   it('reads as clinic only until a clinic turns something on, including older rows and bad values', () => {
@@ -76,5 +76,14 @@ describe('placeLabelFor', () => {
     expect(placeLabelFor(both, {})).toBeNull();
     expect(placeLabelFor({ careLocations: ['clinic'] }, { location: 'home' })).toBeNull();
     expect(placeLabelFor(null, { location: 'home' })).toBeNull();
+  });
+});
+
+describe('offersBookingChoice', () => {
+  it('counts only places a visit can be booked at: Clinic and Inpatient alone is no choice', () => {
+    expect(offersBookingChoice({ careLocations: ['clinic', 'ward'] })).toBe(false);
+    expect(offersBookingChoice({ careLocations: ['clinic', 'home', 'ward'] })).toBe(true);
+    expect(offersBookingChoice({ careLocations: ['clinic'] })).toBe(false);
+    expect(offersLocationChoice({ careLocations: ['clinic', 'ward'] })).toBe(true);
   });
 });

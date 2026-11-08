@@ -36,6 +36,7 @@ export function PlanSection() {
     { key: 'revenueSplit', label: 'Hospital revenue split & attribution audit' },
     { key: 'advancedModules', label: 'Advanced assessment modules' },
     { key: 'notePrinting', label: 'Print / PDF of notes' },
+    { key: 'inpatient', label: 'Inpatient admissions and ward rounds' },
   ];
 
   return (

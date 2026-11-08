@@ -1,6 +1,7 @@
 import {
   clinicBillingConfig,
   type CatalogItem,
+  type CareLocation,
   type Visit,
   type VisitCredit,
   type VisitItem,
@@ -81,7 +82,7 @@ export interface NewVisitInput {
    */
   pendingPaymentNote?: string | null;
   /** Where the visit happened. Defaults to 'clinic'. */
-  location?: 'clinic' | 'home';
+  location?: CareLocation;
 }
 
 export function createVisitService(repos: Repos) {

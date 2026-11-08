@@ -17,6 +17,8 @@ import { clampBufferHours } from './shiftUtils';
 import { toFriendlyMessage } from '@/lib/errors';
 import { isValidUpiVpa } from '@/domain/upiPay';
 import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
+import { useEntitlements } from '@/app/useEntitlements';
+import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
 
 type ProfileFields = Pick<
   Clinic,
@@ -717,14 +719,15 @@ export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: bo
 type CareLocationFields = Pick<Clinic, 'careLocations'>;
 
 /**
- * Where the clinic sees patients. Clinic and Home visit are switches (at least one stays on); Inpatient is listed as
- * coming next. With one place on, nothing about location is asked anywhere in the app.
+ * Where the clinic sees patients. Clinic, Home visit and Inpatient are switches (at least one stays on). Inpatient needs
+ * a plan with the `inpatient` feature (Clinic and above); a lower plan sees which plan has it instead of a switch. With one place on, nothing about location is asked anywhere in the app.
  */
 export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<CareLocationFields>(
+  const { clinic, form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<CareLocationFields>(
     (c) => ({ careLocations: clinicCareLocations(c) }),
     onDirtyChange
   );
+  const entitlements = useEntitlements(clinic.id);
   const on = clinicCareLocations(form);
   const toggle = (loc: CareLocation, next: boolean) => {
     const list = next ? [...on, loc] : on.filter((l) => l !== loc);
@@ -754,13 +757,26 @@ export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty:
             disabled={onlyOne && on.includes('home')}
             onChange={(v) => toggle('home', v)}
           />
-          <div className="flex items-center justify-between gap-3 py-1 text-sm">
-            <div>
-              <p className="font-medium text-[var(--muted)]">{CARE_LOCATION_LABELS.ward}</p>
-              <p className="text-xs text-[var(--muted)]">Admit, ward rounds, discharge bill.</p>
+          {entitlements.planPending ? null : entitlements.can('inpatient') || on.includes('ward') ? (
+            <SwitchRow
+              label={CARE_LOCATION_LABELS.ward}
+              hint="Admit patients, ward rounds, discharge bill."
+              checked={on.includes('ward')}
+              // A clinic that is on a plan without it keeps what it has but can only turn it off.
+              disabled={(onlyOne && on.includes('ward')) || (!entitlements.can('inpatient') && !on.includes('ward'))}
+              onChange={(v) => toggle('ward', v)}
+            />
+          ) : (
+            <div className="flex items-center justify-between gap-3 py-1 text-sm">
+              <div>
+                <p className="font-medium text-[var(--muted)]">{CARE_LOCATION_LABELS.ward}</p>
+                <p className="text-xs text-[var(--muted)]">Admit patients, ward rounds, discharge bill.</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-xs text-[var(--muted)]">
+                {PLAN_TIER_LABELS[minimumTierFor('inpatient')]} plan and above
+              </span>
             </div>
-            <span className="shrink-0 rounded-full bg-[var(--surface-2,#f1f3f2)] px-2.5 py-0.5 text-xs text-[var(--muted)]">Coming next</span>
-          </div>
+          )}
         </div>
       </fieldset>
       {showSaveBar && (

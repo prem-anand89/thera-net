@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
 import type { OutstandingInvoiceRow } from '@/services/dashboardService';
 import { toLocalDateStr } from '@/domain/schedule';
-import { CARE_LOCATION_LABELS, bookableLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
+import { CARE_LOCATION_LABELS, clinicCareLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
 import type { CareLocation } from '@/domain/types';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
@@ -815,7 +815,7 @@ export function LedgerPage() {
       onChange={(e) => setWhere(e.target.value as '' | CareLocation)}
     >
       <option value="">All places</option>
-      {bookableLocations(clinic).map((l) => (
+      {clinicCareLocations(clinic).map((l) => (
         <option key={l} value={l}>
           {CARE_LOCATION_LABELS[l]}
         </option>

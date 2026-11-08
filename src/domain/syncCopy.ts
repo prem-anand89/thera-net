@@ -8,6 +8,7 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   referring_source_catalog: { one: 'settings change', many: 'settings changes' },
   treatment_catalog: { one: 'settings change', many: 'settings changes' },
   patients: { one: 'patient change', many: 'patient changes' },
+  admissions: { one: 'admission change', many: 'admission changes' },
   visits: { one: 'visit', many: 'visits' },
   visit_items: { one: 'visit service', many: 'visit services' },
   visit_credits: { one: 'revenue share', many: 'revenue shares' },

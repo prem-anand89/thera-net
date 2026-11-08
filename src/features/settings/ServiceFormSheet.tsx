@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, catalogService } from '@/services';
 import type { CareLocation, CatalogItem } from '@/domain/types';
-import { bookableLocations, CARE_LOCATION_LABELS, offersLocationChoice } from '@/domain/careLocations';
+import { bookableLocations, CARE_LOCATION_LABELS, offersBookingChoice } from '@/domain/careLocations';
 import { formatAmount, currencySymbol } from '@/domain/money';
 import { perSessionLabel, usageLabel } from '@/domain/catalogDisplay';
 import { groupNameCheck, nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
@@ -121,7 +121,7 @@ function ServiceForm({
     chosenGroup() !== (editing.category ?? '').trim() ||
     (parseDuration(duration) ?? null) !== (editing.durationMinutes ?? null) ||
     (isPackage ? parseValidity(validity) : null) !== (editing.validityDays ?? null) ||
-    (offersLocationChoice(clinic) && defaultLocation !== (editing.defaultLocation === 'home' ? 'home' : 'clinic')) ||
+    (offersBookingChoice(clinic) && defaultLocation !== (editing.defaultLocation === 'home' ? 'home' : 'clinic')) ||
     active !== editing.active;
   const priceChanged = Boolean(editing && pricePaise != null && pricePaise !== editing.basePricePaise);
   // A used service whose session count changes: only visits logged from now on use the new number.
@@ -152,7 +152,7 @@ function ServiceForm({
       durationMinutes,
       validityDays,
       // Only clinics with more than one place set this; everyone else keeps what is stored.
-      ...(offersLocationChoice(clinic) ? { defaultLocation } : {}),
+      ...(offersBookingChoice(clinic) ? { defaultLocation } : {}),
       updatedAt: new Date().toISOString(),
     };
     setSaving(true);
@@ -410,7 +410,7 @@ function ServiceForm({
           />
         </Field>
 
-        {offersLocationChoice(clinic) && (
+        {offersBookingChoice(clinic) && (
           <Field label="Usually done at" hint="The place a booking or visit starts with when this service is picked. Staff can change it each time.">
             <Segmented
               label="Usually done at"

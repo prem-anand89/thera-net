@@ -20,7 +20,7 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
-import { bookableLocations, defaultBookingLocation, locationOf, offersLocationChoice } from '@/domain/careLocations';
+import { bookableLocations, defaultBookingLocation, locationOf, offersBookingChoice } from '@/domain/careLocations';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { syncEngine } from '@/sync/engine';
@@ -507,7 +507,7 @@ export function NewVisitPage() {
     if (prefill.therapistId) setTherapistId(prefill.therapistId);
     setVisitDate(prefill.visitDate);
     const apptPlace = locationOf(fromAppointment);
-    if (offersLocationChoice(clinic) && bookableLocations(clinic).includes(apptPlace) && apptPlace !== 'ward') {
+    if (offersBookingChoice(clinic) && bookableLocations(clinic).includes(apptPlace) && apptPlace !== 'ward') {
       setLocation(apptPlace);
       locationDecidedRef.current = true;
     }
@@ -744,7 +744,7 @@ export function NewVisitPage() {
   // The first service's usual place sets Where, unless the appointment, a repeated visit or a tap already did.
   const firstServiceId = rows[0]?.serviceCatalogId;
   useEffect(() => {
-    if (locationDecidedRef.current || !offersLocationChoice(clinic) || !firstServiceId) return;
+    if (locationDecidedRef.current || !offersBookingChoice(clinic) || !firstServiceId) return;
     const item = catalogItems.find((c) => c.id === firstServiceId);
     if (!item) return;
     const place = defaultBookingLocation(clinic, item);
@@ -1378,7 +1378,8 @@ export function NewVisitPage() {
     if (lastVisit.treatmentIds && lastVisit.treatmentIds.length > 0) {
       setTreatmentIds(lastVisit.treatmentIds);
     }
-    if (lastVisit.location && offersLocationChoice(clinic)) {
+    // An inpatient round is repeated from the ward-rounds card, not from this toggle, which has no Inpatient choice.
+    if (lastVisit.location && lastVisit.location !== 'ward' && offersBookingChoice(clinic)) {
       setLocation(lastVisit.location);
       locationDecidedRef.current = true;
     }
@@ -1669,7 +1670,7 @@ export function NewVisitPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
-          {offersLocationChoice(clinic) && (
+          {offersBookingChoice(clinic) && (
             <SegmentedToggle
               value={location}
               onChange={(next) => {

@@ -1,5 +1,6 @@
 import type { Repos } from '@/repositories/types';
 import type {
+  Admission,
   CatalogItem,
   Clinic,
   ConsultationNote,
@@ -29,6 +30,8 @@ export interface BackupBundle {
   catalog: CatalogItem[];
   patients: Patient[];
   visits: Visit[];
+  /** Inpatient stays. Absent in backups taken before admissions existed. */
+  admissions?: Admission[];
   /** Service lines and revenue shares of the visits. Absent in backups taken before multi-service visits. */
   visitItems?: VisitItem[];
   visitCredits?: VisitCredit[];
@@ -44,6 +47,7 @@ export interface RestoreSummary {
   therapists: number;
   catalog: number;
   patients: number;
+  admissions: number;
   visits: number;
   visitItems: number;
   visitCredits: number;
@@ -63,6 +67,7 @@ export function createBackupService(repos: Repos) {
       therapists,
       catalog,
       patients,
+      admissions,
       visits,
       visitItems,
       visitCredits,
@@ -77,6 +82,7 @@ export function createBackupService(repos: Repos) {
       repos.therapists.list(clinicId, true),
       repos.catalog.list(clinicId, true),
       repos.patients.list(clinicId),
+      repos.admissions.listByClinic(clinicId),
       repos.visits.list({ clinicId }),
       repos.visitItems.listByClinic(clinicId),
       repos.visitCredits.listByClinic(clinicId),
@@ -97,6 +103,7 @@ export function createBackupService(repos: Repos) {
       therapists,
       catalog,
       patients,
+      admissions,
       visits,
       visitItems,
       visitCredits,
@@ -152,6 +159,7 @@ export function createBackupService(repos: Repos) {
       }
       const settlementPayments = bundle.settlementPayments ?? [];
       // Backups from before multi-service visits have no lines or shares.
+      const admissions = bundle.admissions ?? [];
       const visitItems = bundle.visitItems ?? [];
       const visitCredits = bundle.visitCredits ?? [];
 
@@ -175,6 +183,11 @@ export function createBackupService(repos: Repos) {
         ...bundle.therapists.map((t) => repos.therapists.put(t)),
         ...bundle.catalog.map((c) => repos.catalog.put(c)),
         ...bundle.patients.map((p) => repos.patients.put(p)),
+      ]);
+      // Stays after their patients and before the visits that point at them: the outbox pushes in queue order, and
+      // a visit with an admission needs that admission on the server first.
+      for (const admission of admissions) await repos.admissions.put(admission);
+      await Promise.all([
         ...visitsToRestore.map((v) => repos.visits.put(v)),
         ...bundle.invoices.map((inv) => repos.invoices.putLocal(inv)),
         ...statusRowsToRestore.map((p) => repos.invoicePayments.put(p)),
@@ -192,6 +205,7 @@ export function createBackupService(repos: Repos) {
         therapists: bundle.therapists.length,
         catalog: bundle.catalog.length,
         patients: bundle.patients.length,
+        admissions: admissions.length,
         visits: bundle.visits.length,
         visitItems: visitItems.length,
         visitCredits: visitCredits.length,

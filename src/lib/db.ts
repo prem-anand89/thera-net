@@ -7,6 +7,7 @@ import type {
   ReferringSourceItem,
   TreatmentItem,
   Patient,
+  Admission,
   Visit,
   VisitItem,
   VisitCredit,
@@ -64,6 +65,7 @@ export type SyncedTable =
   | 'referring_source_catalog'
   | 'treatment_catalog'
   | 'patients'
+  | 'admissions'
   | 'visits'
   | 'visit_items'
   | 'visit_credits'
@@ -102,6 +104,7 @@ export const ALL_SYNCED_TABLES = [
   'referring_source_catalog',
   'treatment_catalog',
   'patients',
+  'admissions',
   'visits',
   'visit_items',
   'visit_credits',
@@ -156,6 +159,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'referring_source_catalog',
   'treatment_catalog',
   'patients',
+  'admissions',
   'visits',
   'visit_items',
   'visit_credits',
@@ -178,6 +182,7 @@ export class ClinicDB extends Dexie {
   referring_source_catalog!: Table<ReferringSourceItem, string>;
   treatment_catalog!: Table<TreatmentItem, string>;
   patients!: Table<Patient, string>;
+  admissions!: Table<Admission, string>;
   visits!: Table<Visit, string>;
   visit_items!: Table<VisitItem, string>;
   visit_credits!: Table<VisitCredit, string>;
@@ -327,6 +332,10 @@ export class ClinicDB extends Dexie {
     this.version(26).stores({
       visit_items: 'id, clinicId, visitId, [clinicId+updatedAt]',
       visit_credits: 'id, clinicId, visitId, therapistId',
+    });
+    // Inpatient stays (ward rounds, discharge bill). Opens and discharges are read by patient and by clinic.
+    this.version(27).stores({
+      admissions: 'id, clinicId, patientId, [clinicId+updatedAt]',
     });
   }
 }

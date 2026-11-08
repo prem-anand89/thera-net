@@ -73,7 +73,7 @@ import { useClinicRole } from '@/app/useClinicRole';
 import { collectionsLine } from '@/domain/collectionsByMethod';
 import { saveLedgerPrefs } from '@/features/visits/ledgerPrefs';
 import { WorkspacePlaceToggle, inWorkspacePlace, type WorkspacePlace } from './WorkspacePlaceToggle';
-import { offersLocationChoice } from '@/domain/careLocations';
+import { offersBookingChoice } from '@/domain/careLocations';
 
 const EMPTY_SET = new Set<string>();
 
@@ -1099,7 +1099,7 @@ export function WorkspacePage() {
           extra={placeToggle}
         />
       )}
-      {!workspaceView.canToggle && offersLocationChoice(clinic) && <div className="px-1">{placeToggle}</div>}
+      {!workspaceView.canToggle && offersBookingChoice(clinic) && <div className="px-1">{placeToggle}</div>}
 
       {scope.isUnlinkedTherapist && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">

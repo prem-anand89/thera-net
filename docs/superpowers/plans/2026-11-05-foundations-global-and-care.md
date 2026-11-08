@@ -134,6 +134,13 @@ A live error, independent of this feature, and the discharge bill depends on it.
 - **Offline conflict:** Two devices admitting the same patient offline: handle index rejection cleanly by keeping the first and notifying staff (no retry loops).
 - **Mistaken admission:** A quiet red action at the foot of the sheet allows deletion **only if 0 visits** have been logged against it.
 
+**I2 build notes (Opus review of I1, 2026-11-08).**
+- **What the sync engine already does with a refused second admission:** `23505` is a permanent failure (`sync/status.ts`), so the engine reverts the row to server truth, which removes the losing stay from the device (there is no server row), and keeps the outbox error visible. That covers the stay itself. **What it does not cover:** a visit logged offline against the losing stay. Its push fails with `23503` (foreign key), which is NOT on the permanent list, so it retries forever. I2 must handle it: when an `admissions` push is refused as a duplicate, pull the patient's open stay from the server, re-point that patient's local visits from the losing id to the surviving one (outbox them), then clear the losing entry and tell staff ("Already admitted on another device; sessions moved to that stay"). Test it.
+- **Service:** `admissionService` (new, `src/services/admissionService.ts`): `admit`, `changeWardBed`, `discharge`, `deleteMistaken`. `admit` refuses when `repos.admissions.listByPatient` has an open stay (before writing). `deleteMistaken` refuses when any live visit has the stay's id. Map the server's plan refusal (`42501`, "not included in the … plan") to a friendly message.
+- **Visits by stay:** there is no Dexie index on `visits.admissionId`; read a patient's visits by `patientId` and filter. Add an index only if the Inpatients card (I3) needs it.
+- **Do not push I1 on its own:** the Settings switch lets a Clinic-plan clinic turn Inpatient on, and before I2 and I3 there is nothing to use. Push I1 together with I2 and I3, or hide the switch until then.
+- **Apply step:** after the migration is applied, set `supabase_migrations.schema_migrations` to the file's version `20261108120000` and name `admissions` (CLAUDE.md), and check: a Solo clinic's insert is refused, a second open stay is refused, a `ward` visit without a stay is refused, a re-put of an existing stay on a Solo clinic passes.
+
 **I3. Ward rounds (Opus reviews, Sonnet builds).**
 - Workspace card **Inpatients (N)**, visible only when `clinic.careLocations.includes('ward')`, grouped by ward: patient name, bed, day of stay, and **Seen today (N visits)** indicator.
 - **Seen today indicator:**

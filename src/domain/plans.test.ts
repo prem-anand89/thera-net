@@ -3,7 +3,7 @@ import { visitCapStatus, tierIncludes, PLAN_TIER_LABELS, currentMonthRange, mini
 import type { PlanTier } from './types';
 
 const TIERS: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
-const FEATURES: PlanFeature[] = ['invoicing', 'revenueSplit', 'advancedModules', 'notePrinting'];
+const FEATURES: PlanFeature[] = ['invoicing', 'revenueSplit', 'advancedModules', 'notePrinting', 'inpatient'];
 
 describe('tierIncludes', () => {
   it('every tier × feature cell is defined (no accidental undefined)', () => {
@@ -49,6 +49,12 @@ describe('minimumTierFor', () => {
 
   it('invoicing is included from Solo', () => {
     expect(minimumTierFor('invoicing')).toBe('solo');
+  });
+
+  it('inpatient admissions are included from Clinic, not Lite or Solo', () => {
+    expect(minimumTierFor('inpatient')).toBe('clinic');
+    expect(tierIncludes('solo', 'inpatient')).toBe(false);
+    expect(tierIncludes('clinic', 'inpatient')).toBe(true);
   });
 
   it('revenueSplit is included from Clinic, advancedModules from Clinic+', () => {

@@ -608,9 +608,12 @@ export interface Visit {
    * Where the visit happened. Domiciliary (homecare) billing generally
    * needs this recorded explicitly and separately justified — a TPA wants
    * to see why the visit couldn't have been an in-clinic OP visit instead.
-   * Optional: older cached rows predate this and default to 'clinic'.
+   * Optional: older cached rows predate this and default to 'clinic'. 'ward' is an inpatient round: it is set only
+   * by logging a session against an admission, never chosen on the New Visit toggle.
    */
-  location?: 'clinic' | 'home';
+  location?: CareLocation;
+  /** The inpatient stay this visit belongs to (`admissions.id`); null or absent for an ordinary visit. */
+  admissionId?: UUID | null;
   /**
    * How the visit's revenue shares (VisitCredit rows) are kept: 'auto' = recomputed from the service
    * lines whenever they change; 'manual' = someone edited the shares by hand, so line changes leave them
@@ -829,6 +832,28 @@ export interface Payment {
    *  see `advanceService.applyAdvance`. Optional: pre-existing payments and
    *  every non-advance payment lack it. */
   advanceId?: UUID | null;
+  updatedAt: string;
+}
+
+/**
+ * One inpatient stay (ward rounds, discharge bill). At most one is open per patient (`dischargedOn` null and not
+ * deleted); the server's partial unique index holds that line when two devices admit offline. Only clinics on a plan
+ * with the `inpatient` feature can write these. `wardBed` is one free-text field ("Ortho ward, bed 12"); changing it
+ * edits the row in place, so a bed move is not kept as history. Soft-deleted only while the stay has no visits.
+ */
+export interface Admission {
+  id: UUID;
+  clinicId: UUID;
+  patientId: UUID;
+  ipdNo: string | null;
+  wardBed: string | null;
+  admittingDoctor: string | null;
+  /** ISO date yyyy-mm-dd. */
+  admittedOn: string;
+  /** ISO date; null while the patient is still admitted. */
+  dischargedOn: string | null;
+  notes: string | null;
+  deleted: boolean;
   updatedAt: string;
 }
 

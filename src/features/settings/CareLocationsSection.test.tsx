@@ -13,6 +13,10 @@ vi.mock('@/services', () => ({
   repos: { clinics: { get: async () => clinicRef.current, put: (row: Partial<Clinic>) => put(row) } },
   visitService: { recomputeUninvoicedSplits: async () => ({ updated: 0 }) },
 }));
+const inpatientOnPlan = { current: true };
+vi.mock('@/app/useEntitlements', () => ({
+  useEntitlements: () => ({ planPending: false, can: () => inpatientOnPlan.current }),
+}));
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => null, publicLogoUrl: () => null }));
 
 import { CareLocationsSection } from './ClinicSections';
@@ -20,6 +24,7 @@ import { CareLocationsSection } from './ClinicSections';
 beforeEach(() => {
   clinicRef.current = { id: 'c1', name: 'Physio Clinic' };
   put.mockClear();
+  inpatientOnPlan.current = true;
 });
 afterEach(cleanup);
 
@@ -31,7 +36,7 @@ describe('Places you see patients', () => {
     expect(sw('Clinic')).toBeChecked();
     expect(sw('Home visit')).not.toBeChecked();
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
-    expect(screen.getByText('Coming next')).toBeInTheDocument();
+    expect(sw('Inpatient')).not.toBeChecked();
   });
 
   it('turning Home on and saving stores clinic and home', async () => {
@@ -50,5 +55,20 @@ describe('Places you see patients', () => {
     expect(sw('Clinic')).not.toBeChecked();
     expect(sw('Home visit')).toBeChecked();
     expect(sw('Home visit')).toBeDisabled();
+  });
+
+  it('turning Inpatient on stores it with Clinic; a plan without it shows the plan instead of a switch', async () => {
+    const { unmount } = render(<CareLocationsSection onDirtyChange={vi.fn()} />);
+    fireEvent.click(sw('Inpatient'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0].careLocations).toEqual(['clinic', 'ward']);
+    unmount();
+
+    inpatientOnPlan.current = false;
+    clinicRef.current = { id: 'c1', name: 'Physio Clinic' };
+    render(<CareLocationsSection onDirtyChange={vi.fn()} />);
+    expect(screen.queryByRole('switch', { name: /Inpatient/ })).toBeNull();
+    expect(screen.getByText('Clinic plan and above')).toBeInTheDocument();
   });
 });

@@ -45,6 +45,7 @@ import type {
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
   PatientAdvanceRepo,
+  AdmissionRepo,
   FeedbackRequestRepo,
   FeedbackResponseRepo,
   AppointmentRequestRepo,
@@ -457,6 +458,25 @@ const patientModuleEnrollments: PatientModuleEnrollmentRepo = {
   put: (enrollment) => putWithOutbox('patient_module_enrollments', enrollment),
 };
 
+const admissions: AdmissionRepo = {
+  get: (id) => db.admissions.get(id),
+  async listByClinic(clinicId) {
+    const all = await db.admissions.where('clinicId').equals(clinicId).toArray();
+    return all.filter((a) => !a.deleted).sort((a, b) => b.admittedOn.localeCompare(a.admittedOn));
+  },
+  async listByPatient(clinicId, patientId) {
+    const all = await db.admissions.where('patientId').equals(patientId).toArray();
+    return all
+      .filter((a) => a.clinicId === clinicId && !a.deleted)
+      .sort((a, b) => b.admittedOn.localeCompare(a.admittedOn));
+  },
+  async listOpen(clinicId) {
+    const all = await this.listByClinic(clinicId);
+    return all.filter((a) => !a.dischargedOn);
+  },
+  put: (admission) => putWithOutbox('admissions', admission),
+};
+
 const patientAdvances: PatientAdvanceRepo = {
   get: (id) => db.patient_advances.get(id),
   async listByPatient(clinicId, patientId) {
@@ -576,6 +596,7 @@ export const repos: Repos = {
   referringSourceCatalog,
   treatmentCatalog,
   patients,
+  admissions,
   visits,
   visitItems,
   visitCredits,

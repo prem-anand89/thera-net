@@ -24,6 +24,15 @@ export function offersLocationChoice(clinic: { careLocations?: readonly string[]
   return clinicCareLocations(clinic).length > 1;
 }
 
+/**
+ * More than one place a visit can be booked or logged at (inpatient is not one of them: it comes from an admission).
+ * The Place pickers, filters and service defaults use this, so a clinic with only Clinic and Inpatient on is not asked
+ * to choose between one thing.
+ */
+export function offersBookingChoice(clinic: { careLocations?: readonly string[] | null } | null | undefined): boolean {
+  return bookableLocations(clinic).length > 1;
+}
+
 /** Home visits are on for this clinic (the patient address, Open in Maps). */
 export function homeCareOn(clinic: { careLocations?: readonly string[] | null } | null | undefined): boolean {
   return clinicCareLocations(clinic).includes('home');

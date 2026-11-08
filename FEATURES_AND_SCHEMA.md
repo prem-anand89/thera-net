@@ -762,7 +762,7 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 
 | Tab | Contains |
 |---|---|
-| `general` | Clinic profile (no partner fields), Region and daily email, **After a visit** (`AfterVisitSection`: two switch rows — "Ask for a clinical note after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off), then **Places you see patients** (`CareLocationsSection`, card id `settings-card-care-locations`: switches for Clinic and Home visit, at least one always on; Inpatient shows "Coming next"; saves `care_locations`, off by default so a clinic that does nothing sees no change; Home on adds the optional Address field to Add and Edit patient); **New Visit's Clinic / Home toggle** shows only when the clinic sees patients in more than one place, and starts from the appointment, else a repeated visit, else the first service's usual place (never overriding a tap), else Clinic (Home for a home-only clinic); **Workspace → Today** gets All / Clinic / Home visit chips on the appointments card, the **Patients** list a "Home" chip (patients with an address or any home visit; shown when Home is on), and the **Daybook** an "Of this, by place" split of what was collected (advances listed apart, partner-collected money left out as in the total); **Ledger** gets a Place filter and **Reports** a "By place" card (visits and billed per therapist and place for the focused month, counting only, admin; `domain/careLocationSplit.ts`), both only for such clinics, then **Referral sources** (`ReferralSourcesCard`: how patients found the clinic — the sources staff pick when adding a patient — formerly the Referral sources view of the Services tab; card id `settings-card-general-referrals`) |
+| `general` | Clinic profile (no partner fields), Region and daily email, **After a visit** (`AfterVisitSection`: two switch rows — "Ask for a clinical note after each visit" = `clinical_docs_enabled`, and "Ask patients for feedback" = `enable_patient_comms`, which gates only feedback requests; the Google review link (`google_review_url`) shows under the feedback switch while it is on and is kept when it is off), then **Places you see patients** (`CareLocationsSection`, card id `settings-card-care-locations`: switches for Clinic and Home visit, at least one always on; Inpatient is a switch on a plan with the `inpatient` feature (Clinic and Clinic+), else it names the plan; saves `care_locations`, off by default so a clinic that does nothing sees no change; Home on adds the optional Address field to Add and Edit patient); **New Visit's Clinic / Home toggle** shows only when the clinic sees patients in more than one place, and starts from the appointment, else a repeated visit, else the first service's usual place (never overriding a tap), else Clinic (Home for a home-only clinic); **Workspace → Today** gets All / Clinic / Home visit chips on the appointments card, the **Patients** list a "Home" chip (patients with an address or any home visit; shown when Home is on), and the **Daybook** an "Of this, by place" split of what was collected (advances listed apart, partner-collected money left out as in the total); **Ledger** gets a Place filter and **Reports** a "By place" card (visits and billed per therapist and place for the focused month, counting only, admin; `domain/careLocationSplit.ts`), both only for such clinics, then **Referral sources** (`ReferralSourcesCard`: how patients found the clinic — the sources staff pick when adding a patient — formerly the Referral sources view of the Services tab; card id `settings-card-general-referrals`) |
 | `team` | Two views on a `Segmented` control: **Team members** (therapists, invites, logins; the unlinked-login banner, shown inside the list: below the plan's login limit it says to add their email, at the limit — `atSeatCap` in `domain/seatCap.ts`, also used by the landing tab and the setup checklist — it says the plan's logins are all in use, and a team member's "Email for login" is locked with the plan that has room; at the limit Settings no longer lands on Team just for unlinked therapists, and the setup steps "Invite your team" / "Link every therapist" turn optional and say to upgrade, ids unchanged) and **Working hours** (pending shift requests, the **Weekly shifts** card, shift templates), with a count badge on Shifts while shift requests are pending. `?teamView=members|shifts` (parsed like `catalogView`; unknown values fall back to members) opens a view; Schedule's "N shift requests pending · Review" link and Settings search for shift words open Shifts. Default is Team members. |
 | `services` (label **Services & treatments**; the key and URL stay `services`) | Two views on a `Segmented` control, **Services** (`catalogView=packages`: card "Services and prices") and **Treatments** (`catalogView=treatments`). One sentence under each title says where the list shows up (services: what patients pay for, picked on a visit and printed on bills; treatments: what you did in the session, shown as quick picks on each visit). No count pills. Wording: "Stop offering" / "Offer again" for services, "Hide" / "Show" for treatments and referral sources, "Inactive (N)" and "Show hidden (N)" for the stopped ones, "One visit" (never "Single session"). |
 | `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), **Online booking page** (the booking link, and the WhatsApp Business sub-block) |
@@ -1907,7 +1907,8 @@ patient_signature_url text (NULLABLE)
 clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
 consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
 reauthorization_required  boolean NOT NULL
-location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`)
+location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`). 'ward' only with an admission (check `visits_admission_ward_check`)
+admission_id          uuid NULL → admissions(id) — the inpatient stay this visit is a round of; set <=> location = 'ward'; must be the same patient's and clinic's (`check_visit_admission`)
 credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
                        visit_credits rows follow the service lines or were edited by hand
 service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
@@ -1927,6 +1928,17 @@ admin or the visit's own therapist (the therapist before the update), or there i
 Triggers:
 - `visits_enforce_package_limit` (`enforce_package_session_limit()`): ensures a package cannot exceed its total session limit. Since `20261028210000`, excludes the row itself (`id != new.id`) so upserts (`INSERT ... ON CONFLICT DO UPDATE`) when editing an existing visit session never falsely count the row being updated.
 - `visits_enforce_plan` (`enforce_clinic_plan_on_visit_insert()`): checks monthly visit quotas per clinic plan; also excludes `id != new.id` so editing existing visits does not count against new-visit quotas.
+
+#### `admissions` (inpatient stays; migration `20261108120000`)
+
+```
+id, clinic_id, patient_id (→ patients, on delete cascade),
+ipd_no, ward_bed, admitting_doctor        text, all optional ("Ortho ward, bed 12" is one free-text field)
+admitted_on date NOT NULL, discharged_on date NULL (check: not before admitted_on; null = still admitted)
+notes, deleted, created_by, updated_by, updated_at
+```
+
+One OPEN stay per patient: partial unique index `admissions_one_open_per_patient` (clinic, patient) where `discharged_on is null and not deleted`, so two devices admitting the same patient offline cannot both win; the second push is refused. A bed move edits the row in place (no history). A stay can be soft-deleted only while it has no live visits (`check_admission`). **Plan gate (server):** adding a stay needs a plan with the `inpatient` feature (Clinic and Clinic+; `check_admission` refuses Lite and Solo and a read-only plan; the platform kill switch `tier_enforcement_enabled()` turns it off); editing or discharging an existing stay is never refused, and a re-put of an existing id (sync retry, backup restore) passes. RLS: any clinic member reads, adds and edits (like patients); only an admin hard-deletes. Synced like visits: soft delete, tombstone trigger, audit trail, realtime. Client: `Admission` type, Dexie table `admissions` (v27), `repos.admissions` (`get`, `listByClinic`, `listByPatient`, `listOpen`, `put`), in `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES`, in the backup (`admissions`, restored after patients and before visits so the outbox pushes a stay before its visits). **Plan feature `inpatient`** (`PlanFeature`; `minimumTierFor('inpatient')` = clinic): Settings → General → Places you see patients shows an Inpatient switch only on such a plan (a lower plan sees "Clinic plan and above"); a clinic already holding the setting keeps it and can only turn it off. `offersBookingChoice` (more than one *bookable* place) drives the Place pickers and filters, so Clinic + Inpatient alone is no choice. Admit, discharge and ward rounds are built on this in later steps (I2 to I4).
 
 #### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
 
@@ -2870,7 +2882,7 @@ returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
 when unknown) and `visitsThisMonth` (computed from local Dexie visits via
 `repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
 pure tier → feature map (`tierIncludes()`: invoicing, revenueSplit,
-advancedModules, notePrinting) the hook's `can()` reads, plus `currentMonthRange()`
+advancedModules, notePrinting, inpatient) the hook's `can()` reads, plus `currentMonthRange()`
 — both unit-tested. **What a tier includes in numbers** is `TIER_LIMITS` (seats,
 visits a month, team members without a login: Lite 1 / 50 / 1, Solo 1 / 200 / 1,
 Clinic 5 / unlimited / 3, Clinic+ 10 / unlimited / 10), with `nextTierWithMore()` and
@@ -3929,7 +3941,8 @@ patient_signature_url text (NULLABLE)
 clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
 consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
 reauthorization_required  boolean NOT NULL
-location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`)
+location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`). 'ward' only with an admission (check `visits_admission_ward_check`)
+admission_id          uuid NULL → admissions(id) — the inpatient stay this visit is a round of; set <=> location = 'ward'; must be the same patient's and clinic's (`check_visit_admission`)
 credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
                        visit_credits rows follow the service lines or were edited by hand
 service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
@@ -3949,6 +3962,17 @@ admin or the visit's own therapist (the therapist before the update), or there i
 Triggers:
 - `visits_enforce_package_limit` (`enforce_package_session_limit()`): ensures a package cannot exceed its total session limit. Since `20261028210000`, excludes the row itself (`id != new.id`) so upserts (`INSERT ... ON CONFLICT DO UPDATE`) when editing an existing visit session never falsely count the row being updated.
 - `visits_enforce_plan` (`enforce_clinic_plan_on_visit_insert()`): checks monthly visit quotas per clinic plan; also excludes `id != new.id` so editing existing visits does not count against new-visit quotas.
+
+#### `admissions` (inpatient stays; migration `20261108120000`)
+
+```
+id, clinic_id, patient_id (→ patients, on delete cascade),
+ipd_no, ward_bed, admitting_doctor        text, all optional ("Ortho ward, bed 12" is one free-text field)
+admitted_on date NOT NULL, discharged_on date NULL (check: not before admitted_on; null = still admitted)
+notes, deleted, created_by, updated_by, updated_at
+```
+
+One OPEN stay per patient: partial unique index `admissions_one_open_per_patient` (clinic, patient) where `discharged_on is null and not deleted`, so two devices admitting the same patient offline cannot both win; the second push is refused. A bed move edits the row in place (no history). A stay can be soft-deleted only while it has no live visits (`check_admission`). **Plan gate (server):** adding a stay needs a plan with the `inpatient` feature (Clinic and Clinic+; `check_admission` refuses Lite and Solo and a read-only plan; the platform kill switch `tier_enforcement_enabled()` turns it off); editing or discharging an existing stay is never refused, and a re-put of an existing id (sync retry, backup restore) passes. RLS: any clinic member reads, adds and edits (like patients); only an admin hard-deletes. Synced like visits: soft delete, tombstone trigger, audit trail, realtime. Client: `Admission` type, Dexie table `admissions` (v27), `repos.admissions` (`get`, `listByClinic`, `listByPatient`, `listOpen`, `put`), in `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES`, in the backup (`admissions`, restored after patients and before visits so the outbox pushes a stay before its visits). **Plan feature `inpatient`** (`PlanFeature`; `minimumTierFor('inpatient')` = clinic): Settings → General → Places you see patients shows an Inpatient switch only on such a plan (a lower plan sees "Clinic plan and above"); a clinic already holding the setting keeps it and can only turn it off. `offersBookingChoice` (more than one *bookable* place) drives the Place pickers and filters, so Clinic + Inpatient alone is no choice. Admit, discharge and ward rounds are built on this in later steps (I2 to I4).
 
 #### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
 
@@ -4892,7 +4916,7 @@ returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
 when unknown) and `visitsThisMonth` (computed from local Dexie visits via
 `repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
 pure tier → feature map (`tierIncludes()`: invoicing, revenueSplit,
-advancedModules, notePrinting) the hook's `can()` reads, plus `currentMonthRange()`
+advancedModules, notePrinting, inpatient) the hook's `can()` reads, plus `currentMonthRange()`
 — both unit-tested. **What a tier includes in numbers** is `TIER_LIMITS` (seats,
 visits a month, team members without a login: Lite 1 / 50 / 1, Solo 1 / 200 / 1,
 Clinic 5 / unlimited / 3, Clinic+ 10 / unlimited / 10), with `nextTierWithMore()` and

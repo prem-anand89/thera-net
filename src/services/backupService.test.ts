@@ -2,6 +2,7 @@ import { describe, beforeEach, expect, it } from 'vitest';
 import { createBackupService } from './backupService';
 import type { Repos } from '@/repositories/types';
 import type {
+  Admission,
   CatalogItem,
   Clinic,
   ConsultationNote,
@@ -40,6 +41,7 @@ function makeFakeRepos() {
   const catalog: CatalogItem[] = [];
   const patients = new Map<string, Patient>();
   const visits = new Map<string, Visit>();
+  const admissions = new Map<string, Admission>();
   const visitItems = new Map<string, VisitItem>();
   const visitCredits = new Map<string, VisitCredit>();
   const calls: string[] = [];
@@ -57,6 +59,13 @@ function makeFakeRepos() {
     patients: {
       list: async () => [...patients.values()],
       put: async (p: Patient) => void patients.set(p.id, p),
+    },
+    admissions: {
+      listByClinic: async () => [...admissions.values()],
+      put: async (a: Admission) => {
+        calls.push('admissions');
+        admissions.set(a.id, a);
+      },
     },
     visits: {
       list: async () => [...visits.values()],
@@ -109,6 +118,7 @@ function makeFakeRepos() {
     repos,
     clinic,
     patients,
+    admissions,
     visits,
     visitItems,
     visitCredits,
@@ -236,6 +246,32 @@ describe('backupService.restoreBundle with voided invoices', () => {
     expect(fake.visits.get('v1')?.invoiceId).toBeNull();
     expect(fake.invoicePayments.get('now')?.status).toBe('void');
     expect(fake.invoicePayments.has('old')).toBe(false);
+  });
+});
+
+describe('backupService with inpatient stays', () => {
+  const stay = { id: 'a1', clinicId: 'clinic-1', patientId: 'p1' } as unknown as Admission;
+
+  it('round-trips stays and restores them before the visits that point at them', async () => {
+    const fake = makeFakeRepos();
+    fake.admissions.set('a1', stay);
+    fake.visits.set('v1', { id: 'v1', clinicId: 'clinic-1', invoiceId: null, admissionId: 'a1' } as unknown as Visit);
+    const bundle = await createBackupService(fake.repos).exportBundle('clinic-1');
+    expect(bundle.admissions).toEqual([stay]);
+
+    const target = makeFakeRepos();
+    const summary = await createBackupService(target.repos).restoreBundle(bundle, 'clinic-1');
+    expect(target.admissions.get('a1')).toEqual(stay);
+    expect(summary.admissions).toBe(1);
+    expect(target.calls.indexOf('admissions')).toBeLessThan(target.calls.indexOf('visits'));
+  });
+
+  it('restores an older backup without stays as none', async () => {
+    const fake = makeFakeRepos();
+    const svc = createBackupService(fake.repos);
+    const bundle = await svc.exportBundle('clinic-1');
+    delete bundle.admissions;
+    expect((await svc.restoreBundle(bundle, 'clinic-1')).admissions).toBe(0);
   });
 });
 
