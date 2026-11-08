@@ -108,3 +108,101 @@ therapist pay per department (HR).
   visits / appointments / payments list, and a test per screen.
 - Bill series migration recreates money functions: copy the live definitions, test the old series continues gap-free.
 - RLS does not enforce department access in v1 (display-level only), stated in the docs.
+
+---
+
+# Gemini briefs (steps 1 and 2 screens)
+
+**Claude has built the foundation (Step 1):** migration `20261108140000_departments_access.sql` (owner applies it),
+`src/domain/departments.ts`, `src/app/DepartmentContext.tsx` (`useDepartment()`, `DepartmentProvider`, wired in
+`Shell.tsx`), `Therapist.careLocations`, `useClinicRole().departments`. Use them; do not re-derive.
+
+## Standing rules (prepend to every task)
+Start with `git status --short` and `git log --oneline -5`. Work on `main`, small commits, `git add <explicit paths>`
+only (never `-A`, stash, reset --hard, push, --force, --no-verify). Never touch the live database (write the migration
+`.sql` only, Claude applies it). Do not invent names: stop and report if a named file or function is missing. Tests
+first. Every `<button>` has `type`. Update `FEATURES_AND_SCHEMA.md` (all duplicated copies) in the same change. No `₹`
+typed by hand (`formatAmount`). Do not edit this plan file. Paste real command output; never claim "verified" without it.
+Verification per task: `npm run check:fast`. Once at the end of the batch: `npm run typecheck`, `npm run lint`,
+`npm run test` run once, and `npx vite build` when routing or shared components changed. Report: commits, files
+changed, tails of the final run, deviations, open questions.
+
+## The one rule every task follows
+`const { department, departments, canSwitch } = useDepartment()` gives the department the app is showing. A screen
+shows ONLY records whose `departmentOf(record) === department` (`inDepartment(department, record)`; a record with no
+location is OP). Counts, totals, badges and empty states all come from the scoped list, never the full one. When
+`canSwitch` is false there is no switch anywhere. Labels come from `DEPARTMENT_LABELS` (OP / Home care / IP). Never
+write the words "Clinic" / "Home visit" / "Inpatient" as a place choice any more.
+
+## G1. The header switch (Step 1)
+- New `src/components/DepartmentSwitch.tsx`; render it in the `Shell.tsx` header beside the clinic pill, only when
+  `canSwitch`. Desktop: a segmented control (`segTrack` / `segOption` from `@/components/ui`) with `DEPARTMENT_LABELS`.
+  Phone (below `sm`): a compact `OP ▾` button that opens a small menu (reuse the clinic switcher's menu pattern).
+- A thin colour band under the header per department (`--teal` OP, `--sky` Home care, `--plum` IP).
+- Tests: renders nothing when `canSwitch` is false; clicking a department calls `setDepartment`; the active one is
+  `aria-pressed`. 360px: nothing overflows.
+
+## G2. Departments on Settings → Team (Step 1)
+- In `src/features/settings/TeamSection.tsx`, on a member's edit form add "Departments" (ticks OP / Home care / IP from
+  `clinicDepartments(clinic)`, none ticked = all), shown only when the clinic has more than one. Save it in the same
+  `clinic_members.update(...)` as role and display name: `departments: ticked.length === 0 || ticked.length === all.length ? null : ticked`.
+  For roster-only therapists (no login) and linked ones, the same ticks write `therapists.care_locations` (via
+  `repos.therapists.put({...therapist, careLocations})`, same null rule), labelled "Works in".
+- Tests: saves null when all or none ticked; saves the subset otherwise; hidden for a one-department clinic.
+
+## G3. Workspace per department (Step 2)
+`src/features/workspace/WorkspacePage.tsx`. Show only the selected department's cards:
+- **OP:** the Appointments card (clinic appointments only: filter `appointmentsForList` by `inDepartment('clinic', a)`),
+  Today's visits (OP visits), Follow up.
+- **Home care:** new **Home visits today** card (`HomeVisitsCard.tsx`: today's home appointments in time order, each with
+  address from the patient (Copy address, Call), Arrived / Log visit using the same actions as `TodayAppointments`),
+  then Today's visits (home visits), Follow up.
+- **IP:** the existing `InpatientsCard`, Today's visits (ward sessions only), Follow up. No Appointments card.
+- Tiles: Collected and Dues are the selected department's (`today.visits` and payments filtered by department). IP shows
+  "Running charges ₹X · N stays" (sum of unbilled ward sessions) in place of Dues, since unbilled inpatient sessions are
+  not dues until discharge.
+- Remove `WorkspacePlaceToggle` and its use. Keep All | Mine.
+- Tests: switching department shows only that department's cards and rows; tile numbers equal the sum of the rows shown.
+
+## G4. Ledger per department (Step 2)
+`src/features/visits/LedgerPage.tsx`, `DaybookPage.tsx`, `src/features/invoices/InvoicesPage.tsx`.
+- Visits, Invoices, Daybook, Dues and the Credits tab show only the selected department. An invoice's department is its
+  visits' (`clinicalSnapshot.placeOfService`: clinic / home / ward; older bills with none are OP).
+- Daybook: OP = drawer (cash, UPI, card). Home care = field collections grouped by therapist under "To hand over". IP =
+  discharge settlements, deposits, and money the hospital collected on its own line **Hospital partner clearance**
+  (`method === 'partner'`), not as cash.
+- Remove the Place filter and the Daybook "Of this, by place" split.
+- Tests: each tab's rows and totals for the three departments; partner money shows as clearance and never in a drawer.
+
+## G5. Schedule and Book (Step 2)
+`src/features/schedule/*`, `src/components/BookSlotSheet.tsx`. The calendar shows the selected department's
+appointments (OP, Home care; IP has no booking and the Book buttons are hidden there). `BookSlotSheet` drops the Place
+row: the booking's location IS the department. The therapist picker uses `therapistsInDepartment(department, therapists)`.
+Tests: a Home care booking saves `location: 'home'`; the picker hides a therapist who works only in OP.
+
+## G6. New Visit (Step 2)
+`src/features/visits/NewVisitPage.tsx`. Remove the Clinic / Home toggle; the visit's location is the department (OP =
+clinic, Home care = home). IP visits start only from "Log session" (already built; keep the fixed Inpatient tag).
+The therapist picker uses `therapistsInDepartment`. Opening a visit link for a record of another department is allowed.
+Tests: a Home care visit saves `location: 'home'`; the therapist list follows the department.
+
+## G7. Patient profile (Step 2)
+`src/features/patients/PatientProfilePage.tsx`. The visit history lists every department's visits with a small
+`DEPARTMENT_LABELS` tag on each (shared file). The money panels (bills, dues, advances, Take payment, bulk bill) use only
+the selected department's visits. "Admit to ward" shows for anyone who can open IP, even while in OP; after admitting,
+call `setDepartment('ward')`.
+Tests: history shows all departments tagged; the bulk-bill list is the selected department's only.
+
+## G8. Reports (Step 2)
+`src/features/reports/*`, `src/components/CareLocationSplitCard.tsx`. Reports show the selected department only (admin).
+Delete `CareLocationSplitCard` and its `domain/careLocationSplit.ts` once nothing uses them.
+Tests: totals equal the department's visits.
+
+## G9. Remove the old Place controls (Step 2)
+Delete: `WorkspacePlaceToggle` (+ test), the Patients "Home" chip, the New Visit toggle, the booking Place row, the
+service form's "Usually done at" (Step 3 replaces it with department ticks). Delete `offersBookingChoice` /
+`offersLocationChoice` call sites that only existed for these controls; keep `placeLabelFor` if a list still tags records.
+
+## Order for Gemini
+G1 and G2 first (they need only the foundation), then G3 to G8 one at a time (each is one commit), then G9. Claude
+reviews after G2, after G4 and at the end.

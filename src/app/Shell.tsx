@@ -18,6 +18,7 @@ import { syncEngine } from '@/sync/engine';
 import { syncStatus } from '@/sync/status';
 import { useSession } from './useSession';
 import { useClinicRole } from './useClinicRole';
+import { DepartmentProvider } from './DepartmentContext';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
@@ -130,7 +131,7 @@ export function Shell() {
   // down. useClinicRole takes a clinicId directly instead. Nav filtering
   // (not RLS) is display-only, same caveat as everywhere else this role
   // value is read; the real boundary is the settings tables' RLS policies.
-  const { role, displayName, setDisplayName, loading: roleLoading } = useClinicRole(
+  const { role, displayName, departments: memberDepartments, setDisplayName, loading: roleLoading } = useClinicRole(
     clinic?.id ?? ''
   );
   const therapists = useLiveQuery(
@@ -423,6 +424,7 @@ export function Shell() {
 
   return (
     <ClinicContext.Provider value={clinic}>
+      <DepartmentProvider clinic={clinic} userId={session?.user?.id} role={role} departments={memberDepartments}>
       <div className="min-h-screen bg-[var(--paper)]">
         <header ref={trackAppHeaderHeight} className={`no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] ${shouldShowPhoneAppHeader(pathname) ? '' : 'max-sm:hidden'}`}>
           {/* Header layout. Left: the Thera.Net mark (the product; wordmark
@@ -573,6 +575,7 @@ export function Shell() {
           </nav>
         )}
       </div>
+      </DepartmentProvider>
     </ClinicContext.Provider>
   );
 }

@@ -16,6 +16,8 @@ export const CLINIC_ROLE_LABELS: Record<Exclude<ClinicRole, 'unknown'>, string> 
 interface CachedRole {
   role: ClinicRole;
   displayName: string | null;
+  /** The departments this login sees (`clinic_members.departments`); null = every department the clinic has. */
+  departments?: string[] | null;
 }
 
 function cacheKey(clinicId: string): string {
@@ -46,6 +48,8 @@ function putCache(clinicId: string, value: CachedRole) {
 export function useClinicRole(clinicId: string): {
   role: ClinicRole;
   displayName: string | null;
+  /** The departments this login sees; null = no restriction. */
+  departments: string[] | null;
   loading: boolean;
   /** Updates the signed-in user's own display_name (RLS: members_update_self
    *  — a member may only ever change their own row this way, never their
@@ -71,22 +75,32 @@ export function useClinicRole(clinicId: string): {
       return;
     }
     setLoading(true);
-    Promise.resolve(
-      supabase
+    // `departments` arrived with the departments migration. Until it is applied the column does not exist and the query
+    // errors; without a fallback the role would read as 'unknown' and an admin would be narrowed to the therapist view.
+    const memberRow = async () => {
+      const withDepartments = await supabase
+        .from('clinic_members')
+        .select('role, display_name, departments')
+        .eq('clinic_id', clinicId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!withDepartments.error || !/departments/i.test(withDepartments.error.message)) return withDepartments;
+      return supabase
         .from('clinic_members')
         .select('role, display_name')
         .eq('clinic_id', clinicId)
         .eq('user_id', userId)
-        .maybeSingle()
-    )
+        .maybeSingle();
+    };
+    Promise.resolve(memberRow())
       .then(
         ({
           data,
         }: {
-          data: { role: 'admin' | 'therapist' | 'front_desk'; display_name: string | null } | null;
+          data: { role: 'admin' | 'therapist' | 'front_desk'; display_name: string | null; departments?: string[] | null } | null;
         }) => {
           if (cancelled) return;
-          const resolved: CachedRole = { role: data?.role ?? 'unknown', displayName: data?.display_name ?? null };
+          const resolved: CachedRole = { role: data?.role ?? 'unknown', displayName: data?.display_name ?? null, departments: data?.departments ?? null };
           setFetched(resolved);
           // Only cache a confirmed role — a null result can mean "genuinely
           // not a member" or an RLS read getting blocked, and overwriting a
@@ -137,12 +151,12 @@ export function useClinicRole(clinicId: string): {
       .eq('clinic_id', clinicId)
       .eq('user_id', userId);
     if (error) throw error;
-    const next: CachedRole = { role: resolved.role, displayName: trimmed || null };
+    const next: CachedRole = { role: resolved.role, displayName: trimmed || null, departments: resolved.departments ?? null };
     setFetched(next);
     if (next.role !== 'unknown') {
       putCache(clinicId, next);
     }
   }
 
-  return { role: resolved.role, displayName: resolved.displayName, loading, setDisplayName };
+  return { role: resolved.role, displayName: resolved.displayName, departments: resolved.departments ?? null, loading, setDisplayName };
 }
