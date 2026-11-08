@@ -25,7 +25,7 @@ afterEach(cleanup);
 
 const sw = (name: string) => screen.getByRole('switch', { name: new RegExp(name) });
 
-describe('Where you see patients', () => {
+describe('Places you see patients', () => {
   it('a clinic that never set it shows Clinic on, Home off and no Save button', () => {
     render(<CareLocationsSection onDirtyChange={vi.fn()} />);
     expect(sw('Clinic')).toBeChecked();

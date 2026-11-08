@@ -763,8 +763,8 @@ export function BookSlotSheet({
             )}
             {placesOffered.length > 1 && !isReschedule && (
               <div className="mb-2">
-                <p className="mb-1 text-xs font-medium text-[var(--muted)]">Where</p>
-                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Where">
+                <p className="mb-1 text-xs font-medium text-[var(--muted)]">Place</p>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Place">
                   {placesOffered.map((place) => (
                     <button
                       key={place}

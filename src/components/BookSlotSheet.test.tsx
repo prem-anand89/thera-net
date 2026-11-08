@@ -111,7 +111,7 @@ describe('BookSlotSheet', () => {
     expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  describe('Where', () => {
+  describe('Place', () => {
     const fill = () => {
       fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
       fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Meera' } });
@@ -127,9 +127,9 @@ describe('BookSlotSheet', () => {
       data.catalog = [];
     });
 
-    it('a clinic with one place shows no Where row and books at the clinic', async () => {
+    it('a clinic with one place shows no Place row and books at the clinic', async () => {
       render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
-      expect(screen.queryByRole('radiogroup', { name: 'Where' })).toBeNull();
+      expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fill();
       await book();
       expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'clinic' }));
@@ -139,7 +139,7 @@ describe('BookSlotSheet', () => {
       data.clinic = { careLocations: ['clinic', 'home'] };
       data.catalog = [{ id: 's1', name: 'Home physio', active: true, durationMinutes: 60, defaultLocation: 'home' }];
       render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
-      const where = screen.getByRole('radiogroup', { name: 'Where' });
+      const where = screen.getByRole('radiogroup', { name: 'Place' });
       expect(within(where).getByRole('radio', { name: 'Clinic' })).toHaveAttribute('aria-checked', 'true');
       fireEvent.change(screen.getByLabelText(/Visit type/), { target: { value: 's1' } });
       expect(within(where).getByRole('radio', { name: 'Home visit' })).toHaveAttribute('aria-checked', 'true');
@@ -155,7 +155,7 @@ describe('BookSlotSheet', () => {
     it('a home-only clinic has no choice to make and books at home', async () => {
       data.clinic = { careLocations: ['home'] };
       render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
-      expect(screen.queryByRole('radiogroup', { name: 'Where' })).toBeNull();
+      expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fill();
       await book();
       expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'home' }));

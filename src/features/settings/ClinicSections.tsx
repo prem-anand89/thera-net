@@ -734,7 +734,7 @@ export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty:
   const onlyOne = on.length === 1;
 
   return (
-    <SectionCard id="settings-card-care-locations" title="Where you see patients">
+    <SectionCard id="settings-card-care-locations" title="Places you see patients">
       <fieldset disabled={busy} className="contents">
         <p className="mb-3 text-sm text-[var(--muted)]">
           Turn on every place you treat patients. With one place on, nothing about location is asked anywhere in the app.

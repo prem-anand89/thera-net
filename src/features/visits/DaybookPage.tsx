@@ -247,7 +247,7 @@ export function DaybookPage() {
           </div>
           {offersLocationChoice(clinic) && total > 0 && (
             <dl className="mt-3 space-y-1 border-t border-[var(--border)] pt-3 text-sm">
-              <dt className="text-xs font-medium text-[var(--muted)]">Of this, by where the visit was</dt>
+              <dt className="text-xs font-medium text-[var(--muted)]">Of this, by place</dt>
               {bookableLocations(clinic).map((l) => (
                 <div key={l} className="flex justify-between">
                   <dd className="text-[var(--ink)]">{CARE_LOCATION_LABELS[l]}</dd>
