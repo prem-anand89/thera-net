@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// An async query (the dialog reads every visit on the invoice) reads as "still loading" here, as it does on first render.
+// An async query (the dialog reads every visit on the invoice) reads as empty array when resolved.
 vi.mock('dexie-react-hooks', () => ({
   useLiveQuery: (q: () => unknown) => {
     const result = q();
-    return result instanceof Promise ? undefined : result;
+    return result instanceof Promise ? [] : result;
   },
 }));
 const perms = { isAdmin: true };

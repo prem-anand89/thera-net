@@ -417,6 +417,16 @@ describe('dashboardService.receivedOnDate', () => {
     expect(await svc.receivedOnDate('clinic-1', '2026-06-10')).toBe(rs(700));
     expect(await svc.receivedOnDate('clinic-1', '2026-06-10', 'th-prem')).toBe(rs(300));
   });
+
+  it('scopes to department when department is passed', async () => {
+    fake.visits.set('v1', baseVisit('v1', { location: 'clinic' }));
+    fake.visits.set('v2', baseVisit('v2', { location: 'home' }));
+    pay('p1', 'v1', rs(300), '2026-06-10');
+    pay('p2', 'v2', rs(400), '2026-06-10');
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10', undefined, 'clinic')).toBe(rs(300));
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10', undefined, 'home')).toBe(rs(400));
+  });
 });
 
 describe('dashboardService.duesSummary', () => {
@@ -447,6 +457,14 @@ describe('dashboardService.duesSummary', () => {
     const svc = createDashboardService(fake.repos);
     expect(await svc.duesSummary('clinic-1')).toMatchObject({ totalPaise: rs(1500), visitCount: 2 });
     expect(await svc.duesSummary('clinic-1', 'th-prem')).toMatchObject({ totalPaise: rs(600), visitCount: 1 });
+  });
+
+  it('scopes to department when department is passed', async () => {
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(600), location: 'clinic' }));
+    fake.visits.set('v2', baseVisit('v2', { actualBillPaise: rs(900), location: 'home' }));
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.duesSummary('clinic-1', undefined, 'clinic')).toMatchObject({ totalPaise: rs(600), visitCount: 1 });
+    expect(await svc.duesSummary('clinic-1', undefined, 'home')).toMatchObject({ totalPaise: rs(900), visitCount: 1 });
   });
 
   it('ignores collected, ₹0 and deleted visits', async () => {

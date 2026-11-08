@@ -70,11 +70,13 @@ import { TodayTherapistFilter, TodayVisitsTotals } from './TodayVisitsExtras';
 import { therapistsInRows, todayVisitTotals } from './todayTotals';
 
 import { useClinicRole } from '@/app/useClinicRole';
+import { useDepartment } from '@/app/DepartmentContext';
+import { inDepartment } from '@/domain/departments';
+import { runningCharges } from '@/domain/departmentMoney';
 import { collectionsLine } from '@/domain/collectionsByMethod';
 import { saveLedgerPrefs } from '@/features/visits/ledgerPrefs';
 import { InpatientsCard } from './InpatientsCard';
-import { WorkspacePlaceToggle, inWorkspacePlace, type WorkspacePlace } from './WorkspacePlaceToggle';
-import { offersBookingChoice } from '@/domain/careLocations';
+import { HomeVisitsCard } from './HomeVisitsCard';
 
 const EMPTY_SET = new Set<string>();
 
@@ -256,6 +258,7 @@ function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const { department } = useDepartment();
   const { displayName: accountName } = useClinicRole(clinic.id);
   const { canBill, canCollectPayment, canViewClinicalNotes, canEditSettings } = usePermissions();
   const navigate = useNavigate();
@@ -311,9 +314,6 @@ export function WorkspacePage() {
   const [viewChoice, setViewChoice] = useState<WorkspaceViewChoice | null>(null);
   const workspaceView = resolveWorkspaceView(scope, viewChoice);
   const workspaceMineOnly = workspaceView.mineOnly;
-  // The Where choice (All / Clinic / Home visit): narrows the appointments and today's visits, not Follow up.
-  const [placeFilter, setPlaceFilter] = useState<WorkspacePlace>('');
-  const placeToggle = <WorkspacePlaceToggle clinic={clinic} value={placeFilter} onChange={setPlaceFilter} />;
   const viewTherapistId = workspaceView.viewTherapistId;
 
   const expectedToday = useMemo(() => {
@@ -357,6 +357,10 @@ export function WorkspacePage() {
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
   const flagContext = usePatientFlagContext(clinic.id, workspaceAppointments ?? EMPTY_APPOINTMENTS);
   const { mrnoFor, patients: directoryPatients } = usePatientDirectory(clinic.id);
+  const directoryPatientsMap = useMemo(
+    () => new Map(directoryPatients.map((p) => [p.id, p])),
+    [directoryPatients]
+  );
   // Awaiting entries carry only a name and number: this is how "asked not to be messaged" reaches them.
   const doNotMessagePhones = useMemo(
     () => new Set(directoryPatients.filter((p) => p.doNotMessage && p.phone).map((p) => lastTenDigits(p.phone))),
@@ -540,21 +544,29 @@ export function WorkspacePage() {
   // "Collected" = money received today (the Daybook's figure), scoped to the
   // therapist's own visits for a therapist login.
   const receivedToday = useLiveQuery(
-    () => dashboardService.receivedOnDate(clinic.id, toLocalDateStr(new Date()), scope.scopeTherapistId),
-    [clinic.id, scope.scopeTherapistId]
+    () => dashboardService.receivedOnDate(clinic.id, toLocalDateStr(new Date()), scope.scopeTherapistId, department),
+    [clinic.id, scope.scopeTherapistId, department]
   );
   // Front desk: what came in today by cash / UPI / card, in place of the clinic's net revenue.
   const receivedByMethod = useLiveQuery(
-    () => (scope.isFrontDesk ? dashboardService.receivedByMethodOnDate(clinic.id, toLocalDateStr(new Date())) : undefined),
-    [clinic.id, scope.isFrontDesk]
+    () => (scope.isFrontDesk ? dashboardService.receivedByMethodOnDate(clinic.id, toLocalDateStr(new Date()), department) : undefined),
+    [clinic.id, scope.isFrontDesk, department]
   );
   // Dues: what's still owed — the whole clinic for admin/front desk, a
   // therapist's own visits for them (when billing is open to them). Per visit,
   // so "Take payment later" visits count too.
   const showDues = canCollectPayment && (scope.isClinicWideView || Boolean(scope.myTherapistId));
   const dues = useLiveQuery(
-    () => (showDues ? dashboardService.duesSummary(clinic.id, scope.scopeTherapistId) : undefined),
-    [clinic.id, showDues, scope.scopeTherapistId]
+    () => (showDues && department !== 'ward' ? dashboardService.duesSummary(clinic.id, scope.scopeTherapistId, department) : undefined),
+    [clinic.id, showDues, scope.scopeTherapistId, department]
+  );
+  const wardVisits = useLiveQuery(
+    () => (department === 'ward' ? repos.visits.list({ clinicId: clinic.id }) : undefined),
+    [clinic.id, department]
+  );
+  const wardRunning = useMemo(
+    () => (department === 'ward' && wardVisits ? runningCharges(wardVisits) : null),
+    [department, wardVisits]
   );
 
   const editPatient = useLiveQuery(
@@ -753,11 +765,11 @@ export function WorkspacePage() {
       (canBill || canCollectPayment) && scope.isClinicWideView
         ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } })
         : // A therapist: their own visits today, in the Ledger (it opens on what it was last left on, so set that first).
-          scope.myTherapistId
+        scope.myTherapistId
           ? () => {
-              saveLedgerPrefs(clinic.id, { tab: 'visits', datePreset: 'today', therapistId: scope.myTherapistId ?? '' });
-              void navigate({ to: '/ledger', search: { tab: 'visits' } });
-            }
+            saveLedgerPrefs(clinic.id, { tab: 'visits', datePreset: 'today', therapistId: scope.myTherapistId ?? '' });
+            void navigate({ to: '/ledger', search: { tab: 'visits' } });
+          }
           : undefined,
   };
   const duesCell = {
@@ -769,19 +781,35 @@ export function WorkspacePage() {
     // Straight to the unpaid visits, all dates (a therapist's own).
     onClick: () => void navigate({ to: '/ledger', search: { tab: 'visits', filter: 'not_collected' } }),
   };
-  const statCells = showDues ? [collectedCell, duesCell] : [collectedCell];
+  const runningChargesCell = {
+    label:
+      wardRunning && wardRunning.stays > 0
+        ? `Running charges · ${wardRunning.stays} ${plural(wardRunning.stays, 'stay')}`
+        : 'Running charges',
+    value: wardRunning === null ? <LoadingValue /> : formatAmount(wardRunning.paise),
+    icon: <IconWallet />,
+    tone: 'amber' as const,
+    kind: 'money' as const,
+  };
+  const statCells =
+    department === 'ward'
+      ? [collectedCell, runningChargesCell]
+      : showDues
+        ? [collectedCell, duesCell]
+        : [collectedCell];
 
   // Today's visits can be narrowed to one therapist when the card shows more than the viewer's own.
   const [visitTherapistId, setVisitTherapistId] = useState('');
-  const therapistOptions = useMemo(() => therapistsInRows(today?.visits ?? []), [today]);
+  const visitsInDept = useMemo(
+    () => (today?.visits ?? []).filter((v) => inDepartment(department, v)),
+    [today, department]
+  );
+  const therapistOptions = useMemo(() => therapistsInRows(visitsInDept), [visitsInDept]);
   const visitsFilterId =
     !workspaceMineOnly && therapistOptions.some((o) => o.id === visitTherapistId) ? visitTherapistId : '';
   const visitsInView = useMemo(
-    () =>
-      (visitsFilterId ? (today?.visits ?? []).filter((v) => v.therapistId === visitsFilterId) : today?.visits ?? []).filter((v) =>
-        inWorkspacePlace(placeFilter, v)
-      ),
-    [today, visitsFilterId, placeFilter]
+    () => (visitsFilterId ? visitsInDept.filter((v) => v.therapistId === visitsFilterId) : visitsInDept),
+    [visitsInDept, visitsFilterId]
   );
   const visitTotals = useMemo(() => todayVisitTotals(visitsInView), [visitsInView]);
 
@@ -789,25 +817,25 @@ export function WorkspacePage() {
     () =>
       today
         ? visitsInView.map((row) =>
-            todayRowToCardData(
-              row,
-              openPackageGroupIds,
-              scope.isAdmin,
-              scope.isFrontDesk,
-              scope.myTherapistId,
-              canViewClinicalNotes,
-              canShareRevenue,
-              treatmentName,
-              invoicedSiblingGroupIds,
-              consultationNotes,
-              clinic.enablePatientComms ?? false,
-              feedbackRequestByVisitId,
-              responseByRequestId,
-              googleReviewEligibleIds,
-              clinic.googleReviewUrl ?? null,
-              todayDetails.get(row.visitId)
-            )
+          todayRowToCardData(
+            row,
+            openPackageGroupIds,
+            scope.isAdmin,
+            scope.isFrontDesk,
+            scope.myTherapistId,
+            canViewClinicalNotes,
+            canShareRevenue,
+            treatmentName,
+            invoicedSiblingGroupIds,
+            consultationNotes,
+            clinic.enablePatientComms ?? false,
+            feedbackRequestByVisitId,
+            responseByRequestId,
+            googleReviewEligibleIds,
+            clinic.googleReviewUrl ?? null,
+            todayDetails.get(row.visitId)
           )
+        )
         : [],
     [
       today,
@@ -832,24 +860,38 @@ export function WorkspacePage() {
   const todayList = useShowMore(todayRows, `${todayStr}|${workspaceMineOnly}|${visitsFilterId}`, 10);
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
-  const dueByVisitId = new Map((today?.visits ?? []).map((row) => [row.visitId, hasDue(row.paymentState)]));
+  const dueByVisitId = new Map(visitsInView.map((row) => [row.visitId, hasDue(row.paymentState)]));
   // An appointment carried over from an earlier day whose visit was logged today:
   // keep it listed (under Done) so it doesn't vanish when its visit is saved.
-  const todayVisitIds = new Set((today?.visits ?? []).map((row) => row.visitId));
   const filterAppointmentsTherapistId = viewTherapistId;
-  const appointmentsForList = [
-    ...(workspaceAppointments ?? []).filter(
-      (a) =>
-        a.visitId &&
-        todayVisitIds.has(a.visitId) &&
-        toLocalDateStr(new Date(a.scheduledAt)) < toLocalDateStr(new Date()) &&
-        (!filterAppointmentsTherapistId || a.therapistId === filterAppointmentsTherapistId)
-    ),
-    ...todayAppointments,
-  ].filter((a) => inWorkspacePlace(placeFilter, a));
-  // `todayAppointments` now carries cancelled rows (for the Cancelled fold); counts ignore them.
-  const appointmentsLeft =
-    todayAppointments.filter((a) => inWorkspacePlace(placeFilter, a)).filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length;
+  const appointmentsForList = useMemo(() => {
+    const todayVisitIds = new Set(visitsInView.map((row) => row.visitId));
+    return [
+      ...(workspaceAppointments ?? []).filter(
+        (a) =>
+          a.visitId &&
+          todayVisitIds.has(a.visitId) &&
+          toLocalDateStr(new Date(a.scheduledAt)) < toLocalDateStr(new Date()) &&
+          (!filterAppointmentsTherapistId || a.therapistId === filterAppointmentsTherapistId)
+      ),
+      ...todayAppointments,
+    ];
+  }, [workspaceAppointments, visitsInView, filterAppointmentsTherapistId, todayAppointments]);
+  const clinicAppointments = useMemo(
+    () => appointmentsForList.filter((a) => inDepartment('clinic', a)),
+    [appointmentsForList]
+  );
+  const clinicAppointmentsLeft = useMemo(
+    () =>
+      clinicAppointments.filter(
+        (a) => a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId)
+      ).length,
+    [clinicAppointments]
+  );
+  const homeAppointments = useMemo(
+    () => appointmentsForList.filter((a) => inDepartment('home', a)),
+    [appointmentsForList]
+  );
 
   return (
     <div className="space-y-5">
@@ -913,8 +955,8 @@ export function WorkspacePage() {
           openedSlot
             ? openedSlot.time
             : confirmingRequest
-            ? requestedSlotTime(confirmingRequest, workspaceAppointments ?? [], toLocalDateStr(new Date()), clinic.slotDurationMinutes || 30) ?? undefined
-            : undefined
+              ? requestedSlotTime(confirmingRequest, workspaceAppointments ?? [], toLocalDateStr(new Date()), clinic.slotDurationMinutes || 30) ?? undefined
+              : undefined
         }
         prefilledPatientName={confirmingRequest?.name}
         prefilledPatientPhone={confirmingRequest?.phone}
@@ -1097,10 +1139,8 @@ export function WorkspacePage() {
             setViewChoice(next);
             setVisitTherapistId('');
           }}
-          extra={placeToggle}
         />
       )}
-      {!workspaceView.canToggle && offersBookingChoice(clinic) && <div className="px-1">{placeToggle}</div>}
 
       {scope.isUnlinkedTherapist && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
@@ -1118,12 +1158,13 @@ export function WorkspacePage() {
         <SplitChangeBanner clinicId={clinic.id} changedAt={clinic.lastSplitChangeAt} />
       )}
 
+      {department === 'clinic' && (
         <SectionCard
           title="Appointments"
           badge={
-            appointmentsLeft > 0 ? (
-              <Pill tone="teal">{appointmentsLeft} left</Pill>
-            ) : appointmentsForList.some((a) => a.status !== 'cancelled') ? (
+            clinicAppointmentsLeft > 0 ? (
+              <Pill tone="teal">{clinicAppointmentsLeft} left</Pill>
+            ) : clinicAppointments.some((a) => a.status !== 'cancelled') ? (
               <Pill tone="slate">All done</Pill>
             ) : (
               <Pill tone="slate">None today</Pill>
@@ -1139,7 +1180,7 @@ export function WorkspacePage() {
           }
         >
           <TodayAppointments
-            appointments={appointmentsForList}
+            appointments={clinicAppointments}
             slotMinutes={clinic.slotDurationMinutes || 30}
             nextUpId={nextUpId}
             colorFor={appointmentColor}
@@ -1179,20 +1220,41 @@ export function WorkspacePage() {
             }
           />
         </SectionCard>
+      )}
 
-      <InpatientsCard />
+      {department === 'home' && (
+        <HomeVisitsCard
+          appointments={homeAppointments}
+          patientsById={directoryPatientsMap}
+          therapistRoster={therapistRoster}
+          showTherapist={canManageBookings}
+          onSelect={(a) => setOpenAppointmentId(a.id)}
+          onMarkArrived={
+            canManageBookings || scope.myTherapistId
+              ? (a) => bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+              : undefined
+          }
+          onUndoArrived={
+            canManageBookings || scope.myTherapistId
+              ? (a) => bookingService.restoreArrivedAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+              : undefined
+          }
+        />
+      )}
+
+      {department === 'ward' && <InpatientsCard />}
 
       <SectionCard
         title="Today's visits"
         badge={
-          today && today.visits.length > 0 ? (
+          visitsInView.length > 0 ? (
             <span className="font-num rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-semibold text-[var(--ink)]">
               {visitsInView.length}
             </span>
           ) : null
         }
         action={
-          today && today.visits.length > 0 ? (
+          visitsInView.length > 0 ? (
             <div className="flex items-center gap-2">
               {!workspaceMineOnly && therapistOptions.length > 1 && (
                 <TodayTherapistFilter options={therapistOptions} value={visitsFilterId} onChange={setVisitTherapistId} />
@@ -1209,7 +1271,7 @@ export function WorkspacePage() {
       >
         {!today ? (
           <LoadingRows label="Loading today's visits" />
-        ) : today.visits.length === 0 ? (
+        ) : visitsInView.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
@@ -1326,250 +1388,250 @@ export function WorkspacePage() {
         )}
         {followOpen && (
           <>
-        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
-          <div role="tablist" aria-label="Follow up" className={segTrack}>
-            {(
-              [
-                { key: 'reviews', label: 'Reviews', count: followUp.due.length },
-                { key: 'packages', label: 'Packages', count: scopedPackages.length },
-              ] as const
-            ).map((tab) => {
-              const active = followTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => chooseFollowTab(tab.key)}
-                  className={`${segOption(active)} gap-1.5`}
-                >
-                  {tab.label}
-                  <ChipCount n={tab.count} />
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-3">
-            {hasMoreThanFiveFollowUps && (
-              <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                Rows
-                <select
-                  aria-label="Rows per page"
-                  className={chipSelect}
-                  style={chipSelectChevron}
-                  value={followPageSize}
-                  onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                </select>
-              </label>
-            )}
-          </div>
-        </div>
-        {followTab === 'reviews' ? (
-          <ReviewsPanel
-            data={followUp}
-            pageSize={followPageSize}
-            clinicName={clinic.name}
-            showTherapist={scope.isClinicWideView}
-            therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
-            onBook={setBookingFollowUp}
-          />
-        ) : (
-          <>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            {(
-              [
-                { key: 'open', label: 'Open', count: 0 },
-                { key: 'attention', label: 'Needs attention', count: attentionCount },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                aria-pressed={pkgStatusFilter === opt.key}
-                onClick={() => setPkgStatusFilter(opt.key)}
-                className={filterChip(pkgStatusFilter === opt.key)}
-              >
-                {opt.label}
-                {opt.count ? <ChipCount n={opt.count} /> : null}
-              </button>
-            ))}
-          </div>
-          <span className="text-xs text-[var(--muted)]">
-            {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
-          </span>
-        </div>
-        {filteredPackages.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">
-            No packages match this filter.
-          </p>
-        ) : (
-          <>
-            {/* Below tab: pill cards on phone; table from iPad portrait up. */}
-            <div className="tab:hidden space-y-2">
-              {packageList.visible.map((p) => (
-                <div
-                  key={p.packageGroupId}
-                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <Link
-                      to="/patients/$patientId"
-                      params={{ patientId: p.patientId }}
-                      search={{ from: '/workspace' }}
-                      className="min-w-0"
+            <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
+              <div role="tablist" aria-label="Follow up" className={segTrack}>
+                {(
+                  [
+                    { key: 'reviews', label: 'Reviews', count: followUp.due.length },
+                    { key: 'packages', label: 'Packages', count: scopedPackages.length },
+                  ] as const
+                ).map((tab) => {
+                  const active = followTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => chooseFollowTab(tab.key)}
+                      className={`${segOption(active)} gap-1.5`}
                     >
-                      <div className="font-display text-sm font-medium text-[var(--ink)]">
-                        {p.patientName}
-                      </div>
-                      <div className="font-num text-xs text-[var(--muted)]">{p.mrno}</div>
-                    </Link>
-                    <PackageStatusPill pkg={p} />
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Pill tone="slate">{p.serviceName}</Pill>
-                    <Pill tone="slate">{p.startedByTherapistName}</Pill>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
-                      <PackageThread
-                        sessionIndex={p.sessionsLogged}
-                        packageTotal={p.packageTotal}
-                      />
-                      <span className="font-num">
-                        {p.sessionsLogged}/{p.packageTotal}
-                      </span>
-                      <span className="ml-1">
-                        Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} (
-                        {p.daysSinceLastVisit}d ago)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {p.stale && !p.doNotMessage && (
-                        <button
-                          type="button"
-                          className={pillSmAccent}
-                          onClick={() => {
-                            void feedbackService
-                              .sendStalePackageReminder(
-                                clinic.id,
-                                p.patientName,
-                                p.phone,
-                                clinic.name,
-                                p.serviceName
-                              )
-                              .catch((e) => notify.error(toFriendlyMessage(e)));
-                          }}
-                        >
-                          Send reminder
-                        </button>
-                      )}
-                      <Link
-                        to="/visits/new"
-                        search={{ repeatVisitId: p.lastVisitId }}
-                        className={pillSmPrimary}
+                      {tab.label}
+                      <ChipCount n={tab.count} />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3">
+                {hasMoreThanFiveFollowUps && (
+                  <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                    Rows
+                    <select
+                      aria-label="Rows per page"
+                      className={chipSelect}
+                      style={chipSelectChevron}
+                      value={followPageSize}
+                      onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            </div>
+            {followTab === 'reviews' ? (
+              <ReviewsPanel
+                data={followUp}
+                pageSize={followPageSize}
+                clinicName={clinic.name}
+                showTherapist={scope.isClinicWideView}
+                therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
+                onBook={setBookingFollowUp}
+              />
+            ) : (
+              <>
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    {(
+                      [
+                        { key: 'open', label: 'Open', count: 0 },
+                        { key: 'attention', label: 'Needs attention', count: attentionCount },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        aria-pressed={pkgStatusFilter === opt.key}
+                        onClick={() => setPkgStatusFilter(opt.key)}
+                        className={filterChip(pkgStatusFilter === opt.key)}
                       >
-                        Log visit
-                      </Link>
-                    </div>
+                        {opt.label}
+                        {opt.count ? <ChipCount n={opt.count} /> : null}
+                      </button>
+                    ))}
                   </div>
+                  <span className="text-xs text-[var(--muted)]">
+                    {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
+                  </span>
                 </div>
-              ))}
-            </div>
-
-            <div className="hidden tab:block overflow-x-auto">
-              <table className="min-w-full divide-y divide-[var(--border)]">
-                <thead className="bg-[var(--paper)]">
-                  <tr>
-                    <th className={th}>Patient</th>
-                    <th className={th}>Package</th>
-                    <th className={th}>Therapist</th>
-                    <th className={thNum}>Sessions</th>
-                    <th className={th}>Started</th>
-                    <th className={th}>Last visit</th>
-                    <th className={th}>Status</th>
-                    <th className={th}></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {packageList.visible.map((p) => (
-                    <tr key={p.packageGroupId}>
-                      <td className={td}>
-                        <Link
-                          to="/patients/$patientId"
-                          params={{ patientId: p.patientId }}
-                          search={{ from: '/workspace' }}
-                          className="font-display font-medium text-[var(--ink)] hover:underline hover:text-[var(--teal)]"
+                {filteredPackages.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-[var(--muted)]">
+                    No packages match this filter.
+                  </p>
+                ) : (
+                  <>
+                    {/* Below tab: pill cards on phone; table from iPad portrait up. */}
+                    <div className="tab:hidden space-y-2">
+                      {packageList.visible.map((p) => (
+                        <div
+                          key={p.packageGroupId}
+                          className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
                         >
-                          {p.patientName}
-                        </Link>{' '}
-                        <span className="font-num text-xs text-[var(--muted)]">{p.mrno}</span>
-                      </td>
-                      <td className={td}>{p.serviceName}</td>
-                      <td className={td}>{p.startedByTherapistName}</td>
-                      <td className={tdNum}>
-                        <span className="inline-flex items-center gap-1.5">
-                          <PackageThread
-                            sessionIndex={p.sessionsLogged}
-                            packageTotal={p.packageTotal}
-                          />
-                          <span className="font-num">
-                            {p.sessionsLogged}/{p.packageTotal}
-                          </span>
-                        </span>
-                      </td>
-                      <td className={td}>{formatDateDM(p.startedOn)}</td>
-                      <td className={td}>
-                        {formatDateDM(p.lastVisitOn)}{' '}
-                        <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
-                      </td>
-                      <td className={td}>
-                        <PackageStatusPill pkg={p} />
-                      </td>
-                      <td className={td}>
-                        <div className="flex items-center gap-2">
-                          {p.stale && !p.doNotMessage && (
-                            <button
-                              type="button"
-                              className={pillSmAccent}
-                              onClick={() => {
-                                void feedbackService
-                                  .sendStalePackageReminder(
-                                    clinic.id,
-                                    p.patientName,
-                                    p.phone,
-                                    clinic.name,
-                                    p.serviceName
-                                  )
-                                  .catch((e) => notify.error(toFriendlyMessage(e)));
-                              }}
+                          <div className="flex items-start justify-between gap-2">
+                            <Link
+                              to="/patients/$patientId"
+                              params={{ patientId: p.patientId }}
+                              search={{ from: '/workspace' }}
+                              className="min-w-0"
                             >
-                              Send reminder
-                            </button>
-                          )}
-                          <Link
-                            to="/visits/new"
-                            search={{ repeatVisitId: p.lastVisitId }}
-                            className={pillSmPrimary}
-                          >
-                            Log visit
-                          </Link>
+                              <div className="font-display text-sm font-medium text-[var(--ink)]">
+                                {p.patientName}
+                              </div>
+                              <div className="font-num text-xs text-[var(--muted)]">{p.mrno}</div>
+                            </Link>
+                            <PackageStatusPill pkg={p} />
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <Pill tone="slate">{p.serviceName}</Pill>
+                            <Pill tone="slate">{p.startedByTherapistName}</Pill>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
+                              <PackageThread
+                                sessionIndex={p.sessionsLogged}
+                                packageTotal={p.packageTotal}
+                              />
+                              <span className="font-num">
+                                {p.sessionsLogged}/{p.packageTotal}
+                              </span>
+                              <span className="ml-1">
+                                Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} (
+                                {p.daysSinceLastVisit}d ago)
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {p.stale && !p.doNotMessage && (
+                                <button
+                                  type="button"
+                                  className={pillSmAccent}
+                                  onClick={() => {
+                                    void feedbackService
+                                      .sendStalePackageReminder(
+                                        clinic.id,
+                                        p.patientName,
+                                        p.phone,
+                                        clinic.name,
+                                        p.serviceName
+                                      )
+                                      .catch((e) => notify.error(toFriendlyMessage(e)));
+                                  }}
+                                >
+                                  Send reminder
+                                </button>
+                              )}
+                              <Link
+                                to="/visits/new"
+                                search={{ repeatVisitId: p.lastVisitId }}
+                                className={pillSmPrimary}
+                              >
+                                Log visit
+                              </Link>
+                            </div>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <ShowMoreFooter list={packageList} noun="packages" />
-          </>
-        )}
-          </>
-        )}
+                      ))}
+                    </div>
+
+                    <div className="hidden tab:block overflow-x-auto">
+                      <table className="min-w-full divide-y divide-[var(--border)]">
+                        <thead className="bg-[var(--paper)]">
+                          <tr>
+                            <th className={th}>Patient</th>
+                            <th className={th}>Package</th>
+                            <th className={th}>Therapist</th>
+                            <th className={thNum}>Sessions</th>
+                            <th className={th}>Started</th>
+                            <th className={th}>Last visit</th>
+                            <th className={th}>Status</th>
+                            <th className={th}></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border)]">
+                          {packageList.visible.map((p) => (
+                            <tr key={p.packageGroupId}>
+                              <td className={td}>
+                                <Link
+                                  to="/patients/$patientId"
+                                  params={{ patientId: p.patientId }}
+                                  search={{ from: '/workspace' }}
+                                  className="font-display font-medium text-[var(--ink)] hover:underline hover:text-[var(--teal)]"
+                                >
+                                  {p.patientName}
+                                </Link>{' '}
+                                <span className="font-num text-xs text-[var(--muted)]">{p.mrno}</span>
+                              </td>
+                              <td className={td}>{p.serviceName}</td>
+                              <td className={td}>{p.startedByTherapistName}</td>
+                              <td className={tdNum}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <PackageThread
+                                    sessionIndex={p.sessionsLogged}
+                                    packageTotal={p.packageTotal}
+                                  />
+                                  <span className="font-num">
+                                    {p.sessionsLogged}/{p.packageTotal}
+                                  </span>
+                                </span>
+                              </td>
+                              <td className={td}>{formatDateDM(p.startedOn)}</td>
+                              <td className={td}>
+                                {formatDateDM(p.lastVisitOn)}{' '}
+                                <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
+                              </td>
+                              <td className={td}>
+                                <PackageStatusPill pkg={p} />
+                              </td>
+                              <td className={td}>
+                                <div className="flex items-center gap-2">
+                                  {p.stale && !p.doNotMessage && (
+                                    <button
+                                      type="button"
+                                      className={pillSmAccent}
+                                      onClick={() => {
+                                        void feedbackService
+                                          .sendStalePackageReminder(
+                                            clinic.id,
+                                            p.patientName,
+                                            p.phone,
+                                            clinic.name,
+                                            p.serviceName
+                                          )
+                                          .catch((e) => notify.error(toFriendlyMessage(e)));
+                                      }}
+                                    >
+                                      Send reminder
+                                    </button>
+                                  )}
+                                  <Link
+                                    to="/visits/new"
+                                    search={{ repeatVisitId: p.lastVisitId }}
+                                    className={pillSmPrimary}
+                                  >
+                                    Log visit
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <ShowMoreFooter list={packageList} noun="packages" />
+                  </>
+                )}
+              </>
+            )}
           </>
         )}
       </SectionCard>

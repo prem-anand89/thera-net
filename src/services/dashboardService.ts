@@ -31,6 +31,8 @@ import type { Repos } from '@/repositories/types';
 import { createReportService, type MonthlyReport } from './reportService';
 import { isCashInHand, isFullyPartnerCollected, partnerPaymentsByVisit } from '@/domain/paymentMethods';
 import { collectionsByMethod, type CollectionsByMethod } from '@/domain/collectionsByMethod';
+import type { Department } from '@/domain/departments';
+import { paymentsForDepartment, advancesForDepartment, inDepartmentList } from '@/domain/departmentMoney';
 
 export interface OpenPackageRow {
   packageGroupId: UUID;
@@ -401,18 +403,29 @@ export function createDashboardService(repos: Repos) {
      * of today's visits, which misses a payment today on an older visit and
      * counts a bill whose cash came another day.
      */
-    async receivedByMethodOnDate(clinicId: UUID, date: string): Promise<CollectionsByMethod> {
-      const [payments, advances] = await Promise.all([
+    async receivedByMethodOnDate(clinicId: UUID, date: string, department?: Department): Promise<CollectionsByMethod> {
+      let [payments, advances] = await Promise.all([
         repos.payments.listByDate(clinicId, date),
         repos.patientAdvances.listByDate(clinicId, date),
       ]);
+      if (department) {
+        const visits = await repos.visits.list({ clinicId });
+        const visitsById = new Map(visits.map((v) => [v.id, v]));
+        payments = paymentsForDepartment(department, payments, visitsById);
+        advances = advancesForDepartment(department, advances);
+      }
       return collectionsByMethod(payments, advances);
     },
 
-    async receivedOnDate(clinicId: UUID, date: string, therapistId?: UUID): Promise<Paise> {
-      const payments = (await repos.payments.listByDate(clinicId, date)).filter(
+    async receivedOnDate(clinicId: UUID, date: string, therapistId?: UUID, department?: Department): Promise<Paise> {
+      let payments = (await repos.payments.listByDate(clinicId, date)).filter(
         (p) => !p.advanceId && isCashInHand(p.method)
       );
+      if (department) {
+        const visits = await repos.visits.list({ clinicId });
+        const visitsById = new Map(visits.map((v) => [v.id, v]));
+        payments = paymentsForDepartment(department, payments, visitsById);
+      }
       let ownVisitIds: Set<UUID> | null = null;
       if (therapistId) {
         const visits = await repos.visits.list({ clinicId, therapistId });
@@ -422,7 +435,10 @@ export function createDashboardService(repos: Repos) {
         .filter((p) => !ownVisitIds || ownVisitIds.has(p.visitId))
         .reduce((sum, p) => sum + p.amountPaise, 0);
       if (!therapistId) {
-        const advances = await repos.patientAdvances.listByDate(clinicId, date);
+        let advances = await repos.patientAdvances.listByDate(clinicId, date);
+        if (department) {
+          advances = advancesForDepartment(department, advances);
+        }
         total += advances.filter((a) => isCashInHand(a.method)).reduce((sum, a) => sum + a.amountPaise, 0);
       }
       return total;
@@ -437,7 +453,7 @@ export function createDashboardService(repos: Repos) {
      * outstanding, which misses the uninvoiced ones. All dates; whole clinic,
      * or one therapist's own visits when `therapistId` is given.
      */
-    async duesSummary(clinicId: UUID, therapistId?: UUID): Promise<DuesSummary> {
+    async duesSummary(clinicId: UUID, therapistId?: UUID, department?: Department): Promise<DuesSummary> {
       const [visits, invoicePayments, payments] = await Promise.all([
         repos.visits.list({ clinicId, therapistId }),
         repos.invoicePayments.list(clinicId),
@@ -451,7 +467,8 @@ export function createDashboardService(repos: Repos) {
       let totalPaise = 0;
       let visitCount = 0;
       const patients = new Set<UUID>();
-      for (const v of visits) {
+      const candidateVisits = department ? inDepartmentList(department, visits) : visits;
+      for (const v of candidateVisits) {
         if (v.deleted) continue;
         const collected = paidByVisitId.get(v.id) ?? 0;
         const state = computeVisitPaymentState(
@@ -516,17 +533,17 @@ export function createDashboardService(repos: Repos) {
         .map((inv) => {
           const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
           return {
-          invoiceId: inv.id,
-          invoiceNo: inv.invoiceNo,
-          patientName: inv.patientSnapshot.name,
-          mrno: inv.patientSnapshot.mrno,
-          totalPaise: inv.totalPaise,
-          paidPaise,
-          remainingPaise: Math.max(0, inv.totalPaise - paidPaise),
-          issuedAt: inv.issuedAt,
-          daysOutstanding: daysSince(inv.issuedAt.slice(0, 10)),
-          visitId: visitByInvoiceId.get(inv.id)?.id ?? null,
-          patientId: visitByInvoiceId.get(inv.id)?.patientId ?? null,
+            invoiceId: inv.id,
+            invoiceNo: inv.invoiceNo,
+            patientName: inv.patientSnapshot.name,
+            mrno: inv.patientSnapshot.mrno,
+            totalPaise: inv.totalPaise,
+            paidPaise,
+            remainingPaise: Math.max(0, inv.totalPaise - paidPaise),
+            issuedAt: inv.issuedAt,
+            daysOutstanding: daysSince(inv.issuedAt.slice(0, 10)),
+            visitId: visitByInvoiceId.get(inv.id)?.id ?? null,
+            patientId: visitByInvoiceId.get(inv.id)?.patientId ?? null,
           };
         })
         .sort((a, b) => b.daysOutstanding - a.daysOutstanding);
