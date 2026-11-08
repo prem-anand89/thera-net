@@ -1,5 +1,5 @@
 import { confirmAndDeleteVisit } from '@/features/visits/confirmDeleteVisit';
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
@@ -33,7 +33,7 @@ import {
   type UUID,
   type Visit,
 } from '@/domain/types';
-import { btnPrimary, pillPrimary, th, thNum, td, tdNum, SectionCard, StatTile, CountBadge, KebabMenu, menuItem, chipSelectChevron, pillSmPrimary, pillSmNeutral, pillSmDanger } from '@/components/ui';
+import { btnPrimary, pillPrimary, th, thNum, td, tdNum, SectionCard, StatTile, KebabMenu, menuItem, chipSelectChevron, pillSmPrimary, pillSmNeutral, pillSmDanger } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { loadLedgerPrefs, presetRange, saveLedgerPrefs } from './ledgerPrefs';
@@ -50,7 +50,7 @@ import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
-import { MyCreditsCard } from '@/features/workspace/MyCreditsCard';
+import { CreditsTab } from './CreditsTab';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { PatientsList } from '@/features/patients/PatientsPage';
 import { DaybookPage } from './DaybookPage';
@@ -290,7 +290,8 @@ export function LedgerPage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   // The share editor needs someone to share with: split on and more than one active therapist.
   const canShareRevenue = therapistSplit && (therapists ?? []).filter((t) => t.active).length > 1;
-  const canViewCredits = Boolean(canShareRevenue && myTherapistId);
+  // A therapist (or an admin who treats) sees their own; an admin without a therapist row sees the whole clinic.
+  const canViewCredits = Boolean(canShareRevenue && (myTherapistId || isAdmin));
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView; filter?: 'not_collected' };
   // Workspace's Dues tile lands here: unpaid visits, every date.
@@ -301,6 +302,18 @@ export function LedgerPage() {
   // instead of always Visits. replace: true so tab switches don't pile up
   // browser-back history entries.
   const recordsView: RecordsView = search.tab ?? 'visits';
+  // Keep the open tab in view when the strip scrolls (five tabs do not fit a 360px phone): on first show and on every
+  // change, centre it inside the strip. Only the strip scrolls, never the page.
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  const firstTabScroll = useRef(true);
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const tab = strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!strip || !tab || strip.scrollWidth <= strip.clientWidth) return;
+    const left = tab.offsetLeft - (strip.clientWidth - tab.offsetWidth) / 2;
+    strip.scrollTo({ left, behavior: firstTabScroll.current ? 'auto' : 'smooth' });
+    firstTabScroll.current = false;
+  }, [recordsView]);
   const setRecordsView = useCallback(
     (next: RecordsView) => {
       void navigate({
@@ -547,9 +560,6 @@ export function LedgerPage() {
     () => dashboardService.outstandingInvoices(clinic.id),
     [clinic.id]
   );
-  // 1.7's needs-receipt queue count — same underlying call InvoicesPage's
-  // own section uses, so the tab badge and the section can never disagree.
-  const needsReceipt = useLiveQuery(() => dashboardService.needsReceipt(clinic.id), [clinic.id]);
 
   // Candidate ₹0 package rows whose OWN invoiceId is null — for each
   // distinct packageGroupId among them, check the full group (not just
@@ -822,14 +832,14 @@ export function LedgerPage() {
           phone bar's + is New visit). */}
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
+        <div ref={tabStripRef} role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
           {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, canViewCredits, entitlementsLoading }).map((v) => (
             <button
               key={v.key}
               type="button"
               role="tab"
               aria-selected={recordsView === v.key}
-              className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors sm:px-4 sm:py-1.5 sm:text-sm ${
+              className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors last:mr-1.5 sm:px-4 sm:py-1.5 sm:text-sm sm:last:mr-0 ${
                 recordsView === v.key
                   ? 'bg-[var(--teal)] text-white shadow-sm'
                   : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
@@ -837,9 +847,6 @@ export function LedgerPage() {
               onClick={() => setRecordsView(v.key)}
             >
               {v.label}
-              {v.key === 'invoices' && canBill && (
-                <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
-              )}
             </button>
           ))}
         </div>
@@ -1370,17 +1377,7 @@ export function LedgerPage() {
       {recordsView === 'patients' && <PatientsList />}
       {recordsView === 'invoices' && <InvoicesPage canIssue={canBill} />}
       {recordsView === 'daybook' && <DaybookPage />}
-      {recordsView === 'credits' && (
-        <SectionCard title="My credits and debits">
-          {myTherapistId ? (
-            <MyCreditsCard therapistId={myTherapistId} />
-          ) : (
-            <p className="text-sm text-[var(--muted)]">
-              No therapist profile linked to this account.
-            </p>
-          )}
-        </SectionCard>
-      )}
+      {recordsView === 'credits' && <CreditsTab myTherapistId={myTherapistId} isAdmin={isAdmin} />}
 
       {invoicing && (
         <IssueInvoiceDialog

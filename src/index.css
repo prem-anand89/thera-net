@@ -511,3 +511,11 @@ body {
     .nv-form :is(input, select, textarea) { font-size: 16px; }
   }
 }
+
+/* A scroll strip without the bar (Ledger tabs, chip rows, date presets): the row still scrolls by touch, wheel and keys. */
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
