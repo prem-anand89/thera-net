@@ -150,6 +150,13 @@ write the words "Clinic" / "Home visit" / "Inpatient" as a place choice any more
   `repos.therapists.put({...therapist, careLocations})`, same null rule), labelled "Works in".
 - Tests: saves null when all or none ticked; saves the subset otherwise; hidden for a one-department clinic.
 
+## Shared money helpers (Claude, built): `src/domain/departmentMoney.ts`
+Use these instead of writing your own department filters for money. `inDepartmentList(department, records)`,
+`paymentsForDepartment(department, payments, visitsById)` (a payment belongs to its visit's department; unknown visit =
+OP), `advancesForDepartment(department, advances)` (until advances carry a department in Step 3, every advance is OP, so
+IP and Home care show none), `runningCharges(visits)` (`{ paise, sessions, stays }`: unbilled live ward sessions, for the
+IP tile; never counted as dues), `isPartnerClearance(method)`. If a screen needs a rule that is not here, ask Claude.
+
 ## G3. Workspace per department (Step 2)
 `src/features/workspace/WorkspacePage.tsx`. Show only the selected department's cards:
 - **OP:** the Appointments card (clinic appointments only: filter `appointmentsForList` by `inDepartment('clinic', a)`),

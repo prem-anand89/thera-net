@@ -622,7 +622,12 @@ export function TeamMemberCard({
                 )}
 
                 {showDepartments && (
-                  <Field label={therapist ? 'Works in' : 'Departments'}>
+                  // A group, not a Field: a Field wraps its children in one <label>, which would put each tick's own label
+                  // inside another label (invalid, and every box would be named by the whole group).
+                  <div role="group" aria-labelledby="member-departments-label">
+                    <span id="member-departments-label" className="mb-1 block text-label font-medium text-[var(--muted)]">
+                      {therapist ? 'Works in' : 'Departments'}
+                    </span>
                     <div className="flex flex-wrap gap-4 pt-1">
                       {clinicDepts.map((d) => (
                         <label key={d} className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--ink)] cursor-pointer">
@@ -645,7 +650,7 @@ export function TeamMemberCard({
                         ? 'All departments (leave unticked or tick all)'
                         : `Only ${deptDraft.map((d) => DEPARTMENT_LABELS[d]).join(', ')}`}
                     </p>
-                  </Field>
+                  </div>
                 )}
 
                 {roleDraft === 'admin' && (
