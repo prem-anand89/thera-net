@@ -5,7 +5,9 @@ import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
-import { coerceReferringSource, type Patient } from '@/domain/types';
+import { coerceReferringSource, type Admission, type Patient } from '@/domain/types';
+import { isDuplicateOpenAdmission } from '@/domain/admissions';
+import { mergeDuplicateAdmission } from './admissionMerge';
 import { isMrnoCollision, reissueWalkInMrno } from '@/domain/walkInMrno';
 import { notify } from '@/lib/notify';
 import { applyPlanChange } from './planCache';
@@ -472,6 +474,16 @@ export class SyncEngine {
         if (!reissued) break;
         ({ error } = await supabase.from(entry.table).upsert(domainToRow(reissued as unknown as Record<string, unknown>)));
       }
+      // Two devices admitted the same patient while offline and the server kept the first stay. Keep that one:
+      // move this device's visits onto it, drop the losing stay, and tell staff (retrying would fail forever, and
+      // reverting would strand the visits logged against the losing stay).
+      if (error && entry.table === 'admissions' && isDuplicateOpenAdmission(error)) {
+        const merged = await this.mergeLosingAdmission(row as Admission);
+        if (merged !== null) {
+          await this.clearOutbox(entry.table, entry.rowId, maxSeq);
+          continue;
+        }
+      }
       if (error) {
         // Network-level failures throw to stop the drain; server rejections
         // (RLS, constraints, immutability triggers) stay queued and visible.
@@ -540,6 +552,29 @@ export class SyncEngine {
       notify.info(`Patient ID ${oldMrno} was already taken on another device, so ${updated.name} is now ${fresh}.`);
     }
     return updated;
+  }
+
+  /** The patient's open stay on the server, merged in over this device's duplicate; null when it can't be found. */
+  private async mergeLosingAdmission(losing: Admission): Promise<number | null> {
+    const { data, error } = await this.supabase!
+      .from('admissions')
+      .select('*')
+      .eq('clinic_id', losing.clinicId)
+      .eq('patient_id', losing.patientId)
+      .is('discharged_on', null)
+      .eq('deleted', false)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const surviving = normalize('admissions', rowToDomain<Record<string, unknown>>(data)) as unknown as Admission;
+    if (surviving.id === losing.id) return null;
+    const moved = await mergeDuplicateAdmission(losing, surviving);
+    notify.info(
+      moved > 0
+        ? 'This patient was already admitted on another device. Their sessions here were moved to that stay.'
+        : 'This patient was already admitted on another device, so that stay is the one kept.'
+    );
+    return moved;
   }
 
   private async revertToServerTruth(table: SyncedTable, rowId: string) {

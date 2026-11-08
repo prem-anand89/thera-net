@@ -15,6 +15,15 @@ describe('toFriendlyMessage', () => {
     );
   });
 
+  it('explains a refused admission: plan without inpatient, and a read-only plan', () => {
+    expect(
+      toFriendlyMessage(postgrestError('inpatient admissions are not included in the Solo plan -- upgrade to Clinic or above', '42501'))
+    ).toMatch(/not included in this clinic's plan/);
+    expect(
+      toFriendlyMessage(postgrestError("this clinic's plan is read-only -- patients cannot be admitted until payment resumes", '42501'))
+    ).toMatch(/read-only, so patients cannot be admitted/);
+  });
+
   it('distinguishes the two "visit is on issued invoice" variants with an interpolated id', () => {
     const invoiceId = '3f2b6c1a-000-000-000-abcdef123456';
     expect(

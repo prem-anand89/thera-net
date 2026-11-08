@@ -14,6 +14,14 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     "Can't reach the server right now. Your changes are saved on this device and will sync when the connection is back.",
   ],
   [
+    /inpatient admissions are not included/i,
+    "Inpatient admissions are not included in this clinic's plan. Ask your admin about moving to the Clinic plan or above.",
+  ],
+  [
+    /patients cannot be admitted until payment resumes/i,
+    "This clinic's plan is read-only, so patients cannot be admitted until payment resumes.",
+  ],
+  [
     /issued invoices are immutable/i,
     'This invoice has already been issued and can no longer be edited. Create an amendment instead.',
   ],

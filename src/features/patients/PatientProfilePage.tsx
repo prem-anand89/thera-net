@@ -21,6 +21,7 @@ import { useVisitDetails } from '@/features/visits/visitDetails';
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 import { usePermissions } from '@/app/usePermissions';
+import { PatientAdmissionBar } from './PatientAdmissionBar';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary, pillSmAccent, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
@@ -697,6 +698,8 @@ export function PatientProfilePage() {
           </div>
         </div>
       </section>
+
+      <PatientAdmissionBar patient={patient} />
 
       {/* Both columns pin to row 1 explicitly. Without `lg:row-start-1`,
           grid auto-placement puts the side column (first in DOM, at
