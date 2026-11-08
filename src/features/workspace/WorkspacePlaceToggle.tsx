@@ -1,4 +1,4 @@
-import { segTrack, segOption } from '@/components/ui';
+import { chipSelectChevron, segTrack, segOption } from '@/components/ui';
 import { bookableLocations, CARE_LOCATION_LABELS } from '@/domain/careLocations';
 import type { CareLocation } from '@/domain/types';
 
@@ -6,7 +6,10 @@ import type { CareLocation } from '@/domain/types';
 export type WorkspacePlace = '' | CareLocation;
 
 /** True when a record belongs in the chosen place ('' keeps everything). A record with no place reads as Clinic. */
-export function inWorkspacePlace(place: WorkspacePlace, record: { location?: string | null }): boolean {
+export function inWorkspacePlace(
+  place: WorkspacePlace,
+  record: { location?: string | null }
+): boolean {
   return !place || (record.location ?? 'clinic') === place;
 }
 
@@ -26,22 +29,41 @@ export function WorkspacePlaceToggle({
 }) {
   const places = bookableLocations(clinic);
   if (places.length < 2) return null;
-  const options: [WorkspacePlace, string][] = [['', 'All'], ...places.map((l): [WorkspacePlace, string] => [l, CARE_LOCATION_LABELS[l]])];
+  const options: [WorkspacePlace, string][] = [
+    ['', 'All'],
+    ...places.map((l): [WorkspacePlace, string] => [l, CARE_LOCATION_LABELS[l]]),
+  ];
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-[var(--muted)]">Place</span>
-      <div role="group" aria-label="Place" className={segTrack}>
+      {/* A phone has no room for three buttons beside All | Mine, so it gets a dropdown. */}
+      <select
+        aria-label="Place"
+        className="min-h-8 appearance-none rounded-lg border border-[var(--border)] bg-[var(--paper)] bg-[length:12px] bg-[right_8px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] sm:hidden"
+        style={chipSelectChevron}
+        value={value}
+        onChange={(e) => onChange(e.target.value as WorkspacePlace)}
+      >
         {options.map(([key, label]) => (
-          <button
-            key={key || 'all'}
-            type="button"
-            aria-pressed={value === key}
-            onClick={() => onChange(key)}
-            className={segOption(value === key)}
-          >
+          <option key={key || 'all'} value={key}>
             {label}
-          </button>
+          </option>
         ))}
+      </select>
+      <div className="hidden sm:block">
+        <div role="group" aria-label="Place" className={segTrack}>
+          {options.map(([key, label]) => (
+            <button
+              key={key || 'all'}
+              type="button"
+              aria-pressed={value === key}
+              onClick={() => onChange(key)}
+              className={segOption(value === key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

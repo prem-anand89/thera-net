@@ -1044,8 +1044,8 @@ export function WorkspacePage() {
 
         {/* Front desk does not see the clinic's net revenue: it sees what came in today, which is what should be in the drawer. */}
         {scope.isFrontDesk && scope.isClinicWideView && (
-          <p className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-            <span className="min-w-0 truncate">
+          <p className="flex items-start justify-between gap-2 text-xs text-[var(--muted)]">
+            <span className="min-w-0">
               <span className="hidden sm:inline">
                 <span className="font-medium text-[var(--ink)]">Whole clinic</span> ·{' '}
               </span>
@@ -1072,7 +1072,7 @@ export function WorkspacePage() {
             {monthReport === undefined || monthlyNew === undefined || (therapistSplit && therapists === undefined) ? (
               <LoadingValue />
             ) : (
-              `${myMonthRow?.visitCount ?? 0} visits · ${monthlyNew.newPackages} packages`
+              `${myMonthRow?.visitCount ?? 0} visits · ${monthlyNew.newPackages} ${monthlyNew.newPackages === 1 ? 'package' : 'packages'}`
             )}
           </p>
         )}
@@ -1129,24 +1129,12 @@ export function WorkspacePage() {
             )
           }
           action={
-            <span className="flex shrink-0 items-center gap-2">
-              {canManageBookings && (
-                <button
-                  type="button"
-                  className={pillAccent}
-                  onClick={() => setAddAwaitingOpen(true)}
-                >
-                  + Awaiting
-                </button>
-              )}
-              <Link
-                to="/schedule"
-                className={pillNeutral}
-              >
-                <span className="sm:hidden">Schedule →</span>
-                <span className="hidden sm:inline">Open schedule →</span>
-              </Link>
-            </span>
+            // The Schedule tab is in the main navigation, so there is no second link to it here.
+            canManageBookings ? (
+              <button type="button" className={`shrink-0 ${pillAccent}`} onClick={() => setAddAwaitingOpen(true)}>
+                + Awaiting
+              </button>
+            ) : undefined
           }
         >
           <TodayAppointments
