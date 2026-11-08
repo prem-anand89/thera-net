@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { followUpMessage } from '@/domain/bookingMessages';
 import { toLocalDateStr } from '@/domain/schedule';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatExpiryDate } from '@/domain/packageTracking';
 import type { FollowUpRow, NoShowRow } from '@/domain/followUp';
 import type { UUID } from '@/domain/types';
 import { notify } from '@/lib/notify';
@@ -118,9 +118,16 @@ export function ReviewsPanel({
     return (
       <li key={p.id} className="py-2.5">
         <div className="flex items-start justify-between gap-2">
-          <Link to="/patients/$patientId" params={{ patientId: p.id }} search={{ from: '/workspace' }} className="min-w-0 break-words font-display text-sm font-medium text-[var(--ink)] hover:underline">
-            {p.name}
-          </Link>
+          <div className="min-w-0">
+            <Link to="/patients/$patientId" params={{ patientId: p.id }} search={{ from: '/workspace' }} className="break-words font-display text-sm font-medium text-[var(--ink)] hover:underline">
+              {p.name}
+            </Link>
+            {p.mrno && (
+              <span className="ml-1.5 font-num text-xs text-[var(--muted)]">
+                {p.mrno}
+              </span>
+            )}
+          </div>
           {therapistName ? (
             <div className="shrink-0">
               <TherapistPill>{therapistName}</TherapistPill>
@@ -128,7 +135,7 @@ export function ReviewsPanel({
           ) : null}
         </div>
         <p className={`mt-0.5 text-xs ${row.daysFromDue < 0 && kind === 'due' ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
-          {kind === 'missed' ? `Missed · was due ${formatDateDMY(row.dueOn)}` : `${dueLine(row)} · ${formatDateDMY(row.dueOn)}`}
+          {kind === 'missed' ? `Missed · was due ${formatExpiryDate(row.dueOn)}` : `${dueLine(row)} · ${formatExpiryDate(row.dueOn)}`}
         </p>
         {p.followUpNote && <p className="mt-0.5 text-xs text-[var(--ink)]">{p.followUpNote}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -156,7 +163,20 @@ export function ReviewsPanel({
     return (
       <li key={a.id} className="py-2.5">
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 break-words font-display text-sm font-medium text-[var(--ink)]">{a.patientName}</p>
+          <div className="min-w-0">
+            {row.patient ? (
+              <Link to="/patients/$patientId" params={{ patientId: row.patient.id }} search={{ from: '/workspace' }} className="break-words font-display text-sm font-medium text-[var(--ink)] hover:underline">
+                {a.patientName}
+              </Link>
+            ) : (
+              <span className="break-words font-display text-sm font-medium text-[var(--ink)]">{a.patientName}</span>
+            )}
+            {row.patient?.mrno && (
+              <span className="ml-1.5 font-num text-xs text-[var(--muted)]">
+                {row.patient.mrno}
+              </span>
+            )}
+          </div>
           {therapistName ? (
             <div className="shrink-0">
               <TherapistPill>{therapistName}</TherapistPill>
@@ -164,7 +184,7 @@ export function ReviewsPanel({
           ) : null}
         </div>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          No-show · {formatDateDMY(day)}
+          No-show · {formatExpiryDate(day)}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {messageButton('no_show', patient, a.therapistId, day)}

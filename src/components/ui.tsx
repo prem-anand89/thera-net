@@ -730,7 +730,7 @@ export function SheetDialog({
   const panelRef = useDialogBehavior<HTMLDivElement>(open, onClose, () => !busy);
   const titleId = useId();
   if (!open) return null;
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-end justify-center bg-[var(--ink)]/40 sm:items-center sm:p-4"
       onClick={() => !busy && onClose()}
@@ -753,7 +753,8 @@ export function SheetDialog({
           <div className="flex gap-2 [&>*]:flex-1">{footer}</div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

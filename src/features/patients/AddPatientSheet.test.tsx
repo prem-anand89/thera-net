@@ -62,13 +62,11 @@ describe('AddPatientSheet', () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ clinicId: 'c1', name: 'Meera' }));
   });
 
-  it('with offerStartVisit, Save and Save and start visit report the choice', async () => {
-    const { onCreated } = setup({ offerStartVisit: true });
-    typeName('Meera');
-    fireEvent.click(screen.getByRole('button', { name: 'Save and start visit' }));
-    await waitFor(() => expect(onCreated).toHaveBeenLastCalledWith(made, { startVisit: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onCreated).toHaveBeenLastCalledWith(made, { startVisit: false }));
+  it('Cancel closes the sheet without creating a patient', async () => {
+    const { onClose } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('a look-alike must be answered before saving, and Use this patient hands back the existing record', async () => {

@@ -19,12 +19,10 @@ export interface AddPatientSheetProps {
   /** Name and phone the sheet opens with (for example an appointment booked by someone not yet on file). */
   initialName?: string;
   initialPhone?: string;
-  /** The patient was saved. `startVisit` is true only when the person chose "Save and start visit". */
-  onCreated: (patient: Patient, opts: { startVisit: boolean }) => void;
+  /** The patient was saved. */
+  onCreated: (patient: Patient, opts?: { startVisit?: boolean }) => void;
   /** "Use this patient" on a look-alike: carry on with the existing record instead of creating one. */
   onUseExisting: (patient: Patient) => void;
-  /** Offer "Save and start visit" as the main button, with a plain "Save" beside it. */
-  offerStartVisit?: boolean;
 }
 
 /**
@@ -37,7 +35,7 @@ export function AddPatientSheet(props: AddPatientSheetProps) {
   return props.open ? <AddPatientForm {...props} /> : null;
 }
 
-function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreated, onUseExisting, offerStartVisit = false }: AddPatientSheetProps) {
+function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreated, onUseExisting }: AddPatientSheetProps) {
   const clinic = useClinic();
   const [newPatient, setNewPatient] = useState({
     name: initialName,
@@ -86,7 +84,7 @@ function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreate
     onClose();
   }
 
-  async function create(startVisit: boolean) {
+  async function create() {
     setError(null);
     if (!newPatient.name.trim()) return setError('Enter the patient\'s name.');
     if (similar.length > 0 && !differentConfirmed) {
@@ -112,7 +110,7 @@ function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreate
         referringSourceId: newPatient.referringSourceId || null,
         referringSourceDetail: newPatient.referringSourceDetail || null,
       });
-      onCreated(created, { startVisit });
+      onCreated(created, { startVisit: false });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -120,21 +118,12 @@ function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreate
     }
   }
 
-  const footer = offerStartVisit ? (
-    <>
-      <button type="button" className={btnSecondary} disabled={busy} onClick={() => void create(false)}>
-        Save
-      </button>
-      <button type="button" className={btnPrimary} disabled={busy} onClick={() => void create(true)}>
-        {busy ? 'Saving…' : 'Save and start visit'}
-      </button>
-    </>
-  ) : (
+  const footer = (
     <>
       <button type="button" className={btnSecondary} disabled={busy} onClick={() => void requestClose()}>
         Cancel
       </button>
-      <button type="button" className={btnPrimary} disabled={busy} onClick={() => void create(false)}>
+      <button type="button" className={btnPrimary} disabled={busy} onClick={() => void create()}>
         {busy ? 'Adding…' : 'Add patient'}
       </button>
     </>
@@ -288,11 +277,6 @@ function AddPatientForm({ onClose, initialName = '', initialPhone = '', onCreate
       <p className="text-xs text-[var(--muted)]">
         You can complete the rest of these later from the profile.
       </p>
-        {offerStartVisit && (
-          <button type="button" className="text-xs font-medium text-[var(--muted)] underline" disabled={busy} onClick={() => void requestClose()}>
-            Cancel
-          </button>
-        )}
       </div>
     </SheetDialog>
   );

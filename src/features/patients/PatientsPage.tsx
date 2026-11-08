@@ -1,6 +1,6 @@
 import { askConfirm, notify } from '@/lib/notify';
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, patientService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -91,7 +91,6 @@ export function PatientsList() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
   const [adding, setAdding] = useState(false);
-  const navigate = useNavigate();
   const [booking, setBooking] = useState<Patient | null>(null);
   const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
@@ -162,6 +161,7 @@ export function PatientsList() {
     }
     return map;
   }, [allVisits]);
+
   // "Home" chip: patients with a home address on file or any home visit. A patient can be here and in All.
   const showHomeChip = homeCareOn(clinic) && offersLocationChoice(clinic);
   const homePatientIds = useMemo(() => {
@@ -170,7 +170,6 @@ export function PatientsList() {
     for (const p of all ?? []) if (p.address?.trim()) ids.add(p.id);
     return ids;
   }, [allVisits, all]);
-
 
   const statusByInvoiceId = useMemo(
     () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
@@ -240,8 +239,8 @@ export function PatientsList() {
     const stats = visitStatsByPatient.get(p.id);
     if (chip === 'mine') {
       return stats?.latestVisit.therapistId === myTherapistId;
-    if (chip === 'home' && showHomeChip) return homePatientIds.has(p.id);
     }
+    if (chip === 'home' && showHomeChip) return homePatientIds.has(p.id);
     return true;
   });
   const hidden = (all ?? []).filter((p) => p.deletedAt);
@@ -319,8 +318,8 @@ export function PatientsList() {
           {(
             [
               { key: 'all', label: 'All' },
-              ...(showHomeChip ? [{ key: 'home', label: 'Home' } as const] : []),
               { key: 'mine', label: 'My patients' },
+              ...(showHomeChip ? [{ key: 'home', label: 'Home' } as const] : []),
             ] as const
           ).map((c) => (
             <button
@@ -750,16 +749,12 @@ export function PatientsList() {
 
       <AddPatientSheet
         open={adding}
-        offerStartVisit
         onClose={() => setAdding(false)}
-        onCreated={(created, { startVisit }) => {
+        onCreated={(created) => {
           setAdding(false);
-          if (startVisit) void navigate({ to: '/visits/new', search: { patientId: created.id, from: '/patients' } });
-          else {
-            setChip('all');
-            setQuery(created.name);
-            notify.info(`${created.name} added`);
-          }
+          setChip('all');
+          setQuery(created.name);
+          notify.info(`${created.name} added`);
         }}
         onUseExisting={(existing) => {
           setAdding(false);

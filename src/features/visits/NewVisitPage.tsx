@@ -1662,18 +1662,6 @@ export function NewVisitPage() {
         </div>
       )}
 
-      <AddPatientSheet
-        open={addingPatient}
-        onClose={() => setAddingPatient(false)}
-        initialName={query.trim() || search.prefillName || ''}
-        initialPhone={search.prefillPhone ?? ''}
-        onCreated={patientAdded}
-        onUseExisting={(existing) => {
-          setAddingPatient(false);
-          selectPatientFromSearch(existing);
-        }}
-      />
-
       {/* 2. Divider between Patient and This Visit */}
       <div className="border-t border-[var(--border)]" />
 
@@ -2214,6 +2202,18 @@ export function NewVisitPage() {
         </div>
         <div className="min-w-0">{visitPanel}</div>
       </div>
+
+      <AddPatientSheet
+        open={addingPatient}
+        onClose={() => setAddingPatient(false)}
+        initialName={query.trim() || search.prefillName || ''}
+        initialPhone={search.prefillPhone ?? ''}
+        onCreated={patientAdded}
+        onUseExisting={(existing) => {
+          setAddingPatient(false);
+          selectPatientFromSearch(existing);
+        }}
+      />
 
       {patient && editingPatient && (
         <EditPatientModal
