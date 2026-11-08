@@ -6,6 +6,8 @@ import { formatAmount } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
 import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
+import { CARE_LOCATION_LABELS, bookableLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
+import type { CareLocation } from '@/domain/types';
 import { DatePresetBar, DAYBOOK_DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
 
 // Local Y/M/D components
@@ -87,8 +89,10 @@ export function DaybookPage() {
     return { payments, advances, visits, patients };
   }, [clinic.id, from, to], { payments: [], advances: [], visits: [], patients: [] });
 
-  const { cash, upi, card, other, partner, total, transactions } = useMemo(() => {
-    let cash = 0, upi = 0, card = 0, other = 0, partner = 0;
+  const { cash, upi, card, other, partner, total, transactions, byPlace, advanceTotal } = useMemo(() => {
+    let cash = 0, upi = 0, card = 0, other = 0, partner = 0, advanceTotal = 0;
+    // What reached the clinic, by the place of the visit it paid for (advances belong to no visit yet).
+    const byPlace: Partial<Record<CareLocation, number>> = {};
     const transactions: { id: string; date: string; patientName: string; type: string; method: string; amount: number; notes: string }[] = [];
 
     const patientNameById = new Map((data.patients ?? []).map((p) => [p.id, p.name]));
@@ -105,6 +109,10 @@ export function DaybookPage() {
         else other += amt;
 
         const visit = visitById.get(p.visitId);
+        if (p.method !== 'partner') {
+          const place = locationOf(visit);
+          byPlace[place] = (byPlace[place] ?? 0) + amt;
+        }
         const pId = visit?.patientId;
         const pName = pId ? (patientNameById.get(pId) ?? 'Unknown') : 'Unknown';
         
@@ -140,6 +148,7 @@ export function DaybookPage() {
         else if (a.method === 'partner') partner += amt;
         else other += amt;
 
+        if (a.method !== 'partner') advanceTotal += amt;
         const pName = patientNameById.get(a.patientId) ?? 'Unknown';
         transactions.push({
           id: a.id,
@@ -157,7 +166,7 @@ export function DaybookPage() {
     transactions.sort((a, b) => b.date.localeCompare(a.date));
 
     // `total` is money that reached the clinic; what the partner collected is shown on its own line.
-    return { cash, upi, card, other, partner, total: cash + upi + card + other, transactions };
+    return { cash, upi, card, other, partner, total: cash + upi + card + other, transactions, byPlace, advanceTotal };
   }, [data]);
 
   return (
@@ -236,6 +245,23 @@ export function DaybookPage() {
               </tfoot>
             </table>
           </div>
+          {offersLocationChoice(clinic) && total > 0 && (
+            <dl className="mt-3 space-y-1 border-t border-[var(--border)] pt-3 text-sm">
+              <dt className="text-xs font-medium text-[var(--muted)]">Of this, by where the visit was</dt>
+              {bookableLocations(clinic).map((l) => (
+                <div key={l} className="flex justify-between">
+                  <dd className="text-[var(--ink)]">{CARE_LOCATION_LABELS[l]}</dd>
+                  <dd className="tabular-nums">{formatAmount(byPlace[l] ?? 0)}</dd>
+                </div>
+              ))}
+              {advanceTotal > 0 && (
+                <div className="flex justify-between">
+                  <dd className="text-[var(--ink)]">Advances (not on a visit yet)</dd>
+                  <dd className="tabular-nums">{formatAmount(advanceTotal)}</dd>
+                </div>
+              )}
+            </dl>
+          )}
         </SectionCard>
       </div>
 

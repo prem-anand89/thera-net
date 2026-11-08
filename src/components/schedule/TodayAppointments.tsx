@@ -1,4 +1,7 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useContext, useMemo, useState, type ReactNode } from 'react';
+import { ClinicContext } from '@/app/clinicContext';
+import { bookableLocations, CARE_LOCATION_LABELS, locationOf, offersLocationChoice } from '@/domain/careLocations';
+import type { CareLocation } from '@/domain/types';
 import { HomeBadge } from './LocationBadge';
 import { Link } from '@tanstack/react-router';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
@@ -30,7 +33,7 @@ const listCls = '-mx-5 divide-y divide-[var(--border)] border-y border-[var(--bo
  * then the next few upcoming, and finished ones folded away.
  */
 export function TodayAppointments({
-  appointments,
+  appointments: allAppointments,
   slotMinutes,
   nextUpId,
   colorFor,
@@ -86,6 +89,16 @@ export function TodayAppointments({
   onRestoreCancelled?: (appointment: Appointment) => void | Promise<unknown>;
 }) {
   const [showAll, setShowAll] = useState(false);
+  // Clinic / Home chips, only for a clinic that sees patients in more than one place. Everything below (counts,
+  // sections, the empty state) reads the filtered list; the choice is not remembered.
+  const clinic = useContext(ClinicContext);
+  const placeChoices = offersLocationChoice(clinic) ? bookableLocations(clinic) : [];
+  const [place, setPlace] = useState<'' | CareLocation>('');
+  const activePlace = placeChoices.includes(place as CareLocation) ? place : '';
+  const appointments = useMemo(
+    () => (activePlace ? allAppointments.filter((a) => locationOf(a) === activePlace) : allAppointments),
+    [allAppointments, activePlace]
+  );
   // One request per row at a time: a second tap on Arrived / Undo / Restore while the first
   // is in flight would send a second call that the server rejects with an error toast.
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
@@ -264,17 +277,47 @@ export function TodayAppointments({
     </section>
   ) : null;
 
+  const placeChips =
+    placeChoices.length > 0 && allAppointments.length > 0 ? (
+      <div role="group" aria-label="Where" className="flex flex-wrap gap-1.5">
+        {(['', ...placeChoices] as const).map((l) => (
+          <button
+            key={l || 'all'}
+            type="button"
+            aria-pressed={activePlace === l}
+            className={`min-h-8 rounded-full border px-3 text-xs font-medium ${
+              activePlace === l
+                ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
+                : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
+            }`}
+            onClick={() => setPlace(l)}
+          >
+            {l ? CARE_LOCATION_LABELS[l] : 'All'}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
   if (appointments.length === 0) {
     // The card header says "none today" and offers the schedule link; with requests listed there is nothing more to say.
     return hasRequests ? (
-      <div className="space-y-4">{requestsSection}</div>
+      <div className="space-y-4">
+        {placeChips}
+        {requestsSection}
+      </div>
     ) : (
-      <p className="text-sm text-[var(--muted)]">No appointments today</p>
+      <div className="space-y-3">
+        {placeChips}
+        <p className="text-sm text-[var(--muted)]">
+          {activePlace ? `No ${CARE_LOCATION_LABELS[activePlace].toLowerCase()} appointments today` : 'No appointments today'}
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {placeChips}
       {requestsSection}
 
       {inProgress.length > 0 && (

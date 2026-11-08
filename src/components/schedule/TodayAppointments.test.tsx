@@ -13,6 +13,8 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 import { TodayAppointments } from './TodayAppointments';
+import { ClinicContext } from '@/app/clinicContext';
+import type { Clinic } from '@/domain/types';
 
 let n = 0;
 const appt = (time: string, over: Partial<Appointment> = {}): Appointment => ({
@@ -348,5 +350,39 @@ describe('TodayAppointments all-done wording', () => {
     expect(screen.getByText(/1 no-show/)).toBeInTheDocument();
     expect(screen.queryByText(/0 seen/)).not.toBeInTheDocument();
     expect(screen.queryByText(/No appointments today/)).not.toBeInTheDocument();
+  });
+
+  describe('Where chips', () => {
+    const two = { id: 'c', careLocations: ['clinic', 'home'] } as unknown as Clinic;
+    const renderIn = (clinic: Clinic, appointments: Appointment[]) =>
+      render(
+        <ClinicContext.Provider value={clinic}>
+          <TodayAppointments
+            appointments={appointments}
+            slotMinutes={30}
+            nextUpId={null}
+            colorFor={() => '#000'}
+            therapistNameFor={() => 'Dr A'}
+            showTherapist
+            onSelect={vi.fn()}
+          />
+        </ClinicContext.Provider>
+      );
+
+    it('filters the list by place, and says so when none match', () => {
+      renderIn(two, [appt('10:00', { patientName: 'At Clinic' }), appt('11:00', { patientName: 'At Home', location: 'home' })]);
+      expect(screen.getByText('At Clinic')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Home visit' }));
+      expect(screen.queryByText('At Clinic')).not.toBeInTheDocument();
+      expect(screen.getByText('At Home')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Clinic' }));
+      expect(screen.getByText('At Clinic')).toBeInTheDocument();
+      expect(screen.queryByText('At Home')).not.toBeInTheDocument();
+    });
+
+    it('shows no chips for a one-place clinic', () => {
+      renderIn({ id: 'c', careLocations: ['clinic'] } as unknown as Clinic, [appt('10:00')]);
+      expect(screen.queryByRole('group', { name: 'Where' })).not.toBeInTheDocument();
+    });
   });
 });
