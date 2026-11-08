@@ -745,6 +745,15 @@ export interface InvoiceLineItem {
  * note afterward (H3: invoices are immutable snapshots). `sourceNoteId` is
  * provenance only, not a live reference.
  */
+export interface InvoiceAdmissionBlock {
+  ipdNo: string | null;
+  wardBed: string | null;
+  admittingDoctor: string | null;
+  /** ISO dates yyyy-mm-dd; `dischargedOn` is null when the bill was issued before the patient left. */
+  admittedOn: string;
+  dischargedOn: string | null;
+}
+
 export interface InvoiceClinicalSnapshot {
   diagnosis: string | null;
   diagnosisIcdCode?: string | null;
@@ -755,6 +764,8 @@ export interface InvoiceClinicalSnapshot {
   /** Every place the billed visits were at, in the order clinic, home, ward. Absent on older invoices. */
   locations?: CareLocation[];
   treatmentPerformed: string | null;
+  /** The inpatient stay the billed sessions belong to, copied at issue so editing the stay later never changes an issued bill. */
+  admission?: InvoiceAdmissionBlock | null;
   sourceNoteId?: UUID | null;
   /** True when the biller changed a value away from its pre-filled
    *  default before issuing — lets the print/audit trail distinguish

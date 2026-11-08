@@ -18,7 +18,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { INVOICE_PAYMENT_MODES } from '@/domain/paymentMethods';
 import { usePermissions } from '@/app/usePermissions';
 import { ClinicAddressPrompt } from '@/components/ClinicAddressPrompt';
-import { pickReferralNote, placeOfServiceFor, placeOfServiceLabel, treatmentsFor } from '@/domain/invoiceClinical';
+import { admissionBlockFor, admissionRows, pickReferralNote, placeOfServiceFor, placeOfServiceLabel, treatmentsFor } from '@/domain/invoiceClinical';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { clinicCareLocations } from '@/domain/careLocations';
 import type { InvoicePrintBackTarget } from '@/app/router';
@@ -117,6 +117,13 @@ export function IssueInvoiceDialog({
   );
   const billedIdsKey = (visits ?? []).map((v) => v.id).join(',');
   const clinicRow = useLiveQuery(() => repos.clinics.get(clinicId), [clinicId]);
+  // An inpatient bill carries a copy of its stay (IPD no, ward/bed, doctor, dates), frozen with the clinical details.
+  const stayIdsKey = [...new Set((visits ?? []).map((v) => v.admissionId).filter(Boolean))].join(',');
+  const stays = useLiveQuery(
+    async () => new Map((await Promise.all(stayIdsKey.split(',').filter(Boolean).map((id) => repos.admissions.get(id)))).filter((a): a is NonNullable<typeof a> => Boolean(a)).map((a) => [a.id, a])),
+    [stayIdsKey]
+  );
+  const admissionBlock = useMemo(() => (visits && stays ? admissionBlockFor(visits, stays) : null), [visits, stays]);
   const patientNotes = useLiveQuery(
     () => repos.consultationNotes.listByPatient(clinicId, target.patientId),
     [clinicId, target.patientId]
@@ -194,7 +201,7 @@ export function IssueInvoiceDialog({
   }
 
   function clinicalSnapshotFromFields(): InvoiceClinicalSnapshot | null {
-    if (!hasClinicalContent(fields)) return null;
+    if (!hasClinicalContent(fields) && !admissionBlock) return null;
     return {
       diagnosis: fields.diagnosis.trim() || null,
       // The code belongs to the diagnosis the note gave: once the biller changes that text it no longer applies.
@@ -204,6 +211,7 @@ export function IssueInvoiceDialog({
       placeOfService: fields.placeOfService,
       ...(fields.placeOfService === 'mixed' && fields.locations ? { locations: fields.locations } : {}),
       treatmentPerformed: fields.treatmentPerformed.trim() || null,
+      ...(admissionBlock ? { admission: admissionBlock } : {}),
       sourceNoteId: sourceNote?.id ?? null,
       editedByBiller:
         fields.diagnosis !== prefill.diagnosis ||
@@ -378,6 +386,11 @@ export function IssueInvoiceDialog({
                     Place of service: {placeOfServiceLabel({ placeOfService: fields.placeOfService, locations: fields.locations })}
                   </p>
                 )}
+                {admissionRows(admissionBlock).map((r) => (
+                  <p key={r.label}>
+                    {r.label}: {r.value}
+                  </p>
+                ))}
                 {fields.treatmentPerformed && <p>Treatment: {fields.treatmentPerformed}</p>}
                 {period && (
                   <p>

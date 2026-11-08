@@ -9,8 +9,11 @@ import { dayOfStay, openAdmissionOf } from '@/domain/admissions';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { toLocalDateStr } from '@/domain/schedule';
 import { btnSecondary, Pill } from '@/components/ui';
+import { usePermissions } from '@/app/usePermissions';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
+import type { Admission } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
-import { notify } from '@/lib/notify';
+import { askConfirm, notify } from '@/lib/notify';
 import { AdmissionSheet } from './AdmissionSheet';
 import { DischargeSheet } from './DischargeSheet';
 
@@ -24,6 +27,42 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   const entitlements = useEntitlements(clinic.id);
   const stays = useLiveQuery(() => repos.admissions.listByPatient(clinic.id, patient.id), [clinic.id, patient.id]);
   const [sheet, setSheet] = useState<'admit' | 'edit' | 'discharge' | null>(null);
+  const { canBill } = usePermissions();
+  const visits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id, patientId: patient.id }), [clinic.id, patient.id]);
+  const [invoicing, setInvoicing] = useState<IssueInvoiceTarget | null>(null);
+
+  /** The stay's sessions not yet on a bill: what a discharge bill covers. */
+  const unbilledOf = (stay: Admission) => (visits ?? []).filter((v) => !v.deleted && v.admissionId === stay.id && !v.invoiceId);
+  const billableTotal = (stay: Admission) => unbilledOf(stay).reduce((sum, v) => sum + v.actualBillPaise, 0);
+
+  function startBilling(stay: Admission) {
+    const rows = unbilledOf(stay);
+    if (rows.length === 0 || billableTotal(stay) <= 0) {
+      notify.info('There is nothing to bill on this stay yet.');
+      return;
+    }
+    setInvoicing({
+      visitId: rows[0].id,
+      visitIds: rows.map((v) => v.id),
+      patientId: patient.id,
+      patientLabel: patient.name,
+      serviceLabel: `Inpatient stay, ${rows.length} session${rows.length === 1 ? '' : 's'}`,
+      isPackage: false,
+      // Inpatient sessions are saved unpaid; whether the bill is settled now is chosen when it is issued.
+      alreadyCollected: false,
+    });
+  }
+
+  async function offerDischargeBill(stay: Admission) {
+    if (!canBill || unbilledOf(stay).length === 0 || billableTotal(stay) <= 0) return;
+    const now = await askConfirm({
+      title: 'Discharge bill',
+      message: `Generate the bill for the ${unbilledOf(stay).length} session${unbilledOf(stay).length === 1 ? '' : 's'} on this stay now?`,
+      confirmLabel: 'Generate bill',
+      cancelLabel: 'Bill later',
+    });
+    if (now) startBilling(stay);
+  }
 
   const wardOn = clinicCareLocations(clinic).includes('ward');
   if (stays === undefined) return null;
@@ -57,6 +96,11 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canBill && unbilledOf(open).length > 0 && (
+              <button type="button" className={btnSecondary} onClick={() => startBilling(open)}>
+                Bill this stay
+              </button>
+            )}
             <button type="button" className={btnSecondary} onClick={() => setSheet('edit')}>
               Edit stay
             </button>
@@ -74,6 +118,11 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
                 Reopen
               </button>
             )}
+            {last && canBill && unbilledOf(last).length > 0 && (
+              <button type="button" className="ml-2 text-xs text-[var(--teal)] hover:underline" onClick={() => startBilling(last)}>
+                Bill this stay
+              </button>
+            )}
           </p>
           {canAdmit && (
             <button type="button" className={btnSecondary} onClick={() => setSheet('admit')}>
@@ -86,9 +135,16 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
       {open && (
         <>
           <AdmissionSheet open={sheet === 'edit'} onClose={() => setSheet(null)} patient={patient} stay={open} />
-          <DischargeSheet open={sheet === 'discharge'} onClose={() => setSheet(null)} patient={patient} stay={open} />
+          <DischargeSheet
+            open={sheet === 'discharge'}
+            onClose={() => setSheet(null)}
+            patient={patient}
+            stay={open}
+            onDischarged={(stay) => void offerDischargeBill(stay)}
+          />
         </>
       )}
+      {invoicing && <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/patients" />}
     </section>
   );
 }

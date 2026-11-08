@@ -9,7 +9,8 @@ import { formatAmount } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { buildInvoicePaymentLedger } from '@/domain/invoicePaymentLedger';
-import { placeOfServiceLabel } from '@/domain/invoiceClinical';
+import { admissionRows, placeOfServiceLabel } from '@/domain/invoiceClinical';
+import { hasHospitalSlip } from '@/domain/hospitalSlip';
 import {
   isV2Line,
   lineRatePerSessionPaise,
@@ -322,6 +323,7 @@ export function InvoicePrintPage() {
   // have these). With the common ones on the left, a bill with no diagnosis or referral reads without a gap.
   const clinicalLeft = [
     ...(placeLabel ? [{ label: 'Place of service', value: placeLabel }] : []),
+    ...admissionRows(snap?.admission),
     ...(snap?.treatmentPerformed ? [{ label: 'Treatment', value: snap.treatmentPerformed }] : []),
     // A bill covering several days says which: first to last session.
     ...(period ? [{ label: 'Treatment period', value: `${formatDateDMY(period.from)} – ${formatDateDMY(period.to)}` }] : []),
@@ -404,6 +406,16 @@ export function InvoicePrintPage() {
               mirrors that exact rule (see usePermissions.ts). Without this
               gate, the buttons rendered fully clickable for every role and
               only failed with an opaque RPC error once submitted. */}
+          {hasHospitalSlip(invoice) && (
+            <Link
+              to="/invoices/$invoiceId/slip"
+              params={{ invoiceId }}
+              search={{ ...(backTo ? { from: backTo } : {}), ...(backPatient ? { patient: backPatient } : {}) }}
+              className={btnSecondary}
+            >
+              Hospital slip
+            </Link>
+          )}
           {!supersededBy && !isVoid && canBill && (
             <button type="button" className={btnSecondary} onClick={() => setEditingDetails(true)}>
               Edit details

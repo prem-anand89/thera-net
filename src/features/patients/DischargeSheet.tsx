@@ -11,16 +11,29 @@ export function DischargeSheet({
   onClose,
   patient,
   stay,
+  onDischarged,
 }: {
   open: boolean;
   onClose: () => void;
   patient: Pick<Patient, 'name'>;
   stay: Admission;
+  /** Called once the stay is closed, with the discharged stay (the profile offers the discharge bill from it). */
+  onDischarged?: (stay: Admission) => void;
 }) {
-  return open ? <DischargeForm onClose={onClose} patient={patient} stay={stay} /> : null;
+  return open ? <DischargeForm onClose={onClose} patient={patient} stay={stay} onDischarged={onDischarged} /> : null;
 }
 
-function DischargeForm({ onClose, patient, stay }: { onClose: () => void; patient: Pick<Patient, 'name'>; stay: Admission }) {
+function DischargeForm({
+  onClose,
+  patient,
+  stay,
+  onDischarged,
+}: {
+  onClose: () => void;
+  patient: Pick<Patient, 'name'>;
+  stay: Admission;
+  onDischarged?: (stay: Admission) => void;
+}) {
   const [date, setDate] = useState(toLocalDateStr(new Date()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +42,9 @@ function DischargeForm({ onClose, patient, stay }: { onClose: () => void; patien
     setBusy(true);
     setError(null);
     try {
-      await admissionService.discharge(stay.id, date);
+      const discharged = await admissionService.discharge(stay.id, date);
       onClose();
+      onDischarged?.(discharged);
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {

@@ -61,6 +61,9 @@ const TrendsReviewPrintPage = lazy(() =>
     default: m.TrendsReviewPrintPage,
   }))
 );
+const HospitalSlipPrintPage = lazy(() =>
+  import('@/features/invoices/HospitalSlipPrintPage').then((m) => ({ default: m.HospitalSlipPrintPage }))
+);
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
@@ -428,6 +431,19 @@ const invoicePrintRoute = createRoute({
   component: InvoicePrintPage,
 });
 
+// The hospital billing slip of an inpatient bill (compact voucher for the hospital counter).
+const hospitalSlipRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invoices/$invoiceId/slip',
+  validateSearch: (search: Record<string, unknown>): { from?: InvoicePrintBackTarget; patient?: string } => ({
+    ...(INVOICE_PRINT_BACK_TARGETS.includes(search.from as InvoicePrintBackTarget)
+      ? { from: search.from as InvoicePrintBackTarget }
+      : {}),
+    ...(typeof search.patient === 'string' && search.patient ? { patient: search.patient } : {}),
+  }),
+  component: HospitalSlipPrintPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -589,6 +605,7 @@ const routeTree = rootRoute.addChildren([
   reportsRedirectRoute,
   reportsPrintRedirectRoute,
   invoicePrintRoute,
+  hospitalSlipRoute,
   invoicesRedirectRoute,
   settingsRoute,
   scheduleRoute,

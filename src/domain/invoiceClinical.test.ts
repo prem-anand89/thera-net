@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickReferralNote, placeOfServiceFor, placeOfServiceLabel, treatmentsFor } from './invoiceClinical';
+import { admissionBlockFor, admissionRows, pickReferralNote, placeOfServiceFor, placeOfServiceLabel, treatmentsFor } from './invoiceClinical';
 import type { ConsultationNote } from './types';
 
 describe('placeOfServiceFor', () => {
@@ -101,13 +101,33 @@ describe('placeOfServiceLabel', () => {
   it('names each place, and the mix', () => {
     expect(placeOfServiceLabel({ placeOfService: 'clinic' })).toBe('Clinic');
     expect(placeOfServiceLabel({ placeOfService: 'home' })).toBe('Home (domiciliary)');
-    expect(placeOfServiceLabel({ placeOfService: 'ward' })).toBe('Ward');
+    expect(placeOfServiceLabel({ placeOfService: 'ward' })).toBe('Inpatient');
     expect(placeOfServiceLabel({ placeOfService: 'mixed', locations: ['clinic', 'home'] })).toBe('Clinic and Home');
-    expect(placeOfServiceLabel({ placeOfService: 'mixed', locations: ['clinic', 'home', 'ward'] })).toBe('Clinic and Home and Ward');
+    expect(placeOfServiceLabel({ placeOfService: 'mixed', locations: ['clinic', 'home', 'ward'] })).toBe('Clinic and Home and Inpatient');
   });
   it('an old invoice or none prints as before', () => {
     expect(placeOfServiceLabel(null)).toBeNull();
     expect(placeOfServiceLabel({ placeOfService: null })).toBeNull();
     expect(placeOfServiceLabel({ placeOfService: 'mixed' })).toBe('Clinic and Home');
+  });
+});
+
+describe('admission block on a bill', () => {
+  const stay = { ipdNo: 'IP-7', wardBed: 'Ortho, bed 2', admittingDoctor: 'Dr Rao', admittedOn: '2026-11-01', dischargedOn: '2026-11-05' };
+  const stays = new Map([['s1', stay], ['s2', { ...stay, ipdNo: 'IP-8' }]]);
+
+  it('copies the stay when every billed visit is on it; otherwise there is none', () => {
+    expect(admissionBlockFor([{ admissionId: 's1' }, { admissionId: 's1' }], stays)).toEqual(stay);
+    expect(admissionBlockFor([{ admissionId: 's1' }, { admissionId: 's2' }], stays)).toBeNull();
+    expect(admissionBlockFor([{ admissionId: 's1' }, { admissionId: null }], stays)).toBeNull();
+    expect(admissionBlockFor([{ admissionId: null }], stays)).toBeNull();
+    expect(admissionBlockFor([{ admissionId: 'gone' }], stays)).toBeNull();
+    expect(admissionBlockFor([], stays)).toBeNull();
+  });
+
+  it('prints IPD no, ward/bed, doctor and the stay dates, leaving out what is blank', () => {
+    expect(admissionRows(stay).map((r) => r.label)).toEqual(['IPD No', 'Ward / Bed', 'Admitting Doctor', 'Stay']);
+    expect(admissionRows({ ...stay, ipdNo: null, wardBed: null, admittingDoctor: null, dischargedOn: null }).map((r) => r.label)).toEqual(['Stay']);
+    expect(admissionRows(null)).toEqual([]);
   });
 });

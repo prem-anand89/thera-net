@@ -61,7 +61,9 @@ export function EditInvoiceDetailsDialog({
     setBusy(true);
     setError(null);
     try {
-      const clinicalSnapshot: InvoiceClinicalSnapshot | null = hasClinicalContent(fields)
+      // The stay copied at issue is not editable here: correcting the diagnosis or place never drops it.
+      const keptAdmission = invoice.clinicalSnapshot?.admission ?? null;
+      const clinicalSnapshot: InvoiceClinicalSnapshot | null = hasClinicalContent(fields) || keptAdmission
         ? {
             diagnosis: fields.diagnosis.trim() || null,
             // The code belongs to the diagnosis it came with: once that text changes it no longer applies.
@@ -74,6 +76,7 @@ export function EditInvoiceDetailsDialog({
             placeOfService: fields.placeOfService,
             ...(fields.placeOfService === 'mixed' && fields.locations ? { locations: fields.locations } : {}),
             treatmentPerformed: fields.treatmentPerformed.trim() || null,
+            ...(keptAdmission ? { admission: keptAdmission } : {}),
             sourceNoteId: invoice.clinicalSnapshot?.sourceNoteId ?? null,
             editedByBiller: true,
           }

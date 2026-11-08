@@ -1,5 +1,6 @@
 import { locationOf } from './careLocations';
-import type { CareLocation, ConsultationNote, Visit } from './types';
+import { formatDateDMY } from './fiscalYear';
+import type { Admission, CareLocation, ConsultationNote, InvoiceAdmissionBlock, Visit } from './types';
 
 /** Where the visits on one invoice happened: one place, or `mixed` when they were in more than one. */
 export type InvoicePlace = CareLocation | 'mixed';
@@ -75,8 +76,8 @@ function dateInZone(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 }
 
-const PLACE_LABEL: Record<CareLocation, string> = { clinic: 'Clinic', home: 'Home (domiciliary)', ward: 'Ward' };
-const PLACE_SHORT: Record<CareLocation, string> = { clinic: 'Clinic', home: 'Home', ward: 'Ward' };
+const PLACE_LABEL: Record<CareLocation, string> = { clinic: 'Clinic', home: 'Home (domiciliary)', ward: 'Inpatient' };
+const PLACE_SHORT: Record<CareLocation, string> = { clinic: 'Clinic', home: 'Home', ward: 'Inpatient' };
 
 /** How a bill prints the place of service: "Clinic", "Home (domiciliary)", "Ward", or "Clinic and Home" when mixed. */
 export function placeOfServiceLabel(snapshot: { placeOfService?: InvoicePlace | null; locations?: CareLocation[] } | null | undefined): string | null {
@@ -87,4 +88,44 @@ export function placeOfServiceLabel(snapshot: { placeOfService?: InvoicePlace | 
     return names.length > 1 ? names.join(' and ') : 'Clinic and Home';
   }
   return PLACE_LABEL[place];
+}
+
+/**
+ * The stay block for an invoice: when every billed visit belongs to the same admission, a copy of that stay's details
+ * (IPD no, ward/bed, admitting doctor, dates). Visits from different stays, or a mix of stay and ordinary visits, have no
+ * single stay to name, so there is none.
+ */
+export function admissionBlockFor(
+  visits: Pick<Visit, 'admissionId'>[],
+  admissionsById: ReadonlyMap<string, Pick<Admission, 'ipdNo' | 'wardBed' | 'admittingDoctor' | 'admittedOn' | 'dischargedOn'>>
+): InvoiceAdmissionBlock | null {
+  if (visits.length === 0) return null;
+  const ids = new Set(visits.map((v) => v.admissionId ?? null));
+  if (ids.size !== 1) return null;
+  const id = [...ids][0];
+  const stay = id ? admissionsById.get(id) : undefined;
+  if (!stay) return null;
+  return {
+    ipdNo: stay.ipdNo,
+    wardBed: stay.wardBed,
+    admittingDoctor: stay.admittingDoctor,
+    admittedOn: stay.admittedOn,
+    dischargedOn: stay.dischargedOn,
+  };
+}
+
+/** The stay as label/value rows for a printed bill: IPD no, ward/bed, admitting doctor, then admitted and discharged dates. */
+export function admissionRows(block: InvoiceAdmissionBlock | null | undefined): { label: string; value: string }[] {
+  if (!block) return [];
+  return [
+    ...(block.ipdNo ? [{ label: 'IPD No', value: block.ipdNo }] : []),
+    ...(block.wardBed ? [{ label: 'Ward / Bed', value: block.wardBed }] : []),
+    ...(block.admittingDoctor ? [{ label: 'Admitting Doctor', value: block.admittingDoctor }] : []),
+    {
+      label: 'Stay',
+      value: block.dischargedOn
+        ? `${formatDateDMY(block.admittedOn)} – ${formatDateDMY(block.dischargedOn)}`
+        : `Admitted ${formatDateDMY(block.admittedOn)}`,
+    },
+  ];
 }
