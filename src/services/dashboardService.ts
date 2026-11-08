@@ -30,6 +30,7 @@ import {
 import type { Repos } from '@/repositories/types';
 import { createReportService, type MonthlyReport } from './reportService';
 import { isCashInHand, isFullyPartnerCollected, partnerPaymentsByVisit } from '@/domain/paymentMethods';
+import { collectionsByMethod, type CollectionsByMethod } from '@/domain/collectionsByMethod';
 
 export interface OpenPackageRow {
   packageGroupId: UUID;
@@ -234,6 +235,8 @@ export interface TodayVisitRow {
   phone: string | null;
   therapistId: UUID;
   therapistName: string;
+  /** Where the visit was; absent or null reads as Clinic. */
+  location?: string | null;
   serviceName: string;
   treatmentNotes: string | null;
   treatmentIds: UUID[];
@@ -398,6 +401,14 @@ export function createDashboardService(repos: Repos) {
      * of today's visits, which misses a payment today on an older visit and
      * counts a bill whose cash came another day.
      */
+    async receivedByMethodOnDate(clinicId: UUID, date: string): Promise<CollectionsByMethod> {
+      const [payments, advances] = await Promise.all([
+        repos.payments.listByDate(clinicId, date),
+        repos.patientAdvances.listByDate(clinicId, date),
+      ]);
+      return collectionsByMethod(payments, advances);
+    },
+
     async receivedOnDate(clinicId: UUID, date: string, therapistId?: UUID): Promise<Paise> {
       const payments = (await repos.payments.listByDate(clinicId, date)).filter(
         (p) => !p.advanceId && isCashInHand(p.method)
@@ -1165,6 +1176,7 @@ export function createDashboardService(repos: Repos) {
             phone: patient?.phone ?? null,
             therapistId: v.therapistId,
             therapistName: therapistNameById.get(v.therapistId) ?? '—',
+            location: v.location ?? null,
             serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
             treatmentNotes: v.treatmentNotes,
             treatmentIds: v.treatmentIds ?? [],

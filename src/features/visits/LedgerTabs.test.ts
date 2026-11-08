@@ -22,6 +22,14 @@ describe('filterLedgerTabs', () => {
     expect(tabs.map((t) => t.key)).toEqual(['visits', 'patients', 'daybook']);
   });
 
+  it('includes credits tab when canViewCredits is true', () => {
+    const therapistTabs = filterLedgerTabs({ canBill: false, canViewCredits: true, entitlementsLoading: false });
+    expect(therapistTabs.map((t) => t.key)).toEqual(['visits', 'patients', 'credits']);
+
+    const adminTabs = filterLedgerTabs({ canBill: true, canViewCredits: true, entitlementsLoading: false });
+    expect(adminTabs.map((t) => t.key)).toEqual(['visits', 'patients', 'invoices', 'daybook', 'credits']);
+  });
+
   it('shows Invoices read-only to a plan that no longer issues them, only when asked to', () => {
     expect(filterLedgerTabs({ canBill: false, canViewPastInvoices: true, entitlementsLoading: false }).map((t) => t.key)).toContain('invoices');
     expect(filterLedgerTabs({ canBill: false, canViewPastInvoices: false, entitlementsLoading: false }).map((t) => t.key)).not.toContain('invoices');

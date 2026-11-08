@@ -125,7 +125,7 @@ const workspaceRoute = createRoute({
   component: WorkspacePage,
 });
 
-export const LEDGER_TABS = ['visits', 'patients', 'invoices', 'daybook'] as const;
+export const LEDGER_TABS = ['visits', 'patients', 'invoices', 'daybook', 'credits'] as const;
 export type LedgerTab = (typeof LEDGER_TABS)[number];
 
 const ledgerRoute = createRoute({

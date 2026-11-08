@@ -1768,7 +1768,6 @@ export function NewVisitPage() {
                     if (!knownConditions.some((c) => c.toLowerCase() === condition.toLowerCase())) setCondition('');
                   }}
                 >
-                      aria-pressed={isSelected}
                   Cancel
                 </button>
               </div>
@@ -1781,6 +1780,7 @@ export function NewVisitPage() {
                       type="button"
                       key={cond}
                       onClick={() => setCondition(isSelected ? '' : cond)}
+                      aria-pressed={isSelected}
                       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                         isSelected
                           ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'

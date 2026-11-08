@@ -2,7 +2,7 @@ import type { DatePreset } from '@/components/DatePresetBar';
 import { currentWeekRange } from '@/domain/fiscalYear';
 
 // Mirrors LEDGER_TABS in the router (kept local so this module doesn't import the router).
-const TABS = ['visits', 'patients', 'invoices', 'daybook'] as const;
+const TABS = ['visits', 'patients', 'invoices', 'daybook', 'credits'] as const;
 export type LedgerTab = (typeof TABS)[number];
 
 const PRESETS: readonly DatePreset[] = ['today', 'yesterday', 'week', 'month', 'lastMonth', 'all', 'custom'];

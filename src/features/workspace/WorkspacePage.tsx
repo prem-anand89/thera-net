@@ -64,7 +64,16 @@ import { visitPermissions } from '@/features/visits/visitPermissions';
 import { splitDisplay, useVisitDetails, type VisitDetails } from '@/features/visits/visitDetails';
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
-import { MyCreditsCard } from './MyCreditsCard';
+import { resolveWorkspaceView, type WorkspaceViewChoice } from './workspaceView';
+import { WorkspaceViewToggle } from './WorkspaceViewToggle';
+import { TodayTherapistFilter, TodayVisitsTotals } from './TodayVisitsExtras';
+import { therapistsInRows, todayVisitTotals } from './todayTotals';
+
+import { useClinicRole } from '@/app/useClinicRole';
+import { collectionsLine } from '@/domain/collectionsByMethod';
+import { saveLedgerPrefs } from '@/features/visits/ledgerPrefs';
+import { WorkspacePlaceToggle, inWorkspacePlace, type WorkspacePlace } from './WorkspacePlaceToggle';
+import { offersLocationChoice } from '@/domain/careLocations';
 
 const EMPTY_SET = new Set<string>();
 
@@ -246,6 +255,7 @@ function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const { displayName: accountName } = useClinicRole(clinic.id);
   const { canBill, canCollectPayment, canViewClinicalNotes, canEditSettings } = usePermissions();
   const navigate = useNavigate();
 
@@ -293,32 +303,44 @@ export function WorkspacePage() {
       ),
     [workspaceTherapists]
   );
-  // Same scoping as "Seen today": clinic-wide for admin/front desk, own column
-  // for a therapist (scopeTherapistId is undefined for the clinic-wide roles).
+  // Global Workspace scoping: pure staff therapists default to their own queue,
+  // admins / front desk default to clinic-wide.
+  // The person's own All | Mine choice (null until they make one); what it means is worked out on every render from
+  // the role and therapist link, so it is right once those have loaded (see `resolveWorkspaceView`).
+  const [viewChoice, setViewChoice] = useState<WorkspaceViewChoice | null>(null);
+  const workspaceView = resolveWorkspaceView(scope, viewChoice);
+  const workspaceMineOnly = workspaceView.mineOnly;
+  // The Where choice (All / Clinic / Home visit): narrows the appointments and today's visits, not Follow up.
+  const [placeFilter, setPlaceFilter] = useState<WorkspacePlace>('');
+  const placeToggle = <WorkspacePlaceToggle clinic={clinic} value={placeFilter} onChange={setPlaceFilter} />;
+  const viewTherapistId = workspaceView.viewTherapistId;
+
   const expectedToday = useMemo(() => {
     const todayStr = toLocalDateStr(new Date());
+    const filterTherapistId = viewTherapistId;
     return (workspaceAppointments ?? [])
       .filter(
         (a) =>
           appointmentStartsOnDate(a, todayStr) &&
-          (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+          (!filterTherapistId || a.therapistId === filterTherapistId)
       )
       .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
-  }, [workspaceAppointments, scope.scopeTherapistId]);
+  }, [workspaceAppointments, viewTherapistId]);
   // Visits started (arrived / walk-in) but not completed with a service yet —
   // today's plus any left open in the last week, so none are forgotten.
   const todayAppointments = useMemo(() => {
     const weekAgo = toLocalDateStr(new Date(Date.now() - 7 * 86_400_000));
     const todayStr = toLocalDateStr(new Date());
+    const filterTherapistId = viewTherapistId;
     const olderOpen = (workspaceAppointments ?? []).filter((a) => {
       const day = toLocalDateStr(new Date(a.scheduledAt));
       return (
         a.status === 'arrived' && !a.visitId && day < todayStr && day >= weekAgo &&
-        (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+        (!filterTherapistId || a.therapistId === filterTherapistId)
       );
     });
     return [...olderOpen, ...expectedToday];
-  }, [workspaceAppointments, expectedToday, scope.scopeTherapistId]);
+  }, [workspaceAppointments, expectedToday, viewTherapistId]);
   // "Next up": the first still-to-come appointment (15 minutes' grace for late arrivals).
   const nextUpId = expectedToday.find(
     (a) => (a.status === 'confirmed' || a.status === 'rescheduled') && minutesOfDay(a.scheduledAt) >= nowMinutes - 15
@@ -344,7 +366,8 @@ export function WorkspacePage() {
   const hour = new Date().getHours();
   const greeting = hour < 4 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const myTherapistName = scope.myTherapistId ? therapistRoster.get(scope.myTherapistId)?.name : undefined;
-  const firstName = (myTherapistName ?? '').replace(/^Dr\.?\s+/i, '').split(/\s+/)[0] || '';
+  // A therapist is greeted by their therapist name; front desk and admin without one by the name they set on their account.
+  const firstName = (myTherapistName ?? accountName ?? '').replace(/^Dr\.?\s+/i, '').split(/\s+/)[0] || '';
   const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
   const openAppointment = openAppointmentId
     ? (workspaceAppointments ?? []).find((a) => a.id === openAppointmentId) ?? null
@@ -387,15 +410,10 @@ export function WorkspacePage() {
   // "Open" = every open package, the ones needing a call (gone quiet, or
   // nearly used up) sorted first; "Needs attention" narrows to just those.
   const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'attention'>('open');
-  // Defaults on for anyone with a linked therapist record — admin included,
-  // since in most solo/small clinics the admin *is* the primary therapist.
-  // Role plays no part here: only whether this login has a `therapists` row
-  // to scope to.
-  const [pkgMineOnly, setPkgMineOnly] = useState(true);
   // "Follow up" card: Reviews (follow-ups due, missed, no-shows) and Packages share one card. With no reviews the
   // card is just Packages, as before. The tab the person last chose is remembered on this device; until then it opens
   // on Reviews when something is due and on Packages otherwise.
-  const followUp = useFollowUpData(clinic.id, scope.isClinicWideView ? undefined : scope.myTherapistId ?? '00000000-0000-0000-0000-000000000000');
+  const followUp = useFollowUpData(clinic.id, viewTherapistId);
   const [chosenFollowTab, setChosenFollowTab] = useState<'reviews' | 'packages' | null>(() => {
     try {
       const saved = localStorage.getItem('workspace.followUpTab');
@@ -447,21 +465,16 @@ export function WorkspacePage() {
     }
   }
 
-  // Staff (therapist) tier sees only their own visits in the today-scoped
-  // stats and Seen today (one shared query drives both); admin sees the
-  // whole clinic. While role hasn't resolved yet ('unknown'), useWorkspaceScope
-  // defaults to the narrower staff-scoped view rather than flashing
-  // clinic-wide data.
+  // Narrowed to the chosen therapist (Mine), or the whole clinic (All).
+  const effectiveVisitsTherapistId = viewTherapistId;
   const today = useLiveQuery(
-    () => dashboardService.todayWorklist(clinic.id, new Date(), scope.scopeTherapistId),
-    [clinic.id, scope.scopeTherapistId]
+    () => dashboardService.todayWorklist(clinic.id, new Date(), effectiveVisitsTherapistId),
+    [clinic.id, effectiveVisitsTherapistId]
   );
-  // Clinic-wide for admin/front_desk, scoped to just this therapist's own
-  // visits otherwise — matches "Collected today" above, which already
-  // scopes the same way via scope.scopeTherapistId.
+  // Monthly counts scoped to match today's chosen view.
   const monthlyNew = useLiveQuery(
-    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), scope.scopeTherapistId),
-    [clinic.id, scope.scopeTherapistId]
+    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), effectiveVisitsTherapistId),
+    [clinic.id, effectiveVisitsTherapistId]
   );
   // Clinic-wide open-packages list — feeds the Packages panel below.
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
@@ -472,10 +485,10 @@ export function WorkspacePage() {
   const needsAttention = (p: OpenPackageRow) => p.stale || p.nearingCompletion || p.expiry !== null;
   const scopedPackages = useMemo(
     () =>
-      pkgMineOnly && scope.myTherapistId
-        ? (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId)
+      viewTherapistId
+        ? (openPackages ?? []).filter((p) => p.startedByTherapistId === viewTherapistId)
         : openPackages ?? [],
-    [openPackages, pkgMineOnly, scope.myTherapistId]
+    [openPackages, viewTherapistId]
   );
   const attentionCount = scopedPackages.filter(needsAttention).length;
   const filteredPackages = useMemo(() => {
@@ -513,7 +526,7 @@ export function WorkspacePage() {
     return <Pill tone="amber">{parts.join(' · ')}</Pill>;
   }, [followUpReviewCount, stalePackagesCount, renewPackagesCount, expiringPackagesCount]);
 
-  const packageList = useShowMore(filteredPackages, `${pkgStatusFilter}|${pkgMineOnly}`, followPageSize);
+  const packageList = useShowMore(filteredPackages, `${pkgStatusFilter}|${workspaceMineOnly}`, followPageSize);
 
   const now = new Date();
   const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -528,6 +541,11 @@ export function WorkspacePage() {
   const receivedToday = useLiveQuery(
     () => dashboardService.receivedOnDate(clinic.id, toLocalDateStr(new Date()), scope.scopeTherapistId),
     [clinic.id, scope.scopeTherapistId]
+  );
+  // Front desk: what came in today by cash / UPI / card, in place of the clinic's net revenue.
+  const receivedByMethod = useLiveQuery(
+    () => (scope.isFrontDesk ? dashboardService.receivedByMethodOnDate(clinic.id, toLocalDateStr(new Date())) : undefined),
+    [clinic.id, scope.isFrontDesk]
   );
   // Dues: what's still owed — the whole clinic for admin/front desk, a
   // therapist's own visits for them (when billing is open to them). Per visit,
@@ -685,7 +703,7 @@ export function WorkspacePage() {
     unsyncedVisitCount > 0 && {
       key: 'unsynced',
       node: (
-        <span className={`${needsItem} !text-[var(--amber)] hover:!no-underline`}>
+        <span className={`${needsItem} !text-[var(--amber-strong)] hover:!no-underline`}>
           <IconCloud />
           {both(`${unsyncedVisitCount} not synced`, `${unsyncedVisitCount} ${plural(unsyncedVisitCount, 'visit')} not synced yet`)}
         </span>
@@ -730,7 +748,16 @@ export function WorkspacePage() {
     icon: <IconRupee />,
     tone: 'moss' as const,
     kind: 'money' as const,
-    onClick: (canBill || canCollectPayment) && scope.isClinicWideView ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
+    onClick:
+      (canBill || canCollectPayment) && scope.isClinicWideView
+        ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } })
+        : // A therapist: their own visits today, in the Ledger (it opens on what it was last left on, so set that first).
+          scope.myTherapistId
+          ? () => {
+              saveLedgerPrefs(clinic.id, { tab: 'visits', datePreset: 'today', therapistId: scope.myTherapistId ?? '' });
+              void navigate({ to: '/ledger', search: { tab: 'visits' } });
+            }
+          : undefined,
   };
   const duesCell = {
     label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
@@ -743,10 +770,24 @@ export function WorkspacePage() {
   };
   const statCells = showDues ? [collectedCell, duesCell] : [collectedCell];
 
+  // Today's visits can be narrowed to one therapist when the card shows more than the viewer's own.
+  const [visitTherapistId, setVisitTherapistId] = useState('');
+  const therapistOptions = useMemo(() => therapistsInRows(today?.visits ?? []), [today]);
+  const visitsFilterId =
+    !workspaceMineOnly && therapistOptions.some((o) => o.id === visitTherapistId) ? visitTherapistId : '';
+  const visitsInView = useMemo(
+    () =>
+      (visitsFilterId ? (today?.visits ?? []).filter((v) => v.therapistId === visitsFilterId) : today?.visits ?? []).filter((v) =>
+        inWorkspacePlace(placeFilter, v)
+      ),
+    [today, visitsFilterId, placeFilter]
+  );
+  const visitTotals = useMemo(() => todayVisitTotals(visitsInView), [visitsInView]);
+
   const todayRows = useMemo(
     () =>
       today
-        ? today.visits.map((row) =>
+        ? visitsInView.map((row) =>
             todayRowToCardData(
               row,
               openPackageGroupIds,
@@ -769,6 +810,7 @@ export function WorkspacePage() {
         : [],
     [
       today,
+      visitsInView,
       openPackageGroupIds,
       scope.isAdmin,
       scope.isFrontDesk,
@@ -786,26 +828,27 @@ export function WorkspacePage() {
       todayDetails,
     ]
   );
-  const todayList = useShowMore(todayRows, todayStr, 10);
+  const todayList = useShowMore(todayRows, `${todayStr}|${workspaceMineOnly}|${visitsFilterId}`, 10);
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
   const dueByVisitId = new Map((today?.visits ?? []).map((row) => [row.visitId, hasDue(row.paymentState)]));
   // An appointment carried over from an earlier day whose visit was logged today:
   // keep it listed (under Done) so it doesn't vanish when its visit is saved.
   const todayVisitIds = new Set((today?.visits ?? []).map((row) => row.visitId));
+  const filterAppointmentsTherapistId = viewTherapistId;
   const appointmentsForList = [
     ...(workspaceAppointments ?? []).filter(
       (a) =>
         a.visitId &&
         todayVisitIds.has(a.visitId) &&
         toLocalDateStr(new Date(a.scheduledAt)) < toLocalDateStr(new Date()) &&
-        (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+        (!filterAppointmentsTherapistId || a.therapistId === filterAppointmentsTherapistId)
     ),
     ...todayAppointments,
-  ];
+  ].filter((a) => inWorkspacePlace(placeFilter, a));
   // `todayAppointments` now carries cancelled rows (for the Cancelled fold); counts ignore them.
   const appointmentsLeft =
-    todayAppointments.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length;
+    todayAppointments.filter((a) => inWorkspacePlace(placeFilter, a)).filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length;
 
   return (
     <div className="space-y-5">
@@ -963,7 +1006,7 @@ export function WorkspacePage() {
               {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
             </span>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {(canManageBookings || scope.myTherapistId) && (
               <button type="button" className={`${btnSecondary} hidden gap-1.5 sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
                 <IconBook className="h-4 w-4" />
@@ -983,21 +1026,48 @@ export function WorkspacePage() {
             revenue, visits, new patients and packages with trends, so the
             header doesn't repeat it beyond this one line. Admin/front desk
             only; a therapist has no Reports access. */}
-        {scope.isClinicWideView && (
+        {scope.isClinicWideView && !scope.isFrontDesk && (
           <Link
             to="/insights"
             className="flex items-center justify-between gap-2 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
           >
             <span className="min-w-0 truncate">
+              <span className="hidden sm:inline">
+                <span className="font-medium text-[var(--ink)]">Whole clinic</span> ·{' '}
+              </span>
               {monthCaption}: {monthReport ? formatAmount(monthReport.total.netPostTaxPaise) : '—'} net revenue ·{' '}
               {monthReport ? monthReport.total.visitCount : '—'} visits
             </span>
-            <span className="shrink-0 font-medium text-[var(--teal)]">Reports ›</span>
+            <span className="hidden shrink-0 font-medium text-[var(--teal)] sm:inline">Reports ›</span>
           </Link>
+        )}
+
+        {/* Front desk does not see the clinic's net revenue: it sees what came in today, which is what should be in the drawer. */}
+        {scope.isFrontDesk && scope.isClinicWideView && (
+          <p className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+            <span className="min-w-0 truncate">
+              <span className="hidden sm:inline">
+                <span className="font-medium text-[var(--ink)]">Whole clinic</span> ·{' '}
+              </span>
+              Today:{' '}
+              {receivedByMethod === undefined ? '…' : collectionsLine(receivedByMethod, formatAmount) || 'nothing collected yet'}
+            </span>
+            {(canBill || canCollectPayment) && (
+              <Link to="/ledger" search={{ tab: 'daybook' }} className="shrink-0 font-medium text-[var(--teal)]">
+                Daybook ›
+              </Link>
+            )}
+          </p>
         )}
 
         {!scope.isClinicWideView && scope.scopeTherapistId && (
           <p className="text-xs text-[var(--muted)]">
+            <span className="hidden sm:inline">
+              <span className="font-medium text-[var(--ink)]">
+                {scope.myTherapistId ? (therapistRoster.get(scope.myTherapistId)?.name.split(' ')[0] ?? 'You') : 'You'}
+              </span>{' '}
+              ·{' '}
+            </span>
             {monthCaption}:{' '}
             {monthReport === undefined || monthlyNew === undefined || (therapistSplit && therapists === undefined) ? (
               <LoadingValue />
@@ -1018,6 +1088,18 @@ export function WorkspacePage() {
           </ul>
         )}
       </header>
+
+      {workspaceView.canToggle && (
+        <WorkspaceViewToggle
+          mineOnly={workspaceMineOnly}
+          onChange={(next) => {
+            setViewChoice(next);
+            setVisitTherapistId('');
+          }}
+          extra={placeToggle}
+        />
+      )}
+      {!workspaceView.canToggle && offersLocationChoice(clinic) && <div className="px-1">{placeToggle}</div>}
 
       {scope.isUnlinkedTherapist && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
@@ -1114,19 +1196,24 @@ export function WorkspacePage() {
         badge={
           today && today.visits.length > 0 ? (
             <span className="font-num rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-semibold text-[var(--ink)]">
-              {today.visits.length}
+              {visitsInView.length}
             </span>
           ) : null
         }
         action={
           today && today.visits.length > 0 ? (
-            <div className="hidden tab:block">
-              <VisitColumnPicker
-                columnPrefs={visitColumnPrefs}
-                onColumnPrefsChange={setVisitColumnPref}
-              />
+            <div className="flex items-center gap-2">
+              {!workspaceMineOnly && therapistOptions.length > 1 && (
+                <TodayTherapistFilter options={therapistOptions} value={visitsFilterId} onChange={setVisitTherapistId} />
+              )}
+              <div className="hidden tab:block">
+                <VisitColumnPicker
+                  columnPrefs={visitColumnPrefs}
+                  onColumnPrefsChange={setVisitColumnPref}
+                />
+              </div>
             </div>
-          ) : undefined
+          ) : null
         }
       >
         {!today ? (
@@ -1188,6 +1275,11 @@ export function WorkspacePage() {
               backTo="/workspace"
             />
             <ShowMoreFooter list={todayList} noun="visits" />
+            <TodayVisitsTotals
+              totals={visitTotals}
+              label={therapistOptions.find((o) => o.id === visitsFilterId)?.name ?? 'Total'}
+              showMoney={canBill || canCollectPayment}
+            />
           </>
         )}
       </SectionCard>
@@ -1209,12 +1301,6 @@ export function WorkspacePage() {
             assistantName={nameOfTherapist(scope.myTherapistId ?? '')}
             viewerIsAssistant
           />
-        </SectionCard>
-      )}
-
-      {canShareRevenue && !scope.isClinicWideView && scope.myTherapistId && (
-        <SectionCard title="My credits and debits">
-          <MyCreditsCard therapistId={scope.myTherapistId} />
         </SectionCard>
       )}
 
@@ -1253,8 +1339,8 @@ export function WorkspacePage() {
           <div role="tablist" aria-label="Follow up" className={segTrack}>
             {(
               [
-                { key: 'reviews', label: `Reviews (${followUp.due.length})` },
-                { key: 'packages', label: `Packages (${scopedPackages.length})` },
+                { key: 'reviews', label: 'Reviews', count: followUp.due.length },
+                { key: 'packages', label: 'Packages', count: scopedPackages.length },
               ] as const
             ).map((tab) => {
               const active = followTab === tab.key;
@@ -1268,25 +1354,28 @@ export function WorkspacePage() {
                   className={`${segOption(active)} gap-1.5`}
                 >
                   {tab.label}
+                  <ChipCount n={tab.count} />
                 </button>
               );
             })}
           </div>
-          {hasMoreThanFiveFollowUps && (
-            <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              Rows
-              <select
-                aria-label="Rows per page"
-                className={chipSelect}
-                style={chipSelectChevron}
-                value={followPageSize}
-                onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-              </select>
-            </label>
-          )}
+          <div className="flex items-center gap-3">
+            {hasMoreThanFiveFollowUps && (
+              <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                Rows
+                <select
+                  aria-label="Rows per page"
+                  className={chipSelect}
+                  style={chipSelectChevron}
+                  value={followPageSize}
+                  onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                </select>
+              </label>
+            )}
+          </div>
         </div>
         {followTab === 'reviews' ? (
           <ReviewsPanel
@@ -1303,30 +1392,22 @@ export function WorkspacePage() {
           <div className="flex items-center gap-1.5">
             {(
               [
-                { key: 'open', label: 'Open' },
-                { key: 'attention', label: `Needs attention${attentionCount ? ` (${attentionCount})` : ''}` },
+                { key: 'open', label: 'Open', count: 0 },
+                { key: 'attention', label: 'Needs attention', count: attentionCount },
               ] as const
             ).map((opt) => (
               <button
                 key={opt.key}
                 type="button"
+                aria-pressed={pkgStatusFilter === opt.key}
                 onClick={() => setPkgStatusFilter(opt.key)}
                 className={filterChip(pkgStatusFilter === opt.key)}
               >
                 {opt.label}
+                {opt.count ? <ChipCount n={opt.count} /> : null}
               </button>
             ))}
           </div>
-          {scope.myTherapistId && (
-            <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <input
-                type="checkbox"
-                checked={pkgMineOnly}
-                onChange={(e) => setPkgMineOnly(e.target.checked)}
-              />
-              Mine only
-            </label>
-          )}
           <span className="text-xs text-[var(--muted)]">
             {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
           </span>
@@ -1350,7 +1431,6 @@ export function WorkspacePage() {
                       params={{ patientId: p.patientId }}
                       search={{ from: '/workspace' }}
                       className="min-w-0"
-                  <ChipCount n={tab.count} />
                     >
                       <div className="font-display text-sm font-medium text-[var(--ink)]">
                         {p.patientName}
@@ -1404,7 +1484,6 @@ export function WorkspacePage() {
                       >
                         Log visit
                       </Link>
-                {opt.count ? <ChipCount n={opt.count} /> : null}
                     </div>
                   </div>
                 </div>

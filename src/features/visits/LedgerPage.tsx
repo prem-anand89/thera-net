@@ -50,6 +50,7 @@ import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
+import { MyCreditsCard } from '@/features/workspace/MyCreditsCard';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { PatientsList } from '@/features/patients/PatientsPage';
 import { DaybookPage } from './DaybookPage';
@@ -58,19 +59,21 @@ import { partnerPaymentsByVisit } from '@/domain/paymentMethods';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
-export type RecordsView = 'visits' | 'patients' | 'invoices' | 'daybook';
+export type RecordsView = 'visits' | 'patients' | 'invoices' | 'daybook' | 'credits';
 
 export const LEDGER_TAB_ITEMS = [
   { key: 'visits', label: 'Visits' },
   { key: 'patients', label: 'Patients' },
   { key: 'invoices', label: 'Invoices' },
   { key: 'daybook', label: 'Daybook' },
+  { key: 'credits', label: 'Credits' },
 ] as const;
 
 export function filterLedgerTabs({
   canBill,
   canViewPastInvoices = false,
   canCollectPayment = false,
+  canViewCredits = false,
   entitlementsLoading,
 }: {
   canBill: boolean;
@@ -78,9 +81,11 @@ export function filterLedgerTabs({
   canViewPastInvoices?: boolean;
   /** Daybook is a register of payments received, not of invoices: anyone who can collect sees it. */
   canCollectPayment?: boolean;
+  canViewCredits?: boolean;
   entitlementsLoading: boolean;
 }) {
   return LEDGER_TAB_ITEMS.filter((v) => {
+    if (v.key === 'credits') return canViewCredits;
     if (entitlementsLoading) return true;
     if (v.key === 'invoices') return canBill || canViewPastInvoices;
     if (v.key === 'daybook') return canBill || canCollectPayment;
@@ -282,6 +287,10 @@ export function LedgerPage() {
   const canViewPastInvoices = !invoicingOnPlan && invoiceRoleOk && anyInvoices === true;
   const { myTherapistId, isClinicWideView, isFrontDesk } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
+  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  // The share editor needs someone to share with: split on and more than one active therapist.
+  const canShareRevenue = therapistSplit && (therapists ?? []).filter((t) => t.active).length > 1;
+  const canViewCredits = Boolean(canShareRevenue && myTherapistId);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView; filter?: 'not_collected' };
   // Workspace's Dues tile lands here: unpaid visits, every date.
@@ -313,7 +322,8 @@ export function LedgerPage() {
     if (entitlementsLoading) return;
     if (recordsView === 'invoices' && shouldLeaveInvoicesTab({ canBill, canViewPastInvoices, anyInvoices })) setRecordsView('visits');
     if (recordsView === 'daybook' && !canBill && !canCollectPayment) setRecordsView('visits');
-  }, [recordsView, canBill, canViewPastInvoices, anyInvoices, canCollectPayment, entitlementsLoading, setRecordsView]);
+    if (recordsView === 'credits' && therapists !== undefined && !canViewCredits) setRecordsView('visits');
+  }, [recordsView, canBill, canViewPastInvoices, anyInvoices, canCollectPayment, therapists, canViewCredits, entitlementsLoading, setRecordsView]);
   // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
   // (or a patient deep link) always wins and never overwrites what was remembered.
   const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));
@@ -327,7 +337,7 @@ export function LedgerPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   // A therapist landing from their own Dues sees just their visits.
   const [therapistId, setTherapistId] = useState(prefs.therapistId ?? '');
-  // Where the visit was (Clinic / Home visit); only offered when the clinic sees patients in more than one place.
+  // Place of the visit (Clinic / Home visit); only offered when the clinic sees patients in more than one place.
   const [where, setWhere] = useState<'' | CareLocation>('');
   // A therapist landing from their own Dues sees just their visits.
   useDueLandingScope({ dueLanding, isClinicWideView, myTherapistId, setTherapistId });
@@ -368,7 +378,6 @@ export function LedgerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const visits = useLiveQuery(
     async () => {
@@ -391,8 +400,6 @@ export function LedgerPage() {
   );
   const visitIds = useMemo(() => (visits ?? []).map((v) => v.id), [visits]);
   const nameOfTherapist = useCallback((id: UUID) => therapistName.get(id) ?? 'Therapist', [therapistName]);
-  // The share editor needs someone to share with: split on and more than one active therapist.
-  const canShareRevenue = therapistSplit && (therapists ?? []).filter((t) => t.active).length > 1;
   const visitDetails = useVisitDetails(visitIds, nameOfTherapist, therapistSplit);
   // Visits the filtered (or signed-in) therapist assisted on: listed below the visits, but never in the
   // visit list's totals, Dues or Collected -- those belong to the primary's own visits only.
@@ -791,7 +798,7 @@ export function LedgerPage() {
   );
   const whereSelect = offersLocationChoice(clinic) ? (
     <select
-      aria-label="Where"
+      aria-label="Place"
       className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
       style={chipSelectChevron}
       value={where}
@@ -816,7 +823,7 @@ export function LedgerPage() {
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
-          {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, entitlementsLoading }).map((v) => (
+          {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, canViewCredits, entitlementsLoading }).map((v) => (
             <button
               key={v.key}
               type="button"
@@ -1363,6 +1370,17 @@ export function LedgerPage() {
       {recordsView === 'patients' && <PatientsList />}
       {recordsView === 'invoices' && <InvoicesPage canIssue={canBill} />}
       {recordsView === 'daybook' && <DaybookPage />}
+      {recordsView === 'credits' && (
+        <SectionCard title="My credits and debits">
+          {myTherapistId ? (
+            <MyCreditsCard therapistId={myTherapistId} />
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              No therapist profile linked to this account.
+            </p>
+          )}
+        </SectionCard>
+      )}
 
       {invoicing && (
         <IssueInvoiceDialog
@@ -1466,10 +1484,10 @@ function OutstandingInvoiceActions({
         >
           Review
         </Link>
+        <button type="button" className={pillSmDanger} onClick={() => onVoid(row)}>
+          Void invoice
+        </button>
       </div>
     </div>
   );
 }
-        <button type="button" className={pillSmDanger} onClick={() => onVoid(row)}>
-          Void invoice
-        </button>
