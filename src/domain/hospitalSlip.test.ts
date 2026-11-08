@@ -34,6 +34,16 @@ describe('buildHospitalSlip', () => {
   });
 });
 
+describe('therapist names', () => {
+  it('a name containing a comma stays one signature line', () => {
+    const slip = buildHospitalSlip(
+      { ...invoice, lineItems: [{ serviceName: 'x', sessionDates: ['2026-11-01'], totalPaise: 1, therapistIds: ['t9'] }] } as unknown as Invoice,
+      [{ id: 't9', name: 'Dr. Rao, MPT' }]
+    );
+    expect(slip.therapists).toEqual(['Dr. Rao, MPT']);
+  });
+});
+
 describe('hasHospitalSlip', () => {
   it('is for a bill with a stay or an Inpatient place of service, not an ordinary bill', () => {
     expect(hasHospitalSlip(invoice)).toBe(true);

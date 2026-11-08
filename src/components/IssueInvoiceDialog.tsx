@@ -123,6 +123,8 @@ export function IssueInvoiceDialog({
     async () => new Map((await Promise.all(stayIdsKey.split(',').filter(Boolean).map((id) => repos.admissions.get(id)))).filter((a): a is NonNullable<typeof a> => Boolean(a)).map((a) => [a.id, a])),
     [stayIdsKey]
   );
+  // Until the sessions and their stay are loaded the bill could go out without its stay block, and an issued bill cannot be edited.
+  const clinicalLoading = visits === undefined || (stayIdsKey !== '' && stays === undefined);
   const admissionBlock = useMemo(() => (visits && stays ? admissionBlockFor(visits, stays) : null), [visits, stays]);
   const patientNotes = useLiveQuery(
     () => repos.consultationNotes.listByPatient(clinicId, target.patientId),
@@ -424,7 +426,7 @@ export function IssueInvoiceDialog({
               <button
                 type="button"
                 className={btnPrimary}
-                disabled={busy}
+                disabled={busy || clinicalLoading}
                 onClick={() => void issue()}
               >
                 {busy ? 'Issuing…' : 'Confirm & issue'}
@@ -506,7 +508,7 @@ export function IssueInvoiceDialog({
                 className={btnPrimary}
                 // An admin can fix a missing address on the spot, so it holds up the bill; anyone else cannot, so it
                 // does not (they see who to ask).
-                disabled={busy || (addressMissing && isAdmin)}
+                disabled={busy || clinicalLoading || (addressMissing && isAdmin)}
                 onClick={() => void goToReview()}
               >
                 {busy ? 'Loading…' : 'Review invoice'}

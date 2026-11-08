@@ -443,6 +443,12 @@ export function createVisitService(repos: Repos) {
         if (!stay || stay.deleted || stay.clinicId !== input.clinicId || stay.patientId !== input.patientId) {
           throw new Error("This session's stay must be the same patient's, in the same clinic.");
         }
+        if (stay.dischargedOn && input.visitDate > stay.dischargedOn) {
+          throw new Error('This stay was closed when the patient was discharged, so a session cannot be added after that date.');
+        }
+        if (input.visitDate < stay.admittedOn) {
+          throw new Error('A session cannot be dated before the stay began.');
+        }
       }
 
       const visit: Visit = {

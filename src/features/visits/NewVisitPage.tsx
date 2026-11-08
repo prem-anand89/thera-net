@@ -531,7 +531,7 @@ export function NewVisitPage() {
     async () => (search.admissionId ? ((await repos.admissions.get(search.admissionId)) ?? null) : undefined),
     [search.admissionId]
   );
-  const activeAdmission = admission && !admission.deleted && patient?.id === admission.patientId ? admission : null;
+  const activeAdmission = admission && !admission.deleted && !admission.dischargedOn && patient?.id === admission.patientId ? admission : null;
   const prefillPatient = useLiveQuery(
     () => (search.patientId ? repos.patients.get(search.patientId) : undefined),
     [search.patientId]

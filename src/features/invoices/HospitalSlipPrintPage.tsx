@@ -19,6 +19,10 @@ export function HospitalSlipPrintPage() {
   const { from: backTo, patient: backPatient } = useSearch({ strict: false }) as { from?: InvoicePrintBackTarget; patient?: string };
   const invoice = useLiveQuery(() => repos.invoices.get(invoiceId), [invoiceId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  // A voided bill, or one replaced by an amendment, must not be reconciled against.
+  const status = useLiveQuery(async () => (invoice ? ((await repos.invoicePayments.getByInvoiceId(invoice.id)) ?? null) : undefined), [invoice?.id]);
+  const allInvoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const replacedBy = (allInvoices ?? []).find((inv) => inv.supersedesInvoiceId === invoice?.id);
   const slip = useMemo(() => (invoice && therapists ? buildHospitalSlip(invoice, therapists) : null), [invoice, therapists]);
 
   if (!invoice || !slip) {
@@ -42,6 +46,11 @@ export function HospitalSlipPrintPage() {
         </button>
       </div>
 
+      {(status?.status === 'void' || replacedBy) && (
+        <div role="alert" className="mx-auto mb-2 max-w-2xl rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-4 py-2 text-center text-sm font-semibold text-[var(--rust)]">
+          {status?.status === 'void' ? 'VOID: this bill was cancelled. Do not use this slip.' : `REPLACED by bill ${replacedBy?.invoiceNo}. Do not use this slip.`}
+        </div>
+      )}
       <div className="mx-auto max-w-2xl bg-[var(--surface)] p-6 text-[13px] text-[var(--ink)] print:max-w-none print:p-0">
         <div className="flex items-baseline justify-between border-b border-[var(--ink)] pb-2">
           <div>

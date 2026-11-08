@@ -556,6 +556,14 @@ export class SyncEngine {
 
   /** The patient's open stay on the server, merged in over this device's duplicate; null when it can't be found. */
   private async mergeLosingAdmission(losing: Admission): Promise<number | null> {
+    // A stay the server already has under this id is not a second admission: the refusal is a Reopen that now clashes with
+    // a newer open stay. Its visits belong to it, so nothing is merged; this device just takes the server's version.
+    const known = await this.supabase!.from('admissions').select('id').eq('id', losing.id).maybeSingle();
+    if (!known.error && known.data) {
+      await this.revertToServerTruth('admissions', losing.id);
+      notify.info('This patient was admitted again on another device, so the earlier stay could not be reopened.');
+      return 0;
+    }
     const { data, error } = await this.supabase!
       .from('admissions')
       .select('*')

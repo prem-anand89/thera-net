@@ -8,6 +8,8 @@ export interface HospitalSlipRow {
   service: string;
   sessions: number;
   therapist: string;
+  /** The names on this row, kept apart so a name containing a comma is never split. */
+  therapistNames: string[];
   chargePaise: number;
 }
 
@@ -45,10 +47,11 @@ export function buildHospitalSlip(invoice: Invoice, therapists: Pick<Therapist, 
       service: li.serviceName,
       sessions: li.billedSessionCount ?? li.sessionDates.length,
       therapist: names.length > 0 ? [...new Set(names)].join(', ') : (fallback ?? ''),
+      therapistNames: names.length > 0 ? [...new Set(names)] : fallback ? [fallback] : [],
       chargePaise: li.totalPaise,
     };
   });
-  const therapistNames = [...new Set(rows.flatMap((r) => r.therapist.split(', ').filter(Boolean)))];
+  const therapistNames = [...new Set(rows.flatMap((r) => r.therapistNames))];
   return {
     invoiceNo: invoice.invoiceNo,
     patientName: invoice.patientSnapshot.name,

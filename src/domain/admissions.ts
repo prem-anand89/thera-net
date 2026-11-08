@@ -21,6 +21,7 @@ export function dayOfStay(admittedOn: string, today: string): number {
 /** Why these dates can't be saved, or null. Dates are yyyy-mm-dd. */
 export function admissionDateProblem(admittedOn: string, dischargedOn: string | null): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(admittedOn)) return 'Choose the date of admission.';
+  if (dischargedOn !== null && !/^\d{4}-\d{2}-\d{2}$/.test(dischargedOn)) return 'Choose the discharge date.';
   if (dischargedOn && dischargedOn < admittedOn) return 'The discharge date cannot be before the admission date.';
   return null;
 }

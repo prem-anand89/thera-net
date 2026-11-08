@@ -30,6 +30,15 @@ describe('admissionService', () => {
     await expect(t.svc.admit('c', 'p2', { admittedOn: '2026-11-02' })).resolves.toBeTruthy();
   });
 
+  it('refuses an empty discharge date, and an admission date after the first session', async () => {
+    const a = await t.svc.admit('c', 'p', { admittedOn: '2026-11-01' });
+    await expect(t.svc.discharge(a.id, '')).rejects.toThrow(/discharge date/);
+    expect(t.stays.get(a.id)?.dischargedOn).toBeNull();
+    t.visits.push(visit({ id: 'v1', admissionId: a.id, visitDate: '2026-11-02' }));
+    await expect(t.svc.update(a.id, { admittedOn: '2026-11-10' })).rejects.toThrow(/first session/);
+    await expect(t.svc.update(a.id, { admittedOn: '2026-11-02' })).resolves.toBeTruthy();
+  });
+
   it('a bed move edits the stay in place', async () => {
     const a = await t.svc.admit('c', 'p', { admittedOn: '2026-11-01', wardBed: 'A1' });
     const b = await t.svc.update(a.id, { admittedOn: '2026-11-01', wardBed: 'B4' });

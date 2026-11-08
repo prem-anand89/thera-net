@@ -26,11 +26,11 @@ export function InpatientsCard() {
 
   const data = useLiveQuery(async () => {
     if (!wardOn) return null;
-    const [stays, patients, visits] = await Promise.all([
-      repos.admissions.listOpen(clinic.id),
-      repos.patients.list(clinic.id),
-      repos.visits.list({ clinicId: clinic.id }),
-    ]);
+    const [stays, patients] = await Promise.all([repos.admissions.listOpen(clinic.id), repos.patients.list(clinic.id)]);
+    // Only the admitted patients' visits: this card is on the busiest screen and must not read the whole visit table.
+    const visits = (
+      await Promise.all([...new Set(stays.map((s) => s.patientId))].map((patientId) => repos.visits.list({ clinicId: clinic.id, patientId })))
+    ).flat();
     return { stays, patients, visits };
   }, [clinic.id, wardOn]);
 

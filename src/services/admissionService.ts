@@ -53,6 +53,10 @@ export function createAdmissionService(repos: Repos) {
       const current = await getOrThrow(id);
       const problem = admissionDateProblem(details.admittedOn, current.dischargedOn);
       if (problem) throw new Error(problem);
+      const first = (await this.visitsOf(current)).map((v) => v.visitDate).sort()[0];
+      if (first && details.admittedOn > first) {
+        throw new Error('The admission date cannot be after the first session on this stay.');
+      }
       const next: Admission = {
         ...current,
         ipdNo: clean(details.ipdNo),

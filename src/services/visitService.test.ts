@@ -316,6 +316,12 @@ describe('visitService.create', () => {
     await expect(svc.create({ ...base, patientId: 'pat-2', admissionId: 'stay-1' })).rejects.toThrow(/same patient/);
     await expect(svc.create({ ...base, admissionId: 'missing' })).rejects.toThrow(/same patient/);
     expect((await svc.create(base)).admissionId).toBeUndefined();
+
+    // A closed stay takes no later sessions, and none before it began.
+    Object.assign(stay, { admittedOn: '2026-05-02', dischargedOn: '2026-05-06' });
+    await expect(svc.create({ ...base, admissionId: 'stay-1', visitDate: '2026-05-07' })).rejects.toThrow(/closed/);
+    await expect(svc.create({ ...base, admissionId: 'stay-1', visitDate: '2026-05-01' })).rejects.toThrow(/before the stay began/);
+    await expect(svc.create({ ...base, admissionId: 'stay-1', visitDate: '2026-05-04' })).resolves.toBeTruthy();
   });
 
   it('copies the validity days onto each session; a catalog edit leaves a held package alone', async () => {

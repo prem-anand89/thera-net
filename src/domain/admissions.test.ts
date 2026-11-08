@@ -31,6 +31,7 @@ describe('admissionDateProblem', () => {
     expect(admissionDateProblem('2026-11-05', '2026-11-04')).toMatch(/before the admission/);
     expect(admissionDateProblem('2026-11-05', '2026-11-05')).toBeNull();
     expect(admissionDateProblem('2026-11-05', null)).toBeNull();
+    expect(admissionDateProblem('2026-11-05', '')).toMatch(/discharge date/);
   });
 });
 
