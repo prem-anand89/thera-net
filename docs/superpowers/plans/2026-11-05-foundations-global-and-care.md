@@ -115,12 +115,43 @@ A live error, independent of this feature, and the discharge bill depends on it.
 **H4. Visit and bill (Sonnet).** One helper, `defaultVisitLocation(clinic, myLocations)`, feeds the starting state, `startFreshVisitForm`, and the `isNewVisitDirty` baseline, or a home-only clinic gets a false "Discard changes?" on opening New Visit. Precedence: the appointment's location, then repeat visit, then a location the user tapped (a touched flag), then the service default, then the helper. Choosing a service never overwrites a tapped location. Ledger filter and a Reports breakdown when more than one location is on. The invoice's place of service prints as now.
 **Tests:** a clinic-only setup shows no toggle or address box and books as today; a home-only clinic opens New Visit and "Another visit" with no discard prompt; a tapped location survives choosing a service; `start_walk_in` keeps the location; a home booking carries through to the visit and bill; RPC defaults (SQL).
 
-### Phase 2: Inpatient rehab
-**I1. Schema (Opus; migration).** `admissions`: `id, clinic_id, patient_id, ipd_no, ward_bed, admitting_doctor, admitted_on, discharged_on, notes`, `deleted`, plus the standard sync columns and clinic-member RLS (same pattern as `patients`). Partial unique index: one row per `(clinic_id, patient_id)` where `discharged_on is null and not deleted`. `visits.admission_id uuid null`. A Dexie version, sync registration and backup coverage: offline-first like visits.
-**I2. Admit and discharge (Sonnet).** On the patient profile: Admit (IPD no, ward/bed, doctor, all optional but the date), Change ward/bed, Discharge. At most one open admission per patient: `admissionService` refuses a second before writing, as `catalogService` does for names. **Offline conflict:** two devices can still admit the same patient, and the index would then reject one and stick it in the sync queue. Handle that rejection by keeping the first and telling staff, not retrying forever. **A mistaken admission** can be deleted while it has no visits (quiet red action at the foot of the sheet).
-**I3. Ward rounds (Opus reviews, Sonnet builds).** A Workspace card, **Inpatients (N)**, grouped by ward: patient, bed, day of stay, and whether seen today. **Log session** opens New Visit filled from the patient's last session here (the existing repeat-visit path), with the admission and Inpatient set. A multi-disciplinary team uses "Done by" as today.
-**I4. Billing (Opus).** Sessions are saved unpaid (`paymentChoice: 'pending'`) against the admission. **Discharge bill:** one invoice over the admission's visits (invoices already cover several visits), plus a printable **Hospital billing slip**: date, IPD no, patient, ward/bed, service, therapist, charge. Settled at discharge: `partner` when the hospital counter collects (`partner` only exists with `hasPartner`), or normal methods and advances for a standalone rehab centre. Invoice snapshot gains IPD no and ward/bed. `placeOfService` becomes `'clinic' | 'home' | 'ward'` in `types.ts`, `InvoiceClinicalFields` (its select), `IssueInvoiceDialog` and the print page, or an inpatient bill prints "Clinic".
-**Tests:** one open admission only; the seen-today marker; a discharge bill totals exactly the admission's visits and a visit can't be billed twice; slip matches the bill; old invoices print unchanged; a second open admission is refused, and the offline conflict doesn't stick; a mistaken admission deletes only with no visits; an inpatient bill prints Inpatient.
+### Phase 2: Inpatient rehab (reviewed and refined 2026-11-08)
+**I1. Schema & Tier Gate (Opus; migration).**
+- Add `inpatient: boolean` to `TIER_FEATURES` in `src/domain/plans.ts` (true for `clinic` and `clinic_plus`).
+- `admissions` table: `id, clinic_id, patient_id, ipd_no, ward_bed, admitting_doctor, admitted_on, discharged_on, notes`, `deleted`, `version`, `created_at`, `updated_at`, plus standard sync columns and clinic-member RLS (same pattern as `patients`).
+- Partial unique index: one row per `(clinic_id, patient_id)` where `discharged_on is null and not deleted`.
+- `visits.admission_id uuid null` references `admissions(id)`. **Sync order:** admissions must reach the server before the visits that point at them (or the key is deferred), or a visit logged offline fails its foreign key; test it.
+- **Widen the visit location here, not in I4:** `Visit.location` and `visitService` take `'clinic' | 'home'` today; make them `CareLocation` so I3's "Log session" can save `'ward'`.
+- **Plan gate at the server too (owner decision 2026-11-05):** writes to `admissions` check the clinic's plan has the `inpatient` feature (RLS or a trigger, like the other plan checks), not only the Settings card.
+- Dexie version, sync registration (`ALL_SYNCED_TABLES`), and backup coverage: fully offline-first like visits.
+- `CareLocationsSection.tsx`: replace "Coming next" badge with active switch, gated by `TIER_FEATURES.inpatient`.
+
+**I2. Admit and discharge (Sonnet).**
+- **One admit sheet, two doors:** (1) "Admit to Ward" on the **Patient Profile** header; (2) "+ Admit patient" on the Workspace **Inpatients** card, which first picks a patient (or opens the existing Add patient sheet for a new one) and then opens the same admit sheet. No admit form of its own that also creates a patient (that is the half-filled-patient confusion the Add patient sheet removed).
+- Inputs: Admitted Date, IPD No, Ward / Bed, Admitting Doctor, Notes (all optional except date and patient).
+- **Inline Ward/Bed Changes:** Simple "Change Ward/Bed" sheet updates the active admission row directly.
+- **Discharge:** Flexible 2-step flow. Marking `discharged_on` closes the admission and stops ward alerts, prompting *"Generate Discharge Invoice Now"* or *"Bill Later"*. Any interim payments or advances deduct from the final balance.
+- **Offline conflict:** Two devices admitting the same patient offline: handle index rejection cleanly by keeping the first and notifying staff (no retry loops).
+- **Mistaken admission:** A quiet red action at the foot of the sheet allows deletion **only if 0 visits** have been logged against it.
+
+**I3. Ward rounds (Opus reviews, Sonnet builds).**
+- Workspace card **Inpatients (N)**, visible only when `clinic.careLocations.includes('ward')`, grouped by ward: patient name, bed, day of stay, and **Seen today (N visits)** indicator.
+- **Seen today indicator:**
+  - If visits logged today > 0: `Seen today (N visits)` badge + `+ Log another session`.
+  - If not seen: `+ Log session` primary button. (No skip reasons in this phase: a skip is per patient per day, so it would need its own table, and nobody asked for it.)
+  - Header has "+ Admit patient" action.
+- **Log session:** Opens `NewVisitPage` pre-filled from the patient's last session here (repeat-visit path) with `admissionId` and `location = 'ward'` set. New Visit's Place toggle does not offer Inpatient (it lists bookable places), so this path sets the place directly and the screen shows it as fixed, not as a choice. A multi-disciplinary team uses "Done by" as today.
+
+**I4. Billing (Opus).**
+- Sessions are saved unpaid (`paymentChoice: 'pending'`) against the admission.
+- `placeOfService` already allows `'clinic' | 'home' | 'ward' | 'mixed'` (`InvoicePlace`, `placeOfServiceFor`, `placeOfServiceLabel` in `domain/invoiceClinical.ts`): extend those rather than redefining it, so a bill mixing ward and clinic visits still labels as mixed; check `InvoiceClinicalFields` (its select), `IssueInvoiceDialog` and the print page.
+- **Snapshot at issue:** the invoice snapshot stores IPD no, ward/bed and the admitting doctor, so editing the admission later never changes an issued bill.
+- **Discharge bill:** In `IssueInvoiceDialog`, billing an admitted patient pre-selects all unbilled visits from this admission. Settled via `partner` (when the hospital counter collects) or normal payment methods / advances.
+- **Dual print options on Inpatient Invoices:**
+  1. **Print Full Invoice**: Standard tax invoice for patient/TPA with IPD #, Ward/Bed, and Admitting Doctor in clinical header.
+  2. **Print Hospital Slip**: Compact internal voucher layout showing Date, IPD No, Patient, Ward/Bed, Service, Therapist, Charge, and Therapist signature for hospital counter/HMS reconciliation.
+
+**Tests:** One open admission only: the service refuses a second before writing, and the unique index rejects it if two devices admit offline (the first is kept, staff are told, nothing sticks in the sync queue); a visit logged offline against a new admission syncs in order; the seen-today marker; a discharge bill totals exactly the admission's visits and a visit can't be billed twice; hospital slip matches the invoice; the snapshot keeps IPD no and ward/bed after the admission is edited; old invoices print unchanged; a mistaken admission deletes only with no visits; an inpatient bill prints Inpatient and a ward+clinic bill prints mixed; admissions writes are refused on a plan without `inpatient`.
 
 ### Phase 3: Therapist areas (Sonnet)
 `therapists.care_locations` (migration, default all), set on the team member form when the clinic has more than one location. Book and New Visit pickers offer only people for that location, and a therapist with one location gets it preselected.
