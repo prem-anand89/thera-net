@@ -10,6 +10,7 @@ import { formatDateDM } from '@/domain/fiscalYear';
 import { toLocalDateStr } from '@/domain/schedule';
 import { btnSecondary, Pill } from '@/components/ui';
 import { usePermissions } from '@/app/usePermissions';
+import { useDepartment } from '@/app/DepartmentContext';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import type { Admission } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -24,6 +25,7 @@ import { DischargeSheet } from './DischargeSheet';
  */
 export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   const clinic = useClinic();
+  const { departments, setDepartment } = useDepartment();
   const entitlements = useEntitlements(clinic.id);
   const stays = useLiveQuery(() => repos.admissions.listByPatient(clinic.id, patient.id), [clinic.id, patient.id]);
   const [sheet, setSheet] = useState<'admit' | 'edit' | 'discharge' | null>(null);
@@ -78,7 +80,8 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
     }
   }
 
-  const canAdmit = wardOn && entitlements.can('inpatient');
+  const canOpenIP = departments.includes('ward');
+  const canAdmit = canOpenIP && entitlements.can('inpatient');
   return (
     <section aria-label="Ward stay" className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-5 py-3">
       {open ? (
@@ -131,7 +134,12 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
           )}
         </div>
       )}
-      <AdmissionSheet open={sheet === 'admit'} onClose={() => setSheet(null)} patient={patient} />
+      <AdmissionSheet
+        open={sheet === 'admit'}
+        onClose={() => setSheet(null)}
+        patient={patient}
+        onSaved={() => setDepartment('ward')}
+      />
       {open && (
         <>
           <AdmissionSheet open={sheet === 'edit'} onClose={() => setSheet(null)} patient={patient} stay={open} />

@@ -56,6 +56,7 @@ export interface VisitCardData {
   canEdit?: boolean;
   canSplit?: boolean;
   hasSplit?: boolean;
+  canCollect?: boolean;
   /** The shares were edited by hand (credits_mode = manual). */
   creditsManual?: boolean;
   /** The assisting therapist's share, set together with `hasSplit` — the

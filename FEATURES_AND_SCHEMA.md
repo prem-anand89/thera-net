@@ -754,6 +754,11 @@ Front desk's `visits_update` reach is the same as an admin's or the visit's own 
   will record
 - **Payments summary** — lifetime billed / collected / outstanding for the
   patient, alongside the outstanding-balance pill in the header
+- **Department-scoped views and money panels (`useDepartment()`)**:
+  - Visit history lists visits across all departments with small `DEPARTMENT_LABELS` tags (`OP`, `Home care`, `IP`), providing a complete clinical timeline.
+  - Multi-visit selection and bulk billing (`selectableForBilling`, `unbilledInRange`) are strictly scoped to the active department.
+  - Money panels (Payments Summary: Billed, Collected, Outstanding; open advances balance via `advancesForDepartment`; and the Invoices tab) display and total only the active department's records. Direct collections on a visit or invoice are also scoped to the active department.
+  - "Admit to ward" in `PatientAdmissionBar` is visible to anyone with inpatient/ward permissions even when viewing OP; upon admitting a patient, `setDepartment('ward')` automatically switches the active department to Inpatient.
 - **Billing-lock indicator** — a small lock icon on invoiced-but-unpaid
   visit rows, since their billing fields are frozen even though the
   payment chip alone ("Due") doesn't say so

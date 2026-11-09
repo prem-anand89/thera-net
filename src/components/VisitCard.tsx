@@ -170,7 +170,8 @@ export function SharedVisitCard({
     : '';
 
   const bill = formatAmount(data.billPaise);
-  const actions = canCollect ? paymentActions(data.paymentState) : [];
+  const effectiveCanCollect = data.canCollect ?? canCollect;
+  const actions = effectiveCanCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
     billPaise: data.billPaise,
@@ -179,7 +180,7 @@ export function SharedVisitCard({
     issuedAt: data.issuedAt,
     isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
   });
-  const showCollect = canCollect && actions.includes('take_payment');
+  const showCollect = effectiveCanCollect && actions.includes('take_payment');
   // Same freeze-on-invoice signal PaymentStatusDisplay's table cell shows —
   // added here for parity: this hand-rolled card block never carried it,
   // which was a pre-existing gap between the two, not a deliberate choice.

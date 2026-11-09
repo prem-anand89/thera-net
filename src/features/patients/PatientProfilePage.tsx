@@ -26,8 +26,11 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary, pillSmAccent, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
-import { placeLabelFor } from '@/domain/careLocations';
+import { placeLabelFor, clinicCareLocations } from '@/domain/careLocations';
 import { clinicTimezone } from '@/domain/clinicRegion';
+import { useDepartment } from '@/app/DepartmentContext';
+import { DEPARTMENT_LABELS, departmentOf, inDepartment, invoiceDepartment } from '@/domain/departments';
+import { advancesForDepartment } from '@/domain/departmentMoney';
 import { formatAppointmentWhen } from '@/domain/appointmentWhen';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
@@ -103,6 +106,7 @@ export function PatientProfilePage() {
   const [recordingAdvance, setRecordingAdvance] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
 
+  const { department } = useDepartment();
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   // Billing & Notes Rebuild Phase 1, 1.6 — total open-advance balance for
   // this patient, re-runs on any local write (a new advance, a draw-down
@@ -111,7 +115,11 @@ export function PatientProfilePage() {
     () => advanceService.openAdvancesWithBalance(clinic.id, patientId),
     [clinic.id, patientId]
   );
-  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
+  const deptAdvances = useMemo(
+    () => advancesForDepartment(department, openAdvances ?? []),
+    [department, openAdvances]
+  );
+  const advanceBalancePaise = deptAdvances.reduce((sum, a) => sum + a.remainingPaise, 0);
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
     [editPatientId]
@@ -175,21 +183,29 @@ export function PatientProfilePage() {
     () => new Set((invoices ?? []).map((i) => i.supersedesInvoiceId).filter((id): id is string => Boolean(id))),
     [invoices]
   );
+  const deptVisits = useMemo(
+    () => (visits ?? []).filter((v) => inDepartment(department, v)),
+    [visits, department]
+  );
+  const deptInvoices = useMemo(
+    () => (invoices ?? []).filter((inv) => invoiceDepartment(inv) === department),
+    [invoices, department]
+  );
   const patientInvoices = useMemo(
-    () => invoicesForPatient(patientId, invoices ?? [], visits ?? []),
-    [patientId, invoices, visits]
+    () => invoicesForPatient(patientId, deptInvoices, deptVisits),
+    [patientId, deptInvoices, deptVisits]
   );
   const activeInvoiceCount = patientInvoices.filter((i) => !supersededInvoiceIds.has(i.id)).length;
   const { recordedByInvoiceId, visitIdByInvoiceId } = useMemo(() => {
     const recorded = new Map<string, number>();
     const visitIds = new Map<string, string>();
-    for (const v of visits ?? []) {
+    for (const v of deptVisits) {
       if (v.deleted || !v.invoiceId) continue;
       recorded.set(v.invoiceId, (recorded.get(v.invoiceId) ?? 0) + (directPaymentByVisitId.get(v.id) ?? 0));
       if (!visitIds.has(v.invoiceId)) visitIds.set(v.invoiceId, v.id);
     }
     return { recordedByInvoiceId: recorded, visitIdByInvoiceId: visitIds };
-  }, [visits, directPaymentByVisitId]);
+  }, [deptVisits, directPaymentByVisitId]);
   const setView = (next: PatientView) =>
     void navigate({
       to: '/patients/$patientId',
@@ -279,7 +295,7 @@ export function PatientProfilePage() {
     let totalBilled = 0;
     let totalCollected = 0;
     let outstandingBalance = 0;
-    for (const v of visits ?? []) {
+    for (const v of deptVisits) {
       if (v.deleted) continue;
       totalBilled += v.actualBillPaise;
       const state = computeVisitPaymentState(
@@ -296,7 +312,7 @@ export function PatientProfilePage() {
       if (!isCollected(state) && state !== 'zero_session') outstandingBalance += v.actualBillPaise;
     }
     return { totalBilled, totalCollected, outstandingBalance };
-  }, [visits, statusByInvoiceId, directPaymentByVisitId]);
+  }, [deptVisits, statusByInvoiceId, directPaymentByVisitId]);
 
   const openPackageIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
@@ -361,7 +377,7 @@ export function PatientProfilePage() {
           sex: patient?.sex,
           condition: v.condition ?? null,
           serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
-          placeLabel: placeLabelFor(clinic, v),
+          placeLabel: clinicCareLocations(clinic).length > 1 ? DEPARTMENT_LABELS[departmentOf(v)] : null,
           details: visitDetails.get(v.id),
           sessionIndex: v.sessionIndex ?? null,
           packageTotal: v.packageTotal ?? null,
@@ -382,6 +398,7 @@ export function PatientProfilePage() {
           collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
           partnerCollectedPaise: partnerPaymentByVisitId.get(v.id) ?? 0,
           issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
+          canCollect: canCollectPayment && inDepartment(department, v),
           canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
           // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
           // is_own_therapist) — a patient's history is clinic-wide (any
@@ -425,6 +442,8 @@ export function PatientProfilePage() {
       clinic,
       showInvoicesTab,
       invoiceNoById,
+      department,
+      canCollectPayment,
     ]
   );
 
@@ -461,9 +480,19 @@ export function PatientProfilePage() {
   // What a row can be selected for: an invoice (billing users, not yet
   // invoiced) or, without billing, a payment (still owed). Anything else
   // drops out of the selection on its own, e.g. visits that just got invoiced.
+  // Scoped strictly to the active department.
+  const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
+  const selectableVisits = useMemo(
+    () =>
+      visitCardRows.filter((r) => {
+        const v = visitById.get(r.visitId);
+        return v ? inDepartment(department, v) : false;
+      }),
+    [visitCardRows, visitById, department]
+  );
   const selectableIds = useMemo(
-    () => new Set(selectableForBilling(visitCardRows, { canBill, canCollect: canCollectPayment }).map((r) => r.visitId)),
-    [visitCardRows, canBill, canCollectPayment]
+    () => new Set(selectableForBilling(selectableVisits, { canBill, canCollect: canCollectPayment }).map((r) => r.visitId)),
+    [selectableVisits, canBill, canCollectPayment]
   );
   const isSelectableRow = useCallback((row: VisitCardData) => selectableIds.has(row.visitId), [selectableIds]);
   const selectedRows = useMemo(
@@ -901,7 +930,7 @@ export function PatientProfilePage() {
                   className={pillSmNeutral}
                   onClick={() =>
                     setSelectedVisitIds(
-                      new Set(unbilledInRange(visitCardRows, { canBill, canCollect: canCollectPayment }, range, toLocalDateStr(new Date())))
+                      new Set(unbilledInRange(selectableVisits, { canBill, canCollect: canCollectPayment }, range, toLocalDateStr(new Date())))
                     )
                   }
                 >
@@ -965,7 +994,12 @@ export function PatientProfilePage() {
                   showDate={true}
                   showPatient={false}
                   onInvoice={() => {}}
-                  onTakePayment={(row) => setTakingPayment(row)}
+                  onTakePayment={(row) => {
+                    const v = visitById.get(row.visitId);
+                    if (inDepartment(department, v)) {
+                      setTakingPayment(row);
+                    }
+                  }}
                   onEditPatient={(row) => setEditPatientId(row.patientId)}
                   onDelete={(row) => handleVisitDelete(row.visitId)}
                   canInvoice={canBill}

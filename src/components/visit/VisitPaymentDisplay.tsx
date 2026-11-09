@@ -65,7 +65,8 @@ export function PaymentStatusDisplay({
   /** Recording a payment against the visit. Wider than `canInvoice`: a plan without invoicing still collects. */
   canCollect?: boolean;
 }) {
-  const actions = canCollect ? paymentActions(data.paymentState) : [];
+  const effectiveCanCollect = data.canCollect ?? canCollect;
+  const actions = effectiveCanCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
     billPaise: data.billPaise,
@@ -74,7 +75,7 @@ export function PaymentStatusDisplay({
     issuedAt: data.issuedAt,
     isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
   });
-  const showCollect = canCollect && actions.includes('take_payment');
+  const showCollect = effectiveCanCollect && actions.includes('take_payment');
 
   // Billing fields freeze the moment a visit is invoiced (see
   // EditVisitModal's `frozen` check), independent of whether it's since
