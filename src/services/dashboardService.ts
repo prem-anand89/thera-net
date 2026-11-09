@@ -28,7 +28,7 @@ import {
   type VisitPaymentState,
 } from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
-import { inDepartment, type Department } from '@/domain/departments';
+import { inDepartment, invoiceDepartment, type Department } from '@/domain/departments';
 import { createReportService, type MonthlyReport } from './reportService';
 import { isCashInHand, isFullyPartnerCollected, partnerPaymentsByVisit } from '@/domain/paymentMethods';
 import { collectionsByMethod, type CollectionsByMethod } from '@/domain/collectionsByMethod';
@@ -489,7 +489,7 @@ export function createDashboardService(repos: Repos) {
       return { totalPaise, visitCount, patientCount: patients.size };
     },
 
-    async outstandingInvoices(clinicId: UUID): Promise<OutstandingSummary> {
+    async outstandingInvoices(clinicId: UUID, department?: Department): Promise<OutstandingSummary> {
       const [invoices, payments, visits, visitPayments] = await Promise.all([
         repos.invoices.list(clinicId),
         repos.invoicePayments.list(clinicId),
@@ -528,6 +528,7 @@ export function createDashboardService(repos: Repos) {
       const rows: OutstandingInvoiceRow[] = invoices
         .filter(
           (inv) =>
+            (!department || invoiceDepartment(inv) === department) &&
             !supersededInvoiceIds.has(inv.id) &&
             statusByInvoiceId.get(inv.id) === 'outstanding' &&
             // Fully covered by recorded payments but still flagged outstanding

@@ -108,16 +108,17 @@ export function DaybookPage() {
 
   const therapistHandovers = useMemo(() => {
     if (department !== 'home') return [];
-    const map = new Map<string, { therapistId: string; therapistName: string; cash: number; upi: number; other: number; total: number; count: number }>();
+    const map = new Map<string, { therapistId: string; therapistName: string; cash: number; upi: number; card: number; other: number; total: number; count: number }>();
     for (const p of deptPayments) {
-      if (p.advanceId) continue;
+      if (p.advanceId || p.method === 'partner') continue;
       const visit = visitById.get(p.visitId);
       const tId = visit?.therapistId ?? 'unassigned';
       const tName = visit?.therapistId ? (therapistNameById.get(visit.therapistId) ?? 'Therapist') : 'Unassigned';
-      const cur = map.get(tId) ?? { therapistId: tId, therapistName: tName, cash: 0, upi: 0, other: 0, total: 0, count: 0 };
+      const cur = map.get(tId) ?? { therapistId: tId, therapistName: tName, cash: 0, upi: 0, card: 0, other: 0, total: 0, count: 0 };
       const amt = p.amountPaise;
       if (p.method === 'cash') cur.cash += amt;
       else if (p.method === 'upi') cur.upi += amt;
+      else if (p.method === 'card') cur.card += amt;
       else cur.other += amt;
       cur.total += amt;
       cur.count += 1;
@@ -125,6 +126,11 @@ export function DaybookPage() {
     }
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [department, deptPayments, visitById, therapistNameById]);
+
+  const totalHandover = useMemo(
+    () => therapistHandovers.reduce((sum, h) => sum + h.total, 0),
+    [therapistHandovers]
+  );
 
   const { cash, upi, card, other, partner, total, transactions } = useMemo(() => {
     let cash = 0, upi = 0, card = 0, other = 0, partner = 0;
@@ -303,6 +309,7 @@ export function DaybookPage() {
                         <span className="text-xs text-[var(--muted)]">
                           Cash {formatAmount(h.cash)}
                           {h.upi > 0 && ` · UPI ${formatAmount(h.upi)}`}
+                          {h.card > 0 && ` · Card ${formatAmount(h.card)}`}
                           {h.other > 0 && ` · Other ${formatAmount(h.other)}`}
                         </span>
                       </td>
@@ -321,7 +328,7 @@ export function DaybookPage() {
                   <tfoot>
                     <tr>
                       <td colSpan={2} className="py-3 px-3 text-right font-semibold text-[var(--ink)]">Total to hand over</td>
-                      <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatAmount(total)}</td>
+                      <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatAmount(totalHandover)}</td>
                     </tr>
                   </tfoot>
                 )}

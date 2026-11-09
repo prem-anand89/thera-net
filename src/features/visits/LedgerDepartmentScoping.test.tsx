@@ -238,6 +238,8 @@ const mockPayments: Payment[] = [
   },
 ];
 
+let currentPayments = [...mockPayments];
+
 const mockTherapists: Therapist[] = [
   { id: 'th-1', clinicId: 'c1', name: 'Dr. Prem', active: true, phone: null, careLocations: ['clinic', 'home'], updatedAt: '2026-01-01' },
   { id: 'th-2', clinicId: 'c1', name: 'Dr. Asha', active: true, phone: null, careLocations: ['ward'], updatedAt: '2026-01-01' },
@@ -291,6 +293,7 @@ vi.mock('@/services', () => ({
         if (f.therapistId) return mockVisits.filter((v) => v.therapistId === f.therapistId);
         return mockVisits;
       },
+      listByPackageGroup: async () => [],
     },
     invoices: {
       list: async () => mockInvoices,
@@ -303,11 +306,12 @@ vi.mock('@/services', () => ({
       ],
     },
     payments: {
-      list: async () => mockPayments,
+      list: async () => currentPayments,
     },
     patients: {
       list: async () => mockPatients,
       search: async () => [],
+      get: async (id: string) => mockPatients.find((p) => p.id === id),
     },
     therapists: {
       list: async () => mockTherapists,
@@ -320,12 +324,19 @@ vi.mock('@/services', () => ({
     },
     consultationNotes: {
       listByVisitIds: async () => [],
+      listByClinic: async () => [],
     },
     visitItems: {
       listByVisitIds: async () => [],
     },
     visitCredits: {
       listByVisitIds: async () => [],
+    },
+    feedbackRequests: {
+      listByClinic: async () => [],
+    },
+    feedbackResponses: {
+      listByClinic: async () => [],
     },
   },
   paymentService: {
@@ -340,6 +351,54 @@ vi.mock('@/services', () => ({
         ? [{ visitId: 'v-home-1', patientName: 'Asha Home', mrno: 'MRN2', visitDate: '2026-11-09', collectedPaise: 60000, therapistName: 'Dr. Prem', serviceName: 'Consultation' }]
         : [];
     },
+    outstandingInvoices: vi.fn(async (_clinicId: string, dept?: Department) => {
+      if (dept === 'clinic') {
+        return {
+          rows: [
+            {
+              invoiceId: 'inv-op',
+              invoiceNo: 'BM/26-27/0001',
+              patientName: 'Ravi OP',
+              mrno: 'MRN1',
+              issuedAt: '2026-11-09T10:00:00Z',
+              totalPaise: 50000,
+              paidPaise: 0,
+              remainingPaise: 50000,
+              daysOutstanding: 1,
+              visitId: 'v-op-1',
+              hasOtherVisitsInGroup: false,
+              advanceAvailablePaise: 0,
+            },
+          ],
+          totalPaise: 50000,
+          count: 1,
+        };
+      }
+      if (dept === 'home') {
+        return {
+          rows: [
+            {
+              invoiceId: 'inv-home',
+              invoiceNo: 'BM/26-27/0002',
+              patientName: 'Asha Home',
+              mrno: 'MRN2',
+              issuedAt: '2026-11-09T11:00:00Z',
+              totalPaise: 60000,
+              paidPaise: 0,
+              remainingPaise: 60000,
+              daysOutstanding: 1,
+              visitId: 'v-home-1',
+              hasOtherVisitsInGroup: false,
+              advanceAvailablePaise: 0,
+            },
+          ],
+          totalPaise: 60000,
+          count: 1,
+        };
+      }
+      return { rows: [], totalPaise: 0, count: 0 };
+    }),
+    openPackages: async () => [],
   },
   feedbackService: {
     askForFeedback: () => Promise.resolve(),
@@ -358,7 +417,7 @@ vi.mock('@/lib/db', () => ({
       where: () => ({
         equals: () => ({
           filter: () => ({
-            toArray: async () => mockPayments,
+            toArray: async () => currentPayments,
           }),
         }),
       }),
@@ -420,9 +479,13 @@ vi.mock('dexie-react-hooks', async () => {
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { DaybookPage } from './DaybookPage';
 import { CreditsTab } from './CreditsTab';
+import { LedgerPage } from './LedgerPage';
 
 describe('Ledger department scoping (G4)', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    currentPayments = [...mockPayments];
+  });
 
   it('InvoicesPage scopes invoices and totals to active department', async () => {
     currentDept = 'clinic';
@@ -492,5 +555,75 @@ describe('Ledger department scoping (G4)', () => {
     expect(await screen.findByText('Net this month')).toBeInTheDocument();
     // In Home, Dr Prem gave a 300 share on Home visit
     expect(screen.getAllByText('−₹300').length).toBeGreaterThan(0);
+  });
+
+  it('DaybookPage Home care excludes partner payments from handovers, separates card, and matches row sum in footer', async () => {
+    currentDept = 'home';
+    currentPayments = [
+      {
+        id: 'pay-home-cash',
+        clinicId: 'c1',
+        visitId: 'v-home-1',
+        amountPaise: 50000,
+        receivedDate: '2026-11-09',
+        method: 'cash',
+        advanceId: null,
+        notes: null,
+        updatedAt: '2026-11-09T11:00:00Z',
+      },
+      {
+        id: 'pay-home-card',
+        clinicId: 'c1',
+        visitId: 'v-home-1',
+        amountPaise: 30000,
+        receivedDate: '2026-11-09',
+        method: 'card',
+        advanceId: null,
+        notes: null,
+        updatedAt: '2026-11-09T11:15:00Z',
+      },
+      {
+        id: 'pay-home-partner',
+        clinicId: 'c1',
+        visitId: 'v-home-1',
+        amountPaise: 40000,
+        receivedDate: '2026-11-09',
+        method: 'partner',
+        advanceId: null,
+        notes: null,
+        updatedAt: '2026-11-09T11:30:00Z',
+      },
+    ];
+
+    render(<DaybookPage />);
+    expect(await screen.findByText('To hand over')).toBeInTheDocument();
+
+    // Check therapist breakdown row: cash ₹500, card ₹300, partner excluded
+    expect(screen.getByText(/Cash ₹500/)).toBeInTheDocument();
+    expect(screen.getByText(/Card ₹300/)).toBeInTheDocument();
+
+    // The therapist row total should be ₹800 (cash 500 + card 300, partner excluded)
+    // The footer "Total to hand over" should also be ₹800
+    const totalHandoverElements = screen.getAllByText('₹800');
+    expect(totalHandoverElements.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('LedgerPage passes active department to outstandingInvoices and scopes Unpaid invoices card', async () => {
+    currentDept = 'clinic';
+    const { unmount } = render(<LedgerPage />);
+    expect(await screen.findByText('Unpaid invoices')).toBeInTheDocument();
+    expect(screen.getAllByText('BM/26-27/0001').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ravi OP').length).toBeGreaterThan(0);
+    expect(screen.queryByText('BM/26-27/0002')).toBeNull();
+    expect(screen.queryByText('Asha Home')).toBeNull();
+    unmount();
+
+    currentDept = 'home';
+    render(<LedgerPage />);
+    expect(await screen.findByText('Unpaid invoices')).toBeInTheDocument();
+    expect(screen.getAllByText('BM/26-27/0002').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Asha Home').length).toBeGreaterThan(0);
+    expect(screen.queryByText('BM/26-27/0001')).toBeNull();
+    expect(screen.queryByText('Ravi OP')).toBeNull();
   });
 });

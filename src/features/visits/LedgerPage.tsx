@@ -556,8 +556,8 @@ export function LedgerPage() {
     [openPackages]
   );
   const outstanding = useLiveQuery(
-    () => dashboardService.outstandingInvoices(clinic.id),
-    [clinic.id]
+    () => dashboardService.outstandingInvoices(clinic.id, department),
+    [clinic.id, department]
   );
 
   // Candidate ₹0 package rows whose OWN invoiceId is null — for each

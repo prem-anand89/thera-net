@@ -605,6 +605,74 @@ describe('dashboardService.outstandingInvoices', () => {
     expect(summary.rows[0].invoiceId).toBe('inv-2');
     expect(summary.totalPaise).toBe(rs(1500));
   });
+
+  it('scopes outstanding invoices by department when provided', async () => {
+    fake.invoices.set(
+      'inv-op',
+      baseInvoice('inv-op', {
+        totalPaise: rs(1000),
+        clinicalSnapshot: {
+          diagnosis: null,
+          referringPhysician: null,
+          physicianRegistrationNo: null,
+          placeOfService: 'clinic',
+          treatmentPerformed: null,
+        },
+      })
+    );
+    fake.invoices.set(
+      'inv-home',
+      baseInvoice('inv-home', {
+        totalPaise: rs(2000),
+        clinicalSnapshot: {
+          diagnosis: null,
+          referringPhysician: null,
+          physicianRegistrationNo: null,
+          placeOfService: 'home',
+          treatmentPerformed: null,
+        },
+      })
+    );
+    fake.invoices.set(
+      'inv-ward',
+      baseInvoice('inv-ward', {
+        totalPaise: rs(3000),
+        clinicalSnapshot: {
+          diagnosis: null,
+          referringPhysician: null,
+          physicianRegistrationNo: null,
+          placeOfService: 'ward',
+          treatmentPerformed: null,
+        },
+      })
+    );
+
+    fake.invoicePayments.set('p-op', { id: 'p-op', clinicId: 'clinic-1', invoiceId: 'inv-op', status: 'outstanding', paidAt: null, updatedAt: '' });
+    fake.invoicePayments.set('p-home', { id: 'p-home', clinicId: 'clinic-1', invoiceId: 'inv-home', status: 'outstanding', paidAt: null, updatedAt: '' });
+    fake.invoicePayments.set('p-ward', { id: 'p-ward', clinicId: 'clinic-1', invoiceId: 'inv-ward', status: 'outstanding', paidAt: null, updatedAt: '' });
+
+    const svc = createDashboardService(fake.repos);
+
+    const clinicSummary = await svc.outstandingInvoices('clinic-1', 'clinic');
+    expect(clinicSummary.count).toBe(1);
+    expect(clinicSummary.rows[0].invoiceId).toBe('inv-op');
+    expect(clinicSummary.totalPaise).toBe(rs(1000));
+
+    const homeSummary = await svc.outstandingInvoices('clinic-1', 'home');
+    expect(homeSummary.count).toBe(1);
+    expect(homeSummary.rows[0].invoiceId).toBe('inv-home');
+    expect(homeSummary.totalPaise).toBe(rs(2000));
+
+    const wardSummary = await svc.outstandingInvoices('clinic-1', 'ward');
+    expect(wardSummary.count).toBe(1);
+    expect(wardSummary.rows[0].invoiceId).toBe('inv-ward');
+    expect(wardSummary.totalPaise).toBe(rs(3000));
+
+    // Without department filter: clinic-wide
+    const allSummary = await svc.outstandingInvoices('clinic-1');
+    expect(allSummary.count).toBe(3);
+    expect(allSummary.totalPaise).toBe(rs(6000));
+  });
 });
 
 describe('dashboardService.monthlyCollection', () => {
