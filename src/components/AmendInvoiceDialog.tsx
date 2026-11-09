@@ -8,6 +8,7 @@ import { repos, invoiceService } from '@/services';
 import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
+import { departmentOf, invoiceDepartment } from '@/domain/departments';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import type { InvoicePrintBackTarget } from '@/app/router';
 
@@ -42,8 +43,9 @@ export function AmendInvoiceDialog({
 
   const originalVisits = (allVisits ?? []).filter((v) => v.invoiceId === invoice.id);
   const patientId = originalVisits[0]?.patientId;
+  const invoiceDept = originalVisits[0] ? departmentOf(originalVisits[0]) : invoiceDepartment(invoice);
   const addableVisits = (allVisits ?? []).filter(
-    (v) => v.patientId === patientId && !v.invoiceId && !v.deleted
+    (v) => v.patientId === patientId && !v.invoiceId && !v.deleted && departmentOf(v) === invoiceDept
   );
 
   const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);

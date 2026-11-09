@@ -46,8 +46,9 @@ export function resolveDepartment(visible: readonly Department[], remembered: st
   return visible.find((d) => d === remembered) ?? visible[0] ?? 'clinic';
 }
 
-/** The department a visit, appointment or advance belongs to (no place = OP). */
-export function departmentOf(record: { location?: string | null } | null | undefined): Department {
+/** The department a visit, appointment or advance belongs to (no place = OP; admission visits are always IP). */
+export function departmentOf(record: { location?: string | null; admissionId?: string | null } | null | undefined): Department {
+  if (record?.admissionId) return 'ward';
   return locationOf(record);
 }
 

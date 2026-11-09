@@ -8,6 +8,7 @@ import type {
 } from '@/domain/types';
 import { db } from '@/lib/db';
 import { fiscalYearOf } from '@/domain/fiscalYear';
+import { departmentOf } from '@/domain/departments';
 import {
   billingUnits,
   buildLineItems as buildLineItemsPure,
@@ -69,8 +70,9 @@ export function createInvoiceService(repos: Repos) {
 
   async function collectVisits(visit: Visit, allowInvoiceId?: UUID): Promise<Visit[]> {
     if (!visit.packageGroupId) return [visit];
+    const dept = departmentOf(visit);
     const group = await repos.visits.listByPackageGroup(visit.packageGroupId);
-    return group.filter((v) => isAvailable(v, allowInvoiceId));
+    return group.filter((v) => isAvailable(v, allowInvoiceId) && departmentOf(v) === dept);
   }
 
   /**
@@ -97,7 +99,12 @@ export function createInvoiceService(repos: Repos) {
     // p_visit_ids, so dedupe it here too rather than relying on the pure
     // function's side effect for a value used outside it.
     const seen = new Set<UUID>();
-    return allVisits.filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+    const uniqueVisits = allVisits.filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+    const depts = new Set(uniqueVisits.map((v) => departmentOf(v)));
+    if (depts.size > 1) {
+      throw new Error('Cannot combine visits from different departments on one invoice');
+    }
+    return uniqueVisits;
   }
 
   /**
@@ -305,6 +312,11 @@ export function createInvoiceService(repos: Repos) {
         originalInvoiceId
       );
       await assertNothingPending(allVisits.map((v) => v.id));
+
+      const origVisits = await repos.visits.listByInvoiceId(originalInvoiceId);
+      if (origVisits.length > 0 && allVisits.length > 0 && departmentOf(origVisits[0]) !== departmentOf(allVisits[0])) {
+        throw new Error('Cannot combine visits from different departments on one invoice');
+      }
 
       const { data, error } = await supabase.rpc('amend_invoice', {
         p_original_invoice_id: originalInvoiceId,

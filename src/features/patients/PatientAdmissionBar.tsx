@@ -11,6 +11,7 @@ import { toLocalDateStr } from '@/domain/schedule';
 import { btnSecondary, Pill } from '@/components/ui';
 import { usePermissions } from '@/app/usePermissions';
 import { useDepartment } from '@/app/DepartmentContext';
+import { departmentOf } from '@/domain/departments';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import type { Admission } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -34,7 +35,10 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   const [invoicing, setInvoicing] = useState<IssueInvoiceTarget | null>(null);
 
   /** The stay's sessions not yet on a bill: what a discharge bill covers. */
-  const unbilledOf = (stay: Admission) => (visits ?? []).filter((v) => !v.deleted && v.admissionId === stay.id && !v.invoiceId);
+  const unbilledOf = (stay: Admission) =>
+    (visits ?? []).filter(
+      (v) => !v.deleted && v.admissionId === stay.id && !v.invoiceId && departmentOf(v) === 'ward'
+    );
   const billableTotal = (stay: Admission) => unbilledOf(stay).reduce((sum, v) => sum + v.actualBillPaise, 0);
 
   function startBilling(stay: Admission) {

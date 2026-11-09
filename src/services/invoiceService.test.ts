@@ -158,3 +158,69 @@ describe('invoiceService: a visit whose services have not all arrived', () => {
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('invoiceService department scoping (Task 1)', () => {
+  beforeEach(async () => {
+    rpc.mockReset();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    rpc.mockResolvedValue({ data: { id: 'inv-new', clinic_id: 'c1', total_paise: rs(1000), invoice_no: 'X/1' }, error: null });
+    await db.outbox.clear();
+  });
+
+  it('rejects combining visits from different departments on one invoice', async () => {
+    const v1 = visit({ id: 'v1', invoiceId: null, location: 'clinic' });
+    const v2 = visit({ id: 'v2', invoiceId: null, location: 'home' });
+    const { repos } = setup([]);
+    const r = repos as unknown as {
+      patients: unknown;
+      visits: { get: unknown; listByPackageGroup: unknown };
+    };
+    r.patients = { get: async () => ({ id: 'p1' }) };
+    r.visits.get = async (id: string) => (id === 'v1' ? v1 : id === 'v2' ? v2 : undefined);
+    r.visits.listByPackageGroup = async () => [];
+
+    const svc = createInvoiceService(repos);
+    await expect(svc.previewLineItems(['v1', 'v2'])).rejects.toThrow(
+      'Cannot combine visits from different departments on one invoice'
+    );
+    await expect(svc.issueForVisits(['v1', 'v2'], 'Cash')).rejects.toThrow(
+      'Cannot combine visits from different departments on one invoice'
+    );
+  });
+
+  it('package expansion only includes package siblings from the same department', async () => {
+    const v1 = visit({ id: 'v1', invoiceId: null, packageGroupId: 'pkg-1', location: 'clinic' });
+    const v2Sibling = visit({ id: 'v2', invoiceId: null, packageGroupId: 'pkg-1', location: 'home' });
+    const v3Sibling = visit({ id: 'v3', invoiceId: null, packageGroupId: 'pkg-1', location: 'clinic' });
+    const { repos } = setup([]);
+    const r = repos as unknown as {
+      patients: unknown;
+      visits: { get: unknown; listByPackageGroup: unknown };
+    };
+    r.patients = { get: async () => ({ id: 'p1' }) };
+    r.visits.get = async (id: string) => (id === 'v1' ? v1 : undefined);
+    r.visits.listByPackageGroup = async (gid: string) => (gid === 'pkg-1' ? [v1, v2Sibling, v3Sibling] : []);
+
+    const svc = createInvoiceService(repos);
+    const resolved = await svc.visitsOnInvoice(['v1']);
+    expect(resolved.map((v) => v.id)).toEqual(['v1', 'v3']);
+  });
+
+  it('refuses to amend an invoice with visits from a different department than original', async () => {
+    const origVisit = visit({ id: 'v-orig', invoiceId: 'inv-old', location: 'clinic' });
+    const newVisit = visit({ id: 'v-extra', invoiceId: null, location: 'ward' });
+    const { repos } = setup([]);
+    const r = repos as unknown as {
+      patients: unknown;
+      visits: { get: unknown; listByInvoiceId: unknown };
+    };
+    r.patients = { get: async () => ({ id: 'p1' }) };
+    r.visits.get = async (id: string) => (id === 'v-orig' ? origVisit : id === 'v-extra' ? newVisit : undefined);
+    r.visits.listByInvoiceId = async (id: string) => (id === 'inv-old' ? [origVisit] : []);
+
+    const svc = createInvoiceService(repos);
+    await expect(svc.amendInvoice('inv-old', ['v-orig', 'v-extra'], 'Cash')).rejects.toThrow(
+      'Cannot combine visits from different departments on one invoice'
+    );
+  });
+});
