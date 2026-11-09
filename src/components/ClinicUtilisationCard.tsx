@@ -13,6 +13,8 @@ import {
   type BucketReport,
 } from '@/domain/utilisationReport';
 import { loadUtilisationVisits } from '@/services/utilisationVisits';
+import { useDepartment } from '@/app/DepartmentContext';
+import { inDepartment } from '@/domain/departments';
 import { PerformanceFilterBar } from './PerformanceFilterBar';
 import { UtilisationTrendCard } from './UtilisationTrendCard';
 import { CapacityHoursCard } from './CapacityHoursCard';
@@ -25,12 +27,13 @@ import { CapacityHoursCard } from './CapacityHoursCard';
  */
 export function ClinicUtilisationCard() {
   const clinic = useClinic();
+  const { department } = useDepartment();
   const [granularity, setGranularity] = useState<UtilisationGranularity>('ytd');
 
   const report = useLiveQuery(async () => {
     const buckets = utilisationBuckets(granularity, clinic.fyStartMonth);
     if (buckets.length === 0) return [];
-    const [visits, therapists, closedDates] = await Promise.all([
+    const [allVisits, therapists, closedDates] = await Promise.all([
       repos.visits.list({
         clinicId: clinic.id,
         from: buckets[0].from,
@@ -39,6 +42,7 @@ export function ClinicUtilisationCard() {
       repos.therapists.list(clinic.id, true),
       repos.clinicClosedDates.listByClinic(clinic.id),
     ]);
+    const visits = allVisits.filter((v) => inDepartment(department, v));
     const slotMinutes = clinic.slotDurationMinutes || 30;
     const range = { from: buckets[0].from, to: buckets[buckets.length - 1].to };
     const withLines = await loadUtilisationVisits(clinic.id, visits, range, slotMinutes, repos);
@@ -71,6 +75,7 @@ export function ClinicUtilisationCard() {
     clinic.closedWeekdays,
     clinic.slotDurationMinutes,
     granularity,
+    department,
   ]);
 
   return (

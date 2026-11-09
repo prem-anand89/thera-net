@@ -4,6 +4,7 @@ import { paiseToRupees } from '@/domain/money';
 import { attributablePackageGroupIds, payBaseByTherapist, type PayBaseInput } from '@/domain/payBase';
 import { treatedTherapists } from '@/domain/visitLines';
 import { monthDateRange, monthName, type FyMonth } from '@/domain/fiscalYear';
+import { inDepartment, type Department } from '@/domain/departments';
 import type { Repos } from '@/repositories/types';
 
 export interface TherapistMonthRow {
@@ -160,12 +161,14 @@ export function createReportService(repos: Repos) {
   async function totalsForRange(
     clinicId: UUID,
     from: string,
-    to: string
+    to: string,
+    department?: Department
   ): Promise<Pick<MonthlyReport, 'rows' | 'total'>> {
-      const [visits, therapists] = await Promise.all([
+      const [allVisits, therapists] = await Promise.all([
         repos.visits.list({ clinicId, from, to }),
         repos.therapists.list(clinicId, true),
       ]);
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       const therapistName = new Map(therapists.map((t) => [t.id, t.name]));
 
       const rowsById = new Map<string, TherapistMonthRow>();
@@ -263,9 +266,9 @@ export function createReportService(repos: Repos) {
   }
 
   return {
-    async monthly(clinicId: UUID, month: FyMonth): Promise<MonthlyReport> {
+    async monthly(clinicId: UUID, month: FyMonth, department?: Department): Promise<MonthlyReport> {
       const { from, to } = monthDateRange(month);
-      const { rows, total } = await totalsForRange(clinicId, from, to);
+      const { rows, total } = await totalsForRange(clinicId, from, to, department);
       return {
         month,
         title: `${monthName(month.month)} ${month.year}`,

@@ -22,9 +22,11 @@ import {
 } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { toFriendlyMessage } from '@/lib/errors';
+import { useDepartment } from '@/app/DepartmentContext';
 
 export function MonthlyStatementPage() {
   const clinic = useClinic();
+  const { department } = useDepartment();
   const labels = clinicShareLabels(clinic);
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
@@ -46,13 +48,13 @@ export function MonthlyStatementPage() {
   }, [month]);
 
   const report = useLiveQuery(
-    () => reportService.monthly(clinic.id, selected),
-    [clinic.id, selected.year, selected.month]
+    () => reportService.monthly(clinic.id, selected, department),
+    [clinic.id, selected.year, selected.month, department]
   );
 
   const collection = useLiveQuery(
-    () => dashboardService.monthlyCollection(clinic.id, selected),
-    [clinic.id, selected.year, selected.month]
+    () => dashboardService.monthlyCollection(clinic.id, selected, undefined, department),
+    [clinic.id, selected.year, selected.month, department]
   );
 
   // A 0% TDS rate leaves the split itself in place, but with nothing

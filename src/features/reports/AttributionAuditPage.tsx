@@ -14,6 +14,7 @@ import {
   toAuditCsv,
 } from './attributionAuditView';
 import { inputCls, th, thNum, td, tdNum } from '@/components/ui';
+import { useDepartment } from '@/app/DepartmentContext';
 
 /**
  * Per-transaction detail behind reportService's aggregate Shared/Net
@@ -26,6 +27,7 @@ const sectionTitle = 'text-[11px] font-semibold uppercase tracking-wide text-[va
 
 export function AttributionAuditPage() {
   const clinic = useClinic();
+  const { department } = useDepartment();
   const labels = clinicShareLabels(clinic);
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   // Arriving from the Monthly Statement's "see the attribution audit" link
@@ -62,8 +64,8 @@ export function AttributionAuditPage() {
   const [therapistFilter, setTherapistFilter] = useState(linkedMonth.therapist ?? '');
   const [query, setQuery] = useState('');
   const allEntries = useLiveQuery(
-    () => attributionAuditService.monthly(clinic.id, selected),
-    [clinic.id, selected.year, selected.month]
+    () => attributionAuditService.monthly(clinic.id, selected, department),
+    [clinic.id, selected.year, selected.month, department]
   );
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);

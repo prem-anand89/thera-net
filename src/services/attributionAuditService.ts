@@ -2,6 +2,7 @@ import type { CareLocation, UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { attributionMovements, packageSessionShares } from '@/domain/payBase';
 import { monthDateRange, type FyMonth } from '@/domain/fiscalYear';
+import { inDepartment, type Department } from '@/domain/departments';
 import type { Repos } from '@/repositories/types';
 import { loadPayBaseInput } from './reportService';
 
@@ -64,9 +65,10 @@ export interface AttributionEntry {
  */
 export function createAttributionAuditService(repos: Repos) {
   return {
-    async monthly(clinicId: UUID, month: FyMonth): Promise<AttributionEntry[]> {
+    async monthly(clinicId: UUID, month: FyMonth, department?: Department): Promise<AttributionEntry[]> {
       const { from, to } = monthDateRange(month);
-      const visits = await repos.visits.list({ clinicId, from, to });
+      const allVisits = await repos.visits.list({ clinicId, from, to });
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       const input = await loadPayBaseInput(clinicId, visits, from, to, repos);
       const visitById = new Map<UUID, Visit>(visits.map((v) => [v.id, v]));
       for (const group of input.packageGroups.values()) for (const g of group) visitById.set(g.id, g);

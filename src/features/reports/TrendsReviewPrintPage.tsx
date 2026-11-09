@@ -3,6 +3,7 @@ import { Link, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, reportService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useDepartment } from '@/app/DepartmentContext';
 import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import { publicLogoUrl } from '@/lib/supabase';
 import { formatAmount } from '@/domain/money';
@@ -43,6 +44,7 @@ function DeltaCaption({ value, suffix }: { value: number | null; suffix: string 
  */
 export function TrendsReviewPrintPage() {
   const clinic = useClinic();
+  const { department } = useDepartment();
   const compact = useCompactChart();
   const search = useSearch({ from: '/insights/trends-print' });
   const period = useMemo(
@@ -73,21 +75,21 @@ export function TrendsReviewPrintPage() {
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
 
   const report = useLiveQuery(
-    () => reportService.monthly(clinic.id, period),
-    [clinic.id, period.year, period.month]
+    () => reportService.monthly(clinic.id, period, department),
+    [clinic.id, period.year, period.month, department]
   );
   const prevReport = useLiveQuery(
-    () => reportService.monthly(clinic.id, prevPeriod),
-    [clinic.id, prevPeriod.year, prevPeriod.month]
+    () => reportService.monthly(clinic.id, prevPeriod, department),
+    [clinic.id, prevPeriod.year, prevPeriod.month, department]
   );
 
   const trend = useLiveQuery(
-    () => dashboardService.revenueTrend(clinic.id, monthsInRange),
-    [clinic.id, monthsInRange]
+    () => dashboardService.revenueTrend(clinic.id, monthsInRange, department),
+    [clinic.id, monthsInRange, department]
   );
   const singleVisitPatients = useLiveQuery(
-    () => dashboardService.singleVisitPatients(clinic.id),
-    [clinic.id]
+    () => dashboardService.singleVisitPatients(clinic.id, undefined, department),
+    [clinic.id, department]
   );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const stalePackages = useMemo(() => (openPackages ?? []).filter((p) => p.stale), [openPackages]);

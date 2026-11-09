@@ -20,9 +20,9 @@ import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { useShowTherapistComparison } from '@/components/useShowTherapistComparison';
 import { ClinicUtilisationCard } from '@/components/ClinicUtilisationCard';
-import { CareLocationSplitCard } from '@/components/CareLocationSplitCard';
 import { SingleVisitPatientsCard } from '@/components/SingleVisitPatientsCard';
 import { SERIES_COLORS } from '@/components/chartColors';
+import { useDepartment } from '@/app/DepartmentContext';
 import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
 import {
   buildTrendMonthsInRange,
@@ -154,6 +154,7 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
 export function ReportsOverviewPage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const { department } = useDepartment();
   const labels = clinicShareLabels(clinic);
   const { partnerSplit } = clinicBillingConfig(clinic);
   // A 0% TDS rate leaves the revenue split itself in place, but with
@@ -230,16 +231,16 @@ export function ReportsOverviewPage() {
   }
 
   const trend = useLiveQuery(
-    () => dashboardService.revenueTrend(clinic.id, monthsInRange),
-    [clinic.id, monthsInRange]
+    () => dashboardService.revenueTrend(clinic.id, monthsInRange, department),
+    [clinic.id, monthsInRange, department]
   );
   const singleVisitPatients = useLiveQuery(
-    () => dashboardService.singleVisitPatients(clinic.id),
-    [clinic.id]
+    () => dashboardService.singleVisitPatients(clinic.id, undefined, department),
+    [clinic.id, department]
   );
   const referralSources = useLiveQuery(
-    () => dashboardService.referralSourceStats(clinic.id),
-    [clinic.id]
+    () => dashboardService.referralSourceStats(clinic.id, department),
+    [clinic.id, department]
   );
   const modalityUsage = useLiveQuery(
     () => (clinic.clinicalDocsEnabled ? dashboardService.modalityUsage(clinic.id) : undefined),
@@ -263,34 +264,36 @@ export function ReportsOverviewPage() {
   const [kpiMode, setKpiMode] = useState<KpiComparisonMode>('standard');
   const pacingRange = pacingMonthDateRange({ year: now.getFullYear(), month: now.getMonth() + 1 }, now);
   const pacingReport = useLiveQuery(
-    () => (kpiMode === 'pacing' ? reportService.totalsForRange(clinic.id, pacingRange.from, pacingRange.to) : undefined),
-    [clinic.id, pacingRange.from, pacingRange.to, kpiMode]
+    () => (kpiMode === 'pacing' ? reportService.totalsForRange(clinic.id, pacingRange.from, pacingRange.to, department) : undefined),
+    [clinic.id, pacingRange.from, pacingRange.to, kpiMode, department]
   );
   const repeatVisitsThisMonth = useLiveQuery(
     () =>
       dashboardService.repeatVisits(
         clinic.id,
         { year: now.getFullYear(), month: now.getMonth() + 1 },
-        scope.scopeTherapistId
+        scope.scopeTherapistId,
+        department
       ),
-    [clinic.id, now.getFullYear(), now.getMonth(), scope.scopeTherapistId]
+    [clinic.id, now.getFullYear(), now.getMonth(), scope.scopeTherapistId, department]
   );
   const newPatientsThisMonth = useLiveQuery(
-    () => dashboardService.monthlyNewCounts(clinic.id, now, scope.scopeTherapistId),
-    [clinic.id, now.getFullYear(), now.getMonth(), scope.scopeTherapistId]
+    () => dashboardService.monthlyNewCounts(clinic.id, now, scope.scopeTherapistId, department),
+    [clinic.id, now.getFullYear(), now.getMonth(), scope.scopeTherapistId, department]
   );
   const newPatientsLastMonth = useLiveQuery(
-    () => dashboardService.monthlyNewCounts(clinic.id, prevMonthDate, scope.scopeTherapistId),
-    [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId]
+    () => dashboardService.monthlyNewCounts(clinic.id, prevMonthDate, scope.scopeTherapistId, department),
+    [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId, department]
   );
   const repeatVisitsLastMonth = useLiveQuery(
     () =>
       dashboardService.repeatVisits(
         clinic.id,
         { year: prevMonthDate.getFullYear(), month: prevMonthDate.getMonth() + 1 },
-        scope.scopeTherapistId
+        scope.scopeTherapistId,
+        department
       ),
-    [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId]
+    [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId, department]
   );
 
   const categories = useMemo(
@@ -740,8 +743,6 @@ export function ReportsOverviewPage() {
             />
           </div>
         )}
-
-        {scope.isAdmin && <CareLocationSplitCard year={focusMonth.year} month={focusMonth.month} />}
 
         {scope.isAdmin && (
           <div

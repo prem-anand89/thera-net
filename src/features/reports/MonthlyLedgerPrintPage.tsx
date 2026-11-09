@@ -9,23 +9,30 @@ import { fiscalYearOf, monthDateRange, monthName, formatDateDM } from '@/domain/
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
+import { useDepartment } from '@/app/DepartmentContext';
+import { inDepartment } from '@/domain/departments';
 
 export function MonthlyLedgerPrintPage() {
   const clinic = useClinic();
+  const { department } = useDepartment();
   const { year, month } = useSearch({ strict: false }) as { year: number; month: number };
   const labels = clinicShareLabels(clinic);
   const { partnerSplit } = clinicBillingConfig(clinic);
   const period = { year, month };
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
 
-  const visits = useLiveQuery(() => {
+  const visits = useLiveQuery(async () => {
     const { from, to } = monthDateRange(period);
-    return repos.visits.list({ clinicId: clinic.id, from, to });
-  }, [clinic.id, period.year, period.month]);
+    const allVisits = await repos.visits.list({ clinicId: clinic.id, from, to });
+    return allVisits.filter((v) => inDepartment(department, v));
+  }, [clinic.id, period.year, period.month, department]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
-  const report = useLiveQuery(() => reportService.monthly(clinic.id, period), [clinic.id, period.year, period.month]);
+  const report = useLiveQuery(
+    () => reportService.monthly(clinic.id, period, department),
+    [clinic.id, period.year, period.month, department]
+  );
 
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.

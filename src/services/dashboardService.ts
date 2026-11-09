@@ -28,10 +28,10 @@ import {
   type VisitPaymentState,
 } from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
+import { inDepartment, type Department } from '@/domain/departments';
 import { createReportService, type MonthlyReport } from './reportService';
 import { isCashInHand, isFullyPartnerCollected, partnerPaymentsByVisit } from '@/domain/paymentMethods';
 import { collectionsByMethod, type CollectionsByMethod } from '@/domain/collectionsByMethod';
-import { inDepartment, type Department } from '@/domain/departments';
 import { paymentsForDepartment, advancesForDepartment, inDepartmentList } from '@/domain/departmentMoney';
 
 export interface OpenPackageRow {
@@ -344,9 +344,13 @@ export function createDashboardService(repos: Repos) {
     /** Either a rolling window of `months` calendar months (default 6), or
      *  an explicit list of months (e.g. a fiscal year via monthsOfFiscalYear,
      *  trimmed to not run past the current month). */
-    revenueTrend(clinicId: UUID, monthsOrList: number | FyMonth[] = 6): Promise<MonthlyReport[]> {
+    revenueTrend(
+      clinicId: UUID,
+      monthsOrList: number | FyMonth[] = 6,
+      department?: Department
+    ): Promise<MonthlyReport[]> {
       const list = Array.isArray(monthsOrList) ? monthsOrList : lastNMonths(monthsOrList);
-      return Promise.all(list.map((m) => reportService.monthly(clinicId, m)));
+      return Promise.all(list.map((m) => reportService.monthly(clinicId, m, department)));
     },
 
     async openPackages(clinicId: UUID): Promise<OpenPackageRow[]> {
@@ -625,14 +629,16 @@ export function createDashboardService(repos: Repos) {
     async monthlyCollection(
       clinicId: UUID,
       month: FyMonth,
-      therapistId?: UUID
+      therapistId?: UUID,
+      department?: Department
     ): Promise<MonthlyCollection> {
       const { from, to } = monthDateRange(month);
-      const [visits, invoicePayments, directPayments] = await Promise.all([
+      const [allVisits, invoicePayments, directPayments] = await Promise.all([
         repos.visits.list({ clinicId, from, to, therapistId }),
         repos.invoicePayments.list(clinicId),
         repos.payments.list(clinicId),
       ]);
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
       const directByVisitId = new Map<UUID, Paise>();
       for (const p of directPayments) {
@@ -694,14 +700,16 @@ export function createDashboardService(repos: Repos) {
     async repeatVisits(
       clinicId: UUID,
       month: FyMonth,
-      therapistId?: UUID
+      therapistId?: UUID,
+      department?: Department
     ): Promise<RepeatVisitStats> {
       const { from, to } = monthDateRange(month);
       const lookbackDate = new Date(`${from}T00:00:00`);
       lookbackDate.setDate(lookbackDate.getDate() - 30);
       const lookbackFrom = toLocalDateStr(lookbackDate);
 
-      const visits = await repos.visits.list({ clinicId, from: lookbackFrom, to, therapistId });
+      const allVisits = await repos.visits.list({ clinicId, from: lookbackFrom, to, therapistId });
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       const inMonth = visits.filter((v) => v.visitDate >= from && v.visitDate <= to);
       const byPatient = groupByPatient(visits);
 
@@ -1066,14 +1074,16 @@ export function createDashboardService(repos: Repos) {
      */
     async singleVisitPatients(
       clinicId: UUID,
-      thresholdDays = STALE_PACKAGE_DAYS
+      thresholdDays = STALE_PACKAGE_DAYS,
+      department?: Department
     ): Promise<SingleVisitPatientRow[]> {
-      const [visits, patients, catalog, reasons] = await Promise.all([
+      const [allVisits, patients, catalog, reasons] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.patients.list(clinicId),
         repos.catalog.list(clinicId, true),
         repos.noReturnReasonCatalog.list(clinicId, true),
       ]);
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
       const reasonById = new Map(reasons.map((r) => [r.id, r]));
@@ -1290,9 +1300,11 @@ export function createDashboardService(repos: Repos) {
     async monthlyNewCounts(
       clinicId: UUID,
       asOf = new Date(),
-      therapistId?: UUID
+      therapistId?: UUID,
+      department?: Department
     ): Promise<MonthlyNewCounts> {
-      const visits = await repos.visits.list({ clinicId, therapistId });
+      const allVisits = await repos.visits.list({ clinicId, therapistId });
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       // Bounded both ends — an unbounded `>= monthStart` check (the old bug)
       // silently turns "new last month" into "new since last month started,"
       // double-counting anything new this month too.
@@ -1331,8 +1343,9 @@ export function createDashboardService(repos: Repos) {
      * value, not per-visit), so "revenue from a source" sums every visit
      * by patients currently tagged with it.
      */
-    async referralSourceStats(clinicId: UUID): Promise<ReferralSourceStat[]> {
-      const visits = await repos.visits.list({ clinicId });
+    async referralSourceStats(clinicId: UUID, department?: Department): Promise<ReferralSourceStat[]> {
+      const allVisits = await repos.visits.list({ clinicId });
+      const visits = department ? allVisits.filter((v) => inDepartment(department, v)) : allVisits;
       const patients = await repos.patients.list(clinicId);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const sources = await repos.referringSourceCatalog.list(clinicId, true);
