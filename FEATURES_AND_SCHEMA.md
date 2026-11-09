@@ -4318,7 +4318,80 @@ it final.
 #### `payments`
 ```sql
 id              uuid PRIMARY KEY
-clinic_
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
+amount_paise    bigint NOT NULL
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
+received_date   date NOT NULL
+notes           text (NULLABLE)
+advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+```
+A payment toward one visit's bill — cash/UPI collection recorded without
+requiring an invoice, and supports partial payments (an amount less than
+the visit's bill). No `invoice_id` column: this same table is also how a
+*partial* payment against an **invoiced** visit's bill is recorded (an
+invoice itself has no amount-paid field — see `invoice_payments` above),
+so a payment stays keyed to the visit it was collected for either way. For
+an invoice spanning several visits, one entered amount is allocated across
+those visits' `payments` rows in date order — the shared
+`allocateAcrossVisits()` helper in `src/services/advanceService.ts` (both
+`paymentService.recordInvoicePayment` and advance draw-down use it, so the
+two paths can't allocate differently). `advance_id` is set only when this
+payment was drawn down from a patient's advance balance rather than
+collected fresh; `visit_id` still stays required either way, so
+`computeVisitPaymentState` needs no special-casing for advance-funded
+payments.
+
+#### `patient_advances`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+amount_paise    bigint NOT NULL (> 0)
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
+received_date   date NOT NULL
+receipt_no      text (NULLABLE) — no numbered series yet, see below
+notes           text (NULLABLE)
+status          text NOT NULL default 'open' — 'open' | 'exhausted' | 'refunded' | 'void'
+deleted         boolean NOT NULL default false
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (id, clinic_id) — backs the composite FK on payments.advance_id below
+```
+Money received ahead of treatment. **Not a `payments` row until drawn
+down** — `computeVisitPaymentState` and everything derived from it (badges,
+the needs-receipt queue, dashboard KPIs) stays untouched by an advance
+until a real `payments` row is written against a real visit
+(`advanceService.applyAdvance`), which stamps that row's `advance_id` and
+flips this row's `status` to `'exhausted'` once the balance reaches zero.
+Remaining balance is computed, not stored:
+`amount_paise − Σ payments.amount_paise where advance_id = this.id`.
+`payments.advance_id` is a **composite** FK to `(id, clinic_id)` rather
+than a plain `references patient_advances(id)`, so a payment can never
+reference a different clinic's advance even by a client bug — RLS already
+scopes reads correctly, but this closes the write-side gap outright.
+`method` uses the `PaymentMethod` vocabulary (`'cash'|'upi'|…`), not the
+older `PaymentMode` (`'Cash'|'Card'|'UPI'|'Insurance'`) that belongs only
+to `Invoice.paymentMode` — easy to confuse. **No gap-free numbered receipt
+series yet** — `receipt_no` exists but is unused; the printed
+`AdvanceReceiptPrintPage` identifies a receipt by date + a short slice of
+its id instead. A real counter can be added later with no data migration
+if it turns out to matter. Entry point: Patient Profile's "Record advance"
+button; `TakePaymentDialog` also surfaces "₹X advance available — apply"
+and draws down (oldest advance first) when a patient with an open balance
+is being collected from elsewhere.
+
+#### `settlements`
+```sql
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+year, month            int NOT NULL
+amount_received_paise  bigint NOT NULL
+received_date          date (NULLABLE)
+notes                  text (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
 updated_at             timestamptz (NULLABLE)
 ```
 Per-month partner-hospital (HV) settlement record, for the Monthly Report's

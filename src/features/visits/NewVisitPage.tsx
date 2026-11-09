@@ -1389,11 +1389,6 @@ export function NewVisitPage() {
     if (lastVisit.treatmentIds && lastVisit.treatmentIds.length > 0) {
       setTreatmentIds(lastVisit.treatmentIds);
     }
-    // An inpatient round is repeated from the ward-rounds card, not from this toggle, which has no Inpatient choice.
-    if (lastVisit.location === 'home' || lastVisit.location === 'clinic') {
-      setLocation(lastVisit.location);
-      locationDecidedRef.current = true;
-    }
     if (lastVisit.packageGroupId) {
       const openPkg = openPackages?.find((op) => op.packageGroupId === lastVisit.packageGroupId);
       if (openPkg) {

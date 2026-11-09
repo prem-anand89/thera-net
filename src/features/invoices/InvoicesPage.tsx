@@ -258,7 +258,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
     }
 
     return { totalOutstanding: outstanding, totalCollected: collected, totalInvoiced: invoiced, unbilledTotal: unbilled };
-  }, [filteredInvoices, invoiceStatus, paidByInvoiceId, visits, from, to, directPaymentByVisitId, supersededInvoiceIds]);
+  }, [filteredInvoices, invoiceStatus, paidByInvoiceId, visits, from, to, directPaymentByVisitId, supersededInvoiceIds, department]);
 
   // Undo for an invoice flagged paid with no payment behind it. Paying is
   // Take payment, which logs the cash.
