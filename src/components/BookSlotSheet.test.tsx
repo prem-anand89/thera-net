@@ -8,6 +8,18 @@ import { localDateTime } from '@/domain/schedule';
 const askConfirmMock = vi.fn(async () => false);
 vi.mock('@/lib/notify', () => ({ askConfirm: (...a: unknown[]) => askConfirmMock(...(a as [])), notify: { error: vi.fn(), info: vi.fn() } }));
 
+let currentDepartment = 'clinic';
+vi.mock('@/app/DepartmentContext', () => ({
+  useDepartment: () => ({
+    department: currentDepartment,
+    departments: ['clinic', 'home', 'ward'],
+    canSwitch: true,
+    setDepartment: (d: string) => {
+      currentDepartment = d;
+    },
+  }),
+}));
+
 // ---- mocks -----------------------------------------------------------------
 const scope = { myTherapistId: 't1' as string | undefined };
 const data = {
@@ -19,6 +31,7 @@ const data = {
     { id: 'p1', name: 'Priya', phone: '9820000001' },
     { id: 'p2', name: 'Noor', phone: null },
   ],
+  admissions: [] as { id: string; patientId: string; clinicId: string; wardBed?: string }[],
   closed: [] as { closedDate: string; label: string | null }[],
   catalog: [] as { id: string; name: string; active: boolean; durationMinutes?: number | null; defaultLocation?: string }[],
   clinic: {} as Record<string, unknown>,
@@ -26,6 +39,7 @@ const data = {
 const confirmBookingSlot = vi.fn(async () => 'new-id');
 const rescheduleAppointment = vi.fn(async () => undefined);
 const confirmBookingSeries = vi.fn(async () => 'series-1');
+const bookWardRounds = vi.fn(async () => 'ward-appt-1');
 const openPackages = vi.fn(() => [{ patientId: 'p1', packageTotal: 10, sessionsLogged: 6 }]);
 
 vi.mock('@/app/clinicContext', () => ({
@@ -47,6 +61,7 @@ vi.mock('@/services', () => ({
     therapists: { list: () => data.therapists },
     patients: { list: () => data.patients },
     visits: { list: () => [] },
+    admissions: { listOpen: () => data.admissions },
     clinicClosedDates: { listByClinic: () => data.closed },
     catalog: { list: () => data.catalog },
   },
@@ -54,6 +69,7 @@ vi.mock('@/services', () => ({
     confirmBookingSlot: (...args: unknown[]) => confirmBookingSlot(...(args as [])),
     rescheduleAppointment: (...args: unknown[]) => rescheduleAppointment(...(args as [])),
     confirmBookingSeries: (...args: unknown[]) => confirmBookingSeries(...(args as [])),
+    bookWardRounds: (...args: unknown[]) => bookWardRounds(...(args as [])),
   },
   dashboardService: { openPackages: () => openPackages() },
 }));
@@ -111,7 +127,7 @@ describe('BookSlotSheet', () => {
     expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  describe('Place', () => {
+  describe('Place and Department', () => {
     const fill = () => {
       fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
       fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Meera' } });
@@ -123,11 +139,16 @@ describe('BookSlotSheet', () => {
       await waitFor(() => expect(confirmBookingSlot).toHaveBeenCalled());
     };
     afterEach(() => {
+      currentDepartment = 'clinic';
       data.clinic = {};
       data.catalog = [];
+      data.admissions = [];
+      bookWardRounds.mockClear();
+      confirmBookingSlot.mockClear();
     });
 
-    it('a clinic with one place shows no Place row and books at the clinic', async () => {
+    it('shows no Place row and books at the clinic when in OP', async () => {
+      currentDepartment = 'clinic';
       render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
       expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fill();
@@ -135,30 +156,28 @@ describe('BookSlotSheet', () => {
       expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'clinic' }));
     });
 
-    it('a clinic with Home on offers Clinic and Home visit, starting from the service\'s place, and a tapped choice sticks', async () => {
-      data.clinic = { careLocations: ['clinic', 'home'] };
-      data.catalog = [{ id: 's1', name: 'Home physio', active: true, durationMinutes: 60, defaultLocation: 'home' }];
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
-      const where = screen.getByRole('radiogroup', { name: 'Place' });
-      expect(within(where).getByRole('radio', { name: 'Clinic' })).toHaveAttribute('aria-checked', 'true');
-      fireEvent.change(screen.getByLabelText(/Visit type/), { target: { value: 's1' } });
-      expect(within(where).getByRole('radio', { name: 'Home visit' })).toHaveAttribute('aria-checked', 'true');
-      fireEvent.click(within(where).getByRole('radio', { name: 'Clinic' }));
-      fireEvent.change(screen.getByLabelText(/Visit type/), { target: { value: 's1' } });
-      expect(within(where).getByRole('radio', { name: 'Clinic' })).toHaveAttribute('aria-checked', 'true');
-      fireEvent.click(within(where).getByRole('radio', { name: 'Home visit' }));
-      fill();
-      await book();
-      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'home' }));
-    });
-
-    it('a home-only clinic has no choice to make and books at home', async () => {
-      data.clinic = { careLocations: ['home'] };
+    it('shows no Place row and books at home when in Home care', async () => {
+      currentDepartment = 'home';
       render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
       expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fill();
       await book();
       expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ location: 'home' }));
+    });
+
+    it('books ward rounds for admitted patient when in IP', async () => {
+      currentDepartment = 'ward';
+      data.admissions = [{ id: 'adm-1', patientId: 'p1', clinicId: 'c1', wardBed: 'Bed 4' }];
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
+      fireEvent.change(screen.getByLabelText(/Patient \(live stay\)/), { target: { value: 'adm-1' } });
+      fireEvent.click(slot('9:00 AM'));
+      fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+      await waitFor(() => expect(bookWardRounds).toHaveBeenCalledWith(expect.objectContaining({
+        clinicId: 'c1',
+        admissionId: 'adm-1',
+        therapistId: 't1',
+      })));
     });
   });
 

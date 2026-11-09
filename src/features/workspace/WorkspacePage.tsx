@@ -71,6 +71,7 @@ import { therapistsInRows, todayVisitTotals } from './todayTotals';
 
 import { useClinicRole } from '@/app/useClinicRole';
 import { useDepartment } from '@/app/DepartmentContext';
+import { departmentHours } from '@/domain/departmentHours';
 import { inDepartment } from '@/domain/departments';
 import { runningCharges } from '@/domain/departmentMoney';
 import { collectionsLine } from '@/domain/collectionsByMethod';
@@ -919,7 +920,7 @@ export function WorkspacePage() {
             ? patientAttendance(workspaceAppointments ?? [], { patientId: openAppointment.patientId, phone: openAppointment.patientPhone }, new Date(), { excludeId: openAppointment.id })
             : null
         }
-        slotMinutes={clinic.slotDurationMinutes || 30}
+        slotMinutes={departmentHours(clinic, department).slotMinutes}
         flags={openAppointment ? patientFlags(openAppointment, flagContext) : []}
         condition={openAppointment?.patientId ? flagContext?.conditionByPatient.get(openAppointment.patientId) ?? null : null}
         canManage={Boolean(openAppointment) && (canManageBookings || openAppointment?.therapistId === scope.myTherapistId)}
@@ -966,7 +967,7 @@ export function WorkspacePage() {
           openedSlot
             ? openedSlot.time
             : confirmingRequest
-              ? requestedSlotTime(confirmingRequest, workspaceAppointments ?? [], toLocalDateStr(new Date()), clinic.slotDurationMinutes || 30) ?? undefined
+              ? requestedSlotTime(confirmingRequest, workspaceAppointments ?? [], toLocalDateStr(new Date()), departmentHours(clinic, department).slotMinutes) ?? undefined
               : undefined
         }
         prefilledPatientName={confirmingRequest?.name}
@@ -1192,7 +1193,7 @@ export function WorkspacePage() {
         >
           <TodayAppointments
             appointments={clinicAppointments}
-            slotMinutes={clinic.slotDurationMinutes || 30}
+            slotMinutes={departmentHours(clinic, department).slotMinutes}
             nextUpId={nextUpId}
             colorFor={appointmentColor}
             therapistNameFor={appointmentTherapistName}

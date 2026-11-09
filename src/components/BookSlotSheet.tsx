@@ -13,6 +13,9 @@ import { certainPatientMatch, findSimilarPatients, patientSummary } from '@/doma
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { useDepartment } from '@/app/DepartmentContext';
+import { departmentHours, closedDateAppliesTo } from '@/domain/departmentHours';
+import { therapistsInDepartment } from '@/domain/departments';
 import {
   addDays,
   appointmentMinutes,
@@ -21,7 +24,6 @@ import {
   patientAttendance,
   lengthLabel,
   generateScheduleSlots,
-  startStepMinutes,
   isClosedDay,
   isTherapistSlotOccupied,
   localDateTime,
@@ -41,7 +43,6 @@ import {
   minutesToTime,
 } from '@/domain/schedule';
 import type { Appointment, CareLocation, UUID, Patient } from '@/domain/types';
-import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation } from '@/domain/careLocations';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
 import { therapistColor } from '@/components/schedule/scheduleColors';
 
@@ -71,6 +72,7 @@ type BookSlotSheetProps = {
   prefilledPatientPhone?: string;
   /** An existing patient to book (e.g. from the Patients list). */
   prefilledPatientId?: UUID;
+  prefilledAdmissionId?: UUID;
   requestId?: UUID;
   requestNotes?: string;
   requestPreferredTimeText?: string;
@@ -105,6 +107,7 @@ export function BookSlotSheet({
   prefilledPatientName,
   prefilledPatientPhone,
   prefilledPatientId,
+  prefilledAdmissionId,
   requestId,
   requestNotes,
   requestPreferredTimeText,
@@ -118,22 +121,25 @@ export function BookSlotSheet({
   const clinicRef = useRef(clinic);
   clinicRef.current = clinic;
   const { myTherapistId } = useWorkspaceScope();
-  const slotMinutes = clinic.slotDurationMinutes || 30;
-  // Staff start times come every 15 minutes; the slot length stays the default length.
-  const stepMinutes = startStepMinutes();
-  const startHour = clinic.bookingStartHour ?? 9;
-  const endHour = clinic.bookingEndHour ?? 17;
-  // The clinic's hours with its real open intervals (a clinic that closes at midday), not just the outer envelope.
-  const clinicHoursIn = { startHour, endHour, operating: clinic.operatingHours ?? null };
+  const { department } = useDepartment();
+  const deptHours = departmentHours(clinic, department);
+  const slotMinutes = deptHours.slotMinutes;
+  const stepMinutes = deptHours.startStepMinutes;
+  const clinicHoursIn = deptHours.clinicHours;
+  const closedWeekdays = deptHours.closedWeekdays;
+  const location: CareLocation = rescheduleAppointment?.location ?? department;
   const today = toLocalDateStr(new Date());
   const isReschedule = Boolean(rescheduleAppointment);
 
   const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, () => void requestClose(), () => !busy);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [lengthMinutes, setLengthMinutes] = useState(slotMinutes);
+  const [lengthMinutes, setLengthMinutes] = useState(prefilledLengthMinutes ?? slotMinutes);
   const [therapistId, setTherapistId] = useState<UUID | ''>('');
   const [patientId, setPatientId] = useState<UUID | ''>('');
+  const [admissionId, setAdmissionId] = useState<UUID | ''>(
+    prefilledAdmissionId ?? (rescheduleAppointment?.admissionId ?? '')
+  );
   const [patientMode, setPatientMode] = useState<'find' | 'new'>('find');
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
@@ -173,7 +179,15 @@ export function BookSlotSheet({
   const [error, setError] = useState<string | null>(null);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const deptTherapists = useMemo(
+    () => therapistsInDepartment(department, therapists ?? []),
+    [department, therapists]
+  );
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
+  const openAdmissions = useLiveQuery(
+    () => (department === 'ward' ? repos.admissions.listOpen(clinic.id) : undefined),
+    [clinic.id, department]
+  );
   const services = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   // Optional visit type: a service that has a session length, so picking it sets the appointment length. Nothing else is
   // stored (appointments carry no service); services with no length set are not listed.
@@ -182,10 +196,6 @@ export function BookSlotSheet({
     [services]
   );
   const [visitTypeId, setVisitTypeId] = useState('');
-  const placesOffered = bookableLocations(clinic);
-  const [location, setLocation] = useState<CareLocation>(() => defaultBookingLocation(clinic));
-  // The service's place is only a starting point: once the person taps Where, picking a service never changes it.
-  const [locationTouched, setLocationTouched] = useState(false);
   const { lastVisitOn } = usePatientDirectory(clinic.id, true);
   // A new patient typed in may already be on file: ask before booking them as someone new.
   const similar = useMemo(
@@ -196,6 +206,30 @@ export function BookSlotSheet({
   const [differentKey, setDifferentKey] = useState<string | null>(null);
   const differentConfirmed = similar.length > 0 && differentKey === similarKey;
   const closedDates = useLiveQuery(() => repos.clinicClosedDates.listByClinic(clinic.id), [clinic.id]);
+  const deptClosedDates = useMemo(
+    () => (closedDates ?? []).filter((c) => closedDateAppliesTo(c, department)),
+    [closedDates, department]
+  );
+
+  useEffect(() => {
+    if (prefilledAdmissionId) {
+      setAdmissionId(prefilledAdmissionId);
+    }
+  }, [prefilledAdmissionId]);
+
+  useEffect(() => {
+    if (department === 'ward' && admissionId && openAdmissions && patients) {
+      const stay = openAdmissions.find((s) => s.id === admissionId);
+      if (stay) {
+        setPatientId(stay.patientId);
+        const p = patients.find((pt) => pt.id === stay.patientId);
+        if (p) {
+          setPatientName(p.name);
+          setPatientPhone(p.phone ?? '');
+        }
+      }
+    }
+  }, [department, admissionId, openAdmissions, patients]);
   const openPackages = useLiveQuery(
     () => (isOpen && repeat && patientId ? dashboardService.openPackages(clinic.id) : undefined),
     [isOpen, repeat, patientId, clinic.id]
@@ -256,8 +290,6 @@ export function BookSlotSheet({
     setShowOffHours(false);
     setConfirmPrompt(null);
     setRepeat(false);
-    setLocation(defaultBookingLocation(clinicRef.current));
-    setLocationTouched(false);
     setRepeatDays([]);
     setRepeatCount(6);
     setRepeatCountTouched(false);
@@ -318,7 +350,7 @@ export function BookSlotSheet({
 
   if (!isOpen) return null;
 
-  const closed = isClosedDay(selectedDate, clinic.closedWeekdays, closedDates ?? []);
+  const closed = isClosedDay(selectedDate, closedWeekdays, deptClosedDates);
   const isPast = (time: string) => localDateTime(selectedDate, time).getTime() < Date.now();
   const occupied = (time: string) =>
     Boolean(therapistId) && isTherapistSlotOccupied(appointments, therapistId, selectedDate, time, lengthMinutes, {
@@ -328,7 +360,7 @@ export function BookSlotSheet({
   // The time the patient asked for was taken in the meantime (nothing is locked at request time): say why it wasn't pre-selected.
   const askedMinutes = requestId ? clockTextMinutes(requestPreferredTimeText) : null;
   const askedTimeTaken = askedMinutes !== null && occupied(minutesToTime(askedMinutes));
-  const therapistRow = (therapists ?? []).find((t) => t.id === therapistId);
+  const therapistRow = (deptTherapists ?? []).find((t) => t.id === therapistId);
   const therapistName = therapistRow?.name;
   const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, clinicHoursIn);
   const clinicOpenNow = clinicIntervals(clinicHoursIn, selectedDate);
@@ -377,7 +409,7 @@ export function BookSlotSheet({
   const alreadyBooked = who && !rescheduleAppointment ? nextAppointmentFor(appointments, who, now) : null;
 
   function pickFirstAvailable() {
-    const candidates = therapistLocked || therapistId ? [therapistId].filter(Boolean) : (therapists ?? []).map((t) => t.id);
+    const candidates = therapistLocked || therapistId ? [therapistId].filter(Boolean) : (deptTherapists ?? []).map((t) => t.id);
     const found = firstAvailableSlot({
       appointments,
       therapistIds: candidates as string[],
@@ -387,10 +419,10 @@ export function BookSlotSheet({
       slotMinutes,
       lengthMinutes,
       now,
-      isClosed: (date) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed,
+      isClosed: (date) => isClosedDay(date, closedWeekdays, deptClosedDates).closed,
       ignoreAppointmentId: rescheduleAppointment?.id,
       workingFor: (id, date) =>
-        workingIntervals((therapists ?? []).find((t) => t.id === id)?.workingHours, date, clinicHoursIn),
+        workingIntervals((deptTherapists ?? []).find((t) => t.id === id)?.workingHours, date, clinicHoursIn),
     });
     if (!found) return setError('No free time in 3 weeks for this length.');
     setError(null);
@@ -401,7 +433,7 @@ export function BookSlotSheet({
     setSelectedTime(found.time);
   }
 
-  const isClosedDate = (date: string) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed;
+  const isClosedDate = (date: string) => isClosedDay(date, closedWeekdays, deptClosedDates).closed;
   const workingOn = (date: string) => workingIntervals(therapistRow?.workingHours, date, clinicHoursIn);
   const plannedRows =
     repeat && selectedTime && therapistId
@@ -440,15 +472,19 @@ export function BookSlotSheet({
     if (!selectedTime) return setError('Choose a time.');
 
     if (!rescheduleAppointment) {
-      const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
-      const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
-      const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
-      if (patientMode === 'find' && !existing) return setError('Choose a patient, or switch to New patient.');
-      if (!finalName) return setError('Enter a patient name.');
-      if (patientMode === 'new' && similar.length > 0 && !differentConfirmed) {
-        return setError('This patient may already be on file. Choose "Use this patient" or "Different person".');
+      if (department === 'ward') {
+        if (!admissionId) return setError('Choose an admitted patient first.');
+      } else {
+        const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
+        const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
+        const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
+        if (patientMode === 'find' && !existing) return setError('Choose a patient, or switch to New patient.');
+        if (!finalName) return setError('Enter a patient name.');
+        if (patientMode === 'new' && similar.length > 0 && !differentConfirmed) {
+          return setError('This patient may already be on file. Choose "Use this patient" or "Different person".');
+        }
+        if (!finalPhone) return setError('No phone on file. Enter one to confirm the booking.');
       }
-      if (!finalPhone) return setError('No phone on file. Enter one to confirm the booking.');
 
       if (repeat) {
         if (activeRows.length < 2) return setError('Repeat bookings need 2 or more sessions.');
@@ -517,6 +553,37 @@ export function BookSlotSheet({
     const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
     const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
     const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
+
+    if (department === 'ward') {
+      setBusy(true);
+      setError(null);
+      try {
+        const starts = repeat ? activeRows.map((row) => localDateTimeToIso(row.date, row.time)) : [scheduledAt];
+        const appointmentId = await bookingService.bookWardRounds({
+          clinicId: clinic.id,
+          admissionId: admissionId as UUID,
+          therapistId,
+          starts,
+          durationMinutes: lengthMinutes,
+        });
+        onBooked?.({
+          kind: 'booked',
+          appointmentId,
+          scheduledAt: starts[0],
+          durationMinutes: lengthMinutes,
+          patientName: finalName,
+          patientPhone: finalPhone,
+          therapistId,
+          ...(repeat ? { sessions: starts.length } : {}),
+        });
+        onClose();
+      } catch (submitError) {
+        setError(toFriendlyMessage(submitError));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
 
     if (repeat) {
       setBusy(true);
@@ -589,7 +656,7 @@ export function BookSlotSheet({
   const summary = selectedTime
     ? `${displayDate(selectedDate)}, ${timeLabel} · ${lengthLabel(lengthMinutes)}${therapistName ? ` · ${therapistName}` : ''}`
     : null;
-  const roster = [...(therapists ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  const roster = [...(deptTherapists ?? [])].sort((a, b) => a.name.localeCompare(b.name));
   const colorOf = (id: string) => {
     const t = roster.find((t) => t.id === id);
     return t ? therapistColor(t.id, t.color) : 'var(--slate)';
@@ -655,7 +722,48 @@ export function BookSlotSheet({
             </div>
           )}
 
-          {!isReschedule && (
+          {!isReschedule && department === 'ward' && (
+            <section aria-labelledby="book-patient">
+              <h3 id="book-patient" className={`${sectionTitle} mb-2`}>Admitted patient</h3>
+              <label className="block text-xs font-medium text-[var(--muted)]">
+                Patient (live stay)
+                <select
+                  className={`mt-1 block ${inputCls}`}
+                  value={admissionId}
+                  onChange={(e) => {
+                    const aid = e.target.value as UUID;
+                    setAdmissionId(aid);
+                    const stay = (openAdmissions ?? []).find((s) => s.id === aid);
+                    if (stay) {
+                      setPatientId(stay.patientId);
+                      const p = (patients ?? []).find((pt) => pt.id === stay.patientId);
+                      if (p) {
+                        setPatientName(p.name);
+                        setPatientPhone(p.phone ?? '');
+                      }
+                    }
+                  }}
+                >
+                  <option value="">Select admitted patient...</option>
+                  {(openAdmissions ?? []).map((stay) => {
+                    const p = (patients ?? []).find((pt) => pt.id === stay.patientId);
+                    return (
+                      <option key={stay.id} value={stay.id}>
+                        {p?.name ?? 'Unknown'} {stay.wardBed ? `(${stay.wardBed})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              {(openAdmissions ?? []).length === 0 && (
+                <p className="mt-1.5 text-xs text-[var(--rust)]">
+                  Nobody is currently admitted. Admit a patient first before booking ward rounds.
+                </p>
+              )}
+            </section>
+          )}
+
+          {!isReschedule && department !== 'ward' && (
             <section aria-labelledby="book-patient">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h3 id="book-patient" className={sectionTitle}>Patient</h3>
@@ -745,7 +853,6 @@ export function BookSlotSheet({
                   onChange={(e) => {
                     const chosen = visitTypes.find((service) => service.id === e.target.value);
                     setVisitTypeId(e.target.value);
-                    if (!locationTouched) setLocation(defaultBookingLocation(clinic, chosen));
                     if (chosen?.durationMinutes) {
                       setLengthMinutes(chosen.durationMinutes);
                       setSelectedTime(null);
@@ -761,31 +868,10 @@ export function BookSlotSheet({
                 </select>
               </label>
             )}
-            {placesOffered.length > 1 && !isReschedule && (
-              <div className="mb-2">
-                <p className="mb-1 text-xs font-medium text-[var(--muted)]">Place</p>
-                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Place">
-                  {placesOffered.map((place) => (
-                    <button
-                      key={place}
-                      type="button"
-                      role="radio"
-                      aria-checked={location === place}
-                      onClick={() => { setLocation(place); setLocationTouched(true); }}
-                      className={`min-h-9 rounded-lg border px-3 text-xs font-medium ${
-                        location === place ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
-                      }`}
-                    >
-                      {CARE_LOCATION_LABELS[place]}
-                    </button>
-                  ))}
-                </div>
-                {location === 'home' && chosenPatient && (
-                  <p className="mt-1.5 rounded-lg bg-[var(--teal-light)] px-2.5 py-1.5 text-xs text-[var(--teal-strong)]">
-                    {chosenPatient.address ? chosenPatient.address : 'No address on file yet. Add one from the patient profile.'}
-                  </p>
-                )}
-              </div>
+            {location === 'home' && chosenPatient && (
+              <p className="mb-2 rounded-lg bg-[var(--teal-light)] px-2.5 py-1.5 text-xs text-[var(--teal-strong)]">
+                {chosenPatient.address ? chosenPatient.address : 'No address on file yet. Add one from the patient profile.'}
+              </p>
             )}
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Length">
               {lengthOptions.map((minutes) => (
@@ -814,7 +900,7 @@ export function BookSlotSheet({
             </div>
             <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" role="radiogroup" aria-label="Day">
               {quickDates.map((date, index) => {
-                const dayClosed = isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed;
+                const dayClosed = isClosedDay(date, closedWeekdays, deptClosedDates).closed;
                 const value = new Date(`${date}T00:00:00`);
                 const on = selectedDate === date;
                 return (

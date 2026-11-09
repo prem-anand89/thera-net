@@ -169,6 +169,8 @@ export interface Clinic {
   operatingHours?: WorkingHours | null;
   staffBookingBufferHours?: number;
   closedWeekdays?: number[];
+  /** Home care / IP booking hours that differ from OP's (see `departmentHours`). null / absent = both follow OP. */
+  departmentHours?: Partial<Record<'home' | 'ward', DepartmentHoursOverride>> | null;
   /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */
   onboardingCompletedAt?: string | null;
   updatedAt: string;
@@ -1016,6 +1018,8 @@ export interface Appointment {
   id: UUID;
   /** Where it happens. Older cached rows lack it: read through `locationOf`. */
   location?: CareLocation;
+  /** The stay a ward round belongs to; set exactly when location is 'ward'. */
+  admissionId?: UUID | null;
   clinicId: UUID;
   patientId: UUID | null;
   patientName: string;
@@ -1048,6 +1052,8 @@ export interface ClinicClosedDate {
   clinicId: UUID;
   closedDate: string; // YYYY-MM-DD
   label: string | null;
+  /** Departments the closure applies to. null / absent = every department. */
+  departments?: CareLocation[] | null;
   removedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1194,4 +1200,15 @@ export interface ConsultationNote {
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
+}
+
+/** One department's booking hours; any field left out follows OP. Stored in `clinics.department_hours`. */
+export interface DepartmentHoursOverride {
+  startHour?: number;
+  endHour?: number;
+  /** Real open intervals per weekday (lunch break), same shape as a therapist's working hours. */
+  operating?: WorkingHours | null;
+  closedWeekdays?: number[];
+  slotMinutes?: number;
+  startStepMinutes?: number | null;
 }

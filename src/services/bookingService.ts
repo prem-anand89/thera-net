@@ -207,6 +207,31 @@ export const bookingService = {
     return data as UUID;
   },
 
+  /**
+   * Books ward rounds for an admitted patient (IP). One start books one appointment, several book a series; all-or-nothing.
+   * Returns the appointment id (one start) or the series id (several). Needs the `book_ward_rounds` migration.
+   */
+  async bookWardRounds(params: {
+    clinicId: UUID;
+    admissionId: UUID;
+    therapistId: UUID;
+    starts: string[];
+    /** Omit to use IP's own slot length. */
+    durationMinutes?: number;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('book_ward_rounds', {
+      p_clinic_id: params.clinicId,
+      p_admission_id: params.admissionId,
+      p_therapist_id: params.therapistId,
+      p_starts: params.starts,
+      p_duration_minutes: params.durationMinutes ?? null,
+    });
+    if (error) throw new Error(`Could not book the rounds: ${localiseIsoTimes(error.message)}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
   /** Cancels this session and every later open session of its series. */
   async cancelAppointmentSeries(seriesId: UUID, fromScheduledAt: string): Promise<number> {
     const supabase = supabaseOrThrow();

@@ -1301,6 +1301,13 @@ still falls through to the existing share sheet, unchanged.
     - **Repeat bookings**: booking sheet "Repeat this booking" — weekday chips + session count (defaults to sessions left in the patient's open package via `dashboardService.openPackages`), a per-date preview (`seriesDates`, `seriesProblem`) marking clashes / outside hours / past with "Find a time" or "Skip" per date; submits via `confirm_booking_series` (all-or-nothing). The details panel shows "Session k of n" and offers "Cancel this and all following sessions" (`cancel_appointment_series`). Single bookings may go outside therapist or clinic hours after a confirm; repeat (series) bookings cannot.
     - **Start times vs. length** (always 15 minutes, `START_STEP_MINUTES` / `startStepMinutes()` in `schedule.ts`; there is no setting, and the old `clinics.start_step_minutes` column is no longer read): `slot_duration_minutes` is the default appointment length (and the length of legacy rows with none); the start step is how often *staff* can start one, so 30, 45 and 60 minute sessions all fit. The schedule grids (`stepMinutes` prop on `ResourceDayGrid` / `WeekTimeGrid` / phone grids → free-time tint and tap-to-book), Find a time (`FindTimePanel`), the phone free-gap list (`freeGaps` `alignStep`) and the `BookSlotSheet` time list use the step; free time must still hold the default length where a booking is made. The booking sheet's length chips are 15 / 30 / 45 / 60 / 90 (plus the clinic default and a rescheduled appointment's own length). **Public online booking is unchanged and keeps `slot_duration_minutes`.** When an appointment is being moved in the all-therapists Week view, tap targets count only the moving appointment's own therapist (its own time is free, the whole length must fit), not "any therapist is free". `firstAvailableSlot` takes the same step (`stepMinutes`) and an optional `timeOfDay`. **Booking sheet extras**: an optional *Visit type* picker (services that have a session length; sets the length only, nothing is stored on the appointment) and a `prefilledLengthMinutes` the multi-therapist week grid passes when nobody is free for the whole slot (`onBookFree` carries `lengthMinutes`, the longest stretch anyone is free for, so the sheet opens on a length that fits). **Confirming a request with no usable day or time** (flexible, or its day has passed) opens the sheet on the earliest free slot in the patient's morning / afternoon / evening wish (looking only within the day if one was named), not on whatever day is on screen.
     - **Drag (tab+)**: mouse/pen drag a block to move it (15-minute snaps, across therapist columns in Day view, across days in the single-therapist Week view) or drag its bottom edge to resize; a dashed ghost shows the target and turns red when it isn't free / is closed / past (`dropAllowed`, which allows off-hours slots). Touch (phones and iPad): a swipe scrolls as usual; press and hold a block for 300 ms (a short buzz) to lift it, then drag it with the finger in the same 15-minute steps, across columns too (`useGridDrag` in `TimeGrid.tsx`; a non-passive `touchmove` listener on the grid stops page scrolling only while a block is lifted). Lifting and letting go without moving enters "Tap a free time to move …" mode instead: its targets come every 30 minutes (`PLACE_STEP_MINUTES`, so each is a full finger-height whatever the clinic slot) and only where the appointment's whole length fits, before closing, ignoring its own current time. While dragging (mouse or touch) the grid auto-scrolls near the top/bottom 60px of the visible area (`edgeScrollSpeed`; page scroll on phones, the grid's box elsewhere), faster closer to the edge, and the scrolled distance counts toward the drop time; a lifted block held still never auto-scrolls. The clinic's `slot_duration_minutes` still sets booking targets and default length, not drag steps. Same-therapist in-hours drops save at once with a 10 s Undo toast; dropping on another therapist, another date, or an outside-hours slot asks to confirm via `pendingMove`. Only confirmed/rescheduled appointments the viewer can manage are draggable; therapists can't reassign (server-enforced).
+    - **Department-scoped Schedule & Booking (`useDepartment()`)**:
+      - The Schedule tab and calendar grid display appointments strictly for the active department (`inDepartment(department, a)`).
+      - Operating hours, slot durations, and start steps resolve per department via `departmentHours(clinic, department)`: OP defaults to clinic base settings (`slot_duration_minutes`, `start_step_minutes` defaulting to 15m), Home care defaults to 60m slots and 30m steps (or overrides in `clinics.home_booking_slots`), and IP (ward) defaults to 30m slots and 15m steps (or overrides in `clinics.ward_booking_slots`).
+      - Clinic closed dates can restrict scope to specific departments via `clinic_closed_dates.departments` (`closedDateAppliesTo(closedDate, department)`).
+      - Therapist columns and selector chips scope to clinicians assigned to the department (`therapistsInDepartment(department, therapists)`).
+      - In `BookSlotSheet`, the legacy Place radiogroup is removed; booking location matches the active department (`'clinic'` for OP, `'home'` for Home care). For home care, the patient's home address note is surfaced.
+      - In IP (`department === 'ward'`), "+ Book", `BookFab`, and empty grid slots open an admitted patient picker (`PickAdmittedPatientDialog`) to select an active stay and book ward rounds via `bookingService.bookWardRounds` with `appointments.admission_id`. (Migration `20261109100000_department_booking_slots.sql`).
     - **`BookSlotSheet` layout (phone-first)**: a fixed header (title, close ×) and footer (what will be booked, "Fri, 2 Oct, 11:00 AM · 30m · Dr Aishwarya", then a full-width action), with the body scrolling between them; 94dvh bottom sheet on phones, centred dialog from `sm:`. Sections: Patient (Existing / New toggle), Therapist and length (therapist chips with their Schedule colours, length chips), Day (7 day cards, closed days greyed, "Other date" for the calendar), Time (Morning / Afternoon / Evening groups, 4 columns on phones; taken or past times faded; "First available"), then a "Repeat this booking" switch. A request being confirmed shows what the patient asked for at the top.
     - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (30/45/60/90 minutes, plus the clinic slot if different — always labelled in minutes via `lengthLabel()`, never "1h"/"1h30") drives the occupied check; times that already passed or overlap the therapist's bookings for the chosen length are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
     - **Clinic closures**: weekly closed days stay in Settings, shown as an "Open days" strip (`OpenDaysStrip`: seven connected cells, Mon first, filled = open, with "Closed on Sun" in words under it) at the top of Hours & closures (`clinics.closed_weekdays` still stores the closed ones); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
@@ -3342,6 +3349,13 @@ Team's Invite form locks (with the same informational-only copy) once
     - **Repeat bookings**: booking sheet "Repeat this booking" — weekday chips + session count (defaults to sessions left in the patient's open package via `dashboardService.openPackages`), a per-date preview (`seriesDates`, `seriesProblem`) marking clashes / outside hours / past with "Find a time" or "Skip" per date; submits via `confirm_booking_series` (all-or-nothing). The details panel shows "Session k of n" and offers "Cancel this and all following sessions" (`cancel_appointment_series`). Single bookings may go outside therapist or clinic hours after a confirm; repeat (series) bookings cannot.
     - **Start times vs. length** (always 15 minutes, `START_STEP_MINUTES` / `startStepMinutes()` in `schedule.ts`; there is no setting, and the old `clinics.start_step_minutes` column is no longer read): `slot_duration_minutes` is the default appointment length (and the length of legacy rows with none); the start step is how often *staff* can start one, so 30, 45 and 60 minute sessions all fit. The schedule grids (`stepMinutes` prop on `ResourceDayGrid` / `WeekTimeGrid` / phone grids → free-time tint and tap-to-book), Find a time (`FindTimePanel`), the phone free-gap list (`freeGaps` `alignStep`) and the `BookSlotSheet` time list use the step; free time must still hold the default length where a booking is made. The booking sheet's length chips are 15 / 30 / 45 / 60 / 90 (plus the clinic default and a rescheduled appointment's own length). **Public online booking is unchanged and keeps `slot_duration_minutes`.** When an appointment is being moved in the all-therapists Week view, tap targets count only the moving appointment's own therapist (its own time is free, the whole length must fit), not "any therapist is free". `firstAvailableSlot` takes the same step (`stepMinutes`) and an optional `timeOfDay`. **Booking sheet extras**: an optional *Visit type* picker (services that have a session length; sets the length only, nothing is stored on the appointment) and a `prefilledLengthMinutes` the multi-therapist week grid passes when nobody is free for the whole slot (`onBookFree` carries `lengthMinutes`, the longest stretch anyone is free for, so the sheet opens on a length that fits). **Confirming a request with no usable day or time** (flexible, or its day has passed) opens the sheet on the earliest free slot in the patient's morning / afternoon / evening wish (looking only within the day if one was named), not on whatever day is on screen.
     - **Drag (tab+)**: mouse/pen drag a block to move it (15-minute snaps, across therapist columns in Day view, across days in the single-therapist Week view) or drag its bottom edge to resize; a dashed ghost shows the target and turns red when it isn't free / is closed / past (`dropAllowed`, which allows off-hours slots). Touch (phones and iPad): a swipe scrolls as usual; press and hold a block for 300 ms (a short buzz) to lift it, then drag it with the finger in the same 15-minute steps, across columns too (`useGridDrag` in `TimeGrid.tsx`; a non-passive `touchmove` listener on the grid stops page scrolling only while a block is lifted). Lifting and letting go without moving enters "Tap a free time to move …" mode instead: its targets come every 30 minutes (`PLACE_STEP_MINUTES`, so each is a full finger-height whatever the clinic slot) and only where the appointment's whole length fits, before closing, ignoring its own current time. While dragging (mouse or touch) the grid auto-scrolls near the top/bottom 60px of the visible area (`edgeScrollSpeed`; page scroll on phones, the grid's box elsewhere), faster closer to the edge, and the scrolled distance counts toward the drop time; a lifted block held still never auto-scrolls. The clinic's `slot_duration_minutes` still sets booking targets and default length, not drag steps. Same-therapist in-hours drops save at once with a 10 s Undo toast; dropping on another therapist, another date, or an outside-hours slot asks to confirm via `pendingMove`. Only confirmed/rescheduled appointments the viewer can manage are draggable; therapists can't reassign (server-enforced).
+    - **Department-scoped Schedule & Booking (`useDepartment()`)**:
+      - The Schedule tab and calendar grid display appointments strictly for the active department (`inDepartment(department, a)`).
+      - Operating hours, slot durations, and start steps resolve per department via `departmentHours(clinic, department)`: OP defaults to clinic base settings (`slot_duration_minutes`, `start_step_minutes` defaulting to 15m), Home care defaults to 60m slots and 30m steps (or overrides in `clinics.home_booking_slots`), and IP (ward) defaults to 30m slots and 15m steps (or overrides in `clinics.ward_booking_slots`).
+      - Clinic closed dates can restrict scope to specific departments via `clinic_closed_dates.departments` (`closedDateAppliesTo(closedDate, department)`).
+      - Therapist columns and selector chips scope to clinicians assigned to the department (`therapistsInDepartment(department, therapists)`).
+      - In `BookSlotSheet`, the legacy Place radiogroup is removed; booking location matches the active department (`'clinic'` for OP, `'home'` for Home care). For home care, the patient's home address note is surfaced.
+      - In IP (`department === 'ward'`), "+ Book", `BookFab`, and empty grid slots open an admitted patient picker (`PickAdmittedPatientDialog`) to select an active stay and book ward rounds via `bookingService.bookWardRounds` with `appointments.admission_id`. (Migration `20261109100000_department_booking_slots.sql`).
     - **`BookSlotSheet` layout (phone-first)**: a fixed header (title, close ×) and footer (what will be booked, "Fri, 2 Oct, 11:00 AM · 30m · Dr Aishwarya", then a full-width action), with the body scrolling between them; 94dvh bottom sheet on phones, centred dialog from `sm:`. Sections: Patient (Existing / New toggle), Therapist and length (therapist chips with their Schedule colours, length chips), Day (7 day cards, closed days greyed, "Other date" for the calendar), Time (Morning / Afternoon / Evening groups, 4 columns on phones; taken or past times faded; "First available"), then a "Repeat this booking" switch. A request being confirmed shows what the patient asked for at the top.
     - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (30/45/60/90 minutes, plus the clinic slot if different — always labelled in minutes via `lengthLabel()`, never "1h"/"1h30") drives the occupied check; times that already passed or overlap the therapist's bookings for the chosen length are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
     - **Clinic closures**: weekly closed days stay in Settings, shown as an "Open days" strip (`OpenDaysStrip`: seven connected cells, Mon first, filled = open, with "Closed on Sun" in words under it) at the top of Hours & closures (`clinics.closed_weekdays` still stores the closed ones); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
@@ -4286,80 +4300,7 @@ it final.
 #### `payments`
 ```sql
 id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
-amount_paise    bigint NOT NULL
-method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
-received_date   date NOT NULL
-notes           text (NULLABLE)
-advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
-created_by, updated_by  uuid (NULLABLE)
-updated_at      timestamptz NOT NULL
-```
-A payment toward one visit's bill — cash/UPI collection recorded without
-requiring an invoice, and supports partial payments (an amount less than
-the visit's bill). No `invoice_id` column: this same table is also how a
-*partial* payment against an **invoiced** visit's bill is recorded (an
-invoice itself has no amount-paid field — see `invoice_payments` above),
-so a payment stays keyed to the visit it was collected for either way. For
-an invoice spanning several visits, one entered amount is allocated across
-those visits' `payments` rows in date order — the shared
-`allocateAcrossVisits()` helper in `src/services/advanceService.ts` (both
-`paymentService.recordInvoicePayment` and advance draw-down use it, so the
-two paths can't allocate differently). `advance_id` is set only when this
-payment was drawn down from a patient's advance balance rather than
-collected fresh; `visit_id` still stays required either way, so
-`computeVisitPaymentState` needs no special-casing for advance-funded
-payments.
-
-#### `patient_advances`
-```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
-amount_paise    bigint NOT NULL (> 0)
-method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
-received_date   date NOT NULL
-receipt_no      text (NULLABLE) — no numbered series yet, see below
-notes           text (NULLABLE)
-status          text NOT NULL default 'open' — 'open' | 'exhausted' | 'refunded' | 'void'
-deleted         boolean NOT NULL default false
-created_by, updated_by  uuid (NULLABLE)
-updated_at      timestamptz NOT NULL
-UNIQUE (id, clinic_id) — backs the composite FK on payments.advance_id below
-```
-Money received ahead of treatment. **Not a `payments` row until drawn
-down** — `computeVisitPaymentState` and everything derived from it (badges,
-the needs-receipt queue, dashboard KPIs) stays untouched by an advance
-until a real `payments` row is written against a real visit
-(`advanceService.applyAdvance`), which stamps that row's `advance_id` and
-flips this row's `status` to `'exhausted'` once the balance reaches zero.
-Remaining balance is computed, not stored:
-`amount_paise − Σ payments.amount_paise where advance_id = this.id`.
-`payments.advance_id` is a **composite** FK to `(id, clinic_id)` rather
-than a plain `references patient_advances(id)`, so a payment can never
-reference a different clinic's advance even by a client bug — RLS already
-scopes reads correctly, but this closes the write-side gap outright.
-`method` uses the `PaymentMethod` vocabulary (`'cash'|'upi'|…`), not the
-older `PaymentMode` (`'Cash'|'Card'|'UPI'|'Insurance'`) that belongs only
-to `Invoice.paymentMode` — easy to confuse. **No gap-free numbered receipt
-series yet** — `receipt_no` exists but is unused; the printed
-`AdvanceReceiptPrintPage` identifies a receipt by date + a short slice of
-its id instead. A real counter can be added later with no data migration
-if it turns out to matter. Entry point: Patient Profile's "Record advance"
-button; `TakePaymentDialog` also surfaces "₹X advance available — apply"
-and draws down (oldest advance first) when a patient with an open balance
-is being collected from elsewhere.
-
-#### `settlements`
-```sql
-id                     uuid PRIMARY KEY
-clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
-year, month            int NOT NULL
-amount_received_paise  bigint NOT NULL
-received_date          date (NULLABLE)
-notes                  text (NULLABLE)
-created_by, updated_by uuid (NULLABLE)
+clinic_
 updated_at             timestamptz (NULLABLE)
 ```
 Per-month partner-hospital (HV) settlement record, for the Monthly Report's

@@ -11,6 +11,10 @@ import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
 import { ConfirmDialog, Panel } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { useDepartment } from '@/app/DepartmentContext';
+import { departmentHours, closedDateAppliesTo } from '@/domain/departmentHours';
+import { inDepartment, therapistsInDepartment } from '@/domain/departments';
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { toFriendlyMessage } from '@/lib/errors';
 import { repos, bookingService } from '@/services';
 import {
@@ -36,14 +40,13 @@ import {
   type SlotHoursStatus,
   type ClosedRange,
   dayLoad,
-  startStepMinutes,
   clockTextMinutes,
   requestedSlotTime,
   firstAvailableSlot,
   clinicIntervals,
   clinicGaps,
 } from '@/domain/schedule';
-import type { Appointment, AppointmentRequest, UUID, WorkingHours } from '@/domain/types';
+import type { Admission, Appointment, AppointmentRequest, Patient, UUID, WorkingHours } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { usePermissions } from '@/app/usePermissions';
@@ -115,6 +118,8 @@ type SheetState = {
   onlyTherapistIds?: UUID[];
   /** Open with this length selected (the stretch they are free for) instead of the default slot length. */
   lengthMinutes?: number;
+  admissionId?: UUID;
+  patientId?: UUID;
   requestId?: UUID;
   requestAsked?: string;
   patientName?: string;
@@ -124,6 +129,69 @@ type SheetState = {
   /** Snapshot taken when the sheet opens, so a sync mid-edit can't reset it. */
   reschedule?: Appointment;
 };
+
+function PickAdmittedPatientDialog({
+  isOpen,
+  onClose,
+  onPick,
+  clinicId,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onPick: (stay: Admission, patient: Patient) => void;
+  clinicId: UUID;
+}) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, onClose);
+  const stays = useLiveQuery(() => (isOpen ? repos.admissions.listOpen(clinicId) : undefined), [clinicId, isOpen]);
+  const patients = useLiveQuery(() => (isOpen ? repos.patients.list(clinicId) : undefined), [clinicId, isOpen]);
+
+  if (!isOpen) return null;
+
+  const byPatient = new Map((patients ?? []).map((p) => [p.id, p]));
+  const openStays = stays ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="ward-book-title" className="w-full max-w-md rounded-xl bg-[var(--surface)] p-5 shadow-xl">
+        <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+          <h2 id="ward-book-title" className="text-base font-semibold text-[var(--ink)]">Book ward rounds</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-[var(--muted)] hover:text-[var(--ink)]" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div className="mt-3 max-h-80 overflow-y-auto">
+          {openStays.length === 0 ? (
+            <p className="py-4 text-center text-sm text-[var(--muted)]">
+              Nobody is currently admitted. Admit a patient first before booking ward rounds.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--border)]">
+              {openStays.map((stay) => {
+                const patient = byPatient.get(stay.patientId);
+                if (!patient) return null;
+                return (
+                  <li key={stay.id}>
+                    <button
+                      type="button"
+                      onClick={() => onPick(stay, patient)}
+                      className="flex w-full items-center justify-between p-3 text-left hover:bg-[var(--paper)]"
+                    >
+                      <div>
+                        <p className="font-medium text-[var(--ink)]">{patient.name}</p>
+                        {stay.wardBed && <p className="text-xs text-[var(--muted)]">{stay.wardBed}</p>}
+                      </div>
+                      <span className="text-xs font-medium text-[var(--teal)]">Select →</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function longDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
@@ -184,16 +252,23 @@ export function ScheduleBookingsView({
   const canManageAll = scope.isClinicWideView;
   const isTherapist = scope.role === 'therapist';
   const myTherapistId = scope.myTherapistId;
-  const slotMinutes = clinic.slotDurationMinutes || 30;
-  // Staff start times come every 15 minutes; the slot length stays the default length.
-  const stepMinutes = startStepMinutes();
-  const hours = useMemo(
-    () => ({ startHour: clinic.bookingStartHour ?? 9, endHour: clinic.bookingEndHour ?? 17, operating: clinic.operatingHours ?? null }),
-    [clinic.bookingStartHour, clinic.bookingEndHour, clinic.operatingHours]
-  );
+  const { department } = useDepartment();
+  const deptHours = useMemo(() => departmentHours(clinic, department), [clinic, department]);
+  const slotMinutes = deptHours.slotMinutes;
+  const stepMinutes = deptHours.startStepMinutes;
+  const hours = deptHours.clinicHours;
+  const closedWeekdays = deptHours.closedWeekdays;
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const deptTherapists = useMemo(
+    () => therapistsInDepartment(department, therapists ?? []),
+    [department, therapists]
+  );
   const allAppointments = useLiveQuery(() => repos.appointments.listByClinic(clinic.id), [clinic.id]);
+  const scopedAppointments = useMemo(
+    () => (allAppointments ?? []).filter((a) => inDepartment(department, a)),
+    [allAppointments, department]
+  );
   const flagContext = usePatientFlagContext(clinic.id, allAppointments ?? EMPTY_APPOINTMENTS);
   const { mrnoFor, patients: directoryPatients } = usePatientDirectory(clinic.id);
   const doNotMessagePhones = useMemo(
@@ -207,6 +282,10 @@ export function ScheduleBookingsView({
     [canManageAll, clinic.id]
   );
   const closedDates = useLiveQuery(() => repos.clinicClosedDates.listByClinic(clinic.id), [clinic.id]);
+  const deptClosedDates = useMemo(
+    () => (closedDates ?? []).filter((c) => closedDateAppliesTo(c, department)),
+    [closedDates, department]
+  );
   const shiftAssignments = useLiveQuery(
     () => (canManageAll ? repos.therapistShiftAssignments.listByClinic(clinic.id) : undefined),
     [canManageAll, clinic.id]
@@ -218,10 +297,10 @@ export function ScheduleBookingsView({
 
   const roster = useMemo(
     () =>
-      [...(therapists ?? [])]
+      [...deptTherapists]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((therapist) => ({ id: therapist.id, name: therapist.name, active: therapist.active, phone: therapist.phone ?? null, workingHours: therapist.workingHours ?? null, color: therapistColor(therapist.id, therapist.color) })),
-    [therapists]
+    [deptTherapists]
   );
   const rosterById = useMemo(() => new Map(roster.map((t) => [t.id, t])), [roster]);
   const workingFor = useCallback(
@@ -247,7 +326,7 @@ export function ScheduleBookingsView({
     if (!canManageAll || isTherapist || search.therapist || (search.mode ?? 'day') !== 'day' || showOffToday) return null;
     const activeIds = roster.filter((t) => t.active !== false).map((t) => t.id);
     const withAppointments = new Set(
-      (allAppointments ?? [])
+      (scopedAppointments)
         .filter((a) => a.status !== 'cancelled' && a.therapistId && dateForAppointment(a) === date)
         .map((a) => a.therapistId as string)
     );
@@ -256,7 +335,7 @@ export function ScheduleBookingsView({
       activeIds,
       workingIds: workingTodayIds(activeIds, (id) => workingFor(id, date).length > 0, withAppointments),
     });
-  }, [canManageAll, isTherapist, search.therapist, search.mode, showOffToday, roster, allAppointments, date, workingFor, clinic.id]);
+  }, [canManageAll, isTherapist, search.therapist, search.mode, showOffToday, roster, scopedAppointments, date, workingFor, clinic.id]);
   const therapistParam = search.therapist ?? (implicitSelection?.ids.length ? implicitSelection.ids.join(',') : undefined);
   const offTodayCount = implicitSelection?.offCount ?? 0;
 
@@ -281,7 +360,6 @@ export function ScheduleBookingsView({
     );
   }, [scope.role, myTherapistId, search.therapist, roster]);
   const [showCancelled, setShowCancelled] = useState(false);
-  const scopedAppointments = useMemo(() => allAppointments ?? [], [allAppointments]);
   const monthAppointments = useMemo(
     () =>
       scopedAppointments.filter(
@@ -413,16 +491,16 @@ export function ScheduleBookingsView({
   );
 
   const closedFor = useCallback(
-    (day: string) => isClosedDay(day, clinic.closedWeekdays, closedDates ?? []),
-    [clinic.closedWeekdays, closedDates]
+    (day: string) => isClosedDay(day, closedWeekdays, deptClosedDates),
+    [closedWeekdays, deptClosedDates]
   );
   const closedToday = closedFor(date);
   // The clinic's midday closure on a date, drawn on the grid even over a therapist whose own hours run through it.
   const closuresFor = useCallback((day: string) => clinicGaps(clinicIntervals(hours, day)), [hours]);
   const dayNow = date === today ? now.minutes : null;
   const closures = useMemo(
-    () => groupClosedRanges(closedDates ?? []).filter((range) => range.to >= today).slice(0, 8),
-    [closedDates, today]
+    () => groupClosedRanges(deptClosedDates).filter((range) => range.to >= today).slice(0, 8),
+    [deptClosedDates, today]
   );
 
   // Column headers + rail: how full each therapist's day is (capacity bar +
@@ -526,7 +604,7 @@ export function ScheduleBookingsView({
         }
         const todayIso = toLocalDateStr(new Date());
         const conflicts = appointmentsOutsideHours({
-          appointments: allAppointments ?? [],
+          appointments: scopedAppointments,
           therapistId,
           hours: value,
           clinicHours: hours,
@@ -539,7 +617,7 @@ export function ScheduleBookingsView({
         }
         setPendingHoursSave({ therapistId, value, count: conflicts.length, resolve, reject });
       }),
-    [hoursTherapistId, allAppointments, hours, slotMinutes]
+    [hoursTherapistId, scopedAppointments, hours, slotMinutes]
   );
   const [startNoteFor, setStartNoteFor] = useState<Appointment | null>(null);
   const [pendingMove, setPendingMove] = useState<{
@@ -555,6 +633,8 @@ export function ScheduleBookingsView({
   }, [undo]);
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
   const [declined, setDeclined] = useState<DeclinedRequest | null>(null);
+  const [pickAdmittedOpen, setPickAdmittedOpen] = useState(false);
+  const [pendingWardSlot, setPendingWardSlot] = useState<SheetState | null>(null);
 
   const selectedAppointment = selectedId ? scopedAppointments.find((a) => a.id === selectedId) ?? null : null;
   const seriesLabel = useMemo(() => {
@@ -629,6 +709,15 @@ export function ScheduleBookingsView({
       ...(singleTherapist && !input.therapistId ? { therapistId: singleTherapist.id } : {}),
       ...input,
     });
+  }
+
+  function handleStartBooking(slotParams: SheetState = {}) {
+    if (department === 'ward' && !slotParams.admissionId) {
+      setPendingWardSlot(slotParams);
+      setPickAdmittedOpen(true);
+    } else {
+      openBooking(slotParams);
+    }
   }
 
   const bookedNoteForRequest = (request: AppointmentRequest) => bookedNoteFor(request, allAppointments ?? []);
@@ -949,7 +1038,7 @@ export function ScheduleBookingsView({
                 Reminders
               </button>
             )}
-            <button type="button" className={`${tabPrimary} hidden tab:inline-flex`} onClick={() => openBooking()}>+ Book</button>
+            <button type="button" className={`${tabPrimary} hidden tab:inline-flex`} onClick={() => handleStartBooking()}>+ Book</button>
           </>
         }
       />
@@ -1193,7 +1282,7 @@ export function ScheduleBookingsView({
                     selectedId={selectedId}
                     onSelect={(a) => setSelectedId(a.id)}
                     canBookFor={canBookFor}
-                    onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
+                    onBook={({ time, therapistId }) => handleStartBooking({ date, time, therapistId })}
                     summaryFor={summaryFor}
                     workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
@@ -1215,7 +1304,7 @@ export function ScheduleBookingsView({
                     colorFor={colorFor}
                     selectedId={selectedId}
                     onSelect={(a) => setSelectedId(a.id)}
-                    onBook={({ date: day, time }) => openBooking({ date: day, time, therapistId: threeDayTherapist.id })}
+                    onBook={({ date: day, time }) => handleStartBooking({ date: day, time, therapistId: threeDayTherapist.id })}
                     isColleague={!canBookFor(threeDayTherapist.id)}
                     onOpenDay={(day) => {
                       setPhoneView('day');
@@ -1246,7 +1335,7 @@ export function ScheduleBookingsView({
                       colorFor={colorFor}
                       selectedId={selectedId}
                       onSelect={(a) => setSelectedId(a.id)}
-                      onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
+                      onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => handleStartBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
                       onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
                       workingFor={(day) => workingFor(singleTherapist.id, day)}
                       drag={dragOptions}
@@ -1277,7 +1366,7 @@ export function ScheduleBookingsView({
                         canBookFor,
                         workingForTherapist: (therapistId, day) => workingFor(therapistId, day),
                         onBookFree: ({ date: day, time, freeTherapistIds, lengthMinutes }) =>
-                          openBooking({ date: day, time, onlyTherapistIds: freeTherapistIds as UUID[], lengthMinutes }),
+                          handleStartBooking({ date: day, time, onlyTherapistIds: freeTherapistIds as UUID[], lengthMinutes }),
                       }}
                     />
                   )
@@ -1298,7 +1387,7 @@ export function ScheduleBookingsView({
                     selectedId={selectedId}
                     onSelect={(a) => setSelectedId(a.id)}
                     canBookFor={canBookFor}
-                    onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
+                    onBook={({ time, therapistId }) => handleStartBooking({ date, time, therapistId })}
                     summaryFor={summaryFor}
                     workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
@@ -1318,7 +1407,7 @@ export function ScheduleBookingsView({
                 stepMinutes={stepMinutes}
                 closed={closedToday}
                 nowMinutes={dayNow}
-                onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}
+                onPick={({ therapistId, time }) => { setFindTime(false); handleStartBooking({ date, time, therapistId }); }}
                 workingFor={(therapistId) => workingFor(therapistId, date)}
               />
             )}
@@ -1448,6 +1537,8 @@ export function ScheduleBookingsView({
         onlyTherapistIds={sheet?.onlyTherapistIds}
         prefilledPatientName={sheet?.patientName}
         prefilledPatientPhone={sheet?.patientPhone}
+        prefilledPatientId={sheet?.patientId}
+        prefilledAdmissionId={sheet?.admissionId}
         requestId={sheet?.requestId}
         requestNotes={sheet?.requestNotes}
         requestPreferredTimeText={sheet?.requestPreferredTimeText}
@@ -1461,6 +1552,27 @@ export function ScheduleBookingsView({
           }
           setConfirmed(result);
           setSchedule({ view: 'schedule', date: toLocalDateStr(new Date(result.scheduledAt)) });
+        }}
+      />
+
+      <PickAdmittedPatientDialog
+        isOpen={pickAdmittedOpen}
+        clinicId={clinic.id}
+        onClose={() => {
+          setPickAdmittedOpen(false);
+          setPendingWardSlot(null);
+        }}
+        onPick={(stay, patient) => {
+          setPickAdmittedOpen(false);
+          const pending = pendingWardSlot ?? {};
+          setPendingWardSlot(null);
+          openBooking({
+            ...pending,
+            admissionId: stay.id,
+            patientId: stay.patientId,
+            patientName: patient.name,
+            patientPhone: patient.phone ?? undefined,
+          });
         }}
       />
 
@@ -1480,7 +1592,7 @@ export function ScheduleBookingsView({
         open={hoursTherapistId !== null}
         therapistName={hoursTherapistId ? rosterById.get(hoursTherapistId)?.name ?? '' : ''}
         value={hoursTherapistId ? rosterById.get(hoursTherapistId)?.workingHours : null}
-        clinic={{ ...hours, closedWeekdays: clinic.closedWeekdays }}
+        clinic={{ ...hours, closedWeekdays }}
         onSave={handleHoursSave}
         onClose={() => setHoursTherapistId(null)}
       />
@@ -1492,7 +1604,7 @@ export function ScheduleBookingsView({
           therapistName={rosterById.get(myTherapistId)?.name ?? ''}
           clinicId={clinic.id}
           currentWorkingHours={rosterById.get(myTherapistId)?.workingHours ?? null}
-          clinic={{ ...hours, closedWeekdays: clinic.closedWeekdays }}
+          clinic={{ ...hours, closedWeekdays }}
           onClose={() => setMyHoursOpen(false)}
         />
       )}
@@ -1502,7 +1614,7 @@ export function ScheduleBookingsView({
         therapistId={assignShiftTherapistId ?? ''}
         therapistName={assignShiftTherapistId ? rosterById.get(assignShiftTherapistId)?.name ?? '' : ''}
         clinicId={clinic.id}
-        closedWeekdays={clinic.closedWeekdays}
+        closedWeekdays={closedWeekdays}
         onClose={() => setAssignShiftTherapistId(null)}
       />
 
@@ -1639,7 +1751,7 @@ export function ScheduleBookingsView({
 
       {/* Phones: Book is a round floating button above the bottom nav (the tab-row button starts at `tab:`). */}
       {isPhone && activeView === 'schedule' && (
-        <BookFab onClick={() => openBooking()} />
+        <BookFab onClick={() => handleStartBooking()} />
       )}
     </div>
   );
