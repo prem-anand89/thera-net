@@ -163,6 +163,11 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - After saving: the "Visit logged" screen (`VisitLoggedCard.tsx`) displays a compact receipt summary (patient, MRN, service, date, therapist, and payment status badge), a 2-column grid of patient-specific actions (Add clinical note, Give bill, Request review, and Another visit for {patient}), and a bottom exit block with "Log visit for next patient" (for fast back-to-back logging) and a clear "Done" dismissal button. One solid button at a time (Take payment if owed, else the note, else Give bill); a visit billed elsewhere reads "Billing handled separately" (never "Settled"). "Another visit" and "next patient" clear everything the last visit filled in (services, condition, treatments, notes, discount, payment choice) and restart the unsaved-changes guard from the blank form; "Another visit" offers the patient's open package again.
 - **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)
 - **Package session tracking** (1/3, 2/3, etc.) with ₹0 continuations for subsequent sessions
+- **Department-scoped New Visit (`useDepartment()`)**:
+  - The Clinic / Home toggle is removed from the form header. The visit's location is automatically determined by the active department (`'home'` for Home care, `'clinic'` for OP).
+  - Inpatient sessions start from "Log session" on an admitted patient stay, retaining the fixed Inpatient tag (`activeAdmission`, saving `location: 'ward'` and `admission_id`).
+  - The therapist picker scopes to therapists assigned to the visit's department (`therapistsInDepartment(visitDept, therapists)`).
+  - Opening a visit link for an appointment or repeated visit from another department (e.g. completing a home appointment while active in OP) is allowed and sets the visit's location to match that record.
 - **Reference panel** showing patient's last visit and open-package progress
 
 #### Edit Visit

@@ -17,10 +17,12 @@ import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
+import { useDepartment } from '@/app/DepartmentContext';
+import { type Department, therapistsInDepartment } from '@/domain/departments';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
-import { bookableLocations, defaultBookingLocation, locationOf, offersBookingChoice } from '@/domain/careLocations';
+import { locationOf } from '@/domain/careLocations';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { syncEngine } from '@/sync/engine';
@@ -213,9 +215,9 @@ export function isNewVisitDirty(input: {
   return !input.justSaved && input.touched && input.signature !== input.baseline;
 }
 
-/** Where a new visit starts when nothing else says: Clinic, or Home for a clinic that only does home visits. */
-function startingLocation(clinic: Parameters<typeof defaultBookingLocation>[0]): 'clinic' | 'home' {
-  return defaultBookingLocation(clinic) === 'home' ? 'home' : 'clinic';
+/** Where a new visit starts: Home care for home department, otherwise clinic. */
+function startingLocation(department: Department): 'clinic' | 'home' {
+  return department === 'home' ? 'home' : 'clinic';
 }
 
 export function NewVisitPage() {
@@ -286,7 +288,8 @@ export function NewVisitPage() {
   const today = toLocalDateStr(new Date());
   const [visitDate, setVisitDate] = useState(today);
   const [therapistId, setTherapistId] = useState('');
-  const [location, setLocation] = useState<'clinic' | 'home'>(() => startingLocation(clinic));
+  const { department } = useDepartment();
+  const [location, setLocation] = useState<'clinic' | 'home'>(() => startingLocation(department));
   // True once something other than the starting default has set the place: the appointment, a repeated visit or a
   // tap. After that, picking a service never changes it.
   const locationDecidedRef = useRef(false);
@@ -508,11 +511,11 @@ export function NewVisitPage() {
     if (prefill.therapistId) setTherapistId(prefill.therapistId);
     setVisitDate(prefill.visitDate);
     const apptPlace = locationOf(fromAppointment);
-    if (offersBookingChoice(clinic) && bookableLocations(clinic).includes(apptPlace) && apptPlace !== 'ward') {
+    if (apptPlace === 'home' || apptPlace === 'clinic') {
       setLocation(apptPlace);
       locationDecidedRef.current = true;
     }
-  }, [fromAppointment, clinic]);
+  }, [fromAppointment]);
 
   // "Repeat last visit": pre-fill patient/therapist/condition from the
   // visit being repeated, then — once that patient's open packages have
@@ -532,6 +535,11 @@ export function NewVisitPage() {
     [search.admissionId]
   );
   const activeAdmission = admission && !admission.deleted && !admission.dischargedOn && patient?.id === admission.patientId ? admission : null;
+  const visitDept: Department = activeAdmission ? 'ward' : (location === 'home' ? 'home' : 'clinic');
+  const therapistList = useMemo(
+    () => therapistsInDepartment(visitDept, therapists ?? []),
+    [visitDept, therapists]
+  );
   const prefillPatient = useLiveQuery(
     () => (search.patientId ? repos.patients.get(search.patientId) : undefined),
     [search.patientId]
@@ -601,8 +609,8 @@ export function NewVisitPage() {
     return [...rows].sort((a, b) => b.visitDate.localeCompare(a.visitDate))[0];
   }, [patientVisits]);
   const lastActiveTherapistId = useMemo(
-    () => (lastVisit && therapists?.some((t) => t.id === lastVisit.therapistId) ? lastVisit.therapistId : undefined),
-    [lastVisit, therapists]
+    () => (lastVisit && therapistList.some((t) => t.id === lastVisit.therapistId) ? lastVisit.therapistId : undefined),
+    [lastVisit, therapistList]
   );
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const statusByInvoiceId = useMemo(
@@ -753,15 +761,6 @@ export function NewVisitPage() {
   //   openPackages re-emits.
   // - The repeat-visit shortcut fills its own rows and is skipped here.
   const catalogItems = useMemo(() => catalog ?? [], [catalog]);
-  // The first service's usual place sets Where, unless the appointment, a repeated visit or a tap already did.
-  const firstServiceId = rows[0]?.serviceCatalogId;
-  useEffect(() => {
-    if (locationDecidedRef.current || !offersBookingChoice(clinic) || !firstServiceId) return;
-    const item = catalogItems.find((c) => c.id === firstServiceId);
-    if (!item) return;
-    const place = defaultBookingLocation(clinic, item);
-    setLocation(place === 'home' ? 'home' : 'clinic');
-  }, [firstServiceId, catalogItems, clinic]);
   const rowsPatientRef = useRef<UUID | null>(null);
   useEffect(() => {
     if (!patient) {
@@ -805,7 +804,7 @@ export function NewVisitPage() {
     setTherapistId(myTherapistId);
   }, [patient, therapistId, myTherapistId]);
 
-  const activeTherapists = useMemo(() => (therapists ?? []).filter((t) => t.active), [therapists]);
+  const activeTherapists = useMemo(() => therapistList.filter((t) => t.active), [therapistList]);
   // A clinic with one active therapist has nobody to assist.
   const showAssistant = activeTherapists.length > 1;
   const splitEnabled = clinic.enableTherapistSplit !== false;
@@ -998,7 +997,7 @@ export function NewVisitPage() {
     setTreatmentIds([]);
     setPaymentChoice(activeAdmission ? 'pending' : 'paid');
     setPaymentRef('');
-    setLocation(startingLocation(clinic));
+    setLocation(startingLocation(department));
     locationDecidedRef.current = false;
     setCustomConditionOpen(false);
     setError(null);
@@ -1342,7 +1341,6 @@ export function NewVisitPage() {
       </div>
     );
   }
-  const therapistList = therapists ?? [];
   const therapistChosen = therapistList.some((t) => t.id === therapistId);
   const clinicalHidden = role === 'front_desk' && !clinicalDetailsExpanded;
 
@@ -1383,7 +1381,7 @@ export function NewVisitPage() {
 
   const applyLastVisit = () => {
     if (!lastVisit) return;
-    if (lastVisit.therapistId && therapists?.some((t) => t.id === lastVisit.therapistId)) {
+    if (lastVisit.therapistId && therapistList.some((t) => t.id === lastVisit.therapistId)) {
       setTherapistId(lastVisit.therapistId);
     }
     if (lastVisit.condition) setCondition(lastVisit.condition);
@@ -1392,7 +1390,7 @@ export function NewVisitPage() {
       setTreatmentIds(lastVisit.treatmentIds);
     }
     // An inpatient round is repeated from the ward-rounds card, not from this toggle, which has no Inpatient choice.
-    if (lastVisit.location && lastVisit.location !== 'ward' && offersBookingChoice(clinic)) {
+    if (lastVisit.location === 'home' || lastVisit.location === 'clinic') {
       setLocation(lastVisit.location);
       locationDecidedRef.current = true;
     }
@@ -1683,23 +1681,10 @@ export function NewVisitPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
-          {activeAdmission ? (
+          {activeAdmission && (
             <Pill tone="teal">
               Inpatient{activeAdmission.wardBed ? ` · ${activeAdmission.wardBed}` : ''}
             </Pill>
-          ) : offersBookingChoice(clinic) && (
-            <SegmentedToggle
-              value={location}
-              onChange={(next) => {
-                locationDecidedRef.current = true;
-                setLocation(next);
-              }}
-              className="inline-flex shrink-0 w-auto"
-              options={bookableLocations(clinic).map((l) => ({
-                value: l as 'clinic' | 'home',
-                label: l === 'home' ? 'Home visit' : 'Clinic',
-              }))}
-            />
           )}
         </div>
 
@@ -1957,7 +1942,7 @@ export function NewVisitPage() {
             onChange={changeRows}
             catalog={catalogItems}
             openPackages={openPackages ?? []}
-            therapists={therapists ?? []}
+            therapists={therapistList}
             primaryId={therapistId}
             showAssistant={showAssistant}
             errors={rowErrors}
