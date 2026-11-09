@@ -526,15 +526,33 @@ export const bookingService = {
   },
 
   /** Marks every day in [from, to] closed (holiday / one-off closure). */
-  async setClosedDates(clinicId: UUID, from: string, to: string, label: string | null): Promise<void> {
+  async setClosedDates(
+    clinicId: UUID,
+    from: string,
+    to: string,
+    label: string | null,
+    departments?: CareLocation[] | null
+  ): Promise<void> {
     const supabase = supabaseOrThrow();
-    const { error } = await supabase.rpc('set_clinic_closed_dates', {
+    const params: Record<string, unknown> = {
       p_clinic_id: clinicId,
       p_from: from,
       p_to: to,
       p_label: label,
-    });
-    if (error) throw new Error(`Could not save closed days: ${error.message}`);
+    };
+    if (departments && departments.length > 0) {
+      params.p_departments = departments;
+    }
+    const { error } = await supabase.rpc('set_clinic_closed_dates', params);
+    if (error) {
+      if ((error.code === 'PGRST202' || error.code === '42883') && 'p_departments' in params) {
+        delete params.p_departments;
+        const { error: retryError } = await supabase.rpc('set_clinic_closed_dates', params);
+        if (retryError) throw new Error(`Could not save closed days: ${retryError.message}`);
+      } else {
+        throw new Error(`Could not save closed days: ${error.message}`);
+      }
+    }
     syncEngine.schedule(0);
   },
 

@@ -17,16 +17,18 @@ import { PlanSection } from './PlanSection';
 import { ClinicProfileSection, ClinicRegionSection, ClinicHoursSection, AfterVisitSection, PaymentsSection, CareLocationsSection } from './ClinicSections';
 import { BillingSection, PartnerSection } from './BillingSections';
 import { PatientCommsSection } from './BookingSections';
+import { DepartmentHoursSection } from './DepartmentHoursSection';
 import { HistoricalData, DataBackup, DangerZone } from './DataSections';
 import { Therapists } from './TeamSection';
 
 /** Sections that edit a slice of the clinic row and report unsaved edits.
  *  A tab can hold more than one (Payments & billing holds payments, invoicing and partner). */
-type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'afterVisit' | 'careLocations' | 'payments' | 'billing' | 'partner' | 'patientComms';
+type FormKey = 'profile' | 'clinicHours' | 'departmentHours' | 'clinicRegion' | 'afterVisit' | 'careLocations' | 'payments' | 'billing' | 'partner' | 'patientComms';
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
   profile: 'general',
   clinicHours: 'booking',
+  departmentHours: 'booking',
   clinicRegion: 'general',
   afterVisit: 'general',
   careLocations: 'general',
@@ -369,6 +371,7 @@ export function SettingsPage() {
   // and Account act immediately per row or button and never report dirty.
   const setProfileDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'profile', d)), []);
   const setClinicHoursDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicHours', d)), []);
+  const setDepartmentHoursDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'departmentHours', d)), []);
   const setClinicRegionDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicRegion', d)), []);
   const setAfterVisitDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'afterVisit', d)), []);
   const setCareLocationsDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'careLocations', d)), []);
@@ -520,6 +523,7 @@ export function SettingsPage() {
           {activeTab === 'booking' && (
             <>
               <ClinicHoursSection onDirtyChange={setClinicHoursDirty} />
+              <DepartmentHoursSection onDirtyChange={setDepartmentHoursDirty} />
               <PatientCommsSection onDirtyChange={setPatientCommsDirty} />
             </>
           )}

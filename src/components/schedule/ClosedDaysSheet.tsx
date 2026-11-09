@@ -5,6 +5,8 @@ import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/componen
 import { toFriendlyMessage } from '@/lib/errors';
 import { bookingService } from '@/services';
 import type { UUID } from '@/domain/types';
+import { useClinic } from '@/app/clinicContext';
+import { clinicDepartments, DEPARTMENT_LABELS, type Department } from '@/domain/departments';
 
 /** Mark one day or a range closed (holiday, training day, renovation). */
 export function ClosedDaysSheet({
@@ -19,9 +21,12 @@ export function ClosedDaysSheet({
   onClose: () => void;
 }) {
   const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose);
+  const clinic = useClinic();
+  const depts = clinicDepartments(clinic);
   const [from, setFrom] = useState(initialDate);
   const [to, setTo] = useState(initialDate);
   const [label, setLabel] = useState('');
+  const [selectedDepts, setSelectedDepts] = useState<Department[]>(() => [...depts]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +35,7 @@ export function ClosedDaysSheet({
     setFrom(initialDate);
     setTo(initialDate);
     setLabel('');
+    setSelectedDepts([...depts]);
     setError(null);
     setBusy(false);
     // Reset only when the sheet opens. The parent passes inline callbacks and
@@ -44,10 +50,14 @@ export function ClosedDaysSheet({
 
   async function save() {
     if (!from || !to || to < from) return setError('End date can\'t be before the start.');
+    if (depts.length > 1 && selectedDepts.length === 0) {
+      return setError('Pick at least one department.');
+    }
     setBusy(true);
     setError(null);
     try {
-      await bookingService.setClosedDates(clinicId, from, to, label.trim() || null);
+      const deptsToSave = depts.length > 1 && selectedDepts.length < depts.length ? selectedDepts : null;
+      await bookingService.setClosedDates(clinicId, from, to, label.trim() || null, deptsToSave);
       onClose();
     } catch (saveError) {
       setError(toFriendlyMessage(saveError));
@@ -99,6 +109,30 @@ export function ClosedDaysSheet({
             />
           </Field>
         </div>
+        {depts.length > 1 && (
+          <div className="mt-3">
+            <span className="block text-xs font-medium text-[var(--muted)]">Applies to</span>
+            <div className="mt-1 flex flex-wrap gap-4" role="group" aria-label="Applies to">
+              {depts.map((d) => (
+                <label key={d} className="inline-flex items-center gap-1.5 text-sm text-[var(--ink)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-[var(--border)] text-[var(--teal)] focus:ring-[var(--teal)]"
+                    checked={selectedDepts.includes(d)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedDepts((prev) => [...prev, d]);
+                      } else {
+                        setSelectedDepts((prev) => prev.filter((x) => x !== d));
+                      }
+                    }}
+                  />
+                  {DEPARTMENT_LABELS[d]}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="mt-3 text-xs text-[var(--muted)]">
           Closed every week on the same day? Set that in{' '}
           <Link to="/settings" search={{ tab: 'booking' }} className="text-[var(--teal)] hover:underline">
