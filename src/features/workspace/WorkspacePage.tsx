@@ -1273,7 +1273,11 @@ export function WorkspacePage() {
         />
       )}
 
-      {department === 'ward' && <InpatientsCard />}
+      {department === 'ward' && (
+        <InpatientsCard
+          viewTherapistId={workspaceMineOnly ? scope.myTherapistId : (visitsFilterId || undefined)}
+        />
+      )}
 
       <SectionCard
         title="Today's visits"
