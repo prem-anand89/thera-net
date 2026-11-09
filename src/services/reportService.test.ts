@@ -665,6 +665,45 @@ describe('reportService.toCsv — configurable share labels', () => {
     // Header and data rows must stay column-aligned once Post Tax is spliced out.
     expect(csv.split('\n')[1].split(',').length).toBe(header.split(',').length);
   });
+
+  it('outputs per-department sections and a final "All departments" total line when departmentSections is passed', async () => {
+    const repos = makeFakeRepos([
+      visit({ therapistId: PREM, location: 'clinic', actualBillPaise: rs(1000), postTaxPaise: rs(1000) }),
+      visit({ therapistId: AISH, location: 'ward', actualBillPaise: rs(2000), postTaxPaise: rs(2000) }),
+    ]);
+    const service = createReportService(repos);
+    const opReport = await service.monthly(CLINIC, JULY, 'clinic');
+    const wardReport = await service.monthly(CLINIC, JULY, 'ward');
+    const combined = await service.monthly(CLINIC, JULY);
+
+    const csv = service.toCsv(combined, {
+      partnerSplit: false,
+      therapistSplit: false,
+      departmentSections: [
+        { label: 'OP', report: opReport },
+        { label: 'IP', report: wardReport },
+      ],
+      allDepartmentsTotal: combined.total,
+    });
+
+    const lines = csv.split('\n');
+    // Header
+    expect(lines[0]).toBe('"Therapist","Bill Amount","Net","Visits","Patients"');
+    // OP Section label row
+    expect(lines[1]).toBe('"OP","","","",""');
+    // OP Prem row
+    expect(lines[2]).toBe('"Prem","1000","1000","1","1"');
+    // OP total row
+    expect(lines[3]).toBe('"OP Total","1000","1000","1","1"');
+    // IP Section label row
+    expect(lines[4]).toBe('"IP","","","",""');
+    // IP Aishwarya row
+    expect(lines[5]).toBe('"Aishwarya","2000","2000","1","1"');
+    // IP total row
+    expect(lines[6]).toBe('"IP Total","2000","2000","1","1"');
+    // All departments combined line at the bottom
+    expect(lines[7]).toBe('"All departments","3000","3000","2","1"');
+  });
 });
 
 describe('clinicShareLabels', () => {

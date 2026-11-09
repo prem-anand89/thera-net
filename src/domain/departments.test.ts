@@ -73,10 +73,10 @@ describe('effectiveIpInvoicePrefix', () => {
 });
 
 describe('servicesInDepartment and normalizeServiceDepartments', () => {
-  const sAll = { id: 's1', departments: null };
-  const sWard = { id: 's2', departments: ['ward'] };
-  const sOp = { id: 's3', departments: ['clinic'] };
-  const sNone = { id: 's4' };
+  const sAll: { id: string; departments?: string[] | null } = { id: 's1', departments: null };
+  const sWard: { id: string; departments?: string[] | null } = { id: 's2', departments: ['ward'] };
+  const sOp: { id: string; departments?: string[] | null } = { id: 's3', departments: ['clinic'] };
+  const sNone: { id: string; departments?: string[] | null } = { id: 's4' };
 
   it('servicesInDepartment filters services offered in a department', () => {
     expect(servicesInDepartment('ward', [sAll, sWard, sOp, sNone]).map((s) => s.id)).toEqual(['s1', 's2', 's4']);

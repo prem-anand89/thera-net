@@ -368,11 +368,11 @@ queued with a visible error.
 - **Rounding**: half-up to the rupee, once per visit — rollups reconcile by construction
 
 #### Invoice Issuance
-- **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
+- **Server-issued gap-free sequential numbers** per clinic per FY per series (`'main'` and `'ip'`). Inpatient bills use `clinics.ip_invoice_prefix` (defaults to `${invoicePrefix}IP`, e.g., `BMIP/26-27/0001`) and increment an independent `invoice_counters` row (`series = 'ip'`). Configurable in Settings → Billing & Invoicing with real-time preview and uppercase alphanumeric validation.
 - **An invoice must match its visits** (`check_invoice_matches_visits`, called by `issue_invoice` and `amend_invoice` after
-  the visits are stamped): at least one visit; all visits one patient, and that patient the invoice's, matched by permanent id (`patientId` on the snapshot; an amendment must keep the original bill's patient), since the Patient ID can be edited after issue; a total above
+  the visits are stamped): at least one visit; all visits one patient, and that patient the invoice's, matched by permanent id (`patientId` on the snapshot; an amendment must keep the original bill's patient), since the Patient ID can be edited after issue; **all visits belong to a single department** (`location`), strictly preventing mixed-department bills; a total above
   zero ("Nothing to bill"); the total equals the sum of the visits' bills; the line items add up to the total. A refusal
-  rolls back the call, so the gap-free counter is not used. Existing invoices (three ₹0 ones among them) are untouched
+  rolls back the call, so the gap-free counter is not used. Existing invoices (three ₹0 ones among them) are untouched. `AmendInvoiceDialog` limits available visits to uninvoiced visits from the invoice's own department.
 - **Clinical details come from every visit billed**, including the package sessions issuing pulls in (`invoiceService.visitsOnInvoice`; `src/domain/invoiceClinical.ts`): place of service is the one place all
   the visits were at, or `mixed` (with `locations`, printed "Clinic and Home"); `ward` is a third place; treatments are
   every treatment done, once each, plus each visit's own words (200 characters at most); the referral block (diagnosis,
@@ -527,6 +527,7 @@ queued with a visible error.
 - **Monthly report** shows HV settlement card for variance tracking
 
 #### Advance Payments
+- **Department-scoped advances** (`patient_advances.department`): Each advance belongs to a specific department (`'clinic'`, `'home'`, or `'ward'`). Record advance dialog defaults to the active department. Draw-downs (`advanceService.applyAdvance`) enforce single-department matching: an advance can only pay for visits in the same department; cross-department draw-downs are rejected with a friendly error. `TakePaymentDialog` displays and applies advance balances scoped strictly to the visit's department. `AdvanceReceiptPrintPage` displays the department and scopes balance computations accordingly.
 - **Record ahead of treatment**: Patient Profile's "Record advance" button
   logs money received with no visit attached yet — amount, method, date,
   optional note — and prints its own small receipt (`ADVANCE RECEIPT`,
@@ -564,7 +565,7 @@ queued with a visible error.
   - Legacy `CareLocationSplitCard` and `domain/careLocationSplit.ts` ("By place" card) are removed in favor of the universal department switch.
 - **Per-therapist metrics**: Bill, BM Share, TDS, Post-Tax, HV, unique patients, total. Each row also carries `visitCount` (visits as primary), `patientsTreated` (visits the therapist delivered at least one service line on, or as primary for visits without lines; each visit once per therapist, so a primary who also delivers counts once) and `assistedVisitCount` (delivered a line without being the primary). The Total row's `patientsTreated` is the number of visits (no double count) and its `assistedVisitCount` is 0. Every therapist who delivered a live line in the period has a row (zero money when nothing moved to them: ₹0 visits, therapist split off), so assisted work is always listed. **Monthly statement / comparison table:** an "Assisted" column (from `assistedVisitCount`) sits next to Visits and appears only when any row has assisted visits, with the note "Total counts each visit once; therapists' patients treated can add up to more."; Bill/Share/TDS/Post-Tax/Partner stay "billed under my name" and Shared/Net come from the pay base (`MonthlyReportTable`, `TherapistComparisonTable`). `treatedTherapists` in `domain/visitLines` is the one rule for who was treated on a visit.
 - **Service mix** (`dashboardService.serviceUsage`, "frequently used services"): a visit with service lines contributes one entry per live line (count +1, amount = that line's net from `lineNets`, so the discount lands pro rata); a visit without lines keeps its single entry. The name comes from the catalog, else the line's name snapshot.
-- **CSV export** capability
+- **CSV export** capability: for multi-department clinics (`clinicDepartments(clinic).length > 1`), the accountant's monthly statement CSV export groups rows into per-department sections (OP, Home care, IP) with individual section totals, followed by an `"All departments"` combined total line.
 - **Attribution audit tab** (Reports → "Attribution audit"): a per-visit
   ledger of every rupee a revenue share, a legacy manual split or automatic
   package attribution moved between therapists that month — see §2b.
@@ -795,7 +796,7 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 | `team` | Two views on a `Segmented` control: **Team members** (therapists, invites, logins; the unlinked-login banner, shown inside the list: below the plan's login limit it says to add their email, at the limit — `atSeatCap` in `domain/seatCap.ts`, also used by the landing tab and the setup checklist — it says the plan's logins are all in use, and a team member's "Email for login" is locked with the plan that has room; at the limit Settings no longer lands on Team just for unlinked therapists, and the setup steps "Invite your team" / "Link every therapist" turn optional and say to upgrade, ids unchanged) and **Working hours** (pending shift requests, the **Weekly shifts** card, shift templates), with a count badge on Shifts while shift requests are pending. `?teamView=members|shifts` (parsed like `catalogView`; unknown values fall back to members) opens a view; Schedule's "N shift requests pending · Review" link and Settings search for shift words open Shifts. Default is Team members. |
 | `services` (label **Services & treatments**; the key and URL stay `services`) | Two views on a `Segmented` control, **Services** (`catalogView=packages`: card "Services and prices") and **Treatments** (`catalogView=treatments`). One sentence under each title says where the list shows up (services: what patients pay for, picked on a visit and printed on bills; treatments: what you did in the session, shown as quick picks on each visit). No count pills. Wording: "Stop offering" / "Offer again" for services, "Hide" / "Show" for treatments and referral sources, "Inactive (N)" and "Show hidden (N)" for the stopped ones, "One visit" (never "Single session"). |
 | `booking` (label **Schedule & Booking**) | Hours & closures (open days, clinic hours, appointment length, holidays), **Online booking page** (the booking link, and the WhatsApp Business sub-block) |
-| `billing` (label **Payments & billing**; never hidden on any plan) | Three cards in this order: **Payments** (every plan: UPI collection — show-QR switch, UPI ID, payee name, QR image. There is no default payment method setting: payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last, else UPI — `defaultPaymentMethod()` in `domain/paymentMethods.ts`), **Invoicing** (card title was "Modules & invoicing" and then "Billing & invoicing"; GST number and who can issue — the invoice prefix moved to the Clinic code in Clinic profile, the fiscal year to Region and daily email, and the bill policy was removed; below the invoicing tier it is a compact `LockedCard` — the card with its title and "Available on the Solo plan and above.", so search still lands on it), **Partner revenue share** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan and above", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. Before such a save (and before **Turn off partner mode**) it counts, from local data and against the unsaved settings, the visits that would change (`visitService.countUninvoicedSplitChanges`); with N > 0 a `ConfirmDialog` says "This recalculates N visits that have no invoice yet. Invoices already issued stay as they are." and Cancel saves nothing; with N = 0 it saves without asking. The count and `recomputeUninvoicedSplits` share one rule (`uninvoicedSplitRates` + `visitNeedsSplitUpdate` in `domain/split.ts`), so the number shown is the number updated. If the visit update fails after the settings saved, the card says so and offers **Update visits again**. |
+| `billing` (label **Payments & billing**; never hidden on any plan) | Three cards in this order: **Payments** (every plan: UPI collection — show-QR switch, UPI ID, payee name, QR image. There is no default payment method setting: payment screens start from "Collected by {partner}" when the partner collects, else the method this device used last, else UPI — `defaultPaymentMethod()` in `domain/paymentMethods.ts`), **Invoicing** (card title was "Modules & invoicing" and then "Billing & invoicing"; GST number, who can issue, and for clinics with Inpatient care (`ward`), an **Inpatient (IP) invoice prefix** field with uppercase alphanumeric validation and sample bill number hint that writes to `clinics.ip_invoice_prefix` with an independent IP counter series — the main invoice prefix moved to the Clinic code in Clinic profile, the fiscal year to Region and daily email, and the bill policy was removed; below the invoicing tier it is a compact `LockedCard` — the card with its title and "Available on the Solo plan and above.", so search still lands on it), **Partner revenue share** — the one home for every partner setting: a "We work with a partner" switch (`has_partner`), partner name and logo, who collects patient payments (`partner_collects`), share labels, split %, tax %, TDS basis (`PartnerSection`). Shown on every plan: without `revenueSplit` the switch is disabled with "Available on the Clinic plan and above", and a clinic that still has partner mode on there sees "Partner settings need the Clinic plan" with **Turn off partner mode** (clears `has_partner` and `partner_collects`, re-applies the split; visits already marked "Collected by partner" keep it). Turning partner mode on or off, or changing split %, tax % or TDS basis (`partnerSplitChanged`), re-applies the split to visits not yet invoiced on Save; renaming the partner or a label does not. Before such a save (and before **Turn off partner mode**) it counts, from local data and against the unsaved settings, the visits that would change (`visitService.countUninvoicedSplitChanges`); with N > 0 a `ConfirmDialog` says "This recalculates N visits that have no invoice yet. Invoices already issued stay as they are." and Cancel saves nothing; with N = 0 it saves without asking. The count and `recomputeUninvoicedSplits` share one rule (`uninvoicedSplitRates` + `visitNeedsSplitUpdate` in `domain/split.ts`), so the number shown is the number updated. If the visit update fails after the settings saved, the card says so and offers **Update visits again**. |
 | `account` | Plan, historical data import, backup, danger zone |
 
 Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` → services with the treatments view, and every old referral-sources link (`?tab=referrals`, `?catalogView=referrals` with or without a tab) → **general at the Referral sources card** (`SettingsSearch.card = 'referrals'`; `SettingsPage` scrolls to `REFERRALS_CARD_ID`). Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
@@ -816,6 +817,8 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 
 #### Catalog (Settings → Services & treatments)
 One settings tab with two lists, **Services** and **Treatments** (the same words as the visit screen's "Services" and "Treatments" cards). **Referral sources** moved to General (they are about patients, not services; the card keeps its name, with "How patients found you" as its first line). `parseSettingsSearch` sends old `?tab=services|treatments` links to the matching view and every old referral link to General at that card.
+
+- **Services per department** (`ServiceFormSheet.tsx`): for clinics with more than one care location (`clinicDepartments(clinic).length > 1`), the service add/edit sheet displays department checkboxes (OP, Home care, IP). None ticked or all ticked saves `departments: null` (meaning the service is offered across every department); ticking a specific subset saves `departments: text[]`. Services list displays department tags for scoped items. Service pickers on New Visit (`NewVisitPage`), Edit Visit (`EditVisitModal`), and Schedule booking (`BookSlotSheet`) filter items with `servicesInDepartment()` so staff only select services offered in that department.
 
 **Treatments** (`TreatmentsView.tsx`): one wrap of chips, most used first (the same 90-day order the visit screen's quick picks use, `dashboardService.treatmentUsageCounts`; alphabetical for ties). "+ Add" in the card header and tapping a chip open the same small `SheetDialog`: a name (live name check; "Make it active again" for a hidden one) and, when editing, a **Active** switch. The line "Tap a treatment to rename or hide it." sits under the chips; hidden treatments are in a collapsed "Inactive (N)" footer (`HiddenItemsFooter`) and keep their names on past visits. Counts ("312" = visits in the last 90 days) show by default; **Show usage** (`useShowUsage('treatments')`, a per-device view switch, on by default) hides them. The card is capped at 640px wide on desktop.
 
@@ -1672,6 +1675,7 @@ address, phone, email, gst_no, logo_path  text (NULLABLE)
 tagline                   text (NULLABLE, max 60) — optional line under the clinic's name on its letterhead
 partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
 invoice_prefix              text NOT NULL (e.g., "BM") — the Clinic code (invoice half); made from the clinic name at sign-up
+ip_invoice_prefix           text (NULLABLE) — custom prefix for IP invoices (e.g. "BMIP"); defaults to {invoicePrefix}IP
 bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
@@ -1871,6 +1875,7 @@ duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
 default_location  text NOT NULL (default 'clinic'; clinic|home|ward) — where the service usually happens: the starting Place on a booking, set in the service form's "Usually done at" (only shown when the clinic has more than one place)
                  (per session for a package); snapshotted onto visit_items
 validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
+departments      text[] (NULLABLE) — department ids (clinic, home, ward) offering this service; null or all = everywhere
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
@@ -2240,8 +2245,9 @@ already-issued bill's record, not starting a fresh collection.
 ```sql
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 fy_label        text NOT NULL
+series          text NOT NULL default 'main' — 'main' or 'ip'
 next_seq        int NOT NULL (default 1)
-PRIMARY KEY (clinic_id, fy_label)
+PRIMARY KEY (clinic_id, fy_label, series)
 ```
 
 ---
@@ -2307,6 +2313,7 @@ id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
 amount_paise    bigint NOT NULL (> 0)
+department      text NOT NULL default 'clinic' — 'clinic' | 'home' | 'ward': department the advance belongs to
 method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
 received_date   date NOT NULL
 receipt_no      text (NULLABLE) — no numbered series yet, see below
@@ -3715,6 +3722,7 @@ address, phone, email, gst_no, logo_path  text (NULLABLE)
 tagline                   text (NULLABLE, max 60) — optional line under the clinic's name on its letterhead
 partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
 invoice_prefix              text NOT NULL (e.g., "BM") — the Clinic code (invoice half); made from the clinic name at sign-up
+ip_invoice_prefix           text (NULLABLE) — custom prefix for IP invoices (e.g. "BMIP"); defaults to {invoicePrefix}IP
 bm_split_pct                numeric NOT NULL (default 75)
 tax_pct                     numeric NOT NULL (default 10)
 tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
@@ -3914,6 +3922,7 @@ duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
 default_location  text NOT NULL (default 'clinic'; clinic|home|ward) — where the service usually happens: the starting Place on a booking, set in the service form's "Usually done at" (only shown when the clinic has more than one place)
                  (per session for a package); snapshotted onto visit_items
 validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
+departments      text[] (NULLABLE) — department ids (clinic, home, ward) offering this service; null or all = everywhere
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
@@ -4283,8 +4292,9 @@ already-issued bill's record, not starting a fresh collection.
 ```sql
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 fy_label        text NOT NULL
+series          text NOT NULL default 'main' — 'main' or 'ip'
 next_seq        int NOT NULL (default 1)
-PRIMARY KEY (clinic_id, fy_label)
+PRIMARY KEY (clinic_id, fy_label, series)
 ```
 
 ---
@@ -4350,6 +4360,7 @@ id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
 amount_paise    bigint NOT NULL (> 0)
+department      text NOT NULL default 'clinic' — 'clinic' | 'home' | 'ward': department the advance belongs to
 method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'partner' (collected by the partner; not cash in hand)
 received_date   date NOT NULL
 receipt_no      text (NULLABLE) — no numbered series yet, see below

@@ -292,6 +292,8 @@ export function createReportService(repos: Repos) {
          *  backward compatibility; pass false to drop the column. */
         showPostTax?: boolean;
         therapistSplit?: boolean;
+        departmentSections?: { label: string; report: MonthlyReport }[];
+        allDepartmentsTotal?: TherapistMonthRow;
       } = {}
     ): string {
       const labels = opts.labels ?? { own: 'Clinic', partner: 'Partner' };
@@ -321,6 +323,20 @@ export function createReportService(repos: Repos) {
         r.visitCount,
         r.uniquePatients,
       ];
+
+      if (opts.departmentSections && opts.departmentSections.length > 1 && opts.allDepartmentsTotal) {
+        const rows: (string | number)[][] = [header];
+        for (const { label, report: sectionReport } of opts.departmentSections) {
+          rows.push([label, ...Array(header.length - 1).fill('')]);
+          rows.push(...sectionReport.rows.map(line));
+          rows.push(line({ ...sectionReport.total, therapistName: `${label} Total` }));
+        }
+        rows.push(line({ ...opts.allDepartmentsTotal, therapistName: 'All departments' }));
+        return rows
+          .map((cells) => cells.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(','))
+          .join('\n');
+      }
+
       return [header, ...report.rows.map(line), line(report.total)]
         .map((cells) => cells.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(','))
         .join('\n');

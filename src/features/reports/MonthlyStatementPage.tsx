@@ -23,6 +23,7 @@ import {
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { toFriendlyMessage } from '@/lib/errors';
 import { useDepartment } from '@/app/DepartmentContext';
+import { clinicDepartments, DEPARTMENT_LABELS } from '@/domain/departments';
 
 export function MonthlyStatementPage() {
   const clinic = useClinic();
@@ -64,14 +65,33 @@ export function MonthlyStatementPage() {
     [partnerSplit, report]
   );
 
-  function downloadCsv() {
+  const clinicDepts = useMemo(() => clinicDepartments(clinic), [clinic]);
+
+  async function downloadCsv() {
     if (!report) return;
-    const blob = new Blob(
-      [reportService.toCsv(report, { labels, partnerSplit, showPostTax, therapistSplit })],
-      {
-        type: 'text/csv',
-      }
-    );
+    let csv: string;
+    if (clinicDepts.length > 1) {
+      const departmentSections = await Promise.all(
+        clinicDepts.map(async (d) => ({
+          label: DEPARTMENT_LABELS[d],
+          report: await reportService.monthly(clinic.id, selected, d),
+        }))
+      );
+      const combined = await reportService.monthly(clinic.id, selected);
+      csv = reportService.toCsv(report, {
+        labels,
+        partnerSplit,
+        showPostTax,
+        therapistSplit,
+        departmentSections,
+        allDepartmentsTotal: combined.total,
+      });
+    } else {
+      csv = reportService.toCsv(report, { labels, partnerSplit, showPostTax, therapistSplit });
+    }
+    const blob = new Blob([csv], {
+      type: 'text/csv',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -126,7 +146,7 @@ export function MonthlyStatementPage() {
           <button
             type="button"
             className={`${btnSecondary} shrink-0 whitespace-nowrap`}
-            onClick={downloadCsv}
+            onClick={() => void downloadCsv()}
           >
             Export CSV
           </button>

@@ -432,7 +432,7 @@ describe('ServicesView - ServiceFormSheet departments', () => {
   it('shows department checkboxes when clinic has multiple departments and saves normalized departments', async () => {
     clinicObj = { id: 'c1', careLocations: ['clinic', 'home', 'ward'] };
     catalogItems = [];
-    render(<ServicesView onDirtyChange={vi.fn()} />);
+    render(<ServicesView />);
 
     // Click "+ Add"
     fireEvent.click(screen.getByRole('button', { name: /\+ Add/i }));
@@ -461,7 +461,7 @@ describe('ServicesView - ServiceFormSheet departments', () => {
   it('does not show department checkboxes when clinic has only clinic (OP)', () => {
     clinicObj = { id: 'c1', careLocations: ['clinic'] };
     catalogItems = [];
-    render(<ServicesView onDirtyChange={vi.fn()} />);
+    render(<ServicesView />);
 
     fireEvent.click(screen.getByRole('button', { name: /\+ Add/i }));
     expect(screen.queryByLabelText('OP')).not.toBeInTheDocument();
