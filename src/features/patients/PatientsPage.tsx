@@ -7,7 +7,6 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatAmount } from '@/domain/money';
-import { homeCareOn, locationOf, offersLocationChoice } from '@/domain/careLocations';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientSheet } from './AddPatientSheet';
@@ -86,7 +85,7 @@ export function PatientsList() {
   // Book button that always failed with "Not authorized."
   const canBook = isAdmin || isFrontDesk;
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useState<'all' | 'mine' | 'home'>('all');
+  const [chip, setChip] = useState<'all' | 'mine'>('all');
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
@@ -162,15 +161,6 @@ export function PatientsList() {
     return map;
   }, [allVisits]);
 
-  // "Home" chip: patients with a home address on file or any home visit. A patient can be here and in All.
-  const showHomeChip = homeCareOn(clinic) && offersLocationChoice(clinic);
-  const homePatientIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const v of allVisits ?? []) if (!v.deleted && locationOf(v) === 'home') ids.add(v.patientId);
-    for (const p of all ?? []) if (p.address?.trim()) ids.add(p.id);
-    return ids;
-  }, [allVisits, all]);
-
   const statusByInvoiceId = useMemo(
     () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
     [invoicePayments]
@@ -240,7 +230,6 @@ export function PatientsList() {
     if (chip === 'mine') {
       return stats?.latestVisit.therapistId === myTherapistId;
     }
-    if (chip === 'home' && showHomeChip) return homePatientIds.has(p.id);
     return true;
   });
   const hidden = (all ?? []).filter((p) => p.deletedAt);
@@ -319,7 +308,6 @@ export function PatientsList() {
             [
               { key: 'all', label: 'All' },
               { key: 'mine', label: 'My patients' },
-              ...(showHomeChip ? [{ key: 'home', label: 'Home' } as const] : []),
             ] as const
           ).map((c) => (
             <button
