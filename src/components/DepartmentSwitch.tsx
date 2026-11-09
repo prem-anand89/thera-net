@@ -10,10 +10,10 @@ const BAND_COLORS: Record<Department, string> = {
 };
 
 /**
- * Universal department switch. Rendered in the Shell header next to the clinic pill
- * when the user has more than one department to choose from.
- * Desktop: segmented control.
- * Phone: compact trigger button with dropdown menu.
+ * Universal place switch (OP · Home · IP). Rendered in the Shell header
+ * when the user has more than one place to choose from.
+ * Wide desktop (desktop:): segmented control.
+ * Below desktop: compact trigger button with dropdown menu.
  */
 export function DepartmentSwitch() {
   const { department, departments, canSwitch, setDepartment } = useDepartment();
@@ -40,8 +40,8 @@ export function DepartmentSwitch() {
 
   return (
     <div className="flex shrink-0 items-center">
-      {/* Desktop segmented switch (sm and up) */}
-      <div className="hidden sm:inline-flex" role="group" aria-label="Department switch">
+      {/* Wide desktop segmented switch (desktop and up) */}
+      <div className="hidden desktop:inline-flex" role="group" aria-label="Place switch">
         <div className={segTrack}>
           {departments.map((dept) => {
             const active = dept === department;
@@ -60,16 +60,16 @@ export function DepartmentSwitch() {
         </div>
       </div>
 
-      {/* Phone compact dropdown trigger (below sm) */}
-      <div className="relative sm:hidden">
+      {/* Phone / tablet / zoomed-desktop compact dropdown trigger (below desktop) */}
+      <div className="relative desktop:hidden">
         <button
           ref={triggerRef}
           type="button"
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={`Department: ${DEPARTMENT_LABELS[department]}. Switch department`}
+          aria-label={`Place: ${DEPARTMENT_LABELS[department]}. Switch place`}
           onClick={toggleMenu}
-          className="flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2 py-1 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)]"
+          className="flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface)]"
         >
           <span>{DEPARTMENT_LABELS[department]}</span>
           <svg aria-hidden className="h-3 w-3 shrink-0 text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
@@ -82,7 +82,7 @@ export function DepartmentSwitch() {
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
             <div
               role="menu"
-              aria-label="Switch department"
+              aria-label="Switch place"
               style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
               className="fixed z-50 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-lg"
             >
@@ -98,11 +98,10 @@ export function DepartmentSwitch() {
                       setDepartment(dept);
                       setOpen(false);
                     }}
-                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${
-                      active
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${active
                         ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                         : 'text-[var(--ink)] hover:bg-[var(--paper)]'
-                    }`}
+                      }`}
                   >
                     <span>{DEPARTMENT_LABELS[dept]}</span>
                     {active && <span aria-hidden className="text-xs">✓</span>}
@@ -118,13 +117,12 @@ export function DepartmentSwitch() {
 }
 
 /**
- * A thin colour band rendered under the header per department:
- * --teal for OP, --sky for Home care, --plum for IP.
- * Only shown when the user has more than one department to choose from.
+ * A thin colour band rendered under the header per place:
+ * --teal for OP, --sky for Home, --plum for IP.
+ * Only shown when the user has more than one place to choose from.
  */
 export function DepartmentBand() {
   const { department, canSwitch } = useDepartment();
   if (!canSwitch) return null;
   return <div className={`h-0.5 w-full ${BAND_COLORS[department]}`} role="presentation" />;
 }
-

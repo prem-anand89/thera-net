@@ -108,8 +108,8 @@ export function DepartmentHoursSection({ onDirtyChange }: { onDirtyChange: (dirt
     <div>
       <SectionCard
         id="settings-card-department-hours"
-        title="Hours by department"
-        subtitle="Set separate booking hours, open days and slot lengths for Home care and Inpatients. Any field left as 'Same as OP' follows your clinic opening hours."
+        title="Hours by place"
+        subtitle="Set separate booking hours, open days and slot lengths for Home and Inpatients. Any field left as 'Same as OP' follows your clinic opening hours."
       >
         <fieldset disabled={busy} className="space-y-6">
           {nonClinicDepts.map((d, index) => {

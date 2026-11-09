@@ -362,7 +362,7 @@ describe('TeamMemberCard — Departments in the edit form (G2)', () => {
     expect(screen.getByText('Works in')).toBeInTheDocument();
 
     const opCheckbox = screen.getByRole('checkbox', { name: 'OP' });
-    const homeCheckbox = screen.getByRole('checkbox', { name: 'Home care' });
+    const homeCheckbox = screen.getByRole('checkbox', { name: 'Home' });
 
     fireEvent.click(opCheckbox);
     fireEvent.click(homeCheckbox);
@@ -380,7 +380,7 @@ describe('TeamMemberCard — Departments in the edit form (G2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     const opCheckbox = screen.getByRole('checkbox', { name: 'OP' });
-    const homeCheckbox = screen.getByRole('checkbox', { name: 'Home care' });
+    const homeCheckbox = screen.getByRole('checkbox', { name: 'Home' });
     const ipCheckbox = screen.getByRole('checkbox', { name: 'IP' });
 
     fireEvent.click(opCheckbox);
@@ -408,10 +408,10 @@ describe('TeamMemberCard — Departments in the edit form (G2)', () => {
     );
   });
 
-  it('shows "Departments" for a non-therapist member (front desk)', () => {
+  it('shows "Places" for a non-therapist member (front desk)', () => {
     render(card(multiClinic, member('front_desk'), null));
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(screen.getByText('Departments')).toBeInTheDocument();
+    expect(screen.getByText('Places')).toBeInTheDocument();
     expect(screen.queryByText('Works in')).toBeNull();
   });
 });

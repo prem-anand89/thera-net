@@ -64,13 +64,13 @@ describe('DepartmentHoursSection (G10)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders cards for Home care and Inpatient when clinic has multiple departments', () => {
+  it('renders cards for Home and Inpatient when clinic has multiple places', () => {
     mockClinic = {
       ...mockClinic,
       careLocations: ['clinic', 'home', 'ward'],
     };
     render(<DepartmentHoursSection onDirtyChange={vi.fn()} />);
-    expect(screen.getByText('Hours by department')).toBeInTheDocument();
+    expect(screen.getByText('Hours by place')).toBeInTheDocument();
     expect(screen.getByTestId('department-hours-home')).toBeInTheDocument();
     expect(screen.getByTestId('department-hours-ward')).toBeInTheDocument();
   });
@@ -84,11 +84,11 @@ describe('DepartmentHoursSection (G10)', () => {
     render(<DepartmentHoursSection onDirtyChange={vi.fn()} />);
 
     // Change Home start time to 8:00 (8)
-    const homeStart = screen.getByLabelText('Home care Start time');
+    const homeStart = screen.getByLabelText('Home Start time');
     fireEvent.change(homeStart, { target: { value: '8' } });
 
     // Change Home slot length to 60 minutes
-    const homeSlot = screen.getByLabelText('Home care Appointment length');
+    const homeSlot = screen.getByLabelText('Home Appointment length');
     fireEvent.change(homeSlot, { target: { value: '60' } });
 
     // Save button should appear
@@ -144,8 +144,8 @@ describe('DepartmentHoursSection (G10)', () => {
       />
     );
 
-    // Uncheck Home care and IP, leave OP checked
-    const homeCareCheckbox = screen.getByLabelText('Home care');
+    // Uncheck Home and IP, leave OP checked
+    const homeCareCheckbox = screen.getByLabelText('Home');
     const ipCheckbox = screen.getByLabelText('IP');
     fireEvent.click(homeCareCheckbox);
     fireEvent.click(ipCheckbox);

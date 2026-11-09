@@ -626,7 +626,7 @@ export function TeamMemberCard({
                   // inside another label (invalid, and every box would be named by the whole group).
                   <div role="group" aria-labelledby="member-departments-label">
                     <span id="member-departments-label" className="mb-1 block text-label font-medium text-[var(--muted)]">
-                      {therapist ? 'Works in' : 'Departments'}
+                      {therapist ? 'Works in' : 'Places'}
                     </span>
                     <div className="flex flex-wrap gap-4 pt-1">
                       {clinicDepts.map((d) => (
@@ -1412,8 +1412,8 @@ export function Therapists() {
           open={true}
           title="Deactivate therapist"
           message={`${deactivateTarget.therapist.name} will no longer treat patients or appear in the schedule. Past records stay intact; you can reactivate anytime.${deactivateTarget.upcoming > 0
-              ? ` They still have ${deactivateTarget.upcoming} upcoming appointment(s) — reassign or cancel those separately.`
-              : ''
+            ? ` They still have ${deactivateTarget.upcoming} upcoming appointment(s) — reassign or cancel those separately.`
+            : ''
             }`}
           confirmLabel="Deactivate"
           cancelLabel="Cancel"

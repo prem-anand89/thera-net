@@ -295,8 +295,8 @@ function ServiceForm({
                   type="button"
                   aria-pressed={sessions === n}
                   className={`min-h-9 rounded-full border px-3 text-sm ${sessions === n
-                      ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
-                      : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
+                    ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
                     }`}
                   onClick={() => setSessions(n)}
                 >
@@ -437,8 +437,8 @@ function ServiceForm({
                   type="button"
                   aria-pressed={validity === String(d)}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium ${validity === String(d)
-                      ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
-                      : 'border-[var(--border)] text-[var(--muted)]'
+                    ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                    : 'border-[var(--border)] text-[var(--muted)]'
                     }`}
                   onClick={() => setValidity(String(d))}
                 >
@@ -451,10 +451,10 @@ function ServiceForm({
 
         {clinicDepts.length > 1 && (
           <Field
-            label="Departments"
+            label="Places"
             hint={
               departments.length === 0 || departments.length === clinicDepts.length
-                ? 'All departments (leave unticked or tick all)'
+                ? 'All places (leave unticked or tick all)'
                 : undefined
             }
           >

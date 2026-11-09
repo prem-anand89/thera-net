@@ -7,7 +7,7 @@ import type { CareLocation } from './types';
  */
 export type Department = CareLocation;
 
-export const DEPARTMENT_LABELS: Record<Department, string> = { clinic: 'OP', home: 'Home care', ward: 'IP' };
+export const DEPARTMENT_LABELS: Record<Department, string> = { clinic: 'OP', home: 'Home', ward: 'IP' };
 
 /** Longer wording for places with room (Settings, the Team form). */
 export const DEPARTMENT_NAMES: Record<Department, string> = { clinic: 'Outpatient (OP)', home: 'Home care', ward: 'Inpatient (IP)' };

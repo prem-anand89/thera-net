@@ -350,7 +350,7 @@ describe('PatientProfilePage department scoping (G7)', () => {
     // All three visits should be rendered in the history
     expect(screen.getByText('Kavita Sharma')).toBeInTheDocument();
     expect(screen.getAllByText('OP').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Home care').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Home').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('IP').length).toBeGreaterThanOrEqual(1);
   });
 

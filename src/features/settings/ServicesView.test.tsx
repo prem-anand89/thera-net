@@ -439,7 +439,7 @@ describe('ServicesView - ServiceFormSheet departments', () => {
 
     // Checkboxes should exist
     expect(screen.getByLabelText('OP')).toBeInTheDocument();
-    expect(screen.getByLabelText('Home care')).toBeInTheDocument();
+    expect(screen.getByLabelText('Home')).toBeInTheDocument();
     expect(screen.getByLabelText('IP')).toBeInTheDocument();
 
     // Fill form

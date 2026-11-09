@@ -89,7 +89,7 @@ export function AdvanceReceiptPrintPage() {
             <p className="font-display font-semibold text-[var(--ink)]">{patient.name}</p>
             <p className="text-[var(--muted)]">Patient ID: {patient.mrno}</p>
             {hasMultipleDepts && (
-              <p className="text-[var(--muted)]">Department: {DEPARTMENT_LABELS[advDept]}</p>
+              <p className="text-[var(--muted)]">Place: {DEPARTMENT_LABELS[advDept]}</p>
             )}
           </div>
           <div className="text-right">

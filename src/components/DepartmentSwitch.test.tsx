@@ -26,7 +26,7 @@ describe('DepartmentSwitch', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders desktop segmented control with aria-pressed on the active department', () => {
+  it('renders desktop segmented control with aria-pressed on the active place', () => {
     render(
       <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
         <DepartmentSwitch />
@@ -37,7 +37,7 @@ describe('DepartmentSwitch', () => {
     const opSegment = opButtons.find((b) => b.getAttribute('aria-pressed') !== null);
     expect(opSegment).toHaveAttribute('aria-pressed', 'true');
 
-    const homeButtons = screen.getAllByRole('button', { name: 'Home care' });
+    const homeButtons = screen.getAllByRole('button', { name: 'Home' });
     const homeSegment = homeButtons.find((b) => b.getAttribute('aria-pressed') !== null);
     expect(homeSegment).toHaveAttribute('aria-pressed', 'false');
 
@@ -46,14 +46,14 @@ describe('DepartmentSwitch', () => {
     expect(ipSegment).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('clicking a department switches the active department', async () => {
+  it('clicking a place switches the active place', async () => {
     render(
       <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
         <DepartmentSwitch />
       </DepartmentProvider>
     );
 
-    const homeButtons = screen.getAllByRole('button', { name: 'Home care' });
+    const homeButtons = screen.getAllByRole('button', { name: 'Home' });
     const homeSegment = homeButtons.find((b) => b.getAttribute('aria-pressed') !== null);
     expect(homeSegment).toBeDefined();
 
@@ -62,7 +62,7 @@ describe('DepartmentSwitch', () => {
     });
 
     await waitFor(() => {
-      const updatedHome = screen.getAllByRole('button', { name: 'Home care' }).find((b) => b.getAttribute('aria-pressed') !== null);
+      const updatedHome = screen.getAllByRole('button', { name: 'Home' }).find((b) => b.getAttribute('aria-pressed') !== null);
       expect(updatedHome).toHaveAttribute('aria-pressed', 'true');
     });
 
@@ -71,21 +71,21 @@ describe('DepartmentSwitch', () => {
     expect(opSegment).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('opens mobile menu, allows choosing a department, and closes', async () => {
+  it('opens mobile menu, allows choosing a place, and closes', async () => {
     render(
       <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
         <DepartmentSwitch />
       </DepartmentProvider>
     );
 
-    const mobileTrigger = screen.getByRole('button', { name: /Department: OP\. Switch department/ });
+    const mobileTrigger = screen.getByRole('button', { name: /Place: OP\. Switch place/ });
     expect(mobileTrigger).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(mobileTrigger);
     });
 
-    const menu = screen.getByRole('menu', { name: /Switch department/ });
+    const menu = screen.getByRole('menu', { name: /Switch place/ });
     expect(menu).toBeInTheDocument();
 
     const ipMenuItem = screen.getByRole('menuitem', { name: /IP/ });
@@ -94,8 +94,8 @@ describe('DepartmentSwitch', () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByRole('menu', { name: /Switch department/ })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Department: IP\. Switch department/ })).toBeInTheDocument();
+      expect(screen.queryByRole('menu', { name: /Switch place/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Place: IP\. Switch place/ })).toBeInTheDocument();
     });
   });
 });
@@ -115,7 +115,7 @@ describe('DepartmentBand', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders the appropriate color band for active department when canSwitch is true', async () => {
+  it('renders the appropriate color band for active place when canSwitch is true', async () => {
     const { container } = render(
       <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
         <DepartmentBand />
@@ -125,7 +125,7 @@ describe('DepartmentBand', () => {
 
     expect(container.querySelector('.bg-\\[var\\(--teal\\)\\]')).toBeInTheDocument();
 
-    const homeButtons = screen.getAllByRole('button', { name: 'Home care' });
+    const homeButtons = screen.getAllByRole('button', { name: 'Home' });
     const homeSegment = homeButtons.find((b) => b.getAttribute('aria-pressed') !== null);
     await act(async () => {
       fireEvent.click(homeSegment!);
