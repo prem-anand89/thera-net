@@ -40,7 +40,7 @@ departments that are mutually exclusive everywhere.
 | | OP | Home care | IP |
 |---|---|---|---|
 | Workspace | Appointments (clinic only), today's visits, OP collected and dues | Home visits today (route: address, Copy, Call, Log visit), today's home visits, home collected and dues | Inpatients (ward rounds), today's sessions, running charges |
-| Schedule | Clinic appointments, Book | Home appointments, Book | No booking (ward rounds are on the Inpatients card) |
+| Schedule | Clinic appointments, Book, OP hours and slots | Home appointments, Book, its own hours and slots | Ward rounds (booked for an admitted patient), its own hours and slots |
 | Ledger | OP visits, bills, daybook, dues | Home visits, bills, daybook (field collections per therapist, "to hand over"), dues | Sessions, discharge bills, deposits, daybook with **Hospital partner clearance** |
 | New Visit | Clinic visit | Home visit | Only on an admitted patient (Log session) |
 | Reports (admin) | OP only | Home only | IP only |
@@ -102,6 +102,46 @@ Waiting on the owner to apply `20261108130000_visit_stay_must_be_live.sql`; then
 ### Step 4. Later
 Split %, TDS basis and who collects per department, and the partner statement per department (old Phase 4). Then
 therapist pay per department (HR).
+
+### Step 5. Separate booking slots per department (owner request 2026-11-09)
+Home care and IP each get their own booking hours, slot length and start step, so a home round at 7 am or a ward round at
+6 am is a normal slot, not an "outside hours" warning. **This reverses "IP has no booking"** (latest decision wins): IP
+now books ward rounds, only for an admitted patient.
+
+**Model**
+- OP keeps today's columns (`booking_start_hour`, `booking_end_hour`, `operating`, `closed_weekdays`,
+  `slot_duration_minutes`, `start_step_minutes`), so nothing existing moves and public booking is untouched.
+- `clinics.department_hours jsonb null`: `{ "home": {...}, "ward": {...} }`, each
+  `{ startHour, endHour, operating?, closedWeekdays, slotMinutes, startStepMinutes }`. A missing department, or a missing
+  field, inherits OP. Shown and edited only when the clinic has more than one department.
+- `clinic_closed_dates.departments text[] null` (null = every department): a holiday can close OP and leave IP open.
+- `appointments.admission_id uuid null` with the same rule as visits (`location = 'ward'` if and only if it is set, and
+  the stay must be live); a visit made from a ward round carries the stay.
+- Therapist hours: a therapist's own `working_hours` stay their **OP** hours. A weekday they have no hours on is a day off
+  everywhere; the time of day for Home and IP comes from the department's hours, not the therapist's OP hours. Leave,
+  shifts and per-department personal hours are a later step.
+- A therapist can never be in two places: the overlap guard stays per therapist across all departments. (The travel gap
+  between a clinic and a home appointment stays in the Home visits plan, 9b.)
+- Public online booking stays OP only. Its availability already counts a therapist's home and ward appointments as busy.
+
+**Code (Claude, before G5 starts)**
+- One pure resolver in `domain/departments.ts`: `departmentHours(clinic, department)` returns
+  `{ clinicHours (ClinicHoursInput), slotMinutes, startStepMinutes, closedWeekdays }` with the inheritance above, and
+  `isClosedDayFor(department, ...)`. Tests: inheritance, a partial override, a lunch-break `operating` per department.
+- Migration `…_department_booking_slots.sql`: the three columns above, the ward check on appointments, the
+  `confirm`/`create_appointment_staff` paths accept `admission_id`, and `appointmentMinutes` fallback uses the
+  department's slot length. Owner applies it; Claude verifies live and records the history row.
+- Replace every direct read of `clinic.slotDurationMinutes`, `bookingStartHour/EndHour`, `startStepMinutes`,
+  `closedWeekdays` in the schedule code with the resolver, passing the selected department: `TimeGrid`,
+  `ScheduleBookingsView`, `BookSlotSheet`, `freeGaps`, `slotHoursStatus` callers, `hoursConflicts`, the Workspace
+  appointment cards. Public booking keeps reading OP.
+
+**Screens (Gemini, brief G10 below)**: Settings → Booking "Hours by department" card; the calendar grid, slot list and
+start times follow the selected department; IP Book starts from an admitted patient and shows on the Inpatients card as
+"Next round 8:30".
+Tests: Home has its own start and end hour and slot length while OP is unchanged; a holiday set for OP only leaves Home
+and IP bookable; a ward round needs a live stay; a Home slot outside OP hours is not flagged; therapist overlap is still
+refused across departments.
 
 ## Risks
 - Scoping misses a list somewhere and shows another department's rows: one `departmentOf()` helper, a grep for every
@@ -181,11 +221,15 @@ IP tile; never counted as dues), `isPartnerClearance(method)`. If a screen needs
 - Remove the Place filter and the Daybook "Of this, by place" split.
 - Tests: each tab's rows and totals for the three departments; partner money shows as clearance and never in a drawer.
 
-## G5. Schedule and Book (Step 2)
+## G5. Schedule and Book (Step 2, after Claude's resolver from Step 5)
 `src/features/schedule/*`, `src/components/BookSlotSheet.tsx`. The calendar shows the selected department's
-appointments (OP, Home care; IP has no booking and the Book buttons are hidden there). `BookSlotSheet` drops the Place
-row: the booking's location IS the department. The therapist picker uses `therapistsInDepartment(department, therapists)`.
-Tests: a Home care booking saves `location: 'home'`; the picker hides a therapist who works only in OP.
+appointments and uses **that department's hours and slots** from `departmentHours(clinic, department)` (never read
+`clinic.slotDurationMinutes` / `bookingStartHour` directly). OP and Home care book as before; IP books **ward rounds**:
+the Book button there opens a picker of admitted patients (live stays), and the booking saves `location: 'ward'` with
+`admissionId`. `BookSlotSheet` drops the Place row: the booking's location IS the department. The therapist picker uses
+`therapistsInDepartment(department, therapists)`.
+Tests: a Home care booking saves `location: 'home'`; an IP round saves the stay; the grid spans the department's own
+hours and slot length; the picker hides a therapist who works only in OP.
 
 ## G6. New Visit (Step 2)
 `src/features/visits/NewVisitPage.tsx`. Remove the Clinic / Home toggle; the visit's location is the department (OP =
@@ -210,6 +254,14 @@ Delete: `WorkspacePlaceToggle` (+ test), the Patients "Home" chip, the New Visit
 service form's "Usually done at" (Step 3 replaces it with department ticks). Delete `offersBookingChoice` /
 `offersLocationChoice` call sites that only existed for these controls; keep `placeLabelFor` if a list still tags records.
 
+## G10. Hours by department (Step 5, after G5)
+`src/features/settings/*` (the Booking section). A card "Hours by department", shown only when the clinic has more than
+one department: for Home care and IP, start and end time, closed weekdays, slot length (minutes) and start step, each
+defaulting to "Same as OP" (store nothing until changed). Holidays (closed dates) get an "Applies to" row of department
+ticks, all ticked by default. Saves `clinics.department_hours` and `clinic_closed_dates.departments` through the existing
+clinic and closed-date services (Claude adds the fields and service methods first).
+Tests: changing Home's hours leaves OP unchanged; "Same as OP" stores nothing; a holiday ticked for OP only.
+
 ## Order for Gemini
-G1 and G2 first (they need only the foundation), then G3 to G8 one at a time (each is one commit), then G9. Claude
+G1 and G2 first (they need only the foundation), then G3 to G4, then **Claude builds the Step 5 resolver and migration**, then G5 to G8 one at a time (each is one commit), then G10, then G9. Claude
 reviews after G2, after G4 and at the end.
