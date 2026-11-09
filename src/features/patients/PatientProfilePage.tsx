@@ -579,8 +579,8 @@ export function PatientProfilePage() {
 
   const referral = matchedReferralName
     ? [matchedReferralName, patient.referringSourceDetail]
-        .filter(Boolean)
-        .join(' — ')
+      .filter(Boolean)
+      .join(' — ')
     : null;
 
   const back = patientsBackLink(backTo);
@@ -911,119 +911,119 @@ export function PatientProfilePage() {
             </section>
           ) : (
             <>
-          <div className="flex items-center justify-between">
-            <SectionLabel>Visit history</SectionLabel>
-            {visitRows.length > 0 && (
-              <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                <input
-                  type="checkbox"
-                  checked={hideZeroBilled}
-                  onChange={(e) => setHideZeroBilled(e.target.checked)}
-                />
-                Hide {currencySymbol()}0 visits (package sessions)
-              </label>
-            )}
-          </div>
-          {selectableIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Select visits">
-              <span className="text-[var(--muted)]">{canBill ? 'Bill' : 'Collect'}:</span>
-              {(
-                [
-                  ['all', 'All unbilled'],
-                  ['this_month', 'This month'],
-                  ['last_month', 'Last month'],
-                ] as [BillingRange, string][]
-              ).map(([range, label]) => (
-                <button
-                  key={range}
-                  type="button"
-                  className={pillSmNeutral}
-                  onClick={() =>
-                    setSelectedVisitIds(
-                      new Set(unbilledInRange(selectableVisits, { canBill, canCollect: canCollectPayment }, range, toLocalDateStr(new Date())))
-                    )
-                  }
-                >
-                  {label}
-                </button>
-              ))}
-              {selectedVisitIds.size > 0 && (
-                <button type="button" className="min-h-9 px-2 text-[var(--muted)] hover:underline" onClick={() => setSelectedVisitIds(new Set())}>
-                  Clear
-                </button>
-              )}
-            </div>
-          )}
-          <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-            {selectedRows.length > 0 && (
-              <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
-                <span className="text-sm font-medium text-[var(--teal)]">
-                  {selectedRows.length} selected · {formatAmount(canBill ? selectedBillPaise : selectedDuePaise)}
-                </span>
-                <button
-                  type="button"
-                  className={pillSmPrimary}
-                  disabled={canBill && selectedBillPaise <= 0}
-                  title={canBill && selectedBillPaise <= 0 ? 'These visits have no charge to bill' : undefined}
-                  onClick={startBulkAction}
-                >
-                  {canBill ? 'Issue invoice / collect' : `Collect ${formatAmount(selectedDuePaise)}`}
-                </button>
-                {canBill && selectedBillPaise <= 0 && (
-                  <span className="text-xs text-[var(--muted)]">These visits have no charge to bill</span>
+              <div className="flex items-center justify-between">
+                <SectionLabel>Visit history</SectionLabel>
+                {visitRows.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                    <input
+                      type="checkbox"
+                      checked={hideZeroBilled}
+                      onChange={(e) => setHideZeroBilled(e.target.checked)}
+                    />
+                    Hide {currencySymbol()}0 visits (package sessions)
+                  </label>
                 )}
               </div>
-            )}
-            {assistedVisits.length > 0 && (
-              <div className="border-b border-[var(--border)] px-5 pb-2">
-                <AssistedVisitList
-                  rows={assistedVisits}
-                  patientName={() => patient?.name ?? 'Patient'}
-                  assistantName={nameOfTherapist(myTherapistId ?? '')}
-                  viewerIsAssistant
-                />
-              </div>
-            )}
-            {visitRows.length === 0 && assistedVisits.length > 0 ? null : visitRows.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-sm text-[var(--muted)]">No visits recorded yet.</p>
-                <div className="mt-3">
-                  <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
-                    Record first visit
-                  </Link>
+              {selectableIds.size > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Select visits">
+                  <span className="text-[var(--muted)]">{canBill ? 'Bill' : 'Collect'}:</span>
+                  {(
+                    [
+                      ['all', 'All unbilled'],
+                      ['this_month', 'This month'],
+                      ['last_month', 'Last month'],
+                    ] as [BillingRange, string][]
+                  ).map(([range, label]) => (
+                    <button
+                      key={range}
+                      type="button"
+                      className={pillSmNeutral}
+                      onClick={() =>
+                        setSelectedVisitIds(
+                          new Set(unbilledInRange(selectableVisits, { canBill, canCollect: canCollectPayment }, range, toLocalDateStr(new Date())))
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  {selectedVisitIds.size > 0 && (
+                    <button type="button" className="min-h-9 px-2 text-[var(--muted)] hover:underline" onClick={() => setSelectedVisitIds(new Set())}>
+                      Clear
+                    </button>
+                  )}
                 </div>
-              </div>
-            ) : visibleVisitCardRows.length === 0 ? (
-              <p className="p-4 text-sm text-[var(--muted)]">
-                All visits are {currencySymbol()}0 (package sessions) — uncheck "Hide {currencySymbol()}0 visits" to see them.
-              </p>
-            ) : (
-              <div className="p-5">
-                <ResponsiveVisitList
-                  rows={visibleVisitCardRows}
-                  showDate={true}
-                  showPatient={false}
-                  onInvoice={() => {}}
-                  onTakePayment={(row) => {
-                    const v = visitById.get(row.visitId);
-                    if (inDepartment(department, v)) {
-                      setTakingPayment(row);
-                    }
-                  }}
-                  onEditPatient={(row) => setEditPatientId(row.patientId)}
-                  onDelete={(row) => handleVisitDelete(row.visitId)}
-                  canInvoice={canBill}
-                  canCollect={canCollectPayment}
-                  selection={{
-                    selectedIds: selectedVisitIds,
-                    onToggle: toggleVisitSelection,
-                    isSelectable: isSelectableRow,
-                  }}
-                  backTo={backTo}
-                />
-              </div>
-            )}
-          </section>
+              )}
+              <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+                {selectedRows.length > 0 && (
+                  <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
+                    <span className="text-sm font-medium text-[var(--teal)]">
+                      {selectedRows.length} selected · {formatAmount(canBill ? selectedBillPaise : selectedDuePaise)}
+                    </span>
+                    <button
+                      type="button"
+                      className={pillSmPrimary}
+                      disabled={canBill && selectedBillPaise <= 0}
+                      title={canBill && selectedBillPaise <= 0 ? 'These visits have no charge to bill' : undefined}
+                      onClick={startBulkAction}
+                    >
+                      {canBill ? 'Issue invoice / collect' : `Collect ${formatAmount(selectedDuePaise)}`}
+                    </button>
+                    {canBill && selectedBillPaise <= 0 && (
+                      <span className="text-xs text-[var(--muted)]">These visits have no charge to bill</span>
+                    )}
+                  </div>
+                )}
+                {assistedVisits.length > 0 && (
+                  <div className="border-b border-[var(--border)] px-5 pb-2">
+                    <AssistedVisitList
+                      rows={assistedVisits}
+                      patientName={() => patient?.name ?? 'Patient'}
+                      assistantName={nameOfTherapist(myTherapistId ?? '')}
+                      viewerIsAssistant
+                    />
+                  </div>
+                )}
+                {visitRows.length === 0 && assistedVisits.length > 0 ? null : visitRows.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-sm text-[var(--muted)]">No visits recorded yet.</p>
+                    <div className="mt-3">
+                      <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
+                        Record first visit
+                      </Link>
+                    </div>
+                  </div>
+                ) : visibleVisitCardRows.length === 0 ? (
+                  <p className="p-4 text-sm text-[var(--muted)]">
+                    All visits are {currencySymbol()}0 (package sessions) — uncheck "Hide {currencySymbol()}0 visits" to see them.
+                  </p>
+                ) : (
+                  <div className="p-5">
+                    <ResponsiveVisitList
+                      rows={visibleVisitCardRows}
+                      showDate={true}
+                      showPatient={false}
+                      onInvoice={() => { }}
+                      onTakePayment={(row) => {
+                        const v = visitById.get(row.visitId);
+                        if (inDepartment(department, v)) {
+                          setTakingPayment(row);
+                        }
+                      }}
+                      onEditPatient={(row) => setEditPatientId(row.patientId)}
+                      onDelete={(row) => handleVisitDelete(row.visitId)}
+                      canInvoice={canBill}
+                      canCollect={canCollectPayment}
+                      selection={{
+                        selectedIds: selectedVisitIds,
+                        onToggle: toggleVisitSelection,
+                        isSelectable: isSelectableRow,
+                      }}
+                      backTo={backTo}
+                    />
+                  </div>
+                )}
+              </section>
             </>
           )}
         </div>

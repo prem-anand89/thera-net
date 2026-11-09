@@ -11,15 +11,15 @@ const clinicRef: { current: { id: string; careLocations: string[]; ipBilledByPar
 const planAllows = { current: true };
 const dataRef: {
   current:
-    | {
-        stays: Admission[];
-        patients: Patient[];
-        therapists?: Therapist[];
-        appointments?: Appointment[];
-        visits: Visit[];
-      }
-    | null
-    | undefined;
+  | {
+    stays: Admission[];
+    patients: Patient[];
+    therapists?: Therapist[];
+    appointments?: Appointment[];
+    visits: Visit[];
+  }
+  | null
+  | undefined;
 } = { current: undefined };
 
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => clinicRef.current }));
@@ -78,26 +78,26 @@ const patient = (id: string, name: string) =>
 const therapist = (id: string, name: string) =>
   ({ id, clinicId: 'c', name } as unknown as Therapist);
 const visit = (id: string, admissionId: string, visitDate: string, over: Partial<Visit> = {}) =>
-  ({
-    id,
-    admissionId,
-    visitDate,
-    deleted: false,
-    actualBillPaise: 100000,
-    invoiceId: null,
-    therapistId: 't1',
-    ...over,
-  } as unknown as Visit);
+({
+  id,
+  admissionId,
+  visitDate,
+  deleted: false,
+  actualBillPaise: 100000,
+  invoiceId: null,
+  therapistId: 't1',
+  ...over,
+} as unknown as Visit);
 const appointment = (id: string, patientId: string, scheduledAt: string, over: Partial<Appointment> = {}) =>
-  ({
-    id,
-    patientId,
-    scheduledAt,
-    location: 'ward',
-    status: 'confirmed',
-    therapistId: 't1',
-    ...over,
-  } as unknown as Appointment);
+({
+  id,
+  patientId,
+  scheduledAt,
+  location: 'ward',
+  status: 'confirmed',
+  therapistId: 't1',
+  ...over,
+} as unknown as Appointment);
 
 describe('InpatientsCard', () => {
   beforeEach(() => {

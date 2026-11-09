@@ -308,7 +308,7 @@ describe('Package validity', () => {
 
 describe('Services list — desktop table', () => {
   it('shows columns, "—" for one-visit rows, and Used unless "Show usage" is off', async () => {
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('min-width'), media: q, addEventListener() {}, removeEventListener() {} }));
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('min-width'), media: q, addEventListener() { }, removeEventListener() { } }));
     const pkg = item({ name: 'Package', sessionCount: 10, basePricePaise: 1000000 });
     catalogItems = [item(), pkg];
     visits = [{ id: 'v1', serviceCatalogId: pkg.id }];
@@ -316,13 +316,13 @@ describe('Services list — desktop table', () => {
     const table = screen.getByRole('table');
     // The Used column waits for the counts, so a table never shows zeros that are really "not loaded yet".
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Service', 'Sessions', 'Price', 'Each', 'Length', 'Edit']);
-    await act(async () => {});
+    await act(async () => { });
     expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Service', 'Sessions', 'Price', 'Each', 'Length', 'Used', 'Edit']);
     const row = within(table).getByRole('row', { name: 'Edit Package, ₹10,000' });
     expect(row).toHaveTextContent('10');
     expect(row).toHaveTextContent('₹1,000');
     expect(within(table).getByRole('row', { name: 'Edit Initial assessment, ₹1,000' })).toHaveTextContent('—');
-    await act(async () => {});
+    await act(async () => { });
     expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((h) => h.textContent)).toContain('Used');
     fireEvent.click(screen.getByRole('switch', { name: 'Show usage' }));
     expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Used');

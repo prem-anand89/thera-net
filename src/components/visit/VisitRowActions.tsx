@@ -70,15 +70,15 @@ export function RowActionsMenu({
     const remainingPaise = data.billPaise - data.collectedPaise;
     const upiPayUri = clinicCanShowUpiQr(clinic)
       ? buildUpiPayUri({
-          vpa: clinic.upiVpa ?? '',
-          payeeName: clinicUpiPayeeName(clinic),
-          amountPaise: remainingPaise,
-          note: data.patientName,
-        })
+        vpa: clinic.upiVpa ?? '',
+        payeeName: clinicUpiPayeeName(clinic),
+        amountPaise: remainingPaise,
+        note: data.patientName,
+      })
       : null;
 
     let text = `Hi ${data.patientName},\n\nThis is a reminder from ${clinic.name} regarding your pending bill for your visit on ${formatDateDM(data.visitDate)} of ${formatAmount(remainingPaise)}.`;
-    
+
     if (upiPayUri) {
       text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
     }
@@ -88,105 +88,105 @@ export function RowActionsMenu({
 
   return (
     <>
-    <KebabMenu>
-      {(close) => (
-        <>
-          {data.canRepeat && (
-            <Link
-              to="/visits/new"
-              search={{ repeatVisitId: data.visitId }}
-              className={menuItem}
-              onClick={close}
-            >
-              Repeat
-            </Link>
-          )}
-          {canIssueInvoice && (
+      <KebabMenu>
+        {(close) => (
+          <>
+            {data.canRepeat && (
+              <Link
+                to="/visits/new"
+                search={{ repeatVisitId: data.visitId }}
+                className={menuItem}
+                onClick={close}
+              >
+                Repeat
+              </Link>
+            )}
+            {canIssueInvoice && (
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  onInvoice!();
+                }}
+              >
+                Give bill
+              </button>
+            )}
+            {showReminder && (
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  handleSendReminder();
+                }}
+              >
+                Send WhatsApp reminder
+              </button>
+            )}
+            {canAskGoogleReview && (
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  handleAskGoogleReview();
+                }}
+              >
+                Ask for Google review
+              </button>
+            )}
             <button
               type="button"
               className={menuItem}
               onClick={() => {
                 close();
-                onInvoice!();
+                setFollowUpOpen(true);
               }}
             >
-              Give bill
+              Set follow-up
             </button>
-          )}
-          {showReminder && (
-            <button
-              type="button"
-              className={menuItem}
-              onClick={() => {
-                close();
-                handleSendReminder();
-              }}
-            >
-              Send WhatsApp reminder
-            </button>
-          )}
-          {canAskGoogleReview && (
-            <button
-              type="button"
-              className={menuItem}
-              onClick={() => {
-                close();
-                handleAskGoogleReview();
-              }}
-            >
-              Ask for Google review
-            </button>
-          )}
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              close();
-              setFollowUpOpen(true);
-            }}
-          >
-            Set follow-up
-          </button>
-          {data.canEdit && onEdit && (
-            <button
-              type="button"
-              className={menuItem}
-              onClick={() => {
-                close();
-                onEdit();
-              }}
-            >
-              Edit visit
-            </button>
-          )}
-          {data.canSplit && onSplit && (
-            <button
-              type="button"
-              className={menuItem}
-              onClick={() => {
-                close();
-                onSplit();
-              }}
-            >
-              {data.hasSplit ? 'Edit split' : 'Split revenue'}
-            </button>
-          )}
-          {data.canDelete && (
-            <button
-              type="button"
-              className={menuItemDestructive}
-              onClick={() => {
-                close();
-                onDelete();
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </>
-      )}
-    </KebabMenu>
-    <FollowUpDialog open={followUpOpen} patientId={data.patientId} onClose={() => setFollowUpOpen(false)} />
+            {data.canEdit && onEdit && (
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  onEdit();
+                }}
+              >
+                Edit visit
+              </button>
+            )}
+            {data.canSplit && onSplit && (
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  onSplit();
+                }}
+              >
+                {data.hasSplit ? 'Edit split' : 'Split revenue'}
+              </button>
+            )}
+            {data.canDelete && (
+              <button
+                type="button"
+                className={menuItemDestructive}
+                onClick={() => {
+                  close();
+                  onDelete();
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </>
+        )}
+      </KebabMenu>
+      <FollowUpDialog open={followUpOpen} patientId={data.patientId} onClose={() => setFollowUpOpen(false)} />
     </>
   );
 }

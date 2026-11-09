@@ -163,10 +163,10 @@ export function SharedVisitCard({
 }) {
   const initials = showPatient
     ? data.patientName
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((w) => w[0]?.toUpperCase() ?? '')
-        .join('')
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('')
     : '';
 
   const bill = formatAmount(data.billPaise);

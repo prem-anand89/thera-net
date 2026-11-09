@@ -108,153 +108,153 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
           id="settings-card-general-profile"
           title="Clinic profile"
         >
-            <fieldset disabled={busy} className="contents">
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row gap-6 items-start">
-                  <div className="shrink-0 flex flex-col items-center gap-2">
-                    {logoPreviewUrl ? (
-                      <img 
-                        src={logoPreviewUrl} 
-                        alt="Clinic logo" 
-                        className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
-                      />
-                    ) : (
-                      <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                      </div>
-                    )}
-                    <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
-                      Upload logo
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} 
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex-1 w-full space-y-4">
-                    <div className="flex flex-wrap gap-4">
-                      <div className="flex-1 min-w-[200px]">
-                        <Field label="Clinic name" htmlFor="clinic-name">
-                          <input
-                            id="clinic-name"
-                            className={inputCls}
-                            value={form.name}
-                            autoComplete="organization"
-                            onChange={(e) => set({ name: e.target.value })}
-                            placeholder="Your clinic name"
-                          />
-                        </Field>
-                      </div>
-                    </div>
-
-                    <Field label="Tagline (optional)" htmlFor="clinic-tagline" hint="One line under your clinic name on bills and receipts.">
-                      <input
-                        id="clinic-tagline"
-                        className={inputCls}
-                        maxLength={60}
-                        value={form.tagline ?? ''}
-                        onChange={(e) => set({ tagline: e.target.value || null })}
-                        placeholder="e.g. Physiotherapy and Sports Rehabilitation"
-                      />
-                    </Field>
-
-                    <Field label="Address" htmlFor="clinic-address" hint="Printed on bills and receipts, one line per row.">
-                      <textarea
-                        id="clinic-address"
-                        className={`${inputCls} resize-none min-h-[72px] max-h-48 field-sizing-content`}
-                        rows={3}
-                        autoComplete="street-address"
-                        placeholder={'Street\nCity, State — PIN'}
-                        value={form.address ?? ''}
-                        onChange={(e) => set({ address: e.target.value || null })}
-                      />
-                    </Field>
-
-                    <div className="flex flex-wrap gap-4 pt-1">
-                      <div className="flex-1 min-w-[140px]">
-                        <Field label="Phone" htmlFor="clinic-phone">
-                          <PhoneField
-                            id="clinic-phone"
-                            value={form.phone ?? ''}
-                            onChange={(phone) => set({ phone: phone || null })}
-                            ariaLabel="Clinic phone"
-                          />
-                        </Field>
-                      </div>
-                      <div className="flex-[1.5] min-w-[200px]">
-                        <Field label="Email" htmlFor="clinic-email">
-                          {/* An email keyboard on phones (with @ and .com), no auto-capital or spell-check, and a plain
-                              message under the box when what is typed can't be an address. */}
-                          <input
-                            id="clinic-email"
-                            type="email"
-                            inputMode="email"
-                            autoComplete="email"
-                            autoCapitalize="none"
-                            spellCheck={false}
-                            className={inputCls}
-                            value={form.email ?? ''}
-                            aria-invalid={emailProblem ? true : undefined}
-                            aria-describedby={emailProblem ? 'clinic-email-problem' : undefined}
-                            onChange={(e) => set({ email: e.target.value.trim() || null })}
-                            placeholder="clinic@example.com"
-                          />
-                          {emailProblem && (
-                            <p id="clinic-email-problem" role="alert" className="mt-1 text-hint text-[var(--rust)]">
-                              {emailProblem}
-                            </p>
-                          )}
-                        </Field>
-                      </div>
-                    </div>
-
-                    <ClinicCodeField
-                      invoicePrefix={form.invoicePrefix ?? ''}
-                      walkInMrnoPrefix={form.walkInMrnoPrefix}
-                      fyStartMonth={clinic.fyStartMonth}
-                      invoicing={invoicing}
-                      onChange={(code) => set(code)}
+          <fieldset disabled={busy} className="contents">
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row gap-6 items-start">
+                <div className="shrink-0 flex flex-col items-center gap-2">
+                  {logoPreviewUrl ? (
+                    <img
+                      src={logoPreviewUrl}
+                      alt="Clinic logo"
+                      className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm"
                     />
-                  </div>
+                  ) : (
+                    <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    </div>
+                  )}
+                  <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
+                    Upload logo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
+                    />
+                  </label>
                 </div>
 
-                <div className="pt-6 border-t border-[var(--border)]">
-                  {/* Signature Column */}
-                  <div>
-                    <p className="mb-1.5 block text-label font-medium text-[var(--muted)]">Authorised signature</p>
-                    <p className="text-hint text-[var(--muted)] mb-3 leading-relaxed">
-                      Printed on every invoice in place of the blank signature line.
-                    </p>
-                    <div className="flex flex-col items-start gap-2">
-                      {signaturePreviewUrl ? (
-                        <img 
-                          src={signaturePreviewUrl} 
-                          alt="Signature" 
-                          className="h-16 w-32 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm" 
+                <div className="flex-1 w-full space-y-4">
+                  <div className="flex flex-wrap gap-4">
+                    <div className="flex-1 min-w-[200px]">
+                      <Field label="Clinic name" htmlFor="clinic-name">
+                        <input
+                          id="clinic-name"
+                          className={inputCls}
+                          value={form.name}
+                          autoComplete="organization"
+                          onChange={(e) => set({ name: e.target.value })}
+                          placeholder="Your clinic name"
                         />
-                      ) : (
-                        <div className="h-16 w-32 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-caption">
-                          No signature
-                        </div>
-                      )}
-                      <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
-                        Upload signature
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          className="hidden" 
-                          onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])} 
-                        />
-                      </label>
+                      </Field>
                     </div>
                   </div>
+
+                  <Field label="Tagline (optional)" htmlFor="clinic-tagline" hint="One line under your clinic name on bills and receipts.">
+                    <input
+                      id="clinic-tagline"
+                      className={inputCls}
+                      maxLength={60}
+                      value={form.tagline ?? ''}
+                      onChange={(e) => set({ tagline: e.target.value || null })}
+                      placeholder="e.g. Physiotherapy and Sports Rehabilitation"
+                    />
+                  </Field>
+
+                  <Field label="Address" htmlFor="clinic-address" hint="Printed on bills and receipts, one line per row.">
+                    <textarea
+                      id="clinic-address"
+                      className={`${inputCls} resize-none min-h-[72px] max-h-48 field-sizing-content`}
+                      rows={3}
+                      autoComplete="street-address"
+                      placeholder={'Street\nCity, State — PIN'}
+                      value={form.address ?? ''}
+                      onChange={(e) => set({ address: e.target.value || null })}
+                    />
+                  </Field>
+
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    <div className="flex-1 min-w-[140px]">
+                      <Field label="Phone" htmlFor="clinic-phone">
+                        <PhoneField
+                          id="clinic-phone"
+                          value={form.phone ?? ''}
+                          onChange={(phone) => set({ phone: phone || null })}
+                          ariaLabel="Clinic phone"
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex-[1.5] min-w-[200px]">
+                      <Field label="Email" htmlFor="clinic-email">
+                        {/* An email keyboard on phones (with @ and .com), no auto-capital or spell-check, and a plain
+                              message under the box when what is typed can't be an address. */}
+                        <input
+                          id="clinic-email"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          className={inputCls}
+                          value={form.email ?? ''}
+                          aria-invalid={emailProblem ? true : undefined}
+                          aria-describedby={emailProblem ? 'clinic-email-problem' : undefined}
+                          onChange={(e) => set({ email: e.target.value.trim() || null })}
+                          placeholder="clinic@example.com"
+                        />
+                        {emailProblem && (
+                          <p id="clinic-email-problem" role="alert" className="mt-1 text-hint text-[var(--rust)]">
+                            {emailProblem}
+                          </p>
+                        )}
+                      </Field>
+                    </div>
+                  </div>
+
+                  <ClinicCodeField
+                    invoicePrefix={form.invoicePrefix ?? ''}
+                    walkInMrnoPrefix={form.walkInMrnoPrefix}
+                    fyStartMonth={clinic.fyStartMonth}
+                    invoicing={invoicing}
+                    onChange={(code) => set(code)}
+                  />
                 </div>
               </div>
 
-            </fieldset>
+              <div className="pt-6 border-t border-[var(--border)]">
+                {/* Signature Column */}
+                <div>
+                  <p className="mb-1.5 block text-label font-medium text-[var(--muted)]">Authorised signature</p>
+                  <p className="text-hint text-[var(--muted)] mb-3 leading-relaxed">
+                    Printed on every invoice in place of the blank signature line.
+                  </p>
+                  <div className="flex flex-col items-start gap-2">
+                    {signaturePreviewUrl ? (
+                      <img
+                        src={signaturePreviewUrl}
+                        alt="Signature"
+                        className="h-16 w-32 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm"
+                      />
+                    ) : (
+                      <div className="h-16 w-32 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-caption">
+                        No signature
+                      </div>
+                    )}
+                    <label className="cursor-pointer text-xs font-semibold text-[var(--teal)] hover:underline">
+                      Upload signature
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </fieldset>
 
           {showSaveBar && (
             <SectionSaveBar
@@ -288,19 +288,19 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
           <span aria-hidden="true">{previewOpen ? '▴' : '▾'}</span>
         </button>
         <div className={`${previewOpen ? 'mt-3 block' : 'hidden'} desktop:mt-0 desktop:block`}>
-        <LetterheadPreview
-          draft={{
-            name: form.name,
-            tagline: form.tagline,
-            address: form.address,
-            phone: form.phone,
-            email: form.email,
-            gstNo: clinic.gstNo,
-            partnerHospitalName: clinic.hasPartner ? clinic.partnerHospitalName : null
-          }}
-          logoUrl={logoPreviewUrl}
-          partnerLogoUrl={partnerLogoPreviewUrl}
-        />
+          <LetterheadPreview
+            draft={{
+              name: form.name,
+              tagline: form.tagline,
+              address: form.address,
+              phone: form.phone,
+              email: form.email,
+              gstNo: clinic.gstNo,
+              partnerHospitalName: clinic.hasPartner ? clinic.partnerHospitalName : null
+            }}
+            logoUrl={logoPreviewUrl}
+            partnerLogoUrl={partnerLogoPreviewUrl}
+          />
         </div>
       </div>
     </div>
@@ -377,90 +377,90 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
             </button>
           </div>
           {expanded && (
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                <>
-                  Time zone
-                  <InfoTip text="Emails, push notifications, the daily agenda and your public booking page show times in this zone." />
-                </>
-              }
-              htmlFor="clinic-timezone"
-            >
-              <select
-                id="clinic-timezone"
-                className={inputCls}
-                value={canonicalTimezone(form.timezone ?? 'Asia/Kolkata')}
-                onChange={(e) => set({ timezone: e.target.value })}
-              >
-                {zoneGroups.map((group) => (
-                  <optgroup key={group.region} label={group.region}>
-                    {group.zones.map((z) => (
-                      <option key={z.zone} value={z.zone}>
-                        {z.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              <span className="mt-1 block text-hint text-[var(--muted)]">
-                {timezoneHint(form.timezone ?? 'Asia/Kolkata')}
-                {!showAllZones && (
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field
+                label={
                   <>
-                    {' · '}
-                    <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={() => setShowAllZones(true)}>
-                      Not listed? Show all time zones
-                    </button>
+                    Time zone
+                    <InfoTip text="Emails, push notifications, the daily agenda and your public booking page show times in this zone." />
                   </>
-                )}
-              </span>
-            </Field>
-            <Field
-              label={
-                <>
-                  Phone country code
-                  <InfoTip text="New phone numbers start with this code. Each number can still use another." />
-                </>
-              }
-              htmlFor="clinic-country-code"
-            >
-              <select
-                id="clinic-country-code"
-                className={inputCls}
-                value={form.defaultCountryCode ?? '+91'}
-                onChange={(e) => set({ defaultCountryCode: e.target.value })}
+                }
+                htmlFor="clinic-timezone"
               >
-                {COUNTRY_CODES.filter((c) => c.code).map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.flag} {c.name} {c.code}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              label={
-                <>
-                  Financial year starts in
-                  <InfoTip text="Invoice numbers restart each financial year (for example BM/26-27/0001). April is the usual choice in India." />
-                </>
-              }
-              htmlFor="clinic-fy-start"
-              hint={form.fyStartMonth !== clinic.fyStartMonth ? 'Applies to invoices issued from now on. Invoices already issued keep their numbers.' : undefined}
-            >
-              <select
-                id="clinic-fy-start"
-                className={inputCls}
-                value={form.fyStartMonth}
-                onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
+                <select
+                  id="clinic-timezone"
+                  className={inputCls}
+                  value={canonicalTimezone(form.timezone ?? 'Asia/Kolkata')}
+                  onChange={(e) => set({ timezone: e.target.value })}
+                >
+                  {zoneGroups.map((group) => (
+                    <optgroup key={group.region} label={group.region}>
+                      {group.zones.map((z) => (
+                        <option key={z.zone} value={z.zone}>
+                          {z.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <span className="mt-1 block text-hint text-[var(--muted)]">
+                  {timezoneHint(form.timezone ?? 'Asia/Kolkata')}
+                  {!showAllZones && (
+                    <>
+                      {' · '}
+                      <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={() => setShowAllZones(true)}>
+                        Not listed? Show all time zones
+                      </button>
+                    </>
+                  )}
+                </span>
+              </Field>
+              <Field
+                label={
+                  <>
+                    Phone country code
+                    <InfoTip text="New phone numbers start with this code. Each number can still use another." />
+                  </>
+                }
+                htmlFor="clinic-country-code"
               >
-                {MONTH_NAMES.map((label, i) => (
-                  <option key={label} value={i + 1}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+                <select
+                  id="clinic-country-code"
+                  className={inputCls}
+                  value={form.defaultCountryCode ?? '+91'}
+                  onChange={(e) => set({ defaultCountryCode: e.target.value })}
+                >
+                  {COUNTRY_CODES.filter((c) => c.code).map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.name} {c.code}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field
+                label={
+                  <>
+                    Financial year starts in
+                    <InfoTip text="Invoice numbers restart each financial year (for example BM/26-27/0001). April is the usual choice in India." />
+                  </>
+                }
+                htmlFor="clinic-fy-start"
+                hint={form.fyStartMonth !== clinic.fyStartMonth ? 'Applies to invoices issued from now on. Invoices already issued keep their numbers.' : undefined}
+              >
+                <select
+                  id="clinic-fy-start"
+                  className={inputCls}
+                  value={form.fyStartMonth}
+                  onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
+                >
+                  {MONTH_NAMES.map((label, i) => (
+                    <option key={label} value={i + 1}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
           )}
           <div className="mt-4">
             <SwitchRow
@@ -472,20 +472,20 @@ export function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: 
           </div>
           {form.agendaEnabled !== false && (
             <div className="mt-3">
-            <Field label="Send at" htmlFor="clinic-agenda-hour">
-              <select
-                id="clinic-agenda-hour"
-                className={`${inputCls} sm:max-w-[10rem]`}
-                value={form.agendaHour ?? 20}
-                onChange={(e) => set({ agendaHour: Number(e.target.value) })}
-              >
-                {[...new Set([...AGENDA_HOURS, form.agendaHour ?? 20])].sort((a, b) => a - b).map((hour) => (
-                  <option key={hour} value={hour}>
-                    {hourLabel(hour)}
-                  </option>
-                ))}
-              </select>
-            </Field>
+              <Field label="Send at" htmlFor="clinic-agenda-hour">
+                <select
+                  id="clinic-agenda-hour"
+                  className={`${inputCls} sm:max-w-[10rem]`}
+                  value={form.agendaHour ?? 20}
+                  onChange={(e) => set({ agendaHour: Number(e.target.value) })}
+                >
+                  {[...new Set([...AGENDA_HOURS, form.agendaHour ?? 20])].sort((a, b) => a - b).map((hour) => (
+                    <option key={hour} value={hour}>
+                      {hourLabel(hour)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
           )}
         </fieldset>
@@ -566,8 +566,8 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
                 <InfoTip text="The days the clinic is open every week. Holidays and one-off closures are set on the Schedule." />
               </p>
               <OpenDaysStrip closedWeekdays={form.closedWeekdays ?? []} disabled={busy} onChange={(closedWeekdays) =>
-                  set({ closedWeekdays, ...(form.operatingHours ? { operatingHours: withOpenDays(form.operatingHours, closedWeekdays) } : {}) })
-                }
+                set({ closedWeekdays, ...(form.operatingHours ? { operatingHours: withOpenDays(form.operatingHours, closedWeekdays) } : {}) })
+              }
               />
             </div>
 

@@ -263,8 +263,8 @@ export function VisitLoggedCard({
                     <span
                       key={i}
                       className={`h-1.5 w-1.5 rounded-full ${i < justSaved.packageSessionNumber!
-                          ? 'bg-[var(--teal-strong)]'
-                          : 'bg-[var(--border)]'
+                        ? 'bg-[var(--teal-strong)]'
+                        : 'bg-[var(--border)]'
                         }`}
                     />
                   ))}

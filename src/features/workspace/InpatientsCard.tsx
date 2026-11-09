@@ -258,10 +258,10 @@ export function InpatientsCard({ viewTherapistId }: InpatientsCardProps = {}) {
                           {[
                             row.stay.ipdNo && `IPD ${row.stay.ipdNo}`,
                             row.stay.admittingDoctor &&
-                              `Dr. ${row.stay.admittingDoctor.replace(/^Dr\.?\s*/i, '')}`,
+                            `Dr. ${row.stay.admittingDoctor.replace(/^Dr\.?\s*/i, '')}`,
                             row.patient.primaryCondition || row.lastSession?.condition,
                             row.unbilledSessions.length > 0 &&
-                              `${row.unbilledSessions.length} session${row.unbilledSessions.length === 1 ? '' : 's'} · ${formatAmount(row.unbilledPaise)}`,
+                            `${row.unbilledSessions.length} session${row.unbilledSessions.length === 1 ? '' : 's'} · ${formatAmount(row.unbilledPaise)}`,
                           ]
                             .filter(Boolean)
                             .join(' · ')}

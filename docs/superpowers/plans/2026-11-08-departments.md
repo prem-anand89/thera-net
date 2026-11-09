@@ -125,13 +125,14 @@ now books ward rounds, only for an admitted patient.
 - Public online booking stays OP only. Its availability already counts a therapist's home and ward appointments as busy.
 
 **Code (Claude, before G5 starts)**
-- One pure resolver in `domain/departments.ts`: `departmentHours(clinic, department)` returns
+- **Built (Claude, 2026-11-09):** `src/domain/departmentHours.ts` (+ test): `departmentHours(clinic, department)` returns
   `{ clinicHours (ClinicHoursInput), slotMinutes, startStepMinutes, closedWeekdays }` with the inheritance above, and
   `isClosedDayFor(department, ...)`. Tests: inheritance, a partial override, a lunch-break `operating` per department.
-- Migration `…_department_booking_slots.sql`: the three columns above, the ward check on appointments, the
-  `confirm`/`create_appointment_staff` paths accept `admission_id`, and `appointmentMinutes` fallback uses the
-  department's slot length. Owner applies it; Claude verifies live and records the history row.
-- Replace every direct read of `clinic.slotDurationMinutes`, `bookingStartHour/EndHour`, `startStepMinutes`,
+- **Built:** migration `20261109100000_department_booking_slots.sql` (the columns above; ward-iff-stay checked at commit;
+  `book_ward_rounds` wraps the live booking functions so overlap rules are shared) and `bookingService.bookWardRounds`.
+  Owner applies it; Claude verifies live and records the history row. Home care keeps using `confirmBookingSlot` /
+  `confirmBookingSeries` with `location: 'home'` and the department's `slotMinutes` as `durationMinutes`.
+- **G5 does this (Gemini):** replace every direct read of `clinic.slotDurationMinutes`, `bookingStartHour/EndHour`, `startStepMinutes`,
   `closedWeekdays` in the schedule code with the resolver, passing the selected department: `TimeGrid`,
   `ScheduleBookingsView`, `BookSlotSheet`, `freeGaps`, `slotHoursStatus` callers, `hoursConflicts`, the Workspace
   appointment cards. Public booking keeps reading OP.
