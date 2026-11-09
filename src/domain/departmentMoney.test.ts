@@ -24,10 +24,29 @@ describe('paymentsForDepartment', () => {
 });
 
 describe('advancesForDepartment', () => {
-  it('until advances carry a department, they are all OP', () => {
-    expect(advancesForDepartment('clinic', [1, 2])).toEqual([1, 2]);
-    expect(advancesForDepartment('home', [1, 2])).toEqual([]);
-    expect(advancesForDepartment('ward', [1, 2])).toEqual([]);
+  it('filters advances by department, treating missing or null department as OP (clinic)', () => {
+    const rawAdvances = [
+      { id: 'a1', department: 'ward' },
+      { id: 'a2', department: 'home' },
+      { id: 'a3', department: 'clinic' },
+      { id: 'a4', department: null },
+      { id: 'a5' },
+    ];
+    expect(advancesForDepartment('ward', rawAdvances).map((a) => a.id)).toEqual(['a1']);
+    expect(advancesForDepartment('home', rawAdvances).map((a) => a.id)).toEqual(['a2']);
+    expect(advancesForDepartment('clinic', rawAdvances).map((a) => a.id)).toEqual(['a3', 'a4', 'a5']);
+  });
+
+  it('filters wrapped advance balance rows by advance.department', () => {
+    const balanceRows = [
+      { advance: { id: 'b1', department: 'ward' }, remainingPaise: 5000 },
+      { advance: { id: 'b2', department: 'home' }, remainingPaise: 3000 },
+      { advance: { id: 'b3', department: null }, remainingPaise: 2000 },
+      { advance: { id: 'b4' }, remainingPaise: 1000 },
+    ];
+    expect(advancesForDepartment('ward', balanceRows).map((r) => r.advance.id)).toEqual(['b1']);
+    expect(advancesForDepartment('home', balanceRows).map((r) => r.advance.id)).toEqual(['b2']);
+    expect(advancesForDepartment('clinic', balanceRows).map((r) => r.advance.id)).toEqual(['b3', 'b4']);
   });
 });
 

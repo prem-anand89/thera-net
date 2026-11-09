@@ -47,4 +47,25 @@ describe('advanceService.applyAdvance', () => {
     await createAdvanceService(repos).applyAdvance('c1', advance, [{ ...visit, invoiceId: null }], rs(500), '2026-08-02');
     expect(statuses.size).toBe(0);
   });
+
+  it('throws when applying an advance to a visit in a different department', async () => {
+    const { repos, visit, advance } = setup(rs(1000), rs(1000));
+    // advance is for ward, visit is OP (no location)
+    const wardAdvance = { ...advance, department: 'ward' as const };
+    await expect(
+      createAdvanceService(repos).applyAdvance('c1', wardAdvance, [visit], rs(500), '2026-08-02')
+    ).rejects.toThrow(/different department/i);
+  });
+});
+
+describe('advanceService.recordAdvance', () => {
+  it('stamps department on newly recorded advances, defaulting to clinic (OP)', async () => {
+    const { repos } = setup(rs(1000), rs(1000));
+    const svc = createAdvanceService(repos);
+    const advDefault = await svc.recordAdvance('c1', 'p1', rs(500), 'cash', '2026-08-01');
+    expect(advDefault.department).toBe('clinic');
+
+    const advWard = await svc.recordAdvance('c1', 'p1', rs(500), 'upi', '2026-08-01', 'Ward deposit', 'ward');
+    expect(advWard.department).toBe('ward');
+  });
 });

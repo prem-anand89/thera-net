@@ -10,6 +10,8 @@ import { ShowUpiQrButton } from '@/components/UpiQrModal';
 import { toLocalDateStr } from '@/domain/schedule';
 import { useClinic } from '@/app/clinicContext';
 import { defaultPaymentMethod, paymentMethodOptions, paymentReferenceField, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
+import { departmentOf, invoiceDepartment } from '@/domain/departments';
+import { advancesForDepartment } from '@/domain/departmentMoney';
 
 export function TakePaymentDialog({
   clinicId,
@@ -64,12 +66,15 @@ export function TakePaymentDialog({
     () => (patientId ? advanceService.openAdvancesWithBalance(clinicId, patientId) : undefined),
     [clinicId, patientId]
   );
-  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
-
+  const visit = useLiveQuery(() => repos.visits.get(visitId), [visitId]);
   const invoice = useLiveQuery(
     () => (invoiceId ? repos.invoices.get(invoiceId) : undefined),
     [invoiceId]
   );
+  const targetDept = invoice ? invoiceDepartment(invoice) : departmentOf(visit);
+  const deptAdvances = advancesForDepartment(targetDept, openAdvances ?? []);
+  const advanceBalancePaise = deptAdvances.reduce((sum, a) => sum + a.remainingPaise, 0);
+
   const invoiceBalance = useLiveQuery(
     () => (invoiceId && invoice ? paymentService.invoiceBalance(clinicId, invoice) : undefined),
     [invoiceId, invoice, clinicId]
@@ -165,7 +170,7 @@ export function TakePaymentDialog({
   }
 
   async function applyAdvance() {
-    if (!openAdvances || openAdvances.length === 0) return;
+    if (!deptAdvances || deptAdvances.length === 0) return;
     setBusy(true);
     setError(null);
     try {
@@ -177,7 +182,7 @@ export function TakePaymentDialog({
       if (visits.length === 0) throw new Error('Visit not found');
 
       // Oldest advance first (FIFO), each capped at what's actually owed.
-      const ordered = [...openAdvances].sort((a, b) =>
+      const ordered = [...deptAdvances].sort((a, b) =>
         a.advance.receivedDate.localeCompare(b.advance.receivedDate)
       );
       let toApply = Math.min(remainingDuePaise, advanceBalancePaise);

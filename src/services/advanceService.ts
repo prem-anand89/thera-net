@@ -1,6 +1,8 @@
 import type { PatientAdvance, PaymentMethod, Payment, UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import type { Repos } from '@/repositories/types';
+import { departmentOf, type Department } from '@/domain/departments';
+import { advancesForDepartment } from '@/domain/departmentMoney';
 import { allocateAcrossVisits } from './allocate';
 import { createPaymentService } from './paymentService';
 
@@ -23,7 +25,8 @@ export function createAdvanceService(repos: Repos) {
       amountPaise: Paise,
       method: PaymentMethod,
       receivedDate: string,
-      notes: string | null = null
+      notes: string | null = null,
+      department: Department = 'clinic'
     ): Promise<PatientAdvance> {
       const advance: PatientAdvance = {
         id: crypto.randomUUID(),
@@ -34,6 +37,7 @@ export function createAdvanceService(repos: Repos) {
         receivedDate,
         receiptNo: null,
         notes,
+        department,
         status: 'open',
         deleted: false,
         updatedAt: new Date().toISOString(),
@@ -51,7 +55,8 @@ export function createAdvanceService(repos: Repos) {
     /** Every open advance for a patient, with its live remaining balance. */
     async openAdvancesWithBalance(
       clinicId: UUID,
-      patientId: UUID
+      patientId: UUID,
+      department?: Department
     ): Promise<{ advance: PatientAdvance; remainingPaise: Paise }[]> {
       const advances = (await repos.patientAdvances.listByPatient(clinicId, patientId)).filter(
         (a) => a.status === 'open'
@@ -61,7 +66,7 @@ export function createAdvanceService(repos: Repos) {
         const drawn = (await repos.payments.listByAdvanceId(advance.id)).reduce((sum, p) => sum + p.amountPaise, 0);
         drawnDownByAdvance.set(advance.id, drawn);
       }
-      return advances
+      const balances = advances
         .map((advance) => ({
           advance,
           remainingPaise: Math.max(
@@ -70,6 +75,7 @@ export function createAdvanceService(repos: Repos) {
           ),
         }))
         .filter((a) => a.remainingPaise > 0);
+      return department ? advancesForDepartment(department, balances) : balances;
     },
 
     /**
@@ -87,6 +93,11 @@ export function createAdvanceService(repos: Repos) {
       amountPaise: Paise,
       receivedDate: string
     ): Promise<void> {
+      const advDept: Department =
+        advance.department === 'home' || advance.department === 'ward' ? advance.department : 'clinic';
+      if (visits.some((v) => departmentOf(v) !== advDept)) {
+        throw new Error('Advance belongs to a different department than this visit.');
+      }
       const remaining = await this.advanceBalance(clinicId, advance);
       if (amountPaise > remaining) {
         throw new Error("Amount exceeds this advance's remaining balance.");

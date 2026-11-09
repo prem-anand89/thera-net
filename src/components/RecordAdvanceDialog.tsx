@@ -8,6 +8,7 @@ import { toLocalDateStr } from '@/domain/schedule';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useDepartment } from '@/app/DepartmentContext';
 import { defaultPaymentMethod, paymentMethodOptions, readLastPaymentMethod, rememberPaymentMethod } from '@/domain/paymentMethods';
 
 /** Record money received ahead of treatment (Billing & Notes Rebuild Phase
@@ -27,6 +28,7 @@ export function RecordAdvanceDialog({
   onClose: () => void;
 }) {
   const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
+  const { department } = useDepartment();
   const [amountRupees, setAmountRupees] = useState('');
   const clinic = useClinic();
   const methods = paymentMethodOptions(clinic);
@@ -55,7 +57,8 @@ export function RecordAdvanceDialog({
         parsedAmountPaise,
         method,
         receivedDate,
-        notes.trim() || null
+        notes.trim() || null,
+        department
       );
       rememberPaymentMethod(clinic.id, method);
       setRecorded({ advanceId: advance.id });

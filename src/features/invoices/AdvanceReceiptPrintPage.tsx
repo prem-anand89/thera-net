@@ -12,6 +12,8 @@ import { btnPrimary, btnSecondary } from '@/components/ui';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
 import { advanceReceiptLabel } from '@/domain/advanceReceipt';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
+import { advancesForDepartment } from '@/domain/departmentMoney';
+import type { Department } from '@/domain/departments';
 
 export function AdvanceReceiptPrintPage() {
   const clinic = useClinic();
@@ -26,7 +28,10 @@ export function AdvanceReceiptPrintPage() {
     () => advanceService.openAdvancesWithBalance(clinic.id, patientId),
     [clinic.id, patientId]
   );
-  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
+  const advDept: Department =
+    advance?.department === 'home' || advance?.department === 'ward' ? advance.department : 'clinic';
+  const deptAdvances = advancesForDepartment(advDept, openAdvances ?? []);
+  const advanceBalancePaise = deptAdvances.reduce((sum, a) => sum + a.remainingPaise, 0);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
   const partnerLogoUrl = useMemo(

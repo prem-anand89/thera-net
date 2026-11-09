@@ -893,6 +893,8 @@ export interface PatientAdvance {
   receiptNo: string | null;
   notes: string | null;
   status: PatientAdvanceStatus;
+  /** Department where the advance was collected ('clinic' = OP, 'home' = Home care, 'ward' = IP). Null/omitted defaults to 'clinic'. */
+  department?: CareLocation;
   deleted: boolean;
   updatedAt: string;
 }

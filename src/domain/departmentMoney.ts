@@ -19,12 +19,22 @@ export function paymentsForDepartment<P extends { visitId?: string | null }>(
   return payments.filter((p) => departmentOf(p.visitId ? visitsById.get(p.visitId) : undefined) === department);
 }
 
+type AdvanceItem = {
+  department?: string | null;
+  advance?: { department?: string | null } | null;
+};
+
 /**
- * Advances (deposits) by department. Until an advance carries a department of its own (a later step adds the column),
- * every advance belongs to OP, so IP and Home care show none and nothing is counted twice.
+ * Advances (deposits) by department. An advance belongs to the department it was recorded in;
+ * older rows with no department belong to OP ('clinic'). Works on both raw `PatientAdvance`
+ * rows and `{ advance, remainingPaise }` balance entries.
  */
-export function advancesForDepartment<A>(department: Department, advances: readonly A[]): A[] {
-  return department === 'clinic' ? [...advances] : [];
+export function advancesForDepartment<A extends AdvanceItem>(department: Department, advances: readonly A[]): A[] {
+  return advances.filter((item) => {
+    const raw = item.department ?? item.advance?.department;
+    const advDept: Department = raw === 'home' || raw === 'ward' ? raw : 'clinic';
+    return advDept === department;
+  });
 }
 
 /**
