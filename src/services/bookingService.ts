@@ -81,7 +81,7 @@ export const bookingService = {
   async getBookingAvailability(slug: string, startDate: string, endDate: string): Promise<{ closedWeekdays: number[], closedDates: { date: string, label: string }[], appointments: { scheduled_at: string, therapist_id: UUID, duration_minutes?: number }[], therapistHours?: Record<string, WorkingHours> }> {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase is not configured');
-    const { data, error } = await supabase.rpc('get_booking_availability', { 
+    const { data, error } = await supabase.rpc('get_booking_availability', {
       p_slug: slug,
       p_start_date: startDate,
       p_end_date: endDate
@@ -545,13 +545,7 @@ export const bookingService = {
     }
     const { error } = await supabase.rpc('set_clinic_closed_dates', params);
     if (error) {
-      if ((error.code === 'PGRST202' || error.code === '42883') && 'p_departments' in params) {
-        delete params.p_departments;
-        const { error: retryError } = await supabase.rpc('set_clinic_closed_dates', params);
-        if (retryError) throw new Error(`Could not save closed days: ${retryError.message}`);
-      } else {
-        throw new Error(`Could not save closed days: ${error.message}`);
-      }
+      throw new Error(`Could not save closed days: ${error.message}`);
     }
     syncEngine.schedule(0);
   },

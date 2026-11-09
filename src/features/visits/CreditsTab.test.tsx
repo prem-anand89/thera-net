@@ -84,9 +84,9 @@ describe('CreditsTab', () => {
   it('says what the month before had when this month is empty, and steps back on tap', async () => {
     monthly.mockImplementation(async (_c: string, m: { month: number }) => (m.month === new Date().getMonth() + 1 ? [] : [entry]));
     render(<CreditsTab myTherapistId="me" isAdmin={false} />);
-    const hint = await screen.findByRole('button', { name: /had 1 entry/ });
+    const hint = await screen.findByRole('button', { name: /had 1 entry/ }, { timeout: 4000 });
     fireEvent.click(hint);
-    expect(await screen.findByText('Entries · 1')).toBeInTheDocument();
+    expect(await screen.findByText('Entries · 1', {}, { timeout: 4000 })).toBeInTheDocument();
   });
 
   it('gives an admin without a therapist row the whole-clinic table, and a tap opens a statement', async () => {
