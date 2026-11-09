@@ -40,148 +40,92 @@ alter table public.invoices
 
 -- ---------------------------------------------------------------------------
 -- 2. Invoice integrity & series selection (`check_invoice_matches_visits`, `issue_invoice`, `amend_invoice`)
+--    Based directly on 20261107120000_invoice_patient_check_by_id.sql and
+--    20261107100000_invoice_integrity_checks.sql.
 -- ---------------------------------------------------------------------------
-create or replace function public.check_invoice_matches_visits(
+drop function if exists public.check_invoice_matches_visits(uuid, uuid[], jsonb, bigint, jsonb, uuid);
+drop function if exists public.check_invoice_matches_visits(uuid, uuid[], bigint, jsonb, jsonb, uuid);
+drop function if exists public.check_invoice_matches_visits(uuid, uuid[], bigint, jsonb, jsonb, uuid, text);
+
+create function public.check_invoice_matches_visits(
   p_clinic_id uuid,
   p_visit_ids uuid[],
-  p_line_items jsonb,
   p_total_paise bigint,
+  p_line_items jsonb,
   p_patient_snapshot jsonb,
-  p_allow_invoice_id uuid
+  p_original_patient_id uuid default null,
+  p_original_dept text default null
 ) returns void
-language plpgsql
-as $$
+language plpgsql stable security definer set search_path = pg_catalog, public as $$
 declare
-  v_requested integer := coalesce(cardinality(p_visit_ids), 0);
-  v_found integer;
-  v_patients integer;
-  v_departments integer;
-  v_orig_dept text;
-  v_patient_id uuid;
-  v_patient_mrno text;
-  v_snap_patient_id text := nullif(btrim(p_patient_snapshot->>'patientId'), '');
-  v_snap_mrno text := nullif(btrim(p_patient_snapshot->>'mrno'), '');
-  v_visits_total bigint;
-  v_lines_total bigint;
-  v_bad_line boolean;
+  v_visits int;
+  v_patients int;
+  v_depts int;
+  v_patient uuid;
+  v_dept text;
+  v_bills bigint;
+  v_lines bigint;
 begin
-  if v_requested = 0 then
-    raise exception 'Select at least one visit to invoice' using errcode = '22023';
+  select
+    count(*),
+    count(distinct patient_id),
+    count(distinct case
+      when admission_id is not null or location = 'ward' then 'ward'
+      when location = 'home' then 'home'
+      else 'clinic'
+    end),
+    (array_agg(patient_id))[1],
+    (array_agg(case
+      when admission_id is not null or location = 'ward' then 'ward'
+      when location = 'home' then 'home'
+      else 'clinic'
+    end))[1],
+    coalesce(sum(actual_bill_paise), 0)
+    into v_visits, v_patients, v_depts, v_patient, v_dept, v_bills
+    from visits
+   where id = any (coalesce(p_visit_ids, '{}')) and clinic_id = p_clinic_id and not deleted;
+
+  if v_visits = 0 then
+    raise exception 'No visits on this invoice';
+  end if;
+  if v_patients <> 1 then
+    raise exception 'All visits on one invoice must belong to the same patient';
+  end if;
+  if v_depts <> 1 then
+    raise exception 'All visits on one invoice must belong to the same department';
+  end if;
+  if p_original_dept is not null and p_original_dept <> v_dept then
+    raise exception 'All visits on one invoice must belong to the same department';
   end if;
 
-  if jsonb_typeof(p_line_items) is distinct from 'array' or jsonb_array_length(p_line_items) = 0 then
-    raise exception 'Invoice must have at least one line item' using errcode = '22023';
+  if p_original_patient_id is not null and p_original_patient_id <> v_patient then
+    raise exception 'The patient on this invoice does not match its visits';
   end if;
-
-  perform 1
-    from public.visits v
-    where v.clinic_id = p_clinic_id
-      and v.id = any(p_visit_ids)
-      and not v.deleted
-      and (v.invoice_id is null or v.invoice_id = p_allow_invoice_id)
-    for update;
-
-  select count(*),
-         count(distinct v.patient_id),
-         (array_agg(v.patient_id))[1],
-         count(distinct coalesce(v.location, 'clinic'))
-    into v_found, v_patients, v_patient_id, v_departments
-    from public.visits v
-    where v.clinic_id = p_clinic_id
-      and v.id = any(p_visit_ids)
-      and not v.deleted
-      and (v.invoice_id is null or v.invoice_id = p_allow_invoice_id);
-
-  if v_found < v_requested then
-    raise exception 'One or more visits are missing, deleted, or already on another invoice'
-      using errcode = '22023';
-  end if;
-
-  if v_patients > 1 then
-    raise exception 'All visits on an invoice must belong to the same patient'
-      using errcode = '22023';
-  end if;
-
-  if v_departments > 1 then
-    raise exception 'Cannot combine visits from different departments on one invoice'
-      using errcode = '22023';
-  end if;
-
-  if p_allow_invoice_id is not null then
-    select coalesce(v.location, 'clinic')
-      into v_orig_dept
-      from public.visits v
-      where v.clinic_id = p_clinic_id
-        and v.invoice_id = p_allow_invoice_id
-        and not v.deleted
-      limit 1;
-
-    if v_orig_dept is not null then
-      perform 1
-        from public.visits v
-        where v.clinic_id = p_clinic_id
-          and v.id = any(p_visit_ids)
-          and not v.deleted
-          and coalesce(v.location, 'clinic') <> v_orig_dept;
-      if found then
-        raise exception 'Cannot combine visits from different departments on one invoice'
-          using errcode = '22023';
-      end if;
+  if p_patient_snapshot ? 'patientId' then
+    if p_patient_snapshot ->> 'patientId' is distinct from v_patient::text then
+      raise exception 'The patient on this invoice does not match its visits';
+    end if;
+  elsif p_original_patient_id is null then
+    if p_patient_snapshot ->> 'mrno' is distinct from (select p.mrno from patients p where p.id = v_patient) then
+      raise exception 'The patient on this invoice does not match its visits';
     end if;
   end if;
 
-  if v_snap_patient_id is not null then
-    if v_patient_id::text is distinct from v_snap_patient_id then
-      raise exception 'Invoice patient details do not match the billed visits'
-        using errcode = '22023';
-    end if;
-  else
-    select p.mrno into v_patient_mrno
-      from public.patients p
-      where p.id = v_patient_id and p.clinic_id = p_clinic_id;
-
-    if v_snap_mrno is null or v_patient_mrno is distinct from v_snap_mrno then
-      raise exception 'Invoice patient details do not match the billed visits'
-        using errcode = '22023';
-    end if;
+  if p_total_paise <= 0 then
+    raise exception 'Nothing to bill: these visits have no charge';
+  end if;
+  if p_total_paise <> v_bills then
+    raise exception 'The invoice total does not match the visits'' bills';
   end if;
 
-  select coalesce(sum(v.actual_bill_paise), 0)
-    into v_visits_total
-    from public.visits v
-    where v.clinic_id = p_clinic_id
-      and v.id = any(p_visit_ids)
-      and not v.deleted;
-
-  if p_total_paise is distinct from v_visits_total then
-    raise exception 'Invoice total (%) does not match the sum of the billed visits (%)',
-      p_total_paise, v_visits_total
-      using errcode = '22023';
+  select coalesce(sum((l ->> 'totalPaise')::bigint), 0) into v_lines
+    from jsonb_array_elements(coalesce(p_line_items, '[]'::jsonb)) l;
+  if v_lines <> p_total_paise then
+    raise exception 'The invoice lines do not add up to its total';
   end if;
+end $$;
 
-  select bool_or(
-           (li->>'totalPaise') is null
-           or (li->>'totalPaise') !~ '^-?[0-9]+$'
-           or (li->>'totalPaise')::bigint < 0
-         ),
-         coalesce(sum(case when (li->>'totalPaise') ~ '^-?[0-9]+$' then (li->>'totalPaise')::bigint else 0 end), 0)
-    into v_bad_line, v_lines_total
-    from jsonb_array_elements(p_line_items) li;
-
-  if coalesce(v_bad_line, false) then
-    raise exception 'Each invoice line item must have a non-negative integer totalPaise'
-      using errcode = '22023';
-  end if;
-
-  if v_lines_total is distinct from p_total_paise then
-    raise exception 'Invoice line items (%) do not add up to the invoice total (%)',
-      v_lines_total, p_total_paise
-      using errcode = '22023';
-  end if;
-end;
-$$;
-
-revoke all on function public.check_invoice_matches_visits(uuid, uuid[], jsonb, bigint, jsonb, uuid)
+revoke all on function public.check_invoice_matches_visits(uuid, uuid[], bigint, jsonb, jsonb, uuid, text)
   from public, anon, authenticated, service_role;
 
 create or replace function public.issue_invoice(
@@ -194,118 +138,121 @@ create or replace function public.issue_invoice(
   p_therapist_id uuid,
   p_visit_ids uuid[],
   p_clinical_snapshot jsonb default null
-) returns public.invoices
-language plpgsql
-security definer
-set search_path = public
-as $$
+)
+ returns invoices
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
 declare
+  v_seq int;
   v_prefix text;
   v_ip_prefix text;
-  v_eff_prefix text;
+  v_effective_prefix text;
   v_series text;
+  v_is_ip boolean;
   v_billing_enabled boolean;
   v_invoicing_access text;
-  v_seq integer;
-  v_invoice_no text;
-  v_invoice invoices;
+  v_caller_role text;
+  v_plan_tier text;
+  v_plan_status text;
+  v_invoice public.invoices;
+  v_stamped int;
 begin
   if not is_clinic_member(p_clinic_id) then
-    raise exception 'Not a member of this clinic' using errcode = '42501';
+    raise exception 'not a member of this clinic';
   end if;
 
-  if not clinic_has_feature(p_clinic_id, 'invoicing') then
-    raise exception 'Invoicing is not included in this clinic''s current plan'
-      using errcode = '42501';
+  if tier_enforcement_enabled() then
+    select plan_tier, status into v_plan_tier, v_plan_status
+      from clinic_plans where clinic_id = p_clinic_id;
+
+    if v_plan_status is not null and v_plan_status <> 'active' then
+      raise exception 'this clinic''s plan is read-only -- invoicing is unavailable until payment resumes';
+    end if;
+
+    if v_plan_tier = 'lite' then
+      raise exception 'invoicing is not included in the Lite plan -- upgrade to Solo or above';
+    end if;
   end if;
 
-  if not can_use_module(p_clinic_id, 'invoicing') then
-    raise exception 'The invoicing module is not enabled for this clinic'
-      using errcode = '42501';
-  end if;
-
-  if p_clinical_snapshot is not null and jsonb_typeof(p_clinical_snapshot) <> 'object' then
-    raise exception 'clinical_snapshot must be a JSON object or null'
-      using errcode = '22023';
+  if not coalesce(
+    (select entitled from clinic_entitlements
+     where clinic_id = p_clinic_id and module_key = 'invoicing'),
+    true
+  ) then
+    raise exception 'clinic is not entitled to invoicing';
   end if;
 
   select invoice_prefix, ip_invoice_prefix, billing_enabled, invoicing_access
     into v_prefix, v_ip_prefix, v_billing_enabled, v_invoicing_access
     from clinics where id = p_clinic_id;
 
-  if not coalesce(v_billing_enabled, true) then
-    raise exception 'Billing is turned off for this clinic'
-      using errcode = '42501';
+  if not v_billing_enabled then
+    raise exception 'billing is turned off for this clinic';
   end if;
 
-  if v_invoicing_access = 'billing_staff'
-     and not (is_clinic_admin(p_clinic_id) or is_front_desk(p_clinic_id)) then
-    raise exception 'Only billing staff can issue invoices for this clinic'
-      using errcode = '42501';
+  if v_invoicing_access = 'billing_staff' then
+    select role into v_caller_role from clinic_members
+      where clinic_id = p_clinic_id and user_id = auth.uid();
+    if v_caller_role not in ('admin', 'front_desk') then
+      raise exception 'only front desk or an admin can issue invoices at this clinic';
+    end if;
   end if;
 
-  perform public.check_invoice_matches_visits(
-    p_clinic_id, p_visit_ids, p_line_items, p_total_paise, p_patient_snapshot, null
-  );
+  select exists (
+    select 1
+      from visits
+     where id = any (coalesce(p_visit_ids, '{}'))
+       and clinic_id = p_clinic_id
+       and not deleted
+       and (admission_id is not null or location = 'ward')
+  ) into v_is_ip;
 
-  select case when coalesce(v.location, 'clinic') = 'ward' then 'ip' else 'main' end
-    into v_series
-    from public.visits v
-    where v.clinic_id = p_clinic_id
-      and v.id = any(p_visit_ids)
-      and not v.deleted
-    limit 1;
-  v_series := coalesce(v_series, 'main');
-
-  v_eff_prefix := case
-    when v_series = 'ip' then coalesce(nullif(btrim(v_ip_prefix), ''), v_prefix || 'IP')
-    else v_prefix
-  end;
+  if v_is_ip then
+    v_series := 'ip';
+    v_effective_prefix := coalesce(nullif(btrim(v_ip_prefix), ''), v_prefix || 'IP');
+  else
+    v_series := 'main';
+    v_effective_prefix := v_prefix;
+  end if;
 
   insert into invoice_counters (clinic_id, fy_label, series)
   values (p_clinic_id, p_fy_label, v_series)
   on conflict (clinic_id, fy_label, series) do nothing;
 
   update invoice_counters
-     set next_seq = next_seq + 1
-   where clinic_id = p_clinic_id and fy_label = p_fy_label and series = v_series
+  set next_seq = next_seq + 1
+  where clinic_id = p_clinic_id and fy_label = p_fy_label and series = v_series
   returning next_seq - 1 into v_seq;
 
-  v_invoice_no := v_eff_prefix || '/' || p_fy_label || '/' || lpad(v_seq::text, 4, '0');
-
   insert into invoices (
-    clinic_id, invoice_no, fy_label, seq,
-    patient_snapshot, line_items, total_paise, payment_mode, therapist_id,
-    clinical_snapshot
+    clinic_id, invoice_no, fy_label, seq, patient_snapshot, line_items,
+    total_paise, payment_mode, therapist_id, clinical_snapshot
   ) values (
-    p_clinic_id, v_invoice_no, p_fy_label, v_seq,
-    p_patient_snapshot, p_line_items, p_total_paise, p_payment_mode, p_therapist_id,
-    p_clinical_snapshot
+    p_clinic_id,
+    v_effective_prefix || '/' || p_fy_label || '/' || lpad(v_seq::text, 4, '0'),
+    p_fy_label, v_seq, p_patient_snapshot, p_line_items,
+    p_total_paise, p_payment_mode, p_therapist_id, p_clinical_snapshot
   ) returning * into v_invoice;
 
   update visits
-     set invoice_id = v_invoice.id,
-         updated_at = now()
-   where clinic_id = p_clinic_id
-     and id = any(p_visit_ids)
-     and invoice_id is null;
+  set invoice_id = v_invoice.id
+  where id = any (p_visit_ids)
+    and clinic_id = p_clinic_id
+    and invoice_id is null
+    and not deleted;
+  get diagnostics v_stamped = row_count;
+  if v_stamped <> coalesce(array_length(p_visit_ids, 1), 0) then
+    raise exception 'one or more visits are missing, deleted, or already invoiced';
+  end if;
 
-  perform record_audit_event(
-    p_clinic_id,
-    'invoice.issued',
-    'invoice',
-    v_invoice.id::text,
-    jsonb_build_object(
-      'invoice_no', v_invoice.invoice_no,
-      'series', v_series,
-      'total_paise', v_invoice.total_paise,
-      'visit_ids', to_jsonb(p_visit_ids)
-    )
+  perform public.check_invoice_matches_visits(
+    p_clinic_id, p_visit_ids, p_total_paise, p_line_items, p_patient_snapshot
   );
 
   return v_invoice;
-end;
-$$;
+end $function$;
 
 create or replace function public.amend_invoice(
   p_original_invoice_id uuid,
@@ -318,142 +265,133 @@ create or replace function public.amend_invoice(
   p_therapist_id uuid,
   p_visit_ids uuid[],
   p_clinical_snapshot jsonb default null
-) returns public.invoices
-language plpgsql
-security definer
-set search_path = public
-as $$
+)
+ returns invoices
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
 declare
+  v_seq int;
   v_prefix text;
   v_ip_prefix text;
-  v_eff_prefix text;
+  v_effective_prefix text;
   v_series text;
   v_billing_enabled boolean;
   v_invoicing_access text;
-  v_seq integer;
-  v_invoice_no text;
-  v_invoice invoices;
-  v_orig invoices;
+  v_caller_role text;
+  v_invoice public.invoices;
+  v_stamped int;
+  v_original_clinic_id uuid;
+  v_original_patient uuid;
+  v_original_dept text;
 begin
   if not is_clinic_member(p_clinic_id) then
-    raise exception 'Not a member of this clinic' using errcode = '42501';
+    raise exception 'not a member of this clinic';
   end if;
 
-  if not clinic_has_feature(p_clinic_id, 'invoicing') then
-    raise exception 'Invoicing is not included in this clinic''s current plan'
-      using errcode = '42501';
+  select clinic_id into v_original_clinic_id from invoices where id = p_original_invoice_id;
+  if v_original_clinic_id is null or v_original_clinic_id <> p_clinic_id then
+    raise exception 'original invoice not found for this clinic';
   end if;
 
-  if not can_use_module(p_clinic_id, 'invoicing') then
-    raise exception 'The invoicing module is not enabled for this clinic'
-      using errcode = '42501';
-  end if;
-
-  if p_clinical_snapshot is not null and jsonb_typeof(p_clinical_snapshot) <> 'object' then
-    raise exception 'clinical_snapshot must be a JSON object or null'
-      using errcode = '22023';
-  end if;
-
-  select * into v_orig
-    from invoices
-   where id = p_original_invoice_id
-     and clinic_id = p_clinic_id
-     for update;
-
-  if not found then
-    raise exception 'Original invoice not found in this clinic'
-      using errcode = 'P0002';
-  end if;
-
-  if exists (select 1 from invoices where supersedes_invoice_id = p_original_invoice_id) then
-    raise exception 'This invoice has already been amended — amend the latest version instead'
-      using errcode = '23505';
+  if not coalesce(
+    (select entitled from clinic_entitlements
+     where clinic_id = p_clinic_id and module_key = 'invoicing'),
+    true
+  ) then
+    raise exception 'clinic is not entitled to invoicing';
   end if;
 
   select invoice_prefix, ip_invoice_prefix, billing_enabled, invoicing_access
     into v_prefix, v_ip_prefix, v_billing_enabled, v_invoicing_access
     from clinics where id = p_clinic_id;
 
-  if not coalesce(v_billing_enabled, true) then
-    raise exception 'Billing is turned off for this clinic'
-      using errcode = '42501';
+  if not v_billing_enabled then
+    raise exception 'billing is turned off for this clinic';
   end if;
 
-  if v_invoicing_access = 'billing_staff'
-     and not (is_clinic_admin(p_clinic_id) or is_front_desk(p_clinic_id)) then
-    raise exception 'Only billing staff can issue invoices for this clinic'
-      using errcode = '42501';
+  if v_invoicing_access = 'billing_staff' then
+    select role into v_caller_role from clinic_members
+      where clinic_id = p_clinic_id and user_id = auth.uid();
+    if v_caller_role not in ('admin', 'front_desk') then
+      raise exception 'only front desk or an admin can issue invoices at this clinic';
+    end if;
   end if;
 
-  perform public.check_invoice_matches_visits(
-    p_clinic_id, p_visit_ids, p_line_items, p_total_paise, p_patient_snapshot, p_original_invoice_id
-  );
+  -- Read before the visits are re-pointed: who the bill being amended was for and which department it belongs to.
+  select
+    patient_id,
+    case
+      when admission_id is not null or location = 'ward' then 'ward'
+      when location = 'home' then 'home'
+      else 'clinic'
+    end
+    into v_original_patient, v_original_dept
+    from visits
+   where invoice_id = p_original_invoice_id and clinic_id = p_clinic_id and not deleted
+   limit 1;
 
-  select case when coalesce(v.location, 'clinic') = 'ward' then 'ip' else 'main' end
-    into v_series
-    from public.visits v
-    where v.clinic_id = p_clinic_id
-      and v.id = any(p_visit_ids)
-      and not v.deleted
-    limit 1;
-  v_series := coalesce(v_series, 'main');
+  if v_original_dept is null then
+    select
+      case
+        when clinical_snapshot ->> 'placeOfService' in ('ward', 'home') then clinical_snapshot ->> 'placeOfService'
+        else 'clinic'
+      end
+      into v_original_dept
+      from invoices
+     where id = p_original_invoice_id and clinic_id = p_clinic_id;
+  end if;
 
-  v_eff_prefix := case
-    when v_series = 'ip' then coalesce(nullif(btrim(v_ip_prefix), ''), v_prefix || 'IP')
-    else v_prefix
-  end;
+  if v_original_dept = 'ward' then
+    v_series := 'ip';
+    v_effective_prefix := coalesce(nullif(btrim(v_ip_prefix), ''), v_prefix || 'IP');
+  else
+    v_series := 'main';
+    v_effective_prefix := v_prefix;
+  end if;
 
   insert into invoice_counters (clinic_id, fy_label, series)
   values (p_clinic_id, p_fy_label, v_series)
   on conflict (clinic_id, fy_label, series) do nothing;
 
   update invoice_counters
-     set next_seq = next_seq + 1
-   where clinic_id = p_clinic_id and fy_label = p_fy_label and series = v_series
+  set next_seq = next_seq + 1
+  where clinic_id = p_clinic_id and fy_label = p_fy_label and series = v_series
   returning next_seq - 1 into v_seq;
 
-  v_invoice_no := v_eff_prefix || '/' || p_fy_label || '/' || lpad(v_seq::text, 4, '0');
-
   insert into invoices (
-    clinic_id, invoice_no, fy_label, seq,
-    patient_snapshot, line_items, total_paise, payment_mode, therapist_id,
-    supersedes_invoice_id,
-    clinical_snapshot
+    clinic_id, invoice_no, fy_label, seq, patient_snapshot, line_items,
+    total_paise, payment_mode, therapist_id, supersedes_invoice_id, clinical_snapshot
   ) values (
-    p_clinic_id, v_invoice_no, p_fy_label, v_seq,
-    p_patient_snapshot, p_line_items, p_total_paise, p_payment_mode, p_therapist_id,
-    p_original_invoice_id,
-    coalesce(p_clinical_snapshot, v_orig.clinical_snapshot)
+    p_clinic_id,
+    v_effective_prefix || '/' || p_fy_label || '/' || lpad(v_seq::text, 4, '0'),
+    p_fy_label, v_seq, p_patient_snapshot, p_line_items,
+    p_total_paise, p_payment_mode, p_therapist_id, p_original_invoice_id, p_clinical_snapshot
   ) returning * into v_invoice;
 
+  perform set_config('app.allow_invoice_amendment', 'true', true);
   update visits
-     set invoice_id = v_invoice.id,
-         updated_at = now()
-   where clinic_id = p_clinic_id
-     and id = any(p_visit_ids)
-     and (invoice_id is null or invoice_id = p_original_invoice_id);
+  set invoice_id = v_invoice.id
+  where id = any (p_visit_ids)
+    and clinic_id = p_clinic_id
+    and (invoice_id is null or invoice_id = p_original_invoice_id)
+    and not deleted;
+  get diagnostics v_stamped = row_count;
+  if v_stamped <> coalesce(array_length(p_visit_ids, 1), 0) then
+    raise exception 'one or more visits are missing, deleted, or invoiced elsewhere';
+  end if;
 
-  perform record_audit_event(
-    p_clinic_id,
-    'invoice.amended',
-    'invoice',
-    v_invoice.id::text,
-    jsonb_build_object(
-      'invoice_no', v_invoice.invoice_no,
-      'series', v_series,
-      'supersedes_invoice_id', p_original_invoice_id,
-      'supersedes_invoice_no', v_orig.invoice_no,
-      'total_paise', v_invoice.total_paise,
-      'visit_ids', to_jsonb(p_visit_ids)
-    )
+  perform public.check_invoice_matches_visits(
+    p_clinic_id, p_visit_ids, p_total_paise, p_line_items, p_patient_snapshot, v_original_patient, v_original_dept
   );
 
   return v_invoice;
-end;
-$$;
+end $function$;
 
 -- ---------------------------------------------------------------------------
 -- 3. Advances per department (`patient_advances.department` & `enforce_advance_balance`)
+--    Based directly on 20261005170000_package_and_advance_race_guards.sql.
 -- ---------------------------------------------------------------------------
 alter table public.patient_advances
   add column if not exists department text not null default 'clinic'
@@ -461,63 +399,47 @@ alter table public.patient_advances
 
 create or replace function public.enforce_advance_balance()
 returns trigger
-language plpgsql
-as $$
+language plpgsql security definer set search_path = public as $$
 declare
-  v_amount bigint;
-  v_status text;
-  v_deleted boolean;
-  v_adv_dept text;
+  v_advance_amount bigint;
+  v_advance_dept text;
   v_visit_dept text;
-  v_drawn bigint;
+  v_drawn_down bigint;
 begin
-  if new.advance_id is null then
-    return new;
+  if new.advance_id is not null then
+    select amount_paise, coalesce(department, 'clinic')
+      into v_advance_amount, v_advance_dept
+      from patient_advances where id = new.advance_id;
+    if v_advance_amount is null then
+      raise exception 'Advance not found for this payment.';
+    end if;
+
+    if new.visit_id is not null then
+      select
+        case
+          when admission_id is not null or location = 'ward' then 'ward'
+          when location = 'home' then 'home'
+          else 'clinic'
+        end
+        into v_visit_dept
+        from visits where id = new.visit_id;
+      if v_visit_dept is not null and v_visit_dept <> v_advance_dept then
+        raise exception 'Advance belongs to a different department (%) than this visit (%).',
+          v_advance_dept, v_visit_dept;
+      end if;
+    end if;
+
+    select coalesce(sum(amount_paise), 0) into v_drawn_down
+      from payments
+      where advance_id = new.advance_id and id <> new.id;
+
+    if v_drawn_down + new.amount_paise > v_advance_amount then
+      raise exception 'This payment (paise: %) would draw down more than the advance''s remaining balance (paise: % of % already used).',
+        new.amount_paise, v_drawn_down, v_advance_amount;
+    end if;
   end if;
-
-  if tg_op = 'UPDATE'
-     and new.advance_id is not distinct from old.advance_id
-     and new.visit_id is not distinct from old.visit_id
-     and new.amount_paise <= old.amount_paise then
-    return new;
-  end if;
-
-  select amount_paise, status, deleted, department
-    into v_amount, v_status, v_deleted, v_adv_dept
-    from public.patient_advances
-   where id = new.advance_id
-     for update;
-
-  if v_deleted or v_status in ('refunded', 'void') then
-    raise exception 'Advance is no longer open'
-      using errcode = '23514';
-  end if;
-
-  select coalesce(location, 'clinic')
-    into v_visit_dept
-    from public.visits
-   where id = new.visit_id;
-
-  if v_visit_dept is not null and v_adv_dept <> v_visit_dept then
-    raise exception 'Advance belongs to a different department than this visit'
-      using errcode = '22023';
-  end if;
-
-  select coalesce(sum(amount_paise), 0)
-    into v_drawn
-    from public.payments
-   where advance_id = new.advance_id
-     and id is distinct from new.id;
-
-  if v_drawn + new.amount_paise > v_amount then
-    raise exception 'Amount exceeds advance remaining balance (% available, % requested)',
-      v_amount - v_drawn, new.amount_paise
-      using errcode = '23514';
-  end if;
-
   return new;
-end;
-$$;
+end $$;
 
 drop trigger if exists payments_enforce_advance_balance on public.payments;
 create trigger payments_enforce_advance_balance
@@ -536,4 +458,3 @@ alter table public.service_catalog
       and departments <@ array['clinic', 'home', 'ward']::text[]
     )
   );
-

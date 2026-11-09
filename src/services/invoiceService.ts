@@ -64,6 +64,21 @@ async function assertNothingPending(visitIds: UUID[]): Promise<void> {
  * issue_invoice() Postgres function. Minting numbers offline would risk
  * duplicates — the one thing an invoice book must never have.
  */
+function ensureSnapshotDepartment(
+  snapshot: InvoiceClinicalSnapshot | null | undefined,
+  dept: 'clinic' | 'home' | 'ward'
+): InvoiceClinicalSnapshot | null {
+  if (dept === 'clinic' || snapshot?.placeOfService) return snapshot ?? null;
+  if (snapshot) return { ...snapshot, placeOfService: dept };
+  return {
+    diagnosis: null,
+    referringPhysician: null,
+    physicianRegistrationNo: null,
+    placeOfService: dept,
+    treatmentPerformed: null,
+  };
+}
+
 export function createInvoiceService(repos: Repos) {
   const isAvailable = (v: Visit, allowInvoiceId?: UUID) =>
     !v.invoiceId || v.invoiceId === allowInvoiceId;
@@ -240,6 +255,8 @@ export function createInvoiceService(repos: Repos) {
       const { allVisits, lineItems, totalPaise, therapistId } = await buildLineItems(visitIds);
       await assertNothingPending(allVisits.map((v) => v.id));
 
+      const effectiveSnapshot = ensureSnapshotDepartment(clinicalSnapshot, departmentOf(allVisits[0]));
+
       const fy = fiscalYearOf(new Date(), clinic.fyStartMonth);
       const { data, error } = await supabase.rpc('issue_invoice', {
         p_clinic_id: clinic.id,
@@ -257,7 +274,7 @@ export function createInvoiceService(repos: Repos) {
         p_payment_mode: paymentMode,
         p_therapist_id: therapistId,
         p_visit_ids: allVisits.map((v) => v.id),
-        p_clinical_snapshot: clinicalSnapshot ?? null,
+        p_clinical_snapshot: effectiveSnapshot,
       });
       if (error) throw new Error(`Could not issue invoice: ${error.message}`);
 
@@ -318,6 +335,10 @@ export function createInvoiceService(repos: Repos) {
         throw new Error('Cannot combine visits from different departments on one invoice');
       }
 
+      const baseSnapshot =
+        clinicalSnapshot !== undefined ? clinicalSnapshot : (original.clinicalSnapshot ?? null);
+      const effectiveSnapshot = ensureSnapshotDepartment(baseSnapshot, departmentOf(allVisits[0]));
+
       const { data, error } = await supabase.rpc('amend_invoice', {
         p_original_invoice_id: originalInvoiceId,
         p_clinic_id: clinic.id,
@@ -328,8 +349,7 @@ export function createInvoiceService(repos: Repos) {
         p_payment_mode: paymentMode,
         p_therapist_id: therapistId,
         p_visit_ids: allVisits.map((v) => v.id),
-        p_clinical_snapshot:
-          clinicalSnapshot !== undefined ? clinicalSnapshot : (original.clinicalSnapshot ?? null),
+        p_clinical_snapshot: effectiveSnapshot,
       });
       if (error) throw new Error(`Could not amend invoice: ${error.message}`);
 

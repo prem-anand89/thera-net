@@ -13,10 +13,11 @@ import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
 import { advanceReceiptLabel } from '@/domain/advanceReceipt';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
 import { advancesForDepartment } from '@/domain/departmentMoney';
-import type { Department } from '@/domain/departments';
+import { clinicDepartments, DEPARTMENT_LABELS, type Department } from '@/domain/departments';
 
 export function AdvanceReceiptPrintPage() {
   const clinic = useClinic();
+  const hasMultipleDepts = clinicDepartments(clinic).length > 1;
   const { patientId, advanceId } = useParams({ strict: false }) as {
     patientId: string;
     advanceId: string;
@@ -87,6 +88,9 @@ export function AdvanceReceiptPrintPage() {
           <div>
             <p className="font-display font-semibold text-[var(--ink)]">{patient.name}</p>
             <p className="text-[var(--muted)]">Patient ID: {patient.mrno}</p>
+            {hasMultipleDepts && (
+              <p className="text-[var(--muted)]">Department: {DEPARTMENT_LABELS[advDept]}</p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-lg font-bold text-[var(--ink)]">ADVANCE RECEIPT</p>

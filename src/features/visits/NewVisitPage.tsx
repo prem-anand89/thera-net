@@ -18,7 +18,7 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useDepartment } from '@/app/DepartmentContext';
-import { type Department, servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
+import { type Department, departmentOf, servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
@@ -118,9 +118,8 @@ function SegmentedToggle<T extends string>({
 }) {
   return (
     <div
-      className={`flex rounded-md border border-[var(--border)] p-0.5 text-xs ${
-        className || 'w-full sm:w-auto sm:inline-flex'
-      }`}
+      className={`flex rounded-md border border-[var(--border)] p-0.5 text-xs ${className || 'w-full sm:w-auto sm:inline-flex'
+        }`}
     >
       {options.map((opt) => (
         <button
@@ -129,11 +128,10 @@ function SegmentedToggle<T extends string>({
           disabled={opt.disabled}
           aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`h-8 flex-1 whitespace-nowrap rounded px-3 text-center font-medium transition-colors ${
-            value === opt.value
+          className={`h-8 flex-1 whitespace-nowrap rounded px-3 text-center font-medium transition-colors ${value === opt.value
               ? 'bg-[var(--teal-light)] text-[var(--teal)]'
               : 'text-[var(--muted)] hover:bg-[var(--paper)]'
-          } ${opt.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+            } ${opt.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           {opt.label}
         </button>
@@ -407,11 +405,69 @@ export function NewVisitPage() {
     () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
     [therapists, session?.user?.id]
   );
-  const rawCatalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
-  const catalog = useMemo(
-    () => (rawCatalog ? servicesInDepartment(department, rawCatalog) : undefined),
-    [rawCatalog, department]
+
+  // "Complete visit" from an appointment: the visit is that appointment's — its therapist and its day —
+  // not whoever saw the patient last. Applied once per appointment, so a manual change afterwards sticks.
+  const fromAppointment = useLiveQuery(
+    async () =>
+      search.appointmentId
+        ? // null = not on this device, so the usual therapist default applies instead of waiting forever.
+        ((await repos.appointments.listByClinic(clinic.id)).find((a) => a.id === search.appointmentId) ?? null)
+        : undefined,
+    [clinic.id, search.appointmentId]
   );
+  const appliedAppointmentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fromAppointment || appliedAppointmentRef.current === fromAppointment.id) return;
+    appliedAppointmentRef.current = fromAppointment.id;
+    const prefill = visitPrefillFromAppointment(fromAppointment);
+    if (prefill.therapistId) setTherapistId(prefill.therapistId);
+    setVisitDate(prefill.visitDate);
+    const apptPlace = locationOf(fromAppointment);
+    if (apptPlace === 'home' || apptPlace === 'clinic') {
+      setLocation(apptPlace);
+      locationDecidedRef.current = true;
+    }
+  }, [fromAppointment]);
+
+  // "Repeat last visit": pre-fill patient/therapist/condition from the
+  // visit being repeated, then — once that patient's open packages have
+  // loaded — select the matching package so this becomes its next session.
+  const repeatVisit = useLiveQuery(
+    () => (search.repeatVisitId ? repos.visits.get(search.repeatVisitId) : undefined),
+    [search.repeatVisitId]
+  );
+
+  // Patient Profile's "New visit" button and an Expected-today card linked
+  // to a registered patient both arrive with ?patientId=… — skip search and
+  // pre-select that patient directly, same as repeatVisit does below.
+  // "Log session" on the ward-rounds card: the visit is an inpatient round on that stay (place fixed to Inpatient, saved
+  // unpaid until the discharge bill). It applies only while the chosen patient is the stay's own patient.
+  const admission = useLiveQuery(
+    async () => (search.admissionId ? ((await repos.admissions.get(search.admissionId)) ?? null) : undefined),
+    [search.admissionId]
+  );
+  const activeAdmission = admission && !admission.deleted && !admission.dischargedOn && patient?.id === admission.patientId ? admission : null;
+  const visitDept: Department = activeAdmission
+    ? 'ward'
+    : location === 'home'
+      ? 'home'
+      : !locationDecidedRef.current && department === 'ward'
+        ? 'ward'
+        : 'clinic';
+  const therapistList = useMemo(
+    () => therapistsInDepartment(visitDept, therapists ?? []),
+    [visitDept, therapists]
+  );
+
+  const rawCatalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const catalog = useMemo(() => {
+    if (!rawCatalog) return undefined;
+    const inDept = new Set(servicesInDepartment(visitDept, rawCatalog).map((c) => c.id));
+    return rawCatalog.filter(
+      (c) => inDept.has(c.id) || rows.some((r) => r.serviceCatalogId === c.id)
+    );
+  }, [rawCatalog, visitDept, rows]);
   // Admin only: a service the search didn't find, added from here and selected on the row that asked for it.
   const [addService, setAddService] = useState<{ name: string; rowKey: string } | null>(null);
   const allCatalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]) ?? EMPTY_CATALOG;
@@ -478,6 +534,7 @@ export function NewVisitPage() {
       const total = group[0].packageTotal ?? 1;
       if (group.length >= total) continue;
       const sorted = [...group].sort((a, b) => a.visitDate.localeCompare(b.visitDate));
+      if (departmentOf(sorted[0]) !== visitDept) continue;
       open.push({
         packageGroupId: gid,
         serviceCatalogId: sorted[0].serviceCatalogId,
@@ -491,59 +548,12 @@ export function NewVisitPage() {
       });
     }
     return { patientId: patient.id, list: open.sort((a, b) => b.startedOn.localeCompare(a.startedOn)) };
-  }, [clinic.id, patient?.id]);
+  }, [clinic.id, patient?.id, visitDept]);
   const openPackages = useMemo((): OpenPackage[] | undefined => {
     if (!patient) return EMPTY_PACKAGES;
     return openPackagesResult?.patientId === patient.id ? openPackagesResult.list : undefined;
   }, [patient, openPackagesResult]);
 
-  // "Complete visit" from an appointment: the visit is that appointment's — its therapist and its day —
-  // not whoever saw the patient last. Applied once per appointment, so a manual change afterwards sticks.
-  const fromAppointment = useLiveQuery(
-    async () =>
-      search.appointmentId
-        ? // null = not on this device, so the usual therapist default applies instead of waiting forever.
-          ((await repos.appointments.listByClinic(clinic.id)).find((a) => a.id === search.appointmentId) ?? null)
-        : undefined,
-    [clinic.id, search.appointmentId]
-  );
-  const appliedAppointmentRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!fromAppointment || appliedAppointmentRef.current === fromAppointment.id) return;
-    appliedAppointmentRef.current = fromAppointment.id;
-    const prefill = visitPrefillFromAppointment(fromAppointment);
-    if (prefill.therapistId) setTherapistId(prefill.therapistId);
-    setVisitDate(prefill.visitDate);
-    const apptPlace = locationOf(fromAppointment);
-    if (apptPlace === 'home' || apptPlace === 'clinic') {
-      setLocation(apptPlace);
-      locationDecidedRef.current = true;
-    }
-  }, [fromAppointment]);
-
-  // "Repeat last visit": pre-fill patient/therapist/condition from the
-  // visit being repeated, then — once that patient's open packages have
-  // loaded — select the matching package so this becomes its next session.
-  const repeatVisit = useLiveQuery(
-    () => (search.repeatVisitId ? repos.visits.get(search.repeatVisitId) : undefined),
-    [search.repeatVisitId]
-  );
-
-  // Patient Profile's "New visit" button and an Expected-today card linked
-  // to a registered patient both arrive with ?patientId=… — skip search and
-  // pre-select that patient directly, same as repeatVisit does below.
-  // "Log session" on the ward-rounds card: the visit is an inpatient round on that stay (place fixed to Inpatient, saved
-  // unpaid until the discharge bill). It applies only while the chosen patient is the stay's own patient.
-  const admission = useLiveQuery(
-    async () => (search.admissionId ? ((await repos.admissions.get(search.admissionId)) ?? null) : undefined),
-    [search.admissionId]
-  );
-  const activeAdmission = admission && !admission.deleted && !admission.dischargedOn && patient?.id === admission.patientId ? admission : null;
-  const visitDept: Department = activeAdmission ? 'ward' : (location === 'home' ? 'home' : 'clinic');
-  const therapistList = useMemo(
-    () => therapistsInDepartment(visitDept, therapists ?? []),
-    [visitDept, therapists]
-  );
   const prefillPatient = useLiveQuery(
     () => (search.patientId ? repos.patients.get(search.patientId) : undefined),
     [search.patientId]
@@ -573,6 +583,10 @@ export function NewVisitPage() {
       if (p) {
         setPatient(p);
         setCondition(repeatVisit.condition ?? p.primaryCondition ?? '');
+      }
+      if (repeatVisit.location === 'home' || repeatVisit.location === 'clinic') {
+        setLocation(repeatVisit.location);
+        locationDecidedRef.current = true;
       }
       setTherapistId(repeatVisit.therapistId);
       // Same service and bill as the visit being repeated either way — for
@@ -685,7 +699,10 @@ export function NewVisitPage() {
   );
   // Everyone, retired therapists included: the last visit names who did it, even if they have since left.
   const allTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const finishedPackage = useMemo(() => lastFinishedPackage(patientVisits ?? []), [patientVisits]);
+  const finishedPackage = useMemo(
+    () => lastFinishedPackage((patientVisits ?? []).filter((v) => departmentOf(v) === visitDept)),
+    [patientVisits, visitDept]
+  );
   const allTreatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const chosenCount = useMemo(() => rows.filter(hasService).length, [rows]);
   const hasTreatmentInfo = treatmentIds.length > 0 || notes.trim() !== '';
@@ -718,8 +735,8 @@ export function NewVisitPage() {
     return text === '—' ? '' : text;
   }, [lastVisit, allTreatments]);
   const catalogNameById = useMemo(
-    () => new Map((catalog ?? []).map((c) => [c.id, c.name])),
-    [catalog]
+    () => new Map(allCatalog.map((c) => [c.id, c.name])),
+    [allCatalog]
   );
 
   // Default therapist when patient is selected: whoever saw them last, or
@@ -843,17 +860,17 @@ export function NewVisitPage() {
   const packageMoveNote =
     packageMove && runnerId
       ? buildPackageMoveNote({
-          amountPaise: packageMove.amountPaise,
-          biller: { id: packageMove.billerId, name: therapistsById.get(packageMove.billerId)?.name ?? 'the biller' },
-          runner: { id: runnerId, name: therapistsById.get(runnerId)?.name ?? 'the therapist' },
-          helper: helperShare
-            ? {
-                id: helperShare.therapistId,
-                name: therapistsById.get(helperShare.therapistId)?.name ?? 'a colleague',
-                pct: helperShare.pct,
-              }
-            : null,
-        })
+        amountPaise: packageMove.amountPaise,
+        biller: { id: packageMove.billerId, name: therapistsById.get(packageMove.billerId)?.name ?? 'the biller' },
+        runner: { id: runnerId, name: therapistsById.get(runnerId)?.name ?? 'the therapist' },
+        helper: helperShare
+          ? {
+            id: helperShare.therapistId,
+            name: therapistsById.get(helperShare.therapistId)?.name ?? 'a colleague',
+            pct: helperShare.pct,
+          }
+          : null,
+      })
       : null;
 
   // The bill: the discount / top-up applies to the rows' catalog total (₹0 for a package session).
@@ -1301,16 +1318,16 @@ export function NewVisitPage() {
                 setJustSaved((prev) =>
                   prev
                     ? {
-                        ...prev,
-                        serviceLabel: label,
-                        billPaise: updated.actualBillPaise,
-                        visitDate: updated.visitDate,
-                        therapistId: updated.therapistId,
-                        isPackage: Boolean(updated.packageGroupId && updated.sessionIndex),
-                        packageSessionNumber: updated.sessionIndex ?? undefined,
-                        packageTotalSessions: updated.packageTotal ?? undefined,
-                        alreadyCollected: paidPaise >= updated.actualBillPaise && updated.actualBillPaise > 0,
-                      }
+                      ...prev,
+                      serviceLabel: label,
+                      billPaise: updated.actualBillPaise,
+                      visitDate: updated.visitDate,
+                      therapistId: updated.therapistId,
+                      isPackage: Boolean(updated.packageGroupId && updated.sessionIndex),
+                      packageSessionNumber: updated.sessionIndex ?? undefined,
+                      packageTotalSessions: updated.packageTotal ?? undefined,
+                      alreadyCollected: paidPaise >= updated.actualBillPaise && updated.actualBillPaise > 0,
+                    }
                     : null
                 );
               } else if (!updated || updated.deleted) {
@@ -1489,9 +1506,8 @@ export function NewVisitPage() {
                       {Array.from({ length: openPackages[0].packageTotal }, (_, i) => (
                         <span
                           key={i}
-                          className={`h-2 w-2 rounded-full ${
-                            i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
-                          }`}
+                          className={`h-2 w-2 rounded-full ${i < openPackages[0].logged ? 'bg-[var(--teal)]' : 'border border-[var(--border)] bg-transparent'
+                            }`}
                         />
                       ))}
                     </span>
@@ -1596,80 +1612,80 @@ export function NewVisitPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-display text-base font-semibold text-[var(--ink)]">Patient</h2>
           </div>
-            <div className="space-y-3">
-              <input
-                type="search"
-                enterKeyHint="search"
-                aria-label="Find patient"
-                className={inputCls}
-                placeholder="Search ID, name or phone…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && matches?.[0]) {
-                    e.preventDefault();
-                    selectPatientFromSearch(matches[0]);
-                  }
-                }}
-                autoFocus
-              />
-              {query.trim() ? (
-                <>
-                  {(matches ?? []).map((p) => {
-                    const subtitle = formatPatientSearchResultSubtitle(p);
-                    return (
+          <div className="space-y-3">
+            <input
+              type="search"
+              enterKeyHint="search"
+              aria-label="Find patient"
+              className={inputCls}
+              placeholder="Search ID, name or phone…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && matches?.[0]) {
+                  e.preventDefault();
+                  selectPatientFromSearch(matches[0]);
+                }
+              }}
+              autoFocus
+            />
+            {query.trim() ? (
+              <>
+                {(matches ?? []).map((p) => {
+                  const subtitle = formatPatientSearchResultSubtitle(p);
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      className="flex min-h-11 w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)] transition-colors"
+                      onClick={() => selectPatientFromSearch(p)}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-display font-medium text-[var(--ink)]">{p.name}</div>
+                        {subtitle && (
+                          <div className="truncate text-xs text-[var(--muted)]">
+                            {subtitle}
+                          </div>
+                        )}
+                      </div>
+                      <span className="ml-2 shrink-0 text-xs tabular-nums text-[var(--muted)]">{p.mrno}</span>
+                    </button>
+                  );
+                })}
+                {matches?.length === 0 && (
+                  <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
+                    No existing patient found.
+                  </p>
+                )}
+              </>
+            ) : (
+              recentPatients.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Recently seen</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {recentPatients.map((p) => (
                       <button
                         type="button"
-                        key={p.id}
-                        className="flex min-h-11 w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)] transition-colors"
-                        onClick={() => selectPatientFromSearch(p)}
+                        key={p.patientId}
+                        className="min-h-9 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
+                        onClick={() =>
+                          void repos.patients
+                            .get(p.patientId)
+                            .then((full) => full && selectPatientFromSearch(full))
+                        }
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-display font-medium text-[var(--ink)]">{p.name}</div>
-                          {subtitle && (
-                            <div className="truncate text-xs text-[var(--muted)]">
-                              {subtitle}
-                            </div>
-                          )}
-                        </div>
-                        <span className="ml-2 shrink-0 text-xs tabular-nums text-[var(--muted)]">{p.mrno}</span>
+                        <span className="font-display font-medium">{p.patientName}</span>{' '}
+                        <span className="font-num text-[var(--muted)]">{p.mrno}</span>
                       </button>
-                    );
-                  })}
-                  {matches?.length === 0 && (
-                    <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
-                      No existing patient found.
-                    </p>
-                  )}
-                </>
-              ) : (
-                recentPatients.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Recently seen</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {recentPatients.map((p) => (
-                        <button
-                          type="button"
-                          key={p.patientId}
-                          className="min-h-9 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
-                          onClick={() =>
-                            void repos.patients
-                              .get(p.patientId)
-                              .then((full) => full && selectPatientFromSearch(full))
-                          }
-                        >
-                          <span className="font-display font-medium">{p.patientName}</span>{' '}
-                          <span className="font-num text-[var(--muted)]">{p.mrno}</span>
-                        </button>
-                      ))}
-                    </div>
+                    ))}
                   </div>
-                )
-              )}
-              <button type="button" className={btnSecondary} onClick={() => setAddingPatient(true)}>
-                + New patient
-              </button>
-            </div>
+                </div>
+              )
+            )}
+            <button type="button" className={btnSecondary} onClick={() => setAddingPatient(true)}>
+              + New patient
+            </button>
+          </div>
         </div>
       )}
 
@@ -1722,11 +1738,10 @@ export function NewVisitPage() {
                 dotColor: therapistColor(t.id, t.color),
               }))}
               onChange={setTherapistId}
-              triggerClassName={`flex h-8 w-full items-center justify-between rounded-full border px-3 text-xs font-medium transition-colors ${
-                therapistChosen
+              triggerClassName={`flex h-8 w-full items-center justify-between rounded-full border px-3 text-xs font-medium transition-colors ${therapistChosen
                   ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
                   : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
-              }`}
+                }`}
               renderTrigger={(selected) => (
                 <>
                   <div className="flex min-w-0 items-center gap-1.5 truncate">
@@ -1783,11 +1798,10 @@ export function NewVisitPage() {
                       key={cond}
                       onClick={() => setCondition(isSelected ? '' : cond)}
                       aria-pressed={isSelected}
-                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                        isSelected
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${isSelected
                           ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
                           : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]'
-                      }`}
+                        }`}
                     >
                       {isSelected && <span aria-hidden="true">✓</span>}
                       <span>{cond}</span>
@@ -2106,9 +2120,8 @@ export function NewVisitPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-0.5">
                 <div className="flex items-baseline gap-2">
                   <span
-                    className={`font-num text-2xl font-extrabold tracking-tight tabular-nums ${
-                      servicesChosen === 0 ? 'text-[var(--muted)]' : 'text-[var(--ink)]'
-                    }`}
+                    className={`font-num text-2xl font-extrabold tracking-tight tabular-nums ${servicesChosen === 0 ? 'text-[var(--muted)]' : 'text-[var(--ink)]'
+                      }`}
                   >
                     {servicesChosen === 0 ? `${currencySymbol()}0` : formatAmount(billPaise)}
                   </span>

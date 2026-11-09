@@ -54,22 +54,22 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
       title="Invoicing"
     >
       <fieldset disabled={busy} className="contents">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              GST number (optional)
-              <InfoTip text="Your clinic's tax registration number, printed on invoices. Not the same as the Tax/TDS % under Partner revenue share, which is a revenue-share percentage." />
-            </>
-          }
-        >
-          <input
-            className={inputCls}
-            value={form.gstNo ?? ''}
-            onChange={(e) => set({ gstNo: e.target.value || null })}
-          />
-        </Field>
-        <Field
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field
+            label={
+              <>
+                GST number (optional)
+                <InfoTip text="Your clinic's tax registration number, printed on invoices. Not the same as the Tax/TDS % under Partner revenue share, which is a revenue-share percentage." />
+              </>
+            }
+          >
+            <input
+              className={inputCls}
+              value={form.gstNo ?? ''}
+              onChange={(e) => set({ gstNo: e.target.value || null })}
+            />
+          </Field>
+          <Field
             label={
               <>
                 Who can issue invoices
@@ -88,29 +88,29 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
               <option value="billing_staff">Front desk and admins only</option>
             </select>
           </Field>
-        {hasIp && (
-          <Field
-            label="IP invoice prefix (optional)"
-            hint={`Sample IP invoice number: ${effectiveIpInvoicePrefix({ invoicePrefix: prefix, ipInvoicePrefix: trimmedIpPrefix })}/${currentFy.label}/0001. Leave blank to use ${prefix}IP.`}
-          >
-            <input
-              className={inputCls}
-              maxLength={10}
-              placeholder={`${prefix}IP`}
-              value={form.ipInvoicePrefix ?? ''}
-              onChange={(e) => {
-                const val = e.target.value.toUpperCase();
-                set({ ipInvoicePrefix: val === '' ? null : val });
-              }}
-            />
-            {ipPrefixError && (
-              <p role="alert" className="mt-1 text-hint text-[var(--rust)]">
-                {ipPrefixError}
-              </p>
-            )}
-          </Field>
-        )}
-      </div>
+          {hasIp && (
+            <Field
+              label="IP invoice prefix (optional)"
+              hint={`Sample IP invoice number: ${effectiveIpInvoicePrefix({ invoicePrefix: prefix, ipInvoicePrefix: trimmedIpPrefix })}/${currentFy.label}/0001. Leave blank to use ${prefix}IP.`}
+            >
+              <input
+                className={inputCls}
+                maxLength={10}
+                placeholder={`${prefix}IP`}
+                value={form.ipInvoicePrefix ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase().trim();
+                  set({ ipInvoicePrefix: val === '' ? null : val });
+                }}
+              />
+              {ipPrefixError && (
+                <p role="alert" className="mt-1 text-hint text-[var(--rust)]">
+                  {ipPrefixError}
+                </p>
+              )}
+            </Field>
+          )}
+        </div>
 
       </fieldset>
       {dirty && (
@@ -119,17 +119,17 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         </p>
       )}
       {showSaveBar && (
-      <SectionSaveBar
-        dirty={dirty}
-        saved={saved}
-        busy={busy}
-        onSave={() => void saveBilling()}
-        saveDisabled={Boolean(ipPrefixError)}
-        onCancel={() => {
-          cancel();
-        }}
-        error={error}
-      />
+        <SectionSaveBar
+          dirty={dirty}
+          saved={saved}
+          busy={busy}
+          onSave={() => void saveBilling()}
+          saveDisabled={Boolean(ipPrefixError)}
+          onCancel={() => {
+            cancel();
+          }}
+          error={error}
+        />
       )}
     </SectionCard>
   );
@@ -336,7 +336,7 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             hint={`Share revenue with a hospital or centre. Available on the ${planName} plan and above.`}
             checked={false}
             disabled
-            onChange={() => {}}
+            onChange={() => { }}
           />
         )}
         {splitConfirm}
@@ -437,39 +437,39 @@ export function PartnerSection({ onDirtyChange, allowed }: { onDirtyChange: (dir
             </div>
             {moreOpen && (
               <>
-              <Field label="Your share label (report column, e.g. Clinic)">
-                <input
-                  className={inputCls}
-                  placeholder="Clinic"
-                  value={form.ownShareLabel ?? ''}
-                  onChange={(e) => set({ ownShareLabel: e.target.value || null })}
-                />
-              </Field>
-              <Field label="Partner share label (report column, e.g. Hospital)">
-                <input
-                  className={inputCls}
-                  placeholder="Hospital"
-                  value={form.partnerShareLabel ?? ''}
-                  onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
-                />
-              </Field>
-              {form.taxPct > 0 && (
-                <Field
-                  label={
-                    <>
-                      TDS basis
-                      <InfoTip text="Whether the tax % is calculated on the full bill (standard format) or only on the clinic's own share. Both produce the same final clinic payout." />
-                    </>
-                  }
-                >
-                  <select className={inputCls} value={form.tdsBasis} onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}>
-                    <option value="gross_bill">
-                      {form.taxPct}% on the full bill (matches {labels.partner} sheet)
-                    </option>
-                    <option value="clinic_share">On your share only</option>
-                  </select>
+                <Field label="Your share label (report column, e.g. Clinic)">
+                  <input
+                    className={inputCls}
+                    placeholder="Clinic"
+                    value={form.ownShareLabel ?? ''}
+                    onChange={(e) => set({ ownShareLabel: e.target.value || null })}
+                  />
                 </Field>
-              )}
+                <Field label="Partner share label (report column, e.g. Hospital)">
+                  <input
+                    className={inputCls}
+                    placeholder="Hospital"
+                    value={form.partnerShareLabel ?? ''}
+                    onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
+                  />
+                </Field>
+                {form.taxPct > 0 && (
+                  <Field
+                    label={
+                      <>
+                        TDS basis
+                        <InfoTip text="Whether the tax % is calculated on the full bill (standard format) or only on the clinic's own share. Both produce the same final clinic payout." />
+                      </>
+                    }
+                  >
+                    <select className={inputCls} value={form.tdsBasis} onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}>
+                      <option value="gross_bill">
+                        {form.taxPct}% on the full bill (matches {labels.partner} sheet)
+                      </option>
+                      <option value="clinic_share">On your share only</option>
+                    </select>
+                  </Field>
+                )}
               </>
             )}
           </div>

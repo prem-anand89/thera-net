@@ -81,7 +81,7 @@ export function MonthlyStatementPage() {
       csv = reportService.toCsv(report, {
         labels,
         partnerSplit,
-        showPostTax,
+        showPostTax: partnerSplit && combined.total.tdsPaise > 0,
         therapistSplit,
         departmentSections,
         allDepartmentsTotal: combined.total,
@@ -215,21 +215,21 @@ export function MonthlyStatementPage() {
 
           {/* Card 2: Clinic Share (Net) */}
           {partnerSplit && (
-          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
-              {showPostTax ? `Post-Tax ${labels.own}` : `${labels.own} Share`}
+            <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
+                {showPostTax ? `Post-Tax ${labels.own}` : `${labels.own} Share`}
+              </div>
+              <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--teal-strong)] truncate">
+                {report ? formatAmount(report.total.netPostTaxPaise) : '—'}
+              </div>
+              <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
+                {report && (report.total.tdsPaise ?? 0) > 0 ? (
+                  <span>TDS: {formatAmount(report.total.tdsPaise)} withheld</span>
+                ) : (
+                  <span>Net clinic earnings</span>
+                )}
+              </div>
             </div>
-            <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--teal-strong)] truncate">
-              {report ? formatAmount(report.total.netPostTaxPaise) : '—'}
-            </div>
-            <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
-              {report && (report.total.tdsPaise ?? 0) > 0 ? (
-                <span>TDS: {formatAmount(report.total.tdsPaise)} withheld</span>
-              ) : (
-                <span>Net clinic earnings</span>
-              )}
-            </div>
-          </div>
           )}
 
           {/* Card 3: Partner Share (if applicable) */}
@@ -268,14 +268,14 @@ export function MonthlyStatementPage() {
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
         <div className="overflow-x-auto overscroll-x-contain">
           <MonthlyReportTable
-          report={report}
-          partnerSplit={partnerSplit}
-          showPostTax={showPostTax}
-          showShared={therapistSplit}
-          own={labels.own}
-          partner={labels.partner}
-          auditLinkMonth={therapistSplit ? selected : undefined}
-        />
+            report={report}
+            partnerSplit={partnerSplit}
+            showPostTax={showPostTax}
+            showShared={therapistSplit}
+            own={labels.own}
+            partner={labels.partner}
+            auditLinkMonth={therapistSplit ? selected : undefined}
+          />
         </div>
       </div>
       {therapistSplit && (
@@ -313,11 +313,11 @@ export function MonthlyStatementPage() {
           balance={
             report && collection
               ? settlementBalance({
-                  partnerCollects: Boolean(clinic.partnerCollects),
-                  totalPartnerSharePaise: report.total.partnerSharePaise,
-                  totalPostTaxPaise: report.total.postTaxPaise,
-                  visits: collection.settlementVisits,
-                })
+                partnerCollects: Boolean(clinic.partnerCollects),
+                totalPartnerSharePaise: report.total.partnerSharePaise,
+                totalPostTaxPaise: report.total.postTaxPaise,
+                visits: collection.settlementVisits,
+              })
               : null
           }
           partnerCollects={Boolean(clinic.partnerCollects)}

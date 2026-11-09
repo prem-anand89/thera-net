@@ -59,6 +59,8 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
   ],
   [/Nothing to bill/i, 'These visits have no charge, so there is nothing to put on an invoice.'],
   [/must belong to the same patient/i, 'An invoice can only cover one patient. Select visits of a single patient.'],
+  [/must belong to the same department/i, 'Cannot combine visits from different departments on one invoice.'],
+  [/Advance belongs to a different department/i, 'This advance belongs to a different department and cannot be applied to this visit.'],
   [
     /does not match the visits|do not add up to its total|does not match its visits|No visits on this invoice/i,
     "This invoice doesn't match the visits selected. Refresh the page and try again; if it keeps happening, tell your admin.",

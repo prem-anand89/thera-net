@@ -164,9 +164,10 @@ export function EditVisitModal({
       (catalogAll ?? EMPTY_CATALOG).filter(
         (c) =>
           (c.active && servicesInDepartment(visitDept, [c]).length > 0) ||
-          items.some((i) => i.serviceCatalogId === c.id)
+          items.some((i) => i.serviceCatalogId === c.id) ||
+          c.id === visit?.serviceCatalogId
       ),
-    [catalogAll, items, visitDept]
+    [catalogAll, items, visitDept, visit?.serviceCatalogId]
   );
 
   const [therapistId, setTherapistId] = useState('');

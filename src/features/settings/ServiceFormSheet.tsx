@@ -113,8 +113,8 @@ function ServiceForm({
   );
   const canDelete = Boolean(editing && !editing.active && historyCount === 0);
   const sessionCount = isPackage ? sessions : 1;
-  const deptsKey = (depts: readonly string[] | null | undefined) =>
-    (depts ?? []).slice().sort().join(',');
+  const deptsKey = (depts: readonly Department[] | null | undefined) =>
+    (normalizeServiceDepartments(depts ?? [], clinicDepts) ?? []).slice().sort().join(',');
   // Editing: Save stays off until something differs from what is stored (adding is never "unchanged").
   const changed =
     !editing ||
@@ -294,11 +294,10 @@ function ServiceForm({
                   key={n}
                   type="button"
                   aria-pressed={sessions === n}
-                  className={`min-h-9 rounded-full border px-3 text-sm ${
-                    sessions === n
+                  className={`min-h-9 rounded-full border px-3 text-sm ${sessions === n
                       ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
                       : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
-                  }`}
+                    }`}
                   onClick={() => setSessions(n)}
                 >
                   {n}
@@ -437,11 +436,10 @@ function ServiceForm({
                   key={d}
                   type="button"
                   aria-pressed={validity === String(d)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                    validity === String(d)
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${validity === String(d)
                       ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
                       : 'border-[var(--border)] text-[var(--muted)]'
-                  }`}
+                    }`}
                   onClick={() => setValidity(String(d))}
                 >
                   {d} days
