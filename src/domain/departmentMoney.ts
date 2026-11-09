@@ -56,3 +56,41 @@ export function runningCharges(
 export function isPartnerClearance(method: string): boolean {
   return method === 'partner';
 }
+
+/** True when a visit is an inpatient stay / ward session (never collected or invoiced per individual session). */
+export function isInpatientVisit(
+  visit: { location?: string | null; admissionId?: string | null } | null | undefined
+): boolean {
+  return departmentOf(visit) === 'ward';
+}
+
+/**
+ * True when the hospital / partner bills inpatients and therapists only document service names and amounts.
+ * Explicit `clinic.ipBilledByPartner` wins when set; otherwise defaults to `Boolean(clinic.hasPartner && clinic.partnerCollects)`.
+ */
+export function isIpBilledByPartner(
+  clinic: { ipBilledByPartner?: boolean | null; hasPartner?: boolean; partnerCollects?: boolean } | null | undefined
+): boolean {
+  if (!clinic) return false;
+  if (typeof clinic.ipBilledByPartner === 'boolean') return clinic.ipBilledByPartner;
+  return Boolean(clinic.hasPartner && clinic.partnerCollects);
+}
+
+/**
+ * True when the clinic / rehab centre issues its own inpatient stay / discharge bills.
+ * False when the hospital / partner bills inpatients directly.
+ */
+export function canBillInpatientStay(
+  clinic: { ipBilledByPartner?: boolean | null; hasPartner?: boolean; partnerCollects?: boolean } | null | undefined
+): boolean {
+  return !isIpBilledByPartner(clinic);
+}
+
+/** How an inpatient visit's billing status should be displayed on visit cards/tables, or null for OP/Home visits. */
+export function inpatientVisitBillingMode(
+  visit: { location?: string | null; admissionId?: string | null } | null | undefined,
+  clinic: { ipBilledByPartner?: boolean | null; hasPartner?: boolean; partnerCollects?: boolean } | null | undefined
+): 'stay_bill' | 'partner_billed' | null {
+  if (!isInpatientVisit(visit)) return null;
+  return isIpBilledByPartner(clinic) ? 'partner_billed' : 'stay_bill';
+}

@@ -239,6 +239,8 @@ export interface TodayVisitRow {
   therapistName: string;
   /** Where the visit was; absent or null reads as Clinic. */
   location?: string | null;
+  /** Inpatient stay this visit belongs to, if any. */
+  admissionId?: UUID | null;
   serviceName: string;
   treatmentNotes: string | null;
   treatmentIds: UUID[];
@@ -1206,6 +1208,7 @@ export function createDashboardService(repos: Repos) {
             therapistId: v.therapistId,
             therapistName: therapistNameById.get(v.therapistId) ?? '—',
             location: v.location ?? null,
+            admissionId: v.admissionId ?? null,
             serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
             treatmentNotes: v.treatmentNotes,
             treatmentIds: v.treatmentIds ?? [],

@@ -30,6 +30,7 @@ import { placeLabelFor, clinicCareLocations } from '@/domain/careLocations';
 import { clinicTimezone } from '@/domain/clinicRegion';
 import { useDepartment } from '@/app/DepartmentContext';
 import { DEPARTMENT_LABELS, departmentOf, inDepartment, invoiceDepartment } from '@/domain/departments';
+import { canBillInpatientStay, inpatientVisitBillingMode, isInpatientVisit } from '@/domain/departmentMoney';
 import { advancesForDepartment } from '@/domain/departmentMoney';
 import { formatAppointmentWhen } from '@/domain/appointmentWhen';
 import { upcastPayload } from '@/domain/coreAssessment';
@@ -177,7 +178,9 @@ export function PatientProfilePage() {
   );
   const invoiceNoById = useMemo(() => new Map((invoices ?? []).map((inv) => [inv.id, inv.invoiceNo])), [invoices]);
   // The patient's bills: who may see them, which ones are theirs, and what has been collected on each.
-  const showInvoicesTab = invoicingOnPlan && invoiceRoleOk;
+  // In IP, if the hospital partner bills, the clinic does not bill stays or show invoice tabs.
+  const ipCanBill = department !== 'ward' || canBillInpatientStay(clinic);
+  const showInvoicesTab = invoicingOnPlan && invoiceRoleOk && ipCanBill;
   const activeView: PatientView = showInvoicesTab && viewParam === 'invoices' ? 'invoices' : 'visits';
   const supersededInvoiceIds = useMemo(
     () => new Set((invoices ?? []).map((i) => i.supersedesInvoiceId).filter((id): id is string => Boolean(id))),
@@ -393,12 +396,13 @@ export function PatientProfilePage() {
             directPaymentByVisitId.get(v.id) ?? 0,
             v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
           ),
+          inpatientBilling: inpatientVisitBillingMode(v, clinic),
           invoiceId: v.invoiceId ?? null,
           invoiceNo: showInvoicesTab && v.invoiceId ? (invoiceNoById.get(v.invoiceId) ?? null) : null,
           collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
           partnerCollectedPaise: partnerPaymentByVisitId.get(v.id) ?? 0,
           issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
-          canCollect: canCollectPayment && inDepartment(department, v),
+          canCollect: canCollectPayment && inDepartment(department, v) && !isInpatientVisit(v),
           canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
           // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
           // is_own_therapist) — a patient's history is clinic-wide (any
@@ -491,8 +495,14 @@ export function PatientProfilePage() {
     [visitCardRows, visitById, department]
   );
   const selectableIds = useMemo(
-    () => new Set(selectableForBilling(selectableVisits, { canBill, canCollect: canCollectPayment }).map((r) => r.visitId)),
-    [selectableVisits, canBill, canCollectPayment]
+    () =>
+      new Set(
+        selectableForBilling(selectableVisits, {
+          canBill: canBill && ipCanBill,
+          canCollect: canCollectPayment && department !== 'ward',
+        }).map((r) => r.visitId)
+      ),
+    [selectableVisits, canBill, canCollectPayment, ipCanBill, department]
   );
   const isSelectableRow = useCallback((row: VisitCardData) => selectableIds.has(row.visitId), [selectableIds]);
   const selectedRows = useMemo(

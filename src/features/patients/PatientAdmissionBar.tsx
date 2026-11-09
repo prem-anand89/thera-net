@@ -12,6 +12,7 @@ import { btnSecondary, Pill } from '@/components/ui';
 import { usePermissions } from '@/app/usePermissions';
 import { useDepartment } from '@/app/DepartmentContext';
 import { departmentOf } from '@/domain/departments';
+import { canBillInpatientStay } from '@/domain/departmentMoney';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import type { Admission } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -31,6 +32,7 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   const stays = useLiveQuery(() => repos.admissions.listByPatient(clinic.id, patient.id), [clinic.id, patient.id]);
   const [sheet, setSheet] = useState<'admit' | 'edit' | 'discharge' | null>(null);
   const { canBill } = usePermissions();
+  const canBillStay = canBill && canBillInpatientStay(clinic);
   const visits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id, patientId: patient.id }), [clinic.id, patient.id]);
   const [invoicing, setInvoicing] = useState<IssueInvoiceTarget | null>(null);
 
@@ -60,7 +62,7 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   }
 
   async function offerDischargeBill(stay: Admission) {
-    if (!canBill || unbilledOf(stay).length === 0 || billableTotal(stay) <= 0) return;
+    if (!canBillStay || unbilledOf(stay).length === 0 || billableTotal(stay) <= 0) return;
     const now = await askConfirm({
       title: 'Discharge bill',
       message: `Generate the bill for the ${unbilledOf(stay).length} session${unbilledOf(stay).length === 1 ? '' : 's'} on this stay now?`,
@@ -103,7 +105,7 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canBill && unbilledOf(open).length > 0 && (
+            {canBillStay && unbilledOf(open).length > 0 && (
               <button type="button" className={btnSecondary} onClick={() => startBilling(open)}>
                 Bill this stay
               </button>
@@ -125,7 +127,7 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
                 Reopen
               </button>
             )}
-            {last && canBill && unbilledOf(last).length > 0 && (
+            {last && canBillStay && unbilledOf(last).length > 0 && (
               <button type="button" className="ml-2 text-xs text-[var(--teal)] hover:underline" onClick={() => startBilling(last)}>
                 Bill this stay
               </button>

@@ -10,6 +10,7 @@ import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { useDepartment } from '@/app/DepartmentContext';
 import { inDepartment } from '@/domain/departments';
+import { canBillInpatientStay, inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { useGoogleReviewEligibleRequestIds } from '@/features/schedule/scheduleSignals';
@@ -75,6 +76,7 @@ export function filterLedgerTabs({
   canCollectPayment = false,
   canViewCredits = false,
   entitlementsLoading,
+  hideBillingTabs = false,
 }: {
   canBill: boolean;
   /** A clinic whose plan no longer issues invoices still finds the ones it already issued (read-only). */
@@ -83,9 +85,11 @@ export function filterLedgerTabs({
   canCollectPayment?: boolean;
   canViewCredits?: boolean;
   entitlementsLoading: boolean;
+  hideBillingTabs?: boolean;
 }) {
   return LEDGER_TAB_ITEMS.filter((v) => {
     if (v.key === 'credits') return canViewCredits;
+    if (hideBillingTabs && (v.key === 'invoices' || v.key === 'daybook')) return false;
     if (entitlementsLoading) return true;
     if (v.key === 'invoices') return canBill || canViewPastInvoices;
     if (v.key === 'daybook') return canBill || canCollectPayment;
@@ -130,7 +134,8 @@ export function visitToCardData(
   googleReviewEligibleIds: Set<UUID>,
   googleReviewUrl: string | null,
   details?: VisitDetails,
-  partnerPaymentByVisitId?: Map<UUID, number>
+  partnerPaymentByVisitId?: Map<UUID, number>,
+  inpatientBilling?: 'stay_bill' | 'partner_billed' | null
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -227,6 +232,8 @@ export function visitToCardData(
       }
       : null,
     googleReviewUrl,
+    inpatientBilling,
+    canCollect: (v.location === 'ward' || Boolean(v.admissionId)) ? false : undefined,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
       !!v.sessionIndex &&
@@ -324,6 +331,8 @@ export function LedgerPage() {
     },
     [navigate, search.patientId]
   );
+  const { department } = useDepartment();
+  const hideBillingTabs = department === 'ward' && !canBillInpatientStay(clinic);
   // An admin flipping invoicingAccess mid-session (synced live from another
   // device) shouldn't leave someone stranded on a tab that just disappeared.
   // Wait for entitlementsLoading to clear first — canBill reads fail-closed
@@ -333,10 +342,14 @@ export function LedgerPage() {
   // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
     if (entitlementsLoading) return;
+    if (hideBillingTabs && (recordsView === 'invoices' || recordsView === 'daybook')) {
+      setRecordsView('visits');
+      return;
+    }
     if (recordsView === 'invoices' && shouldLeaveInvoicesTab({ canBill, canViewPastInvoices, anyInvoices })) setRecordsView('visits');
     if (recordsView === 'daybook' && !canBill && !canCollectPayment) setRecordsView('visits');
     if (recordsView === 'credits' && therapists !== undefined && !canViewCredits) setRecordsView('visits');
-  }, [recordsView, canBill, canViewPastInvoices, anyInvoices, canCollectPayment, therapists, canViewCredits, entitlementsLoading, setRecordsView]);
+  }, [recordsView, canBill, canViewPastInvoices, anyInvoices, canCollectPayment, therapists, canViewCredits, entitlementsLoading, setRecordsView, hideBillingTabs]);
   // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
   // (or a patient deep link) always wins and never overwrites what was remembered.
   const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));
@@ -348,7 +361,6 @@ export function LedgerPage() {
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
-  const { department } = useDepartment();
   // A therapist landing from their own Dues sees just their visits.
   const [therapistId, setTherapistId] = useState(prefs.therapistId ?? '');
   // A therapist landing from their own Dues sees just their visits.
@@ -621,7 +633,8 @@ export function LedgerPage() {
           googleReviewEligibleIds,
           clinic.googleReviewUrl ?? null,
           visitDetails.get(v.id),
-          partnerPaymentByVisitId
+          partnerPaymentByVisitId,
+          inpatientVisitBillingMode(v, clinic)
         )
       ),
     [
@@ -809,7 +822,7 @@ export function LedgerPage() {
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
         <div ref={tabStripRef} role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
-          {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, canViewCredits, entitlementsLoading }).map((v) => (
+          {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, canViewCredits, entitlementsLoading, hideBillingTabs }).map((v) => (
             <button
               key={v.key}
               type="button"
@@ -995,24 +1008,28 @@ export function LedgerPage() {
           {filtersOpen && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--ink)] shadow-sm">
               <div className="flex flex-col gap-2 sm:hidden">{therapistSelect}</div>
-              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
-                <input
-                  type="checkbox"
-                  className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
-                  checked={onlyCollectedNoReceipt}
-                  onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
-                />
-                <span>Collected, no invoice</span>
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
-                <input
-                  type="checkbox"
-                  className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
-                  checked={onlyNotCollected}
-                  onChange={(e) => setOnlyNotCollected(e.target.checked)}
-                />
-                <span>Not collected</span>
-              </label>
+              {department !== 'ward' && (
+                <>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
+                    <input
+                      type="checkbox"
+                      className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
+                      checked={onlyCollectedNoReceipt}
+                      onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
+                    />
+                    <span>Collected, no invoice</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
+                    <input
+                      type="checkbox"
+                      className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
+                      checked={onlyNotCollected}
+                      onChange={(e) => setOnlyNotCollected(e.target.checked)}
+                    />
+                    <span>Not collected</span>
+                  </label>
+                </>
+              )}
               {clinic.clinicalDocsEnabled && (
                 <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
                   <input
@@ -1035,7 +1052,10 @@ export function LedgerPage() {
         </>
       )}
 
-      {recordsView === 'visits' && outstanding && outstanding.rows.length > 0 && (
+      {recordsView === 'visits' &&
+        (department !== 'ward' || canBillInpatientStay(clinic)) &&
+        outstanding &&
+        outstanding.rows.length > 0 && (
         <SectionCard title="Unpaid invoices">
           <div className="mb-4 flex gap-4">
             <StatTile label="Invoiced, unpaid" value={formatAmount(outstanding.totalPaise)} />
@@ -1249,39 +1269,60 @@ export function LedgerPage() {
                     <span className="font-medium text-[var(--ink)]">
                       {totals.visitCount} visit{totals.visitCount === 1 ? '' : 's'}
                     </span>
-                    {totals.state === 'dues' && (
+                    {department === 'ward' ? (
                       <>
                         <span className="text-[var(--muted)]">·</span>
                         <span>
                           Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
                         </span>
                       </>
-                    )}
-                    {totals.state === 'clear' && (
+                    ) : (
                       <>
-                        <span className="text-[var(--muted)]">·</span>
-                        <span>
-                          <strong className="font-num font-medium text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong> collected
-                        </span>
-                        <span className="text-[var(--muted)]">·</span>
-                        <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
-                      </>
-                    )}
-                    {totals.state === 'no_charge' && (
-                      <>
-                        <span className="text-[var(--muted)]">·</span>
-                        <span className="text-[var(--muted)]">no charges</span>
+                        {totals.state === 'dues' && (
+                          <>
+                            <span className="text-[var(--muted)]">·</span>
+                            <span>
+                              Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
+                            </span>
+                          </>
+                        )}
+                        {totals.state === 'clear' && (
+                          <>
+                            <span className="text-[var(--muted)]">·</span>
+                            <span>
+                              <strong className="font-num font-medium text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong> collected
+                            </span>
+                            <span className="text-[var(--muted)]">·</span>
+                            <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
+                          </>
+                        )}
+                        {totals.state === 'no_charge' && (
+                          <>
+                            <span className="text-[var(--muted)]">·</span>
+                            <span className="text-[var(--muted)]">no charges</span>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
-                  {totals.state === 'dues' && (
+                  {department === 'ward' ? (
+                    canBillInpatientStay(clinic) ? (
+                      <span className="whitespace-nowrap font-medium text-[var(--teal-strong)]">
+                        On stay bill <span className="font-num">{formatAmount(totals.outstanding)}</span>
+                      </span>
+                    ) : (
+                      <span className="whitespace-nowrap font-medium text-[var(--ink)]">
+                        Logged <span className="font-num">{formatAmount(totals.bill)}</span>
+                      </span>
+                    )
+                  ) : totals.state === 'dues' ? (
                     <DueToggle
                       active={onlyNotCollected}
                       outstanding={totals.outstanding}
                       unpaidCount={totals.unpaidCount}
                       onToggle={toggleUnpaid}
                     />
-                  )}
+                  ) : null}
                 </div>
 
                 {/* iPad / Desktop (sm+): single row, left visits count, right aligned figures */}
@@ -1293,36 +1334,56 @@ export function LedgerPage() {
                     {visitsPager.pageCount > 1 && ' across all pages'}
                   </span>
                   <div className="flex items-center gap-x-3 text-right">
-                    {totals.state === 'dues' && (
+                    {department === 'ward' ? (
+                      canBillInpatientStay(clinic) ? (
+                        <>
+                          <span>
+                            Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
+                          </span>
+                          <span className="text-[var(--muted)]">·</span>
+                          <span className="font-medium text-[var(--teal-strong)]">
+                            On stay bill <span className="font-num">{formatAmount(totals.outstanding)}</span>
+                          </span>
+                        </>
+                      ) : (
+                        <span>
+                          Logged <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
+                        </span>
+                      )
+                    ) : (
                       <>
-                        <span>
-                          Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
-                        </span>
-                        <span className="text-[var(--muted)]">·</span>
-                        <span>
-                          Collected <strong className="font-num text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong>
-                        </span>
-                        <span className="text-[var(--muted)]">·</span>
-                        <DueToggle
-                          active={onlyNotCollected}
-                          outstanding={totals.outstanding}
-                          unpaidCount={totals.unpaidCount}
-                          onToggle={toggleUnpaid}
-                          long
-                        />
+                        {totals.state === 'dues' && (
+                          <>
+                            <span>
+                              Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
+                            </span>
+                            <span className="text-[var(--muted)]">·</span>
+                            <span>
+                              Collected <strong className="font-num text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong>
+                            </span>
+                            <span className="text-[var(--muted)]">·</span>
+                            <DueToggle
+                              active={onlyNotCollected}
+                              outstanding={totals.outstanding}
+                              unpaidCount={totals.unpaidCount}
+                              onToggle={toggleUnpaid}
+                              long
+                            />
+                          </>
+                        )}
+                        {totals.state === 'clear' && (
+                          <>
+                            <span>
+                              <strong className="font-num text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong> collected
+                            </span>
+                            <span className="text-[var(--muted)]">·</span>
+                            <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
+                          </>
+                        )}
+                        {totals.state === 'no_charge' && (
+                          <span className="text-[var(--muted)]">no charges</span>
+                        )}
                       </>
-                    )}
-                    {totals.state === 'clear' && (
-                      <>
-                        <span>
-                          <strong className="font-num text-[var(--moss-strong)]">{formatAmount(totals.collected)}</strong> collected
-                        </span>
-                        <span className="text-[var(--muted)]">·</span>
-                        <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
-                      </>
-                    )}
-                    {totals.state === 'no_charge' && (
-                      <span className="text-[var(--muted)]">no charges</span>
                     )}
                   </div>
                 </div>

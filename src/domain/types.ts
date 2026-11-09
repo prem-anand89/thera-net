@@ -173,6 +173,14 @@ export interface Clinic {
   closedWeekdays?: number[];
   /** Home care / IP booking hours that differ from OP's (see `departmentHours`). null / absent = both follow OP. */
   departmentHours?: Partial<Record<'home' | 'ward', DepartmentHoursOverride>> | null;
+  /** Preset ward or rehab unit names for Inpatient admissions (`clinics.wards`). null / absent = default presets. */
+  wards?: string[] | null;
+  /**
+   * True when the hospital / partner bills inpatients and therapists only document sessions and rates (`clinics.ip_billed_by_partner`).
+   * False when the clinic / rehab centre bills inpatient stays itself (at discharge or interim stay bill).
+   * Null / absent falls back to `Boolean(hasPartner && partnerCollects)`.
+   */
+  ipBilledByPartner?: boolean | null;
   /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */
   onboardingCompletedAt?: string | null;
   updatedAt: string;

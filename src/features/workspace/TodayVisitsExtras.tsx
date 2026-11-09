@@ -34,8 +34,19 @@ export function TodayTherapistFilter({
 /**
  * Sums the visits the card is showing (all of them, not just the page on screen): visits, billed, paid, due.
  * Without `showMoney` only the visit count appears.
+ * In inpatient mode, per-session Paid/Due are suppressed in favour of stay/partner billing summary.
  */
-export function TodayVisitsTotals({ totals, label, showMoney }: { totals: TodayTotals; label: string; showMoney: boolean }) {
+export function TodayVisitsTotals({
+  totals,
+  label,
+  showMoney,
+  inpatientBillingMode,
+}: {
+  totals: TodayTotals;
+  label: string;
+  showMoney: boolean;
+  inpatientBillingMode?: 'stay_bill' | 'partner_billed' | null;
+}) {
   const cell = (name: string, value: string, tone?: string) => (
     <span className="whitespace-nowrap">
       <span className="text-[var(--muted)]">{name}</span> <span className={`font-num font-semibold ${tone ?? 'text-[var(--ink)]'}`}>{value}</span>
@@ -51,11 +62,17 @@ export function TodayVisitsTotals({ totals, label, showMoney }: { totals: TodayT
       <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {cell('Visits', String(totals.visits))}
         {showMoney && (
-          <>
-            {cell('Billed', formatAmount(totals.billedPaise))}
-            {cell('Paid', formatAmount(totals.paidPaise), 'text-[var(--teal)]')}
-            {cell('Due', formatAmount(totals.duePaise), totals.duePaise > 0 ? 'text-[var(--rust)]' : undefined)}
-          </>
+          inpatientBillingMode === 'partner_billed' ? (
+            cell('Logged', formatAmount(totals.billedPaise))
+          ) : inpatientBillingMode === 'stay_bill' ? (
+            cell('On stay bill', formatAmount(totals.billedPaise), 'text-[var(--teal)]')
+          ) : (
+            <>
+              {cell('Billed', formatAmount(totals.billedPaise))}
+              {cell('Paid', formatAmount(totals.paidPaise), 'text-[var(--teal)]')}
+              {cell('Due', formatAmount(totals.duePaise), totals.duePaise > 0 ? 'text-[var(--rust)]' : undefined)}
+            </>
+          )
         )}
       </span>
     </div>

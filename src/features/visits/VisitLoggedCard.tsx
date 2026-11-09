@@ -33,6 +33,7 @@ export interface SavedVisitInfo {
   visitDate: string;
   mrno: string;
   paymentError?: string;
+  inpatientBilling?: 'stay_bill' | 'partner_billed' | null;
 }
 
 export interface VisitLoggedCardProps {
@@ -228,7 +229,21 @@ export function VisitLoggedCard({
 
         {/* Package / Payment Pill with Session Progress Dots */}
         <div>
-          {paymentDue > 0 ? (
+          {justSaved.inpatientBilling === 'partner_billed' ? (
+            <span
+              className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--slate-light)] px-2.5 py-1 text-xs font-medium text-[var(--ink)]"
+              data-testid="inpatient-logged-line"
+            >
+              ✓ Session logged · {formatAmount(justSaved.billPaise)}
+            </span>
+          ) : justSaved.inpatientBilling === 'stay_bill' ? (
+            <span
+              className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--teal-light)] px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)]"
+              data-testid="inpatient-stay-bill-line"
+            >
+              ✓ Added to stay bill · {formatAmount(justSaved.billPaise)}
+            </span>
+          ) : paymentDue > 0 ? (
             <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)]">
               Payment due · {formatAmount(paymentDue)}
               {receivedPaise > 0 ? ` (paid ${formatAmount(receivedPaise)})` : ''}

@@ -73,7 +73,7 @@ import { useClinicRole } from '@/app/useClinicRole';
 import { useDepartment } from '@/app/DepartmentContext';
 import { departmentHours } from '@/domain/departmentHours';
 import { inDepartment } from '@/domain/departments';
-import { runningCharges } from '@/domain/departmentMoney';
+import { runningCharges, canBillInpatientStay, inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { collectionsLine } from '@/domain/collectionsByMethod';
 import { saveLedgerPrefs } from '@/features/visits/ledgerPrefs';
 import { InpatientsCard } from './InpatientsCard';
@@ -151,7 +151,8 @@ export function todayRowToCardData(
   responseByRequestId: Map<string, FeedbackResponse>,
   googleReviewEligibleIds: Set<string>,
   googleReviewUrl: string | null,
-  details?: VisitDetails
+  details?: VisitDetails,
+  inpatientBilling?: 'stay_bill' | 'partner_billed' | null
 ): VisitCardData {
   const { canModify, canDelete } = visitPermissions({
     isAdmin,
@@ -231,6 +232,8 @@ export function todayRowToCardData(
       }
       : null,
     googleReviewUrl,
+    inpatientBilling,
+    canCollect: row.location === 'ward' ? false : undefined,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -801,11 +804,26 @@ export function WorkspacePage() {
     tone: 'amber' as const,
     kind: 'money' as const,
   };
+  const wardLoggedCell = {
+    label:
+      wardRunning && wardRunning.stays > 0
+        ? `Logged on stays · ${wardRunning.stays} ${plural(wardRunning.stays, 'stay')}`
+        : 'Logged on stays',
+    value: wardRunning === null ? <LoadingValue /> : formatAmount(wardRunning.paise),
+    icon: <IconWallet />,
+    tone: 'amber' as const,
+    kind: 'money' as const,
+  };
+  const canBillStays = canBillInpatientStay(clinic);
   const statCells =
     department === 'ward'
-      ? showDues
-        ? [collectedCell, runningChargesCell]
-        : [collectedCell]
+      ? !canBillStays
+        ? showDues
+          ? [wardLoggedCell]
+          : []
+        : showDues
+          ? [collectedCell, runningChargesCell]
+          : [collectedCell]
       : showDues
         ? [collectedCell, duesCell]
         : [collectedCell];
@@ -845,7 +863,8 @@ export function WorkspacePage() {
             responseByRequestId,
             googleReviewEligibleIds,
             clinic.googleReviewUrl ?? null,
-            todayDetails.get(row.visitId)
+            todayDetails.get(row.visitId),
+            inpatientVisitBillingMode({ location: row.location, admissionId: row.admissionId }, clinic)
           )
         )
         : [],
@@ -1344,6 +1363,13 @@ export function WorkspacePage() {
               totals={visitTotals}
               label={therapistOptions.find((o) => o.id === visitsFilterId)?.name ?? 'Total'}
               showMoney={canBill || canCollectPayment}
+              inpatientBillingMode={
+                department === 'ward'
+                  ? canBillInpatientStay(clinic)
+                    ? 'stay_bill'
+                    : 'partner_billed'
+                  : null
+              }
             />
           </>
         )}

@@ -36,13 +36,15 @@ export function RowActionsMenu({
   canCollect?: boolean;
 }) {
   const clinic = useClinic();
+  const isInpatient = Boolean(data.inpatientBilling);
   const canIssueInvoice =
+    !isInpatient &&
     Boolean(canInvoice) &&
     Boolean(onInvoice) &&
     paymentActions(data.paymentState).includes('issue_invoice') &&
     // The partner billed the patient; an invoice from the clinic would be a second bill.
     !isFullyPartnerCollected(data.billPaise, data.partnerCollectedPaise);
-  const showReminder = canCollect && paymentActions(data.paymentState).includes('take_payment');
+  const showReminder = !isInpatient && Boolean(canCollect) && paymentActions(data.paymentState).includes('take_payment');
   // Direct ask, independent of the feedback flow's own nudge
   // (`VisitFeedbackLink`'s "⭐ Google review", which only shows after a
   // 5* response) — this one is for staff who already know the patient is

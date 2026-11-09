@@ -170,7 +170,8 @@ export function SharedVisitCard({
     : '';
 
   const bill = formatAmount(data.billPaise);
-  const effectiveCanCollect = data.canCollect ?? canCollect;
+  const isInpatient = Boolean(data.inpatientBilling);
+  const effectiveCanCollect = !isInpatient && (data.canCollect ?? canCollect);
   const actions = effectiveCanCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
@@ -246,6 +247,18 @@ export function SharedVisitCard({
           >
             Collect {formatAmount(data.billPaise - data.collectedPaise)}
           </button>
+        ) : data.inpatientBilling === 'partner_billed' ? (
+          <Pill tone="slate">
+            <span className="whitespace-nowrap" title="Logged for hospital / partner billing">
+              Logged
+            </span>
+          </Pill>
+        ) : data.inpatientBilling === 'stay_bill' && !data.invoiceId ? (
+          <Pill tone="slate">
+            <span className="whitespace-nowrap" title="Included on the inpatient stay / discharge bill">
+              On stay bill
+            </span>
+          </Pill>
         ) : (
           <div className="flex items-center gap-1">
             {billingLocked && (
@@ -263,7 +276,7 @@ export function SharedVisitCard({
           </div>
         )}
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {!canCollect && paymentActions(data.paymentState).length > 0 && (
+          {!isInpatient && !canCollect && paymentActions(data.paymentState).length > 0 && (
             <Pill tone="slate">Ask billing</Pill>
           )}
           <VisitBillLink data={data} />

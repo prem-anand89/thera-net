@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { advancesForDepartment, inDepartmentList, isPartnerClearance, paymentsForDepartment, runningCharges } from './departmentMoney';
+import {
+  advancesForDepartment,
+  canBillInpatientStay,
+  inDepartmentList,
+  inpatientVisitBillingMode,
+  isInpatientVisit,
+  isIpBilledByPartner,
+  isPartnerClearance,
+  paymentsForDepartment,
+  runningCharges,
+} from './departmentMoney';
 
 describe('department lists', () => {
   it('keeps each department\'s records apart, a record with no place being OP', () => {
@@ -70,5 +80,30 @@ describe('isPartnerClearance', () => {
   it('only the partner method is clearance', () => {
     expect(isPartnerClearance('partner')).toBe(true);
     expect(isPartnerClearance('cash')).toBe(false);
+  });
+});
+
+
+describe('inpatient billing rules', () => {
+  it('identifies inpatient visits by ward location or admissionId', () => {
+    expect(isInpatientVisit({ location: 'ward' })).toBe(true);
+    expect(isInpatientVisit({ location: 'clinic', admissionId: 'adm-1' })).toBe(true);
+    expect(isInpatientVisit({ location: 'clinic' })).toBe(false);
+    expect(isInpatientVisit({ location: 'home' })).toBe(false);
+  });
+
+  it('resolves whether hospital partner bills inpatients vs clinic stay billing', () => {
+    expect(isIpBilledByPartner({ hasPartner: false, partnerCollects: false })).toBe(false);
+    expect(isIpBilledByPartner({ hasPartner: true, partnerCollects: true })).toBe(true);
+    expect(isIpBilledByPartner({ hasPartner: false, partnerCollects: false, ipBilledByPartner: true })).toBe(true);
+    expect(isIpBilledByPartner({ hasPartner: true, partnerCollects: true, ipBilledByPartner: false })).toBe(false);
+    expect(canBillInpatientStay({ ipBilledByPartner: false })).toBe(true);
+    expect(canBillInpatientStay({ ipBilledByPartner: true })).toBe(false);
+  });
+
+  it('returns stay_bill or partner_billed for ward visits and null for OP/Home', () => {
+    expect(inpatientVisitBillingMode({ location: 'clinic' }, { ipBilledByPartner: false })).toBeNull();
+    expect(inpatientVisitBillingMode({ location: 'ward' }, { ipBilledByPartner: false })).toBe('stay_bill');
+    expect(inpatientVisitBillingMode({ location: 'ward' }, { ipBilledByPartner: true })).toBe('partner_billed');
   });
 });

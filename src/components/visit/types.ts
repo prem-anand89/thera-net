@@ -27,6 +27,12 @@ export interface VisitCardData {
   serviceName: string;
   /** Where it happened ("Home visit", "Inpatient"), only for a clinic with more than one place and a visit away from the clinic. */
   placeLabel?: string | null;
+  /**
+   * Set on inpatient (`ward`) visits, which are never collected or invoiced per individual session:
+   * - `'stay_bill'`: clinic/rehab centre bills the stay in a batch (at discharge or interim stay bill).
+   * - `'partner_billed'`: hospital/partner bills the patient; therapists only log sessions and rates.
+   */
+  inpatientBilling?: 'stay_bill' | 'partner_billed' | null;
   sessionIndex: number | null;
   packageTotal: number | null;
   therapistName: string;

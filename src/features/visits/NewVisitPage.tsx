@@ -19,6 +19,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useDepartment } from '@/app/DepartmentContext';
 import { type Department, departmentOf, servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
+import { inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
@@ -1191,6 +1192,10 @@ export function NewVisitPage() {
         billPaise,
         visitDate,
         mrno: patient.mrno,
+        inpatientBilling: inpatientVisitBillingMode(
+          { location: activeAdmission ? 'ward' : location, admissionId: activeAdmission?.id ?? null },
+          clinic
+        ),
       });
       setFeedbackRequested(false);
     } catch (e) {
@@ -1223,14 +1228,17 @@ export function NewVisitPage() {
 
   if (justSaved) {
     // Still owed on this visit (0 without billing access or when settled).
+    // Inpatient visits are never collected or billed per individual session (paymentDue = 0, showBill = false).
     // Collected on the form: nothing is owed, even in the moment before the payments query answers
     // (it reads empty first, which used to flash "Take payment" for a visit that was already paid).
-    const paymentDue = paymentStillDue({
-      canCollect: canCollectPayment,
-      alreadyCollected: justSaved.alreadyCollected,
-      billPaise: justSaved.billPaise,
-      receivedPaise: (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0),
-    });
+    const paymentDue = justSaved.inpatientBilling
+      ? 0
+      : paymentStillDue({
+          canCollect: canCollectPayment,
+          alreadyCollected: justSaved.alreadyCollected,
+          billPaise: justSaved.billPaise,
+          receivedPaise: (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0),
+        });
     const invoiceTarget: IssueInvoiceTarget = {
       visitId: justSaved.visitId,
       patientId: justSaved.patientId,
@@ -1240,7 +1248,7 @@ export function NewVisitPage() {
       // Settled up front, or since (Take payment above).
       alreadyCollected: justSaved.alreadyCollected || (canBill && justSaved.billPaise > 0 && paymentDue === 0),
     };
-    const showBill = canBill && !justSaved.byPartner;
+    const showBill = !justSaved.inpatientBilling && canBill && !justSaved.byPartner;
     const therapistName = therapistsById.get(justSaved.therapistId)?.name;
     return (
       <div className="mx-auto max-w-2xl space-y-4">
@@ -1288,7 +1296,11 @@ export function NewVisitPage() {
             startFreshVisitForm();
             void navigate({
               to: '/visits/new',
-              search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
+              search: {
+                patientId: justSaved.patientId,
+                ...(search.admissionId ? { admissionId: search.admissionId } : {}),
+                ...(search.from ? { from: search.from } : {}),
+              },
             });
           }}
           onNewVisitNextPatient={() => {

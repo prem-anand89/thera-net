@@ -65,7 +65,8 @@ export function PaymentStatusDisplay({
   /** Recording a payment against the visit. Wider than `canInvoice`: a plan without invoicing still collects. */
   canCollect?: boolean;
 }) {
-  const effectiveCanCollect = data.canCollect ?? canCollect;
+  const isInpatient = Boolean(data.inpatientBilling);
+  const effectiveCanCollect = !isInpatient && (data.canCollect ?? canCollect);
   const actions = effectiveCanCollect ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
     state: data.paymentState,
@@ -85,7 +86,7 @@ export function PaymentStatusDisplay({
   const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
   const hasSecondaryRow =
-    (!canCollect && paymentActions(data.paymentState).length > 0) ||
+    (!isInpatient && !canCollect && paymentActions(data.paymentState).length > 0) ||
     data.packageInvoicePending ||
     Boolean(data.invoiceId && data.invoiceNo);
 
@@ -106,6 +107,18 @@ export function PaymentStatusDisplay({
           >
             Collect {formatAmount(data.billPaise - data.collectedPaise)}
           </button>
+        ) : data.inpatientBilling === 'partner_billed' ? (
+          <Pill tone="slate">
+            <span className="whitespace-nowrap" title="Logged for hospital / partner billing">
+              Logged
+            </span>
+          </Pill>
+        ) : data.inpatientBilling === 'stay_bill' && !data.invoiceId ? (
+          <Pill tone="slate">
+            <span className="whitespace-nowrap" title="Included on the inpatient stay / discharge bill">
+              On stay bill
+            </span>
+          </Pill>
         ) : badge.kind === 'paid' && isFullyPartnerCollected(data.billPaise, data.partnerCollectedPaise) ? (
           <PartnerCollectedPill />
         ) : (
