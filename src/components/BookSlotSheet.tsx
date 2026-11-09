@@ -15,7 +15,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { useDepartment } from '@/app/DepartmentContext';
 import { departmentHours, closedDateAppliesTo } from '@/domain/departmentHours';
-import { therapistsInDepartment } from '@/domain/departments';
+import { servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
 import {
   addDays,
   appointmentMinutes,
@@ -192,8 +192,11 @@ export function BookSlotSheet({
   // Optional visit type: a service that has a session length, so picking it sets the appointment length. Nothing else is
   // stored (appointments carry no service); services with no length set are not listed.
   const visitTypes = useMemo(
-    () => (services ?? []).filter((service) => service.active && service.durationMinutes).sort((a, b) => a.name.localeCompare(b.name)),
-    [services]
+    () =>
+      servicesInDepartment(department, services ?? [])
+        .filter((service) => service.active && service.durationMinutes)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [services, department]
   );
   const [visitTypeId, setVisitTypeId] = useState('');
   const { lastVisitOn } = usePatientDirectory(clinic.id, true);

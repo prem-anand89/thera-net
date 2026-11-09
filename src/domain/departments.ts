@@ -82,3 +82,23 @@ export function effectiveIpInvoicePrefix(clinic: { invoicePrefix: string; ipInvo
   const custom = clinic.ipInvoicePrefix?.trim();
   return custom ? custom : `${clinic.invoicePrefix}IP`;
 }
+
+/** The catalog services offered in a department: everyone with no restriction, else those that include it. */
+export function servicesInDepartment<S extends { departments?: readonly string[] | null }>(
+  department: Department,
+  services: readonly S[]
+): S[] {
+  return services.filter(
+    (s) => !s.departments || s.departments.length === 0 || s.departments.includes(department)
+  );
+}
+
+/** Normalizes ticked service departments against the clinic's departments: none or all ticked -> null (all). */
+export function normalizeServiceDepartments(
+  selected: readonly string[],
+  clinicDepts: readonly Department[]
+): Department[] | null {
+  const kept = clinicDepts.filter((d) => selected.includes(d));
+  if (kept.length === 0 || kept.length >= clinicDepts.length) return null;
+  return kept;
+}

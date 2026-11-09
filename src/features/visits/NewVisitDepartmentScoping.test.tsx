@@ -95,6 +95,8 @@ const mockService: CatalogItem = {
   updatedAt: '2026-01-01',
 } as unknown as CatalogItem;
 
+let mockCatalog: CatalogItem[] = [mockService];
+
 const mockAdmission: Admission = {
   id: 'adm-1',
   clinicId: 'c1',
@@ -131,7 +133,7 @@ vi.mock('@/services', () => ({
       get: (id: string) => (id === 'p1' ? mockPatient : undefined),
       list: () => [mockPatient],
     },
-    catalog: { list: () => [mockService] },
+    catalog: { list: () => mockCatalog },
     treatmentCatalog: { list: () => [] },
     visits: {
       list: () => [],
@@ -206,6 +208,7 @@ describe('NewVisitPage department scoping', () => {
   beforeEach(() => {
     currentDept = 'clinic';
     searchParams = {};
+    mockCatalog = [mockService];
     createVisitMock.mockClear();
     navigateMock.mockClear();
   });
@@ -377,6 +380,39 @@ describe('NewVisitPage department scoping', () => {
         })
       );
     });
+  });
+
+  it('service picker only offers services available in current department', async () => {
+    currentDept = 'clinic';
+    const wardOnlyService = {
+      ...mockService,
+      id: 's-ward',
+      name: 'Ward ICU Physio',
+      departments: ['ward'],
+    } as unknown as CatalogItem;
+    const opService = {
+      ...mockService,
+      id: 's-op',
+      name: 'OP General Physio',
+      departments: ['clinic'],
+    } as unknown as CatalogItem;
+    const allService = {
+      ...mockService,
+      id: 's-all',
+      name: 'All Depts Consultation',
+      departments: null,
+    } as unknown as CatalogItem;
+
+    mockCatalog = [wardOnlyService, opService, allService];
+
+    render(<NewVisitPage />);
+
+    const servicePicker = screen.getByRole('combobox', { name: 'Service' });
+    fireEvent.change(servicePicker, { target: { value: 'Physio' } });
+
+    // OP service should be present, Ward-only service should NOT be present
+    expect(screen.getByRole('option', { name: /OP General Physio/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Ward ICU Physio/ })).not.toBeInTheDocument();
   });
 });
 

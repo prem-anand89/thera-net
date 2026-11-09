@@ -381,6 +381,8 @@ export interface CatalogItem {
   validityDays?: number | null;
   /** Where this service usually happens, the starting location when it is booked or logged. Older rows lack it. */
   defaultLocation?: CareLocation;
+  /** Departments where this service is offered (`null` or absent = every department). */
+  departments?: CareLocation[] | null;
   updatedAt: string;
 }
 

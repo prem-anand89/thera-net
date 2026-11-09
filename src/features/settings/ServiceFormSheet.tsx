@@ -9,6 +9,7 @@ import { groupNameCheck, nameCheck, nameCheckBlocks } from '@/domain/nameCheck';
 import { btnPrimary, btnSecondary, ConfirmDialog, Field, inputCls, RupeeInput, Segmented, SheetDialog } from '@/components/ui';
 import { SwitchRow } from './settingsShared';
 import { DURATION_ERROR, NameCheckNote, parseDuration, saveErrorMessage } from './catalogShared';
+import { clinicDepartments, DEPARTMENT_LABELS, normalizeServiceDepartments, type Department } from '@/domain/departments';
 
 export type ServiceSheetMode = { kind: 'add'; name?: string } | { kind: 'edit'; item: CatalogItem };
 
@@ -79,6 +80,7 @@ function ServiceForm({
   onSaved: (id: string) => void;
 }) {
   const clinic = useClinic();
+  const clinicDepts = clinicDepartments(clinic);
   const editing = mode.kind === 'edit' ? mode.item : null;
   const [kind, setKind] = useState<Kind>(editing && editing.sessionCount > 1 ? 'package' : 'one');
   const [name, setName] = useState(editing?.name ?? (mode.kind === 'add' ? mode.name ?? '' : ''));
@@ -88,6 +90,7 @@ function ServiceForm({
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [duration, setDuration] = useState(editing?.durationMinutes != null ? String(editing.durationMinutes) : '');
   const [validity, setValidity] = useState(editing?.validityDays != null ? String(editing.validityDays) : '');
+  const [departments, setDepartments] = useState<Department[]>(editing?.departments ?? []);
   const [active, setActive] = useState(editing?.active ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +113,8 @@ function ServiceForm({
   );
   const canDelete = Boolean(editing && !editing.active && historyCount === 0);
   const sessionCount = isPackage ? sessions : 1;
+  const deptsKey = (depts: readonly string[] | null | undefined) =>
+    (depts ?? []).slice().sort().join(',');
   // Editing: Save stays off until something differs from what is stored (adding is never "unchanged").
   const changed =
     !editing ||
@@ -119,6 +124,7 @@ function ServiceForm({
     chosenGroup() !== (editing.category ?? '').trim() ||
     (parseDuration(duration) ?? null) !== (editing.durationMinutes ?? null) ||
     (isPackage ? parseValidity(validity) : null) !== (editing.validityDays ?? null) ||
+    deptsKey(departments) !== deptsKey(editing?.departments) ||
     active !== editing.active;
   const priceChanged = Boolean(editing && pricePaise != null && pricePaise !== editing.basePricePaise);
   // A used service whose session count changes: only visits logged from now on use the new number.
@@ -148,6 +154,7 @@ function ServiceForm({
       basePricePaise: pricePaise,
       durationMinutes,
       validityDays,
+      departments: normalizeServiceDepartments(departments, clinicDepts),
       updatedAt: new Date().toISOString(),
     };
     setSaving(true);
@@ -440,6 +447,40 @@ function ServiceForm({
                   {d} days
                 </button>
               ))}
+            </div>
+          </Field>
+        )}
+
+        {clinicDepts.length > 1 && (
+          <Field
+            label="Departments"
+            hint={
+              departments.length === 0 || departments.length === clinicDepts.length
+                ? 'All departments (leave unticked or tick all)'
+                : undefined
+            }
+          >
+            <div className="flex flex-wrap items-center gap-4 pt-1">
+              {clinicDepts.map((d) => {
+                const checked = departments.includes(d);
+                return (
+                  <label key={d} className="flex items-center gap-2 text-sm text-[var(--ink)] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setDepartments([...departments, d]);
+                        } else {
+                          setDepartments(departments.filter((x) => x !== d));
+                        }
+                      }}
+                      className="rounded border-[var(--border)] text-[var(--teal)] focus:ring-[var(--teal)]/30"
+                    />
+                    <span>{DEPARTMENT_LABELS[d]}</span>
+                  </label>
+                );
+              })}
             </div>
           </Field>
         )}

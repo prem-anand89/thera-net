@@ -11,8 +11,9 @@ const put = vi.fn().mockResolvedValue(undefined);
 const bulkPut = vi.fn().mockResolvedValue(undefined);
 const hardDelete = vi.fn().mockResolvedValue(undefined);
 
+let clinicObj: { id: string; careLocations?: string[] } = { id: 'c1' };
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => null }));
-vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1' }) }));
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => clinicObj }));
 // The real catalogService (name checks, group writes, usage counts) on mocked repos; only the online delete is stubbed.
 vi.mock('@/services', async () => {
   const { createCatalogService } = await import('@/services/catalogService');
@@ -424,6 +425,47 @@ describe('Edit a service — form refinements', () => {
     fireEvent.click(within(dialog()).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put.mock.calls[0][0]).toMatchObject({ durationMinutes: null });
+  });
+});
+
+describe('ServicesView - ServiceFormSheet departments', () => {
+  it('shows department checkboxes when clinic has multiple departments and saves normalized departments', async () => {
+    clinicObj = { id: 'c1', careLocations: ['clinic', 'home', 'ward'] };
+    catalogItems = [];
+    render(<ServicesView onDirtyChange={vi.fn()} />);
+
+    // Click "+ Add"
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add/i }));
+
+    // Checkboxes should exist
+    expect(screen.getByLabelText('OP')).toBeInTheDocument();
+    expect(screen.getByLabelText('Home care')).toBeInTheDocument();
+    expect(screen.getByLabelText('IP')).toBeInTheDocument();
+
+    // Fill form
+    fireEvent.change(screen.getByLabelText(/Name/i), { target: { value: 'Inpatient Physio' } });
+    fireEvent.change(screen.getByLabelText(/Price/i), { target: { value: '1500' } });
+
+    // Tick only IP
+    fireEvent.click(screen.getByLabelText('IP'));
+
+    // Save
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put.mock.calls[0][0]).toMatchObject({
+      name: 'Inpatient Physio',
+      departments: ['ward'],
+    });
+  });
+
+  it('does not show department checkboxes when clinic has only clinic (OP)', () => {
+    clinicObj = { id: 'c1', careLocations: ['clinic'] };
+    catalogItems = [];
+    render(<ServicesView onDirtyChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add/i }));
+    expect(screen.queryByLabelText('OP')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('IP')).not.toBeInTheDocument();
   });
 });
 

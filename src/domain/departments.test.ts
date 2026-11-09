@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { canSwitchDepartment, departmentOf, effectiveIpInvoicePrefix, inDepartment, resolveDepartment, therapistsInDepartment, visibleDepartments } from './departments';
+import {
+  canSwitchDepartment,
+  departmentOf,
+  effectiveIpInvoicePrefix,
+  inDepartment,
+  normalizeServiceDepartments,
+  resolveDepartment,
+  servicesInDepartment,
+  therapistsInDepartment,
+  visibleDepartments,
+} from './departments';
 
 const all = { careLocations: ['clinic', 'home', 'ward'] };
 
@@ -59,5 +69,26 @@ describe('effectiveIpInvoicePrefix', () => {
 
   it('uses trimmed custom prefix when set', () => {
     expect(effectiveIpInvoicePrefix({ invoicePrefix: 'BM', ipInvoicePrefix: '  BMWARD ' })).toBe('BMWARD');
+  });
+});
+
+describe('servicesInDepartment and normalizeServiceDepartments', () => {
+  const sAll = { id: 's1', departments: null };
+  const sWard = { id: 's2', departments: ['ward'] };
+  const sOp = { id: 's3', departments: ['clinic'] };
+  const sNone = { id: 's4' };
+
+  it('servicesInDepartment filters services offered in a department', () => {
+    expect(servicesInDepartment('ward', [sAll, sWard, sOp, sNone]).map((s) => s.id)).toEqual(['s1', 's2', 's4']);
+    expect(servicesInDepartment('clinic', [sAll, sWard, sOp, sNone]).map((s) => s.id)).toEqual(['s1', 's3', 's4']);
+    expect(servicesInDepartment('home', [sAll, sWard, sOp, sNone]).map((s) => s.id)).toEqual(['s1', 's4']);
+  });
+
+  it('normalizeServiceDepartments returns null when all or none are ticked, and ordered subset when a subset is ticked', () => {
+    const clinicDepts = ['clinic', 'home', 'ward'] as const;
+    expect(normalizeServiceDepartments([], clinicDepts)).toBeNull();
+    expect(normalizeServiceDepartments(['clinic', 'home', 'ward'], clinicDepts)).toBeNull();
+    expect(normalizeServiceDepartments(['ward'], clinicDepts)).toEqual(['ward']);
+    expect(normalizeServiceDepartments(['ward', 'clinic'], clinicDepts)).toEqual(['clinic', 'ward']);
   });
 });

@@ -18,7 +18,7 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useDepartment } from '@/app/DepartmentContext';
-import { type Department, therapistsInDepartment } from '@/domain/departments';
+import { type Department, servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
@@ -407,7 +407,11 @@ export function NewVisitPage() {
     () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
     [therapists, session?.user?.id]
   );
-  const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const rawCatalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const catalog = useMemo(
+    () => (rawCatalog ? servicesInDepartment(department, rawCatalog) : undefined),
+    [rawCatalog, department]
+  );
   // Admin only: a service the search didn't find, added from here and selected on the row that asked for it.
   const [addService, setAddService] = useState<{ name: string; rowKey: string } | null>(null);
   const allCatalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]) ?? EMPTY_CATALOG;

@@ -21,6 +21,7 @@ import { formatDateDM, monthName } from '@/domain/fiscalYear';
 import { visitDateHint } from './visitDateHint';
 import { toLocalDateStr } from '@/domain/schedule';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
+import { departmentOf, servicesInDepartment } from '@/domain/departments';
 import {
   clinicBillingConfig,
   type CatalogItem,
@@ -156,13 +157,16 @@ export function EditVisitModal({
     () => (itemsRaw ?? EMPTY_ITEMS).filter((i) => !i.deleted).sort((a, b) => a.position - b.position),
     [itemsRaw]
   );
-  // Active services are offered in the picker; an inactive one is kept only while a saved row uses it.
+  const visitDept = departmentOf(visit);
+  // Active services in the visit's department are offered in the picker; an inactive or cross-department one is kept only while a saved row uses it.
   const catalog = useMemo(
     () =>
       (catalogAll ?? EMPTY_CATALOG).filter(
-        (c) => c.active || items.some((i) => i.serviceCatalogId === c.id)
+        (c) =>
+          (c.active && servicesInDepartment(visitDept, [c]).length > 0) ||
+          items.some((i) => i.serviceCatalogId === c.id)
       ),
-    [catalogAll, items]
+    [catalogAll, items, visitDept]
   );
 
   const [therapistId, setTherapistId] = useState('');
