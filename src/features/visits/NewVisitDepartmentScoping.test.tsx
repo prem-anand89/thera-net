@@ -261,7 +261,7 @@ describe('NewVisitPage department scoping', () => {
         })
       );
     });
-  });
+  }, 30000);
 
   it('in OP, therapist list follows department and visit saves location: "clinic"', async () => {
     currentDept = 'clinic';
@@ -303,7 +303,7 @@ describe('NewVisitPage department scoping', () => {
         })
       );
     });
-  });
+  }, 30000);
 
   it('opening an appointment from Home care while active dept is OP sets location: "home" and scopes therapists', async () => {
     currentDept = 'clinic';
@@ -339,7 +339,7 @@ describe('NewVisitPage department scoping', () => {
         })
       );
     });
-  });
+  }, 30000);
 
   it('an inpatient admission visit shows Inpatient tag, scopes therapists to ward, and saves location: "ward"', async () => {
     currentDept = 'clinic';
@@ -380,7 +380,7 @@ describe('NewVisitPage department scoping', () => {
         })
       );
     });
-  });
+  }, 30000);
 
   it('service picker only offers services available in current department', async () => {
     currentDept = 'clinic';

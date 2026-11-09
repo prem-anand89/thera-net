@@ -267,11 +267,10 @@ function DueToggle({
       aria-pressed={active}
       aria-label={`Due ${formatAmount(outstanding)} across ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`}
       title={active ? 'Showing unpaid visits only. Tap to show all.' : 'Show only unpaid visits'}
-      className={`min-h-8 rounded-md px-2.5 py-1 font-num font-bold transition-colors ${
-        active
+      className={`min-h-8 rounded-md px-2.5 py-1 font-num font-bold transition-colors ${active
           ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
           : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
-      }`}
+        }`}
       onClick={onToggle}
     >
       {long
@@ -663,6 +662,7 @@ export function LedgerPage() {
       googleReviewEligibleIds,
       clinic.googleReviewUrl,
       visitDetails,
+      clinic,
     ]
   );
 
@@ -828,11 +828,10 @@ export function LedgerPage() {
               type="button"
               role="tab"
               aria-selected={recordsView === v.key}
-              className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors last:mr-1.5 sm:px-4 sm:py-1.5 sm:text-sm sm:last:mr-0 ${
-                recordsView === v.key
+              className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors last:mr-1.5 sm:px-4 sm:py-1.5 sm:text-sm sm:last:mr-0 ${recordsView === v.key
                   ? 'bg-[var(--teal)] text-white shadow-sm'
                   : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-              }`}
+                }`}
               onClick={() => setRecordsView(v.key)}
             >
               {v.label}
@@ -957,11 +956,10 @@ export function LedgerPage() {
                 type="button"
                 aria-expanded={filtersOpen}
                 onClick={() => setFiltersOpen((current) => !current)}
-                className={`flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
-                  activeFilterCount > 0
+                className={`flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${activeFilterCount > 0
                     ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
                     : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                }`}
+                  }`}
               >
                 <svg
                   width="14"
@@ -1056,116 +1054,116 @@ export function LedgerPage() {
         (department !== 'ward' || canBillInpatientStay(clinic)) &&
         outstanding &&
         outstanding.rows.length > 0 && (
-        <SectionCard title="Unpaid invoices">
-          <div className="mb-4 flex gap-4">
-            <StatTile label="Invoiced, unpaid" value={formatAmount(outstanding.totalPaise)} />
-            <StatTile label="Invoices" value={outstanding.count} />
-          </div>
-          {canBill && (
-            <p className="mb-3 text-xs text-[var(--muted)]">
-              Take payment on each row, or void an invoice whose visit was removed. All dates, not just this week.
-            </p>
-          )}
-          {/* Below tab: — boxed cards instead of forcing this 5-column
+          <SectionCard title="Unpaid invoices">
+            <div className="mb-4 flex gap-4">
+              <StatTile label="Invoiced, unpaid" value={formatAmount(outstanding.totalPaise)} />
+              <StatTile label="Invoices" value={outstanding.count} />
+            </div>
+            {canBill && (
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Take payment on each row, or void an invoice whose visit was removed. All dates, not just this week.
+              </p>
+            )}
+            {/* Below tab: — boxed cards instead of forcing this 5-column
               table to scroll sideways on a phone. */}
-          <div className="tab:hidden space-y-2">
-            {outstanding.rows.map((r) => (
-              <div
-                key={r.invoiceId}
-                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
-              >
-                <Link
-                  to="/invoices/$invoiceId/print"
-                  params={{ invoiceId: r.invoiceId }}
-                  search={{ from: '/ledger' }}
-                  className="block"
+            <div className="tab:hidden space-y-2">
+              {outstanding.rows.map((r) => (
+                <div
+                  key={r.invoiceId}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-display text-sm font-medium text-[var(--ink)]">
-                        {r.patientName}{' '}
-                        <span className="text-xs font-normal text-[var(--muted)]">{r.mrno}</span>
+                  <Link
+                    to="/invoices/$invoiceId/print"
+                    params={{ invoiceId: r.invoiceId }}
+                    search={{ from: '/ledger' }}
+                    className="block"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-display text-sm font-medium text-[var(--ink)]">
+                          {r.patientName}{' '}
+                          <span className="text-xs font-normal text-[var(--muted)]">{r.mrno}</span>
+                        </div>
+                        <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
                       </div>
-                      <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
+                      <span className="font-num shrink-0 text-right text-sm font-medium text-[var(--ink)]">
+                        {formatAmount(r.remainingPaise)}
+                        {r.paidPaise > 0 && (
+                          <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatAmount(r.totalPaise)}</span>
+                        )}
+                      </span>
                     </div>
-                    <span className="font-num shrink-0 text-right text-sm font-medium text-[var(--ink)]">
-                      {formatAmount(r.remainingPaise)}
-                      {r.paidPaise > 0 && (
-                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatAmount(r.totalPaise)}</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
-                    <span>Issued {formatDateDM(r.issuedAt)}</span>
-                    <span className="font-num">{r.daysOutstanding} days outstanding</span>
-                  </div>
-                </Link>
-                {canBill && (
-                  <div className="mt-2 border-t border-[var(--border)] pt-2">
-                    <OutstandingInvoiceActions
-                      row={r}
-                      onTakePayment={setTakingInvoicePayment}
-                      onVoid={(row) => setVoidingInvoice(invoiceById.get(row.invoiceId) ?? null)}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+                      <span>Issued {formatDateDM(r.issuedAt)}</span>
+                      <span className="font-num">{r.daysOutstanding} days outstanding</span>
+                    </div>
+                  </Link>
+                  {canBill && (
+                    <div className="mt-2 border-t border-[var(--border)] pt-2">
+                      <OutstandingInvoiceActions
+                        row={r}
+                        onTakePayment={setTakingInvoicePayment}
+                        onVoid={(row) => setVoidingInvoice(invoiceById.get(row.invoiceId) ?? null)}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
-          <div className="hidden tab:block overflow-x-auto">
-            <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-              <thead>
-                <tr>
-                  <th className={th}>Invoice №</th>
-                  <th className={th}>Patient</th>
-                  <th className={thNum}>Amount</th>
-                  <th className={th}>Issued</th>
-                  <th className={thNum}>Days outstanding</th>
-                  {canBill && <th className={th}>Action</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {outstanding.rows.map((r) => (
-                  <tr key={r.invoiceId} className="hover:bg-[var(--paper)]">
-                    <td className={td}>
-                      <Link
-                        to="/invoices/$invoiceId/print"
-                        params={{ invoiceId: r.invoiceId }}
-                        search={{ from: '/ledger' }}
-                        className="text-[var(--teal)] hover:underline"
-                      >
-                        {r.invoiceNo}
-                      </Link>
-                    </td>
-                    <td className={td}>
-                      <span className="font-display">{r.patientName}</span>{' '}
-                      <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
-                    </td>
-                    <td className={tdNum}>
-                      {formatAmount(r.remainingPaise)}
-                      {r.paidPaise > 0 && (
-                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatAmount(r.totalPaise)}</span>
-                      )}
-                    </td>
-                    <td className={td}>{formatDateDM(r.issuedAt)}</td>
-                    <td className={tdNum}>{r.daysOutstanding}</td>
-                    {canBill && (
-                      <td className={td}>
-                        <OutstandingInvoiceActions
-                          row={r}
-                          onTakePayment={setTakingInvoicePayment}
-                          onVoid={(row) => setVoidingInvoice(invoiceById.get(row.invoiceId) ?? null)}
-                        />
-                      </td>
-                    )}
+            <div className="hidden tab:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                <thead>
+                  <tr>
+                    <th className={th}>Invoice №</th>
+                    <th className={th}>Patient</th>
+                    <th className={thNum}>Amount</th>
+                    <th className={th}>Issued</th>
+                    <th className={thNum}>Days outstanding</th>
+                    {canBill && <th className={th}>Action</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
-      )}
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {outstanding.rows.map((r) => (
+                    <tr key={r.invoiceId} className="hover:bg-[var(--paper)]">
+                      <td className={td}>
+                        <Link
+                          to="/invoices/$invoiceId/print"
+                          params={{ invoiceId: r.invoiceId }}
+                          search={{ from: '/ledger' }}
+                          className="text-[var(--teal)] hover:underline"
+                        >
+                          {r.invoiceNo}
+                        </Link>
+                      </td>
+                      <td className={td}>
+                        <span className="font-display">{r.patientName}</span>{' '}
+                        <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
+                      </td>
+                      <td className={tdNum}>
+                        {formatAmount(r.remainingPaise)}
+                        {r.paidPaise > 0 && (
+                          <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatAmount(r.totalPaise)}</span>
+                        )}
+                      </td>
+                      <td className={td}>{formatDateDM(r.issuedAt)}</td>
+                      <td className={tdNum}>{r.daysOutstanding}</td>
+                      {canBill && (
+                        <td className={td}>
+                          <OutstandingInvoiceActions
+                            row={r}
+                            onTakePayment={setTakingInvoicePayment}
+                            onVoid={(row) => setVoidingInvoice(invoiceById.get(row.invoiceId) ?? null)}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        )}
 
       {recordsView === 'visits' && assistedVisits.length > 0 && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented && (
         <SectionCard title={`Assisted visits · ${assistedVisits.length}`}>

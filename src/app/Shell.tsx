@@ -39,7 +39,6 @@ import {
   IconReports,
   IconCalendar,
   IconMore,
-  IconSettings,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
 import { ForeignPendingScreen } from './ForeignPendingScreen';
@@ -54,7 +53,6 @@ import {
 import { requestPersistentStorage } from '@/lib/persistStorage';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
-import { ClinicSwitcher } from './ClinicSwitcher';
 import { DepartmentSwitch, DepartmentBand } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 
@@ -65,17 +63,14 @@ export const NAV = [
   { to: '/schedule', label: 'Schedule', Icon: IconCalendar },
   { to: '/ledger', label: 'Ledger', Icon: IconLedger },
   { to: '/insights', label: 'Reports', Icon: IconReports },
-  { to: '/settings', label: 'Settings', Icon: IconSettings },
 ] as const;
 
 /** Filter header nav items by user role / permissions. */
 export function filterNavItems(role: string) {
-  const canEditSettings = role === 'admin';
   return NAV.filter(
     (item) =>
       (item.to !== '/schedule' || role !== 'unknown') &&
-      (item.to !== '/insights' || role === 'admin' || role === 'front_desk') &&
-      (item.to !== '/settings' || canEditSettings)
+      (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
   );
 }
 
@@ -426,9 +421,9 @@ export function Shell() {
   return (
     <ClinicContext.Provider value={clinic}>
       <DepartmentProvider clinic={clinic} userId={session?.user?.id} role={role} departments={memberDepartments}>
-      <div className="min-h-screen bg-[var(--paper)]">
-        <header ref={trackAppHeaderHeight} className={`no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] ${shouldShowPhoneAppHeader(pathname) ? '' : 'max-sm:hidden'}`}>
-          {/* Header layout. Left: the Thera.Net mark (the product; wordmark
+        <div className="min-h-screen bg-[var(--paper)]">
+          <header ref={trackAppHeaderHeight} className={`no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] ${shouldShowPhoneAppHeader(pathname) ? '' : 'max-sm:hidden'}`}>
+            {/* Header layout. Left: the Thera.Net mark (the product; wordmark
               from desktop:). Middle: nav, sm:-and-up only — the bottom tab
               bar replaces it on phones. Right: the clinic pill (where you
               are: the clinic's own logo + name, and the clinic switcher),
@@ -446,138 +441,136 @@ export function Shell() {
                    expands with text at every width when there is.
                 4. The account trigger's name shows from desktop: only; the
                    dropdown repeats it anyway. */}
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 tab:gap-4">
-            <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
-              <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
-            </Link>
-            {shouldShowDesktopNav(pathname) && (
-              <nav className="hidden shrink-0 gap-1 sm:flex">
-                {nav.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    // Icon-only below tab:, so the accessible name has to
-                    // come from the attribute rather than the hidden span —
-                    // `hidden` is display:none, which screen readers skip.
-                    aria-label={item.label}
-                    aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
-                    title={item.label}
-                    activeProps={{}}
-                    className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${
-                      isNavActive(pathname, item.to)
-                        ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                        : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                    }`}
-                  >
-                    <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
-                    <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
-                    {item.to === '/schedule' && pendingRequestsCount > 0 && (
-                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
-                        {pendingRequestsCount}
-                      </span>
-                    )}
-                  </Link>
-                ))}
-              </nav>
-            )}
-            <div className="ml-auto flex min-w-0 items-center gap-2 tab:gap-3">
-              <DepartmentSwitch />
-              <div className="flex min-w-0 justify-end">
-                <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} isAdmin={role === 'admin'} />
-              </div>
-              <div className="flex shrink-0 items-center gap-1 tab:gap-2">
-              {(role === 'admin' || role === 'front_desk') && (
-                <NotificationBell
-                  clinicId={clinic.id}
-                  userId={session?.user?.id}
-                  pendingRequestsCount={pendingRequestsCount}
-                  isAdmin={role === 'admin'}
-                />
+            <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 tab:gap-4">
+              <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
+                <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
+              </Link>
+              {shouldShowDesktopNav(pathname) && (
+                <nav className="hidden shrink-0 gap-1 sm:flex">
+                  {nav.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      // Icon-only below tab:, so the accessible name has to
+                      // come from the attribute rather than the hidden span —
+                      // `hidden` is display:none, which screen readers skip.
+                      aria-label={item.label}
+                      aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
+                      title={item.label}
+                      activeProps={{}}
+                      className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${isNavActive(pathname, item.to)
+                          ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+                          : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                        }`}
+                    >
+                      <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
+                      <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
+                      {item.to === '/schedule' && pendingRequestsCount > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
+                          {pendingRequestsCount}
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+                </nav>
               )}
-              {role === 'therapist' && myTherapistId && (
-                <NotificationBell
-                  clinicId={clinic.id}
-                  userId={session?.user?.id}
-                  pendingRequestsCount={0}
-                  isAdmin={false}
-                  therapistId={myTherapistId}
-                />
-              )}
-              <SyncBadge />
-              <AccountMenu
-                displayName={displayName}
-                fallbackName={fallbackName}
-                role={role}
-                setDisplayName={setDisplayName}
-                clinicId={clinic.id}
-                hasPasswordIdentity={
-                  session?.user.identities?.some((i) => i.provider === 'email') ?? true
-                }
-              />
+              <div className="ml-auto flex min-w-0 items-center gap-2 tab:gap-3">
+                <DepartmentSwitch />
+                <div className="flex shrink-0 items-center gap-1 tab:gap-2">
+                  {(role === 'admin' || role === 'front_desk') && (
+                    <NotificationBell
+                      clinicId={clinic.id}
+                      userId={session?.user?.id}
+                      pendingRequestsCount={pendingRequestsCount}
+                      isAdmin={role === 'admin'}
+                    />
+                  )}
+                  {role === 'therapist' && myTherapistId && (
+                    <NotificationBell
+                      clinicId={clinic.id}
+                      userId={session?.user?.id}
+                      pendingRequestsCount={0}
+                      isAdmin={false}
+                      therapistId={myTherapistId}
+                    />
+                  )}
+                  <SyncBadge />
+                  <AccountMenu
+                    displayName={displayName}
+                    fallbackName={fallbackName}
+                    role={role}
+                    setDisplayName={setDisplayName}
+                    clinicId={clinic.id}
+                    clinics={clinics ?? []}
+                    logoUrl={logoUrl}
+                    active={pathname.startsWith('/settings') || pathname.startsWith('/setup')}
+                    hasPasswordIdentity={
+                      session?.user.identities?.some((i) => i.provider === 'email') ?? true
+                    }
+                  />
+                </div>
               </div>
             </div>
-          </div>
-          <DepartmentBand />
-        </header>
-        <UpdateBanner />
-        <SyncStatusBanners />
-        <main
-          className={`mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${
-            shouldShowPhoneBottomNav(pathname)
-              ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
-              : 'pb-6'
-          }`}
-        >
-          <Suspense
-            fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}
+            <DepartmentBand />
+          </header>
+          <UpdateBanner />
+          <SyncStatusBanners />
+          <main
+            className={`mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${shouldShowPhoneBottomNav(pathname)
+                ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
+                : 'pb-6'
+              }`}
           >
-            <Outlet />
-          </Suspense>
-        </main>
-        {shouldShowPhoneBottomNav(pathname) && (
-          <nav
-            className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
-            aria-label="Main"
-          >
-            <PhoneTab
-              to="/workspace"
-              label="Workspace"
-              Icon={IconWorkspace}
-              active={activePhoneTab(pathname) === '/workspace'}
-            />
-            <PhoneTab
-              to="/schedule"
-              label="Schedule"
-              Icon={IconCalendar}
-              active={activePhoneTab(pathname) === '/schedule'}
-              badge={pendingRequestsCount}
-            />
-            <Link
-              to="/visits/new"
-              search={newVisitFrom ? { from: newVisitFrom } : {}}
-              aria-label="New visit"
-              className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center py-1"
+            <Suspense
+              fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--teal)] text-lg font-medium text-white">
-                +
-              </span>
-              <span className="sr-only">New visit</span>
-            </Link>
-            <PhoneTab
-              to="/ledger"
-              label="Ledger"
-              Icon={IconLedger}
-              active={activePhoneTab(pathname) === '/ledger'}
-            />
-            <PhoneTab
-              to="/more"
-              label="More"
-              Icon={IconMore}
-              active={activePhoneTab(pathname) === '/more'}
-            />
-          </nav>
-        )}
-      </div>
+              <Outlet />
+            </Suspense>
+          </main>
+          {shouldShowPhoneBottomNav(pathname) && (
+            <nav
+              className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
+              aria-label="Main"
+            >
+              <PhoneTab
+                to="/workspace"
+                label="Workspace"
+                Icon={IconWorkspace}
+                active={activePhoneTab(pathname) === '/workspace'}
+              />
+              <PhoneTab
+                to="/schedule"
+                label="Schedule"
+                Icon={IconCalendar}
+                active={activePhoneTab(pathname) === '/schedule'}
+                badge={pendingRequestsCount}
+              />
+              <Link
+                to="/visits/new"
+                search={newVisitFrom ? { from: newVisitFrom } : {}}
+                aria-label="New visit"
+                className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center py-1"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--teal)] text-lg font-medium text-white">
+                  +
+                </span>
+                <span className="sr-only">New visit</span>
+              </Link>
+              <PhoneTab
+                to="/ledger"
+                label="Ledger"
+                Icon={IconLedger}
+                active={activePhoneTab(pathname) === '/ledger'}
+              />
+              <PhoneTab
+                to="/more"
+                label="More"
+                Icon={IconMore}
+                active={activePhoneTab(pathname) === '/more'}
+              />
+            </nav>
+          )}
+        </div>
       </DepartmentProvider>
     </ClinicContext.Provider>
   );
@@ -600,14 +593,12 @@ function PhoneTab({
     <Link
       to={to}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] ${
-        active ? 'font-semibold text-[var(--teal-strong)]' : 'font-medium text-[var(--muted)]'
-      }`}
+      className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] ${active ? 'font-semibold text-[var(--teal-strong)]' : 'font-medium text-[var(--muted)]'
+        }`}
     >
       <div
-        className={`relative flex h-7 w-14 items-center justify-center rounded-full transition-colors motion-reduce:transition-none ${
-          active ? 'bg-[var(--teal-light)] [&_path]:stroke-[2.1]' : ''
-        }`}
+        className={`relative flex h-7 w-14 items-center justify-center rounded-full transition-colors motion-reduce:transition-none ${active ? 'bg-[var(--teal-light)] [&_path]:stroke-[2.1]' : ''
+          }`}
       >
         <Icon />
         {badge !== undefined && badge > 0 && (

@@ -130,8 +130,8 @@ function SegmentedToggle<T extends string>({
           aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={`h-8 flex-1 whitespace-nowrap rounded px-3 text-center font-medium transition-colors ${value === opt.value
-              ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-              : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+            ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+            : 'text-[var(--muted)] hover:bg-[var(--paper)]'
             } ${opt.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           {opt.label}
@@ -1234,11 +1234,11 @@ export function NewVisitPage() {
     const paymentDue = justSaved.inpatientBilling
       ? 0
       : paymentStillDue({
-          canCollect: canCollectPayment,
-          alreadyCollected: justSaved.alreadyCollected,
-          billPaise: justSaved.billPaise,
-          receivedPaise: (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0),
-        });
+        canCollect: canCollectPayment,
+        alreadyCollected: justSaved.alreadyCollected,
+        billPaise: justSaved.billPaise,
+        receivedPaise: (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0),
+      });
     const invoiceTarget: IssueInvoiceTarget = {
       visitId: justSaved.visitId,
       patientId: justSaved.patientId,
@@ -1751,8 +1751,8 @@ export function NewVisitPage() {
               }))}
               onChange={setTherapistId}
               triggerClassName={`flex h-8 w-full items-center justify-between rounded-full border px-3 text-xs font-medium transition-colors ${therapistChosen
-                  ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
-                  : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
+                ? 'border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                : 'border-[var(--rust)] bg-[var(--surface)] text-[var(--ink)]'
                 }`}
               renderTrigger={(selected) => (
                 <>
@@ -1811,8 +1811,8 @@ export function NewVisitPage() {
                       onClick={() => setCondition(isSelected ? '' : cond)}
                       aria-pressed={isSelected}
                       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${isSelected
-                          ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
-                          : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]'
+                        ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+                        : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]'
                         }`}
                     >
                       {isSelected && <span aria-hidden="true">✓</span>}

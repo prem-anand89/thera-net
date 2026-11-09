@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { Therapist } from '@/domain/types';
+import type { Clinic, Therapist } from '@/domain/types';
 import type { MySchedule } from '@/features/me/useMySchedule';
 
 let myTherapist: Therapist | undefined;
@@ -11,8 +11,9 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, ...rest }: { children: React.ReactNode; to: string }) => (
     <a href={to} {...rest}>{children}</a>
   ),
+  useNavigate: () => vi.fn(),
 }));
-vi.mock('./clinicContext', () => ({ useClinic: () => ({ id: 'c1', bookingStartHour: 9, bookingEndHour: 17 }) }));
+vi.mock('./clinicContext', () => ({ useClinic: () => ({ id: 'c1', name: 'City Clinic', bookingStartHour: 9, bookingEndHour: 17 }) }));
 vi.mock('./registerServiceWorker', () => ({ checkForUpdateAndReload: vi.fn() }));
 import { checkForUpdateAndReload } from './registerServiceWorker';
 vi.mock('@/features/me/useMyTherapist', () => ({ useMyTherapist: () => myTherapist }));
@@ -27,7 +28,8 @@ vi.mock('@/features/me/MyNotificationsSheet', () => ({ MyNotificationsSheet: () 
 vi.mock('@/components/schedule/ShiftRequestSheet', () => ({ ShiftRequestSheet: () => null }));
 vi.mock('@/components/ChangePasswordDialog', () => ({ ChangePasswordDialog: () => null }));
 vi.mock('@/components/HelpFeedbackDialog', () => ({ HelpFeedbackDialog: () => null }));
-vi.mock('@/lib/supabase', () => ({ publicTherapistPhotoUrl: () => null }));
+vi.mock('@/components/AddClinicDialog', () => ({ AddClinicDialog: () => null }));
+vi.mock('@/lib/supabase', () => ({ publicTherapistPhotoUrl: () => null, getSupabase: () => null }));
 vi.mock('./signOut', () => ({ signOutSafely: vi.fn() }));
 
 import { AccountMenu } from './AccountMenu';
@@ -39,7 +41,7 @@ function openMenu(role: ClinicRole) {
       displayName="Ritu"
       fallbackName="ritu"
       role={role}
-      setDisplayName={async () => {}}
+      setDisplayName={async () => { }}
       clinicId="c1"
       hasPasswordIdentity
     />
@@ -157,5 +159,40 @@ describe('Refresh app', () => {
     openMenu('admin');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh app' }));
     await vi.waitFor(() => expect(checkForUpdateAndReload).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('Clinic administration in AccountMenu', () => {
+  it('shows Clinic settings and Add another clinic for admin', () => {
+    openMenu('admin');
+    expect(screen.getByRole('menuitem', { name: /clinic settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /add another clinic/i })).toBeInTheDocument();
+  });
+
+  it('hides Clinic settings and Add clinic for non-admin', () => {
+    openMenu('therapist');
+    expect(screen.queryByRole('menuitem', { name: /clinic settings/i })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /add another clinic/i })).toBeNull();
+  });
+
+  it('lists clinics to switch when account belongs to multiple clinics', () => {
+    render(
+      <AccountMenu
+        displayName="Ritu"
+        fallbackName="ritu"
+        role="admin"
+        setDisplayName={async () => { }}
+        clinicId="c1"
+        clinics={[
+          { id: 'c1', name: 'Alpha Clinic' } as unknown as Clinic,
+          { id: 'c2', name: 'Beta Rehab' } as unknown as Clinic,
+        ]}
+        hasPasswordIdentity
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    expect(screen.getByText('Switch clinic')).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /alpha clinic/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /beta rehab/i })).toBeInTheDocument();
   });
 });
