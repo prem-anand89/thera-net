@@ -5,6 +5,8 @@ import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useDepartment } from '@/app/DepartmentContext';
+import { inDepartment, invoiceDepartment } from '@/domain/departments';
 import { formatAmount } from '@/domain/money';
 import { formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { type Invoice, type PaymentStatus } from '@/domain/types';
@@ -34,11 +36,19 @@ const INVOICE_COMPARATORS = {
 /** `canIssue` false: a plan that no longer issues invoices. Past invoices stay (view, print, collect); nothing new is issued. */
 export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   const clinic = useClinic();
+  const { department } = useDepartment();
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const deptInvoices = useMemo(
+    () => (invoices ?? []).filter((inv) => invoiceDepartment(inv) === department),
+    [invoices, department]
+  );
   const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   // 1.7's needs-receipt queue — same live-query mechanism every other
   // count in the app uses, so it re-runs on any local write or sync pull.
-  const needsReceipt = useLiveQuery(() => dashboardService.needsReceipt(clinic.id), [clinic.id]);
+  const needsReceipt = useLiveQuery(
+    () => dashboardService.needsReceipt(clinic.id, department),
+    [clinic.id, department]
+  );
   const [invoicingNeedsReceipt, setInvoicingNeedsReceipt] = useState<IssueInvoiceTarget | null>(
     null
   );
@@ -193,11 +203,11 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   }
 
   const filteredInvoices = useMemo(() => {
-    let filtered = invoices ?? [];
+    let filtered = deptInvoices;
     if (from) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) >= from);
     if (to) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) <= to);
     return filtered;
-  }, [invoices, from, to]);
+  }, [deptInvoices, from, to]);
 
   const sortedInvoices = useMemo(
     () => applySort(filteredInvoices, INVOICE_COMPARATORS, sort),
@@ -210,11 +220,11 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   const supersededInvoiceIds = useMemo(
     () =>
       new Set(
-        (invoices ?? [])
+        deptInvoices
           .map((i) => i.supersedesInvoiceId)
           .filter((id): id is string => Boolean(id))
       ),
-    [invoices]
+    [deptInvoices]
   );
 
   const { totalOutstanding, totalCollected, totalInvoiced, unbilledTotal } = useMemo(() => {
@@ -237,7 +247,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
 
     let unbilled = 0;
     for (const v of visits ?? []) {
-      if (v.deleted || v.invoiceId) continue;
+      if (v.deleted || v.invoiceId || !inDepartment(department, v)) continue;
       if (from && v.visitDate < from) continue;
       if (to && v.visitDate > to) continue;
       

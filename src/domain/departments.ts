@@ -51,6 +51,18 @@ export function departmentOf(record: { location?: string | null } | null | undef
   return locationOf(record);
 }
 
+/**
+ * The department an invoice belongs to, based on its visits' placeOfService.
+ * Older invoices with none belong to OP ('clinic').
+ */
+export function invoiceDepartment(
+  invoice: { clinicalSnapshot?: { placeOfService?: string | null } | null } | null | undefined
+): Department {
+  const place = invoice?.clinicalSnapshot?.placeOfService;
+  if (place === 'home' || place === 'ward') return place;
+  return 'clinic';
+}
+
 /** True when a record belongs to the department. */
 export function inDepartment(department: Department, record: { location?: string | null } | null | undefined): boolean {
   return departmentOf(record) === department;

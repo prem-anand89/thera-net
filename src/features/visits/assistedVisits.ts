@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
+import { inDepartment, type Department } from '@/domain/departments';
 import { deliverer } from '@/domain/visitLines';
 import type { Paise } from '@/domain/money';
 import type { UUID, Visit, VisitCredit, VisitItem } from '@/domain/types';
@@ -70,19 +71,22 @@ export function useAssistedVisits(
   range: { from?: string; to?: string; patientId?: UUID },
   nameOf: (id: UUID) => string,
   splitEnabled: boolean,
-  excludeVisitIds?: Set<UUID>
+  excludeVisitIds?: Set<UUID>,
+  department?: Department
 ): AssistedVisit[] {
   const { from, to, patientId } = range;
   const data = useLiveQuery(async () => {
     if (!therapistId) return null;
     const visits = await repos.visits.list({ clinicId, from, to, patientId });
-    const others = visits.filter((v) => !v.deleted && v.therapistId !== therapistId);
+    const others = visits.filter(
+      (v) => !v.deleted && v.therapistId !== therapistId && (!department || inDepartment(department, v))
+    );
     const ids = others.map((v) => v.id);
     const [items, credits] = ids.length
       ? await Promise.all([repos.visitItems.listByVisitIds(ids), repos.visitCredits.listByVisitIds(ids)])
       : [[], []];
     return { visits: others, items, credits };
-  }, [clinicId, therapistId, from, to, patientId]);
+  }, [clinicId, therapistId, from, to, patientId, department]);
   return useMemo(() => {
     if (!data || !therapistId) return [];
     return assistedVisitsFor(therapistId, data.visits, data.items, data.credits, nameOf, splitEnabled).filter(

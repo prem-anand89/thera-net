@@ -31,7 +31,7 @@ import type { Repos } from '@/repositories/types';
 import { createReportService, type MonthlyReport } from './reportService';
 import { isCashInHand, isFullyPartnerCollected, partnerPaymentsByVisit } from '@/domain/paymentMethods';
 import { collectionsByMethod, type CollectionsByMethod } from '@/domain/collectionsByMethod';
-import type { Department } from '@/domain/departments';
+import { inDepartment, type Department } from '@/domain/departments';
 import { paymentsForDepartment, advancesForDepartment, inDepartmentList } from '@/domain/departmentMoney';
 
 export interface OpenPackageRow {
@@ -564,7 +564,7 @@ export function createDashboardService(repos: Repos) {
      * `outstandingInvoices()`'s own precedent — a backlog like this is by
      * definition old and shouldn't disappear behind a date filter.
      */
-    async needsReceipt(clinicId: UUID): Promise<NeedsReceiptRow[]> {
+    async needsReceipt(clinicId: UUID, department?: Department): Promise<NeedsReceiptRow[]> {
       const [visits, invoicePayments, directPayments, patients, catalog] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.invoicePayments.list(clinicId),
@@ -587,6 +587,7 @@ export function createDashboardService(repos: Repos) {
       const rows: NeedsReceiptRow[] = [];
       for (const v of visits) {
         if (v.deleted) continue;
+        if (department && !inDepartment(department, v)) continue;
         const collectedPaise = directPaymentByVisitId.get(v.id) ?? 0;
         const state = computeVisitPaymentState(
           v.actualBillPaise,

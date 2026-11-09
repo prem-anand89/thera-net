@@ -1,4 +1,4 @@
-import type { UUID, Visit } from '@/domain/types';
+import type { CareLocation, UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { attributionMovements, packageSessionShares } from '@/domain/payBase';
 import { monthDateRange, type FyMonth } from '@/domain/fiscalYear';
@@ -17,6 +17,7 @@ export interface AttributionEntry {
   visitId: UUID;
   visitDate: string;
   patientId: UUID;
+  location?: CareLocation;
   fromTherapistId: UUID;
   toTherapistId: UUID;
   /** Gross (bill-based) amount moved — null for package attribution, which has no gross-level equivalent computed today. */
@@ -76,6 +77,7 @@ export function createAttributionAuditService(repos: Repos) {
           visitId: m.visitId,
           visitDate: v.visitDate,
           patientId: v.patientId,
+          location: v.location,
           fromTherapistId: m.fromTherapistId,
           toTherapistId: m.toTherapistId,
           postTaxPaise: m.postTaxPaise,

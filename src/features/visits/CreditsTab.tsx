@@ -3,6 +3,8 @@ import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { attributionAuditService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useDepartment } from '@/app/DepartmentContext';
+import { inDepartment } from '@/domain/departments';
 import { usePermissions } from '@/app/usePermissions';
 import { formatAmount } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
@@ -53,20 +55,29 @@ export function CreditsTab({ myTherapistId, isAdmin }: { myTherapistId?: UUID; i
   const subjectId = view === 'me' ? myTherapistId : view === 'clinic' ? undefined : (view as UUID);
   const isSelf = subjectId !== undefined && subjectId === myTherapistId;
 
+  const { department } = useDepartment();
   const entries = useLiveQuery(
     () => attributionAuditService.monthly(clinic.id, selected),
     [clinic.id, selected.year, selected.month]
   );
-  const rows = useMemo(() => (entries && subjectId ? myRows(entries, subjectId) : []), [entries, subjectId]);
-  const clinicView = useMemo(() => (entries && !subjectId ? clinicTotals(entries) : undefined), [entries, subjectId]);
-  const isEmpty = entries !== undefined && (subjectId ? rows.length === 0 : entries.length === 0);
+  const deptEntries = useMemo(
+    () => (entries ? entries.filter((e) => inDepartment(department, e)) : undefined),
+    [entries, department]
+  );
+  const rows = useMemo(() => (deptEntries && subjectId ? myRows(deptEntries, subjectId) : []), [deptEntries, subjectId]);
+  const clinicView = useMemo(() => (deptEntries && !subjectId ? clinicTotals(deptEntries) : undefined), [deptEntries, subjectId]);
+  const isEmpty = deptEntries !== undefined && (subjectId ? rows.length === 0 : deptEntries.length === 0);
 
   // An empty month says what the month before had, so it is never a dead end.
   const previousEntries = useLiveQuery(
     () => (isEmpty && previous ? attributionAuditService.monthly(clinic.id, previous) : undefined),
     [isEmpty, clinic.id, previous?.year, previous?.month]
   );
-  const previousCount = previousEntries ? (subjectId ? myRows(previousEntries, subjectId).length : previousEntries.length) : 0;
+  const deptPreviousEntries = useMemo(
+    () => (previousEntries ? previousEntries.filter((e) => inDepartment(department, e)) : undefined),
+    [previousEntries, department]
+  );
+  const previousCount = deptPreviousEntries ? (subjectId ? myRows(deptPreviousEntries, subjectId).length : deptPreviousEntries.length) : 0;
 
   const lines = useMemo(
     () => (subjectId ? creditLines(rows, { subjectId, isSelf, nameOf }) : []),
@@ -91,8 +102,8 @@ export function CreditsTab({ myTherapistId, isAdmin }: { myTherapistId?: UUID; i
   }, [isAdmin, therapists, myTherapistId]);
 
   function downloadCsv() {
-    if (!entries) return;
-    const blob = new Blob([toAuditCsv(entries, nameOf, patientName)], { type: 'text/csv' });
+    if (!deptEntries) return;
+    const blob = new Blob([toAuditCsv(deptEntries, nameOf, patientName)], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

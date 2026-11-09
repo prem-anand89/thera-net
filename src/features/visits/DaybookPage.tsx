@@ -2,12 +2,13 @@ import { useMemo, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
+import { useDepartment } from '@/app/DepartmentContext';
+import { paymentsForDepartment, advancesForDepartment } from '@/domain/departmentMoney';
+import { repos } from '@/services';
 import { formatAmount } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
 import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
-import { CARE_LOCATION_LABELS, clinicCareLocations, locationOf, offersLocationChoice } from '@/domain/careLocations';
-import type { CareLocation } from '@/domain/types';
 import { DatePresetBar, DAYBOOK_DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
 
 // Local Y/M/D components
@@ -16,6 +17,12 @@ const toIsoDate = (d: Date) =>
 
 export function DaybookPage() {
   const clinic = useClinic();
+  const { department } = useDepartment();
+  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const therapistNameById = useMemo(
+    () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
+    [therapists]
+  );
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
   const [from, setFrom] = useState(todayIso);
   const [to, setTo] = useState(todayIso);
@@ -89,17 +96,44 @@ export function DaybookPage() {
     return { payments, advances, visits, patients };
   }, [clinic.id, from, to], { payments: [], advances: [], visits: [], patients: [] });
 
-  const { cash, upi, card, other, partner, total, transactions, byPlace, advanceTotal } = useMemo(() => {
-    let cash = 0, upi = 0, card = 0, other = 0, partner = 0, advanceTotal = 0;
-    // What reached the clinic, by the place of the visit it paid for (advances belong to no visit yet).
-    const byPlace: Partial<Record<CareLocation, number>> = {};
+  const visitById = useMemo(() => new Map((data.visits ?? []).map((v) => [v.id, v])), [data.visits]);
+  const deptPayments = useMemo(
+    () => paymentsForDepartment(department, data.payments ?? [], visitById),
+    [department, data.payments, visitById]
+  );
+  const deptAdvances = useMemo(
+    () => advancesForDepartment(department, data.advances ?? []),
+    [department, data.advances]
+  );
+
+  const therapistHandovers = useMemo(() => {
+    if (department !== 'home') return [];
+    const map = new Map<string, { therapistId: string; therapistName: string; cash: number; upi: number; other: number; total: number; count: number }>();
+    for (const p of deptPayments) {
+      if (p.advanceId) continue;
+      const visit = visitById.get(p.visitId);
+      const tId = visit?.therapistId ?? 'unassigned';
+      const tName = visit?.therapistId ? (therapistNameById.get(visit.therapistId) ?? 'Therapist') : 'Unassigned';
+      const cur = map.get(tId) ?? { therapistId: tId, therapistName: tName, cash: 0, upi: 0, other: 0, total: 0, count: 0 };
+      const amt = p.amountPaise;
+      if (p.method === 'cash') cur.cash += amt;
+      else if (p.method === 'upi') cur.upi += amt;
+      else cur.other += amt;
+      cur.total += amt;
+      cur.count += 1;
+      map.set(tId, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [department, deptPayments, visitById, therapistNameById]);
+
+  const { cash, upi, card, other, partner, total, transactions } = useMemo(() => {
+    let cash = 0, upi = 0, card = 0, other = 0, partner = 0;
     const transactions: { id: string; date: string; patientName: string; type: string; method: string; amount: number; notes: string }[] = [];
 
     const patientNameById = new Map((data.patients ?? []).map((p) => [p.id, p.name]));
-    const visitById = new Map((data.visits ?? []).map((v) => [v.id, v]));
 
     // 1. Regular Payments
-    for (const p of data.payments ?? []) {
+    for (const p of deptPayments) {
         if (p.advanceId) continue;
         const amt = p.amountPaise;
         if (p.method === 'cash') cash += amt;
@@ -109,10 +143,6 @@ export function DaybookPage() {
         else other += amt;
 
         const visit = visitById.get(p.visitId);
-        if (p.method !== 'partner') {
-          const place = locationOf(visit);
-          byPlace[place] = (byPlace[place] ?? 0) + amt;
-        }
         const pId = visit?.patientId;
         const pName = pId ? (patientNameById.get(pId) ?? 'Unknown') : 'Unknown';
         
@@ -140,7 +170,7 @@ export function DaybookPage() {
     }
 
     // 2. New Advances collected
-    for (const a of data.advances ?? []) {
+    for (const a of deptAdvances) {
         const amt = a.amountPaise;
         if (a.method === 'cash') cash += amt;
         else if (a.method === 'upi') upi += amt;
@@ -148,7 +178,6 @@ export function DaybookPage() {
         else if (a.method === 'partner') partner += amt;
         else other += amt;
 
-        if (a.method !== 'partner') advanceTotal += amt;
         const pName = patientNameById.get(a.patientId) ?? 'Unknown';
         transactions.push({
           id: a.id,
@@ -161,13 +190,11 @@ export function DaybookPage() {
         });
     }
 
-
-
     transactions.sort((a, b) => b.date.localeCompare(a.date));
 
     // `total` is money that reached the clinic; what the partner collected is shown on its own line.
-    return { cash, upi, card, other, partner, total: cash + upi + card + other, transactions, byPlace, advanceTotal };
-  }, [data]);
+    return { cash, upi, card, other, partner, total: cash + upi + card + other, transactions };
+  }, [deptPayments, deptAdvances, data.patients, visitById]);
 
   return (
     <div className="space-y-6">
@@ -230,7 +257,7 @@ export function DaybookPage() {
                 {partner > 0 && (
                   <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                     <td className={`${td} text-[var(--muted)]`}>
-                      {paymentMethodLabel('partner', clinic)}
+                      {department === 'ward' ? 'Hospital partner clearance' : paymentMethodLabel('partner', clinic)}
                       <span className="block text-xs">Not in your drawer — settled with them later</span>
                     </td>
                     <td className={`${tdNum} text-[var(--muted)]`}>{formatAmount(partner)}</td>
@@ -245,25 +272,64 @@ export function DaybookPage() {
               </tfoot>
             </table>
           </div>
-          {offersLocationChoice(clinic) && total > 0 && (
-            <dl className="mt-3 space-y-1 border-t border-[var(--border)] pt-3 text-sm">
-              <dt className="text-xs font-medium text-[var(--muted)]">Of this, by place</dt>
-              {clinicCareLocations(clinic).map((l) => (
-                <div key={l} className="flex justify-between">
-                  <dd className="text-[var(--ink)]">{CARE_LOCATION_LABELS[l]}</dd>
-                  <dd className="tabular-nums">{formatAmount(byPlace[l] ?? 0)}</dd>
-                </div>
-              ))}
-              {advanceTotal > 0 && (
-                <div className="flex justify-between">
-                  <dd className="text-[var(--ink)]">Advances (not on a visit yet)</dd>
-                  <dd className="tabular-nums">{formatAmount(advanceTotal)}</dd>
-                </div>
-              )}
-            </dl>
-          )}
         </SectionCard>
       </div>
+
+      {department === 'home' && (
+        <div className="max-w-xl">
+          <SectionCard title="To hand over">
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-1/2" />
+                  <col className="w-1/4" />
+                  <col className="w-1/4" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className={th}>Therapist</th>
+                    <th className={th}>Method</th>
+                    <th className={thNum}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {therapistHandovers.map((h) => (
+                    <tr key={h.therapistId} className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
+                      <td className={td}>
+                        <div className="font-medium text-[var(--ink)]">{h.therapistName}</div>
+                        <span className="text-xs text-[var(--muted)]">{h.count} collection{h.count === 1 ? '' : 's'}</span>
+                      </td>
+                      <td className={td}>
+                        <span className="text-xs text-[var(--muted)]">
+                          Cash {formatAmount(h.cash)}
+                          {h.upi > 0 && ` · UPI ${formatAmount(h.upi)}`}
+                          {h.other > 0 && ` · Other ${formatAmount(h.other)}`}
+                        </span>
+                      </td>
+                      <td className={tdNum}>{formatAmount(h.total)}</td>
+                    </tr>
+                  ))}
+                  {therapistHandovers.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-6 text-center text-sm text-[var(--muted)]">
+                        No field collections to hand over in this period.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {therapistHandovers.length > 0 && (
+                  <tfoot>
+                    <tr>
+                      <td colSpan={2} className="py-3 px-3 text-right font-semibold text-[var(--ink)]">Total to hand over</td>
+                      <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatAmount(total)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </SectionCard>
+        </div>
+      )}
 
       <SectionCard title="Transaction Log">
         <div className="overflow-x-auto">
