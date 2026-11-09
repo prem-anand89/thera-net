@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { Admission, Visit } from './types';
-import { wardOf, admissionDateProblem, dayOfStay, isDuplicateOpenAdmission, isOpenAdmission, openAdmissionOf, repointVisits } from './admissions';
+import {
+  wardOf,
+  admissionDateProblem,
+  dayOfStay,
+  isDuplicateOpenAdmission,
+  isOpenAdmission,
+  openAdmissionOf,
+  repointVisits,
+  splitWardBed,
+  joinWardBed,
+  clinicWards,
+  DEFAULT_PRESET_WARDS,
+} from './admissions';
 
 const stay = (over: Partial<Admission> = {}): Admission => ({
   id: 'a1', clinicId: 'c', patientId: 'p', ipdNo: null, wardBed: null, admittingDoctor: null,
@@ -49,6 +61,62 @@ describe('repointVisits', () => {
     const v = (id: string, admissionId: string | null) => ({ id, admissionId, updatedAt: 'x' }) as unknown as Visit;
     const out = repointVisits([v('1', 'lose'), v('2', 'other'), v('3', null)], 'lose', 'win', 'now');
     expect(out.map((x) => [x.id, x.admissionId, x.updatedAt])).toEqual([['1', 'win', 'now']]);
+  });
+});
+
+describe('splitWardBed and joinWardBed', () => {
+  it('splits comma-separated ward and bed correctly', () => {
+    expect(splitWardBed('Ortho, Bed 12')).toEqual({ ward: 'Ortho', bed: 'Bed 12' });
+    expect(splitWardBed('Neuro, Room 204')).toEqual({ ward: 'Neuro', bed: 'Room 204' });
+    expect(splitWardBed('ICU, Bed 3')).toEqual({ ward: 'ICU', bed: 'Bed 3' });
+  });
+
+  it('splits hyphenated or trailing bed notation', () => {
+    expect(splitWardBed('Neuro - Room 204')).toEqual({ ward: 'Neuro', bed: 'Room 204' });
+    expect(splitWardBed('ICU Bed 3')).toEqual({ ward: 'ICU', bed: 'Bed 3' });
+  });
+
+  it('handles bed/room only strings', () => {
+    expect(splitWardBed('Bed 12')).toEqual({ ward: '', bed: 'Bed 12' });
+    expect(splitWardBed('Room 101')).toEqual({ ward: '', bed: 'Room 101' });
+    expect(splitWardBed('Cabin 4')).toEqual({ ward: '', bed: 'Cabin 4' });
+  });
+
+  it('handles ward only strings and empty inputs', () => {
+    expect(splitWardBed('Ortho')).toEqual({ ward: 'Ortho', bed: '' });
+    expect(splitWardBed('')).toEqual({ ward: '', bed: '' });
+    expect(splitWardBed(null)).toEqual({ ward: '', bed: '' });
+  });
+
+  it('joins ward and bed back cleanly', () => {
+    expect(joinWardBed('Ortho', 'Bed 12')).toBe('Ortho, Bed 12');
+    expect(joinWardBed('ICU', '')).toBe('ICU');
+    expect(joinWardBed('', 'Bed 5')).toBe('Bed 5');
+    expect(joinWardBed('', '')).toBe('');
+    expect(joinWardBed(null, undefined)).toBe('');
+  });
+});
+
+describe('clinicWards', () => {
+  it('falls back to DEFAULT_PRESET_WARDS when clinic has no wards configured', () => {
+    expect(clinicWards(null)).toEqual(DEFAULT_PRESET_WARDS);
+    expect(clinicWards({ wards: [] })).toEqual(DEFAULT_PRESET_WARDS);
+    expect(clinicWards({ wards: null })).toEqual(DEFAULT_PRESET_WARDS);
+  });
+
+  it('uses configured clinic wards when present', () => {
+    const custom = ['ICU', 'Neuro Rehab', 'Private Suite'];
+    expect(clinicWards({ wards: custom })).toEqual(custom);
+  });
+
+  it('merges wards used on open stays case-insensitively without duplicates', () => {
+    const stays = [
+      { wardBed: 'Ortho, Bed 1' },
+      { wardBed: 'Step-down, Bed 4' },
+      { wardBed: 'ortho, Bed 2' }, // case duplicate of Ortho
+    ];
+    const result = clinicWards({ wards: ['General', 'Ortho'] }, stays);
+    expect(result).toEqual(['General', 'Ortho', 'Step-down']);
   });
 });
 

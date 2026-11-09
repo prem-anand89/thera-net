@@ -19,6 +19,7 @@ import { isValidUpiVpa } from '@/domain/upiPay';
 import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
 import { useEntitlements } from '@/app/useEntitlements';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
+import { DEFAULT_PRESET_WARDS } from '@/domain/admissions';
 
 type ProfileFields = Pick<
   Clinic,
@@ -716,7 +717,7 @@ export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: bo
   );
 }
 
-type CareLocationFields = Pick<Clinic, 'careLocations'>;
+type CareLocationFields = Pick<Clinic, 'careLocations' | 'wards' | 'ipBilledByPartner'>;
 
 /**
  * Where the clinic sees patients. Clinic, Home visit and Inpatient are switches (at least one stays on). Inpatient needs
@@ -724,7 +725,11 @@ type CareLocationFields = Pick<Clinic, 'careLocations'>;
  */
 export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, dirty, saved, busy, error, showSaveBar } = useClinicSectionForm<CareLocationFields>(
-    (c) => ({ careLocations: clinicCareLocations(c) }),
+    (c) => ({
+      careLocations: clinicCareLocations(c),
+      wards: c.wards ?? null,
+      ipBilledByPartner: c.ipBilledByPartner ?? false,
+    }),
     onDirtyChange
   );
   const entitlements = useEntitlements(clinic.id);
@@ -735,6 +740,23 @@ export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty:
     set({ careLocations: clinicCareLocations({ careLocations: list }) });
   };
   const onlyOne = on.length === 1;
+
+  const [newWard, setNewWard] = useState('');
+  const activeWards = form.wards && form.wards.length > 0 ? form.wards : DEFAULT_PRESET_WARDS;
+  const missingPresets = DEFAULT_PRESET_WARDS.filter(
+    (p) => !activeWards.some((w) => w.toLowerCase() === p.toLowerCase())
+  );
+  const addWard = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (activeWards.some((w) => w.toLowerCase() === trimmed.toLowerCase())) return;
+    set({ wards: [...activeWards, trimmed] });
+    setNewWard('');
+  };
+  const removeWard = (name: string) => {
+    const next = activeWards.filter((w) => w.toLowerCase() !== name.toLowerCase());
+    set({ wards: next });
+  };
 
   return (
     <SectionCard id="settings-card-care-locations" title="Places you see patients">
@@ -758,14 +780,122 @@ export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty:
             onChange={(v) => toggle('home', v)}
           />
           {entitlements.planPending ? null : entitlements.can('inpatient') || on.includes('ward') ? (
-            <SwitchRow
-              label={CARE_LOCATION_LABELS.ward}
-              hint="Admit patients, ward rounds, discharge bill."
-              checked={on.includes('ward')}
-              // A clinic that is on a plan without it keeps what it has but can only turn it off.
-              disabled={(onlyOne && on.includes('ward')) || (!entitlements.can('inpatient') && !on.includes('ward'))}
-              onChange={(v) => toggle('ward', v)}
-            />
+            <>
+              <SwitchRow
+                label={CARE_LOCATION_LABELS.ward}
+                hint="Admit patients, ward rounds, discharge bill."
+                checked={on.includes('ward')}
+                // A clinic that is on a plan without it keeps what it has but can only turn it off.
+                disabled={(onlyOne && on.includes('ward')) || (!entitlements.can('inpatient') && !on.includes('ward'))}
+                onChange={(v) => toggle('ward', v)}
+              />
+              {on.includes('ward') && (
+                <div className="ml-2 mt-2 space-y-4 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-[var(--ink)]">Who bills inpatients?</p>
+                    <p className="mb-2 text-xs text-[var(--muted)]">
+                      Choose whether your clinic collects inpatient stay charges or the hospital handles billing.
+                    </p>
+                    <div className="space-y-2">
+                      <label className="flex cursor-pointer items-start gap-2.5">
+                        <input
+                          type="radio"
+                          name="ipBillingParty"
+                          checked={!form.ipBilledByPartner}
+                          onChange={() => set({ ipBilledByPartner: false })}
+                          className="mt-0.5 text-[var(--teal)] focus:ring-[var(--teal)]"
+                        />
+                        <div>
+                          <p className="font-medium text-[var(--ink)]">We bill inpatients (stay / discharge bill)</p>
+                          <p className="text-xs text-[var(--muted)]">
+                            Sessions accumulate as running charges and are billed together at discharge or interim.
+                          </p>
+                        </div>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-2.5">
+                        <input
+                          type="radio"
+                          name="ipBillingParty"
+                          checked={Boolean(form.ipBilledByPartner)}
+                          onChange={() => set({ ipBilledByPartner: true })}
+                          className="mt-0.5 text-[var(--teal)] focus:ring-[var(--teal)]"
+                        />
+                        <div>
+                          <p className="font-medium text-[var(--ink)]">Hospital / partner bills inpatients</p>
+                          <p className="text-xs text-[var(--muted)]">
+                            Therapists only log sessions and rates; invoice and per-session collection options are hidden in IP.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[var(--border)] pt-3">
+                    <p className="font-semibold text-[var(--ink)]">Preset wards & units</p>
+                    <p className="mb-2 text-xs text-[var(--muted)]">
+                      Wards and units staff can pick from when admitting an inpatient.
+                    </p>
+                    <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+                      {activeWards.map((w) => (
+                        <span
+                          key={w}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--ink)]"
+                        >
+                          {w}
+                          <button
+                            type="button"
+                            onClick={() => removeWard(w)}
+                            aria-label={`Remove ward ${w}`}
+                            className="hover:text-[var(--rust)]"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newWard}
+                        onChange={(e) => setNewWard(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addWard(newWard);
+                          }
+                        }}
+                        placeholder="Add ward or unit (e.g. ICU, Rehab Wing)…"
+                        className="min-h-9 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] placeholder:text-[var(--muted)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addWard(newWard)}
+                        className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--paper)]"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {missingPresets.length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
+                        <span>Quick add:</span>
+                        {missingPresets.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => addWard(preset)}
+                            className="rounded border border-dashed border-[var(--border)] px-1.5 py-0.5 hover:border-[var(--teal)] hover:text-[var(--teal)]"
+                          >
+                            + {preset}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex items-center justify-between gap-3 py-1 text-sm">
               <div>

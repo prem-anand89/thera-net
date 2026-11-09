@@ -41,15 +41,83 @@ export function repointVisits(visits: readonly Visit[], losingId: string, surviv
     .map((v) => ({ ...v, admissionId: survivingId, updatedAt: now }));
 }
 
+/** Default ward & rehab unit presets covering both hospital wards and rehabilitation centres. */
+export const DEFAULT_PRESET_WARDS: readonly string[] = [
+  'General',
+  'Ortho',
+  'Neuro',
+  'ICU',
+  'Private',
+  'Rehab Wing',
+];
+
+/**
+ * The clinic's configured ward / unit presets (or `DEFAULT_PRESET_WARDS` when unset),
+ * merged case-insensitively with any wards already used on open stays so existing custom wards always appear.
+ */
+export function clinicWards(
+  clinic: { wards?: readonly string[] | null } | null | undefined,
+  stays: readonly { wardBed?: string | null }[] = []
+): string[] {
+  const base = clinic?.wards && clinic.wards.length > 0 ? clinic.wards : DEFAULT_PRESET_WARDS;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (raw: string | null | undefined) => {
+    const trimmed = (raw ?? '').trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(trimmed);
+  };
+  for (const w of base) add(w);
+  for (const s of stays) {
+    const { ward } = splitWardBed(s.wardBed);
+    if (ward) add(ward);
+  }
+  return out;
+}
+
+/**
+ * Splits a stored `ward_bed` string into structured `{ ward, bed }` parts:
+ * - `"Ortho, Bed 12"` -> `{ ward: "Ortho", bed: "Bed 12" }`
+ * - `"Neuro - Room 204"` -> `{ ward: "Neuro", bed: "Room 204" }`
+ * - `"ICU Bed 3"` -> `{ ward: "ICU", bed: "Bed 3" }`
+ * - `"Bed 12"` or `"Room 101"` -> `{ ward: "", bed: "Bed 12" }` / `{ ward: "", bed: "Room 101" }`
+ * - `"Ortho"` -> `{ ward: "Ortho", bed: "" }`
+ */
+export function splitWardBed(wardBed: string | null | undefined): { ward: string; bed: string } {
+  const text = (wardBed ?? '').trim();
+  if (!text) return { ward: '', bed: '' };
+  if (text.includes(',')) {
+    const [first, ...rest] = text.split(',');
+    return { ward: first.trim(), bed: rest.join(',').trim() };
+  }
+  if (/^(bed|room|suite|cabin)\b/i.test(text)) {
+    return { ward: '', bed: text };
+  }
+  const trailingMatch = text.match(/^(.*?)\s*[-–·]?\s*((?:bed|room|suite|cabin)\s*\S+.*)$/i);
+  if (trailingMatch && trailingMatch[1].trim()) {
+    return { ward: trailingMatch[1].trim(), bed: trailingMatch[2].trim() };
+  }
+  return { ward: text, bed: '' };
+}
+
+/** Joins structured `ward` and `bed` inputs back into the single `ward_bed` string stored in Postgres. */
+export function joinWardBed(ward: string | null | undefined, bed: string | null | undefined): string {
+  const w = (ward ?? '').trim();
+  const b = (bed ?? '').trim();
+  if (w && b) return `${w}, ${b}`;
+  return w || b;
+}
+
 /**
  * The ward a stay is in, for grouping the ward-rounds list. `ward_bed` is one free-text field ("Ortho ward, bed 12"),
  * so the ward is what comes before the first comma, or before a trailing "bed 12"; with neither, the whole text. Empty
  * reads as "No ward set". Matching ignores case so "ortho ward" and "Ortho Ward" group together.
  */
 export function wardOf(wardBed: string | null | undefined): { key: string; label: string } {
-  const text = (wardBed ?? '').trim();
-  if (!text) return { key: '', label: 'No ward set' };
-  const beforeComma = text.split(',')[0].trim();
-  const label = beforeComma.replace(/\s*[-–]?\s*bed\s*\S+$/i, '').trim() || beforeComma;
-  return { key: label.toLowerCase(), label };
+  const { ward } = splitWardBed(wardBed);
+  if (!ward) return { key: '', label: 'No ward set' };
+  return { key: ward.toLowerCase(), label: ward };
 }
