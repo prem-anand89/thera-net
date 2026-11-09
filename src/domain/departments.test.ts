@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canSwitchDepartment, departmentOf, inDepartment, resolveDepartment, therapistsInDepartment, visibleDepartments } from './departments';
+import { canSwitchDepartment, departmentOf, effectiveIpInvoicePrefix, inDepartment, resolveDepartment, therapistsInDepartment, visibleDepartments } from './departments';
 
 const all = { careLocations: ['clinic', 'home', 'ward'] };
 
@@ -48,5 +48,16 @@ describe('records and roster', () => {
     const people = [{ id: 'a' }, { id: 'b', careLocations: ['home'] }, { id: 'c', careLocations: ['clinic', 'ward'] }, { id: 'd', careLocations: [] }];
     expect(therapistsInDepartment('clinic', people).map((p) => p.id)).toEqual(['a', 'c', 'd']);
     expect(therapistsInDepartment('home', people).map((p) => p.id)).toEqual(['a', 'b', 'd']);
+  });
+});
+
+describe('effectiveIpInvoicePrefix', () => {
+  it('defaults to ${invoicePrefix}IP when custom prefix is blank or null', () => {
+    expect(effectiveIpInvoicePrefix({ invoicePrefix: 'BM', ipInvoicePrefix: null })).toBe('BMIP');
+    expect(effectiveIpInvoicePrefix({ invoicePrefix: 'BM', ipInvoicePrefix: '   ' })).toBe('BMIP');
+  });
+
+  it('uses trimmed custom prefix when set', () => {
+    expect(effectiveIpInvoicePrefix({ invoicePrefix: 'BM', ipInvoicePrefix: '  BMWARD ' })).toBe('BMWARD');
   });
 });

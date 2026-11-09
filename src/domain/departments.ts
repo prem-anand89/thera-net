@@ -76,3 +76,9 @@ export function therapistsInDepartment<T extends { careLocations?: readonly stri
 ): T[] {
   return therapists.filter((t) => !t.careLocations || t.careLocations.length === 0 || t.careLocations.includes(department));
 }
+
+/** Prefix printed on IP bills: the clinic's custom IP prefix when set, else `${invoicePrefix}IP`. */
+export function effectiveIpInvoicePrefix(clinic: { invoicePrefix: string; ipInvoicePrefix?: string | null }): string {
+  const custom = clinic.ipInvoicePrefix?.trim();
+  return custom ? custom : `${clinic.invoicePrefix}IP`;
+}

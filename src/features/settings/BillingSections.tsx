@@ -5,6 +5,8 @@ import { clinicShareLabels, type Clinic } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import { btnSecondary, ConfirmDialog, ErrorNote, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
 import { PLAN_TIER_LABELS, minimumTierFor } from '@/domain/plans';
+import { clinicDepartments, effectiveIpInvoicePrefix } from '@/domain/departments';
+import { fiscalYearOf } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
 import { useClinicSectionForm, SectionSaveBar, SwitchRow } from './settingsShared';
 
@@ -12,18 +14,37 @@ type BillingFields = Pick<
   Clinic,
   | 'gstNo'
   | 'invoicingAccess'
+  | 'ipInvoicePrefix'
 >;
 
 export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error, showSaveBar } =
+  const { clinic, form, set, save, cancel, dirty, saved, busy, error, showSaveBar } =
     useClinicSectionForm<BillingFields>(
       (c) => ({
         gstNo: c.gstNo,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
+        ipInvoicePrefix: c.ipInvoicePrefix ?? null,
       }),
       onDirtyChange
     );
+
+  const hasIp = clinicDepartments(clinic).includes('ward');
+  const prefix = clinic.invoicePrefix ?? '';
+  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
+
+  const rawIpPrefix = form.ipInvoicePrefix ?? '';
+  const trimmedIpPrefix = rawIpPrefix.trim().toUpperCase();
+  let ipPrefixError: string | null = null;
+  if (hasIp && trimmedIpPrefix !== '') {
+    if (!/^[A-Z0-9]{2,10}$/.test(trimmedIpPrefix)) {
+      ipPrefixError = 'Use 2–10 letters or digits (no spaces or slashes)';
+    } else if (trimmedIpPrefix === prefix.trim().toUpperCase()) {
+      ipPrefixError = 'IP invoice prefix must differ from the main invoice prefix';
+    }
+  }
+
   async function saveBilling() {
+    if (ipPrefixError) return;
     await save();
   }
 
@@ -67,6 +88,28 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
               <option value="billing_staff">Front desk and admins only</option>
             </select>
           </Field>
+        {hasIp && (
+          <Field
+            label="IP invoice prefix (optional)"
+            hint={`Sample IP invoice number: ${effectiveIpInvoicePrefix({ invoicePrefix: prefix, ipInvoicePrefix: trimmedIpPrefix })}/${currentFy.label}/0001. Leave blank to use ${prefix}IP.`}
+          >
+            <input
+              className={inputCls}
+              maxLength={10}
+              placeholder={`${prefix}IP`}
+              value={form.ipInvoicePrefix ?? ''}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                set({ ipInvoicePrefix: val === '' ? null : val });
+              }}
+            />
+            {ipPrefixError && (
+              <p role="alert" className="mt-1 text-hint text-[var(--rust)]">
+                {ipPrefixError}
+              </p>
+            )}
+          </Field>
+        )}
       </div>
 
       </fieldset>
@@ -81,6 +124,7 @@ export function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boole
         saved={saved}
         busy={busy}
         onSave={() => void saveBilling()}
+        saveDisabled={Boolean(ipPrefixError)}
         onCancel={() => {
           cancel();
         }}

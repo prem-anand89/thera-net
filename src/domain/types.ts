@@ -18,6 +18,8 @@ export interface Clinic {
   partnerHospitalName: string | null;
   partnerHospitalLogoPath: string | null;
   invoicePrefix: string;
+  /** Optional prefix for inpatient (IP) bills (e.g. 'BMIP'). Null/blank defaults to `${invoicePrefix}IP`. */
+  ipInvoicePrefix?: string | null;
   clinicSplitPct: number;
   taxPct: number;
   tdsBasis: TdsBasis;
