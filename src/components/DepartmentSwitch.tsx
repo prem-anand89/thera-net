@@ -1,13 +1,33 @@
 import { useRef, useState } from 'react';
 import { useDepartment } from '@/app/DepartmentContext';
-import { DEPARTMENT_LABELS, type Department } from '@/domain/departments';
-import { segOption, segTrack } from '@/components/ui';
+import { DEPARTMENT_LABELS, DEPARTMENT_NAMES, type Department } from '@/domain/departments';
+import { Pill, segOption, segTrack } from '@/components/ui';
 
-const BAND_COLORS: Record<Department, string> = {
-  clinic: 'bg-[var(--teal)]',
-  home: 'bg-[var(--sky)]',
-  ward: 'bg-[var(--plum)]',
+const PILL_TONES: Record<Department, 'teal' | 'sky' | 'plum'> = {
+  clinic: 'teal',
+  home: 'sky',
+  ward: 'plum',
 };
+
+/**
+ * Explicit visual badge indicating the active place of service (OP, Home, IP).
+ * Shown inside page headers, forms, and modals so staff never miss which place they are working in.
+ */
+export function DepartmentPill({
+  department: explicitDept,
+  full = false,
+}: {
+  department?: Department;
+  full?: boolean;
+}) {
+  const { department: contextDept } = useDepartment();
+  const dept = explicitDept ?? contextDept;
+  return (
+    <Pill tone={PILL_TONES[dept]}>
+      {full ? DEPARTMENT_NAMES[dept] : DEPARTMENT_LABELS[dept]}
+    </Pill>
+  );
+}
 
 /**
  * Universal place switch (OP · Home · IP). Rendered in the Shell header
@@ -99,8 +119,8 @@ export function DepartmentSwitch() {
                       setOpen(false);
                     }}
                     className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${active
-                        ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                        : 'text-[var(--ink)] hover:bg-[var(--paper)]'
+                      ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+                      : 'text-[var(--ink)] hover:bg-[var(--paper)]'
                       }`}
                   >
                     <span>{DEPARTMENT_LABELS[dept]}</span>
@@ -114,15 +134,4 @@ export function DepartmentSwitch() {
       </div>
     </div>
   );
-}
-
-/**
- * A thin colour band rendered under the header per place:
- * --teal for OP, --sky for Home, --plum for IP.
- * Only shown when the user has more than one place to choose from.
- */
-export function DepartmentBand() {
-  const { department, canSwitch } = useDepartment();
-  if (!canSwitch) return null;
-  return <div className={`h-0.5 w-full ${BAND_COLORS[department]}`} role="presentation" />;
 }

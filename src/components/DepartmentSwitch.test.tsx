@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { db } from '@/lib/db';
 import type { Clinic } from '@/domain/types';
 import { DepartmentProvider } from '@/app/DepartmentContext';
-import { DepartmentSwitch, DepartmentBand } from './DepartmentSwitch';
+import { DepartmentSwitch, DepartmentPill } from './DepartmentSwitch';
 
 const multiClinic = { id: 'c1', careLocations: ['clinic', 'home', 'ward'] } as unknown as Clinic;
 const singleClinic = { id: 'c2', careLocations: ['clinic'] } as unknown as Clinic;
@@ -100,49 +100,27 @@ describe('DepartmentSwitch', () => {
   });
 });
 
-describe('DepartmentBand', () => {
-  beforeEach(async () => {
-    await db.meta.clear();
-  });
+describe('DepartmentPill', () => {
   afterEach(cleanup);
 
-  it('renders nothing when canSwitch is false', () => {
-    const { container } = render(
-      <DepartmentProvider clinic={singleClinic} userId="u1" role="admin" departments={null}>
-        <DepartmentBand />
+  it('renders the active department label or full name with corresponding tone', () => {
+    const { rerender } = render(
+      <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
+        <DepartmentPill />
       </DepartmentProvider>
     );
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByText('OP')).toBeInTheDocument();
+
+    rerender(
+      <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
+        <DepartmentPill full />
+      </DepartmentProvider>
+    );
+    expect(screen.getByText('Outpatient (OP)')).toBeInTheDocument();
   });
 
-  it('renders the appropriate color band for active place when canSwitch is true', async () => {
-    const { container } = render(
-      <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
-        <DepartmentBand />
-        <DepartmentSwitch />
-      </DepartmentProvider>
-    );
-
-    expect(container.querySelector('.bg-\\[var\\(--teal\\)\\]')).toBeInTheDocument();
-
-    const homeButtons = screen.getAllByRole('button', { name: 'Home' });
-    const homeSegment = homeButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    await act(async () => {
-      fireEvent.click(homeSegment!);
-    });
-
-    await waitFor(() => {
-      expect(container.querySelector('.bg-\\[var\\(--sky\\)\\]')).toBeInTheDocument();
-    });
-
-    const ipButtons = screen.getAllByRole('button', { name: 'IP' });
-    const ipSegment = ipButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    await act(async () => {
-      fireEvent.click(ipSegment!);
-    });
-
-    await waitFor(() => {
-      expect(container.querySelector('.bg-\\[var\\(--plum\\)\\]')).toBeInTheDocument();
-    });
+  it('renders explicit department when provided', () => {
+    render(<DepartmentPill department="home" full />);
+    expect(screen.getByText('Home care')).toBeInTheDocument();
   });
 });

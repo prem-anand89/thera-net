@@ -352,6 +352,8 @@ const PILL_TONES = {
   slate:
     'border border-[var(--border)] bg-[var(--slate-light)] text-[var(--slate)]',
   teal: 'border border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]',
+  sky: 'border border-[var(--border)] bg-[var(--sky-light)] text-[var(--sky)]',
+  plum: 'border border-[var(--border)] bg-[var(--plum-light)] text-[var(--plum)]',
 } as const;
 
 /** Status badge. Pair color with words/icons — never color alone. */

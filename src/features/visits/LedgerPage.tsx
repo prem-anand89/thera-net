@@ -9,6 +9,8 @@ import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { useDepartment } from '@/app/DepartmentContext';
+import { DepartmentPill } from '@/components/DepartmentSwitch';
+import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import { inDepartment } from '@/domain/departments';
 import { canBillInpatientStay, inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { usePermissions } from '@/app/usePermissions';
@@ -41,7 +43,7 @@ import { loadLedgerPrefs, presetRange, saveLedgerPrefs } from './ledgerPrefs';
 import { PatientOverview } from './PatientOverview';
 import { useDueLandingScope } from './useDueLandingScope';
 import { EditVisitModal } from './EditVisitModal';
-import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { ResponsiveVisitList, VisitColumnPicker, type VisitCardData } from '@/components/VisitCard';
 import { RevenueShareEditorLoader } from '@/components/RevenueShareEditorLoader';
 import { visitPermissions } from './visitPermissions';
 import { splitDisplay, useVisitDetails, type VisitDetails } from './visitDetails';
@@ -268,8 +270,8 @@ function DueToggle({
       aria-label={`Due ${formatAmount(outstanding)} across ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`}
       title={active ? 'Showing unpaid visits only. Tap to show all.' : 'Show only unpaid visits'}
       className={`min-h-8 rounded-md px-2.5 py-1 font-num font-bold transition-colors ${active
-          ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
-          : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
+        ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
+        : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
         }`}
       onClick={onToggle}
     >
@@ -446,6 +448,7 @@ export function LedgerPage() {
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
   const assistedPatientName = useCallback((id: UUID) => patientById.get(id)?.name ?? 'Patient', [patientById]);
   const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
+  const { prefs: visitColumnPrefs, setPref: setVisitColumnPref } = useVisitColumnPrefs();
   const failedVisitSyncs = useLiveQuery(
     () => db.outbox.filter((e) => e.table === 'visits' && !!e.error).toArray(),
     []
@@ -821,6 +824,7 @@ export function LedgerPage() {
           phone bar's + is New visit). */}
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
+        <DepartmentPill department={department} full />
         <div ref={tabStripRef} role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
           {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, canViewCredits, entitlementsLoading, hideBillingTabs }).map((v) => (
             <button
@@ -829,8 +833,8 @@ export function LedgerPage() {
               role="tab"
               aria-selected={recordsView === v.key}
               className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors last:mr-1.5 sm:px-4 sm:py-1.5 sm:text-sm sm:last:mr-0 ${recordsView === v.key
-                  ? 'bg-[var(--teal)] text-white shadow-sm'
-                  : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                ? 'bg-[var(--teal)] text-white shadow-sm'
+                : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
                 }`}
               onClick={() => setRecordsView(v.key)}
             >
@@ -957,8 +961,8 @@ export function LedgerPage() {
                 aria-expanded={filtersOpen}
                 onClick={() => setFiltersOpen((current) => !current)}
                 className={`flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${activeFilterCount > 0
-                    ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
-                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                  ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
+                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
                   }`}
               >
                 <svg
@@ -984,6 +988,12 @@ export function LedgerPage() {
                 )}
                 <span className="text-xs opacity-60">{filtersOpen ? '▲' : '▼'}</span>
               </button>
+              <div className="hidden tab:block">
+                <VisitColumnPicker
+                  columnPrefs={visitColumnPrefs}
+                  onColumnPrefsChange={setVisitColumnPref}
+                />
+              </div>
               <div className="flex min-h-10 shrink-0 items-center">
                 <KebabMenu ariaLabel="More ledger options">
                   {(close) => (
@@ -1185,6 +1195,7 @@ export function LedgerPage() {
                 showDate={true}
                 showPatient={true}
                 groupByDate={true}
+                showColumnPicker={false}
                 onInvoice={(row) => {
                   setError(null);
                   setInvoicing({

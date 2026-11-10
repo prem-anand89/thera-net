@@ -53,7 +53,7 @@ import {
 import { requestPersistentStorage } from '@/lib/persistStorage';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
-import { DepartmentSwitch, DepartmentBand } from '@/components/DepartmentSwitch';
+import { DepartmentSwitch } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 
 
@@ -513,7 +513,6 @@ export function Shell() {
                 </div>
               </div>
             </div>
-            <DepartmentBand />
           </header>
           <UpdateBanner />
           <SyncStatusBanners />

@@ -18,6 +18,7 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useDepartment } from '@/app/DepartmentContext';
+import { DepartmentPill } from '@/components/DepartmentSwitch';
 import {
   type Department,
   DEPARTMENT_LABELS,
@@ -1745,10 +1746,12 @@ export function NewVisitPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
-          {activeAdmission && (
-            <Pill tone="teal">
+          {activeAdmission ? (
+            <Pill tone="plum">
               {['Inpatient', activeAdmission.wardBed].filter(Boolean).join(' · ')}
             </Pill>
+          ) : (
+            <DepartmentPill department={visitDept} full />
           )}
         </div>
 
@@ -2254,9 +2257,12 @@ export function NewVisitPage() {
             <IconChevronLeft className="h-4 w-4" aria-hidden="true" />
             <span>{backLabel}</span>
           </button>
-          <h1 className="font-display text-xl font-semibold text-[var(--ink)] sm:text-2xl">
-            New visit
-          </h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="font-display text-xl font-semibold text-[var(--ink)] sm:text-2xl">
+              New visit
+            </h1>
+            <DepartmentPill department={visitDept} full />
+          </div>
         </div>
 
         {isDirty && (

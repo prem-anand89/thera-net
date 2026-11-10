@@ -148,43 +148,52 @@ export function TodayAppointments({
             {minutesLabel(minutesOfDay(a.scheduledAt))}
             {isOtherDay && <span className="block text-[11px] font-normal text-[var(--muted)]">{formatDateDM(a.scheduledAt)}</span>}
           </span>
-          <span className="min-w-0 flex-1">
-            {/* Line 1: (time on phones) name + Next chip only, so the name keeps the width */}
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[var(--ink)] sm:hidden">
-                {minutesLabel(minutesOfDay(a.scheduledAt))}
-                {isOtherDay && <span className="font-normal text-[var(--muted)]"> · {formatDateDM(a.scheduledAt)}</span>}
+          <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-4">
+            {/* Patient identity column: name, MRNO, flags on mobile */}
+            <div className="min-w-0 sm:w-52 sm:shrink-0 lg:w-60">
+              {/* Line 1: (time on phones) name + Next chip only, so the name keeps the width */}
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[var(--ink)] sm:hidden">
+                  {minutesLabel(minutesOfDay(a.scheduledAt))}
+                  {isOtherDay && <span className="font-normal text-[var(--muted)]"> · {formatDateDM(a.scheduledAt)}</span>}
+                </span>
+                <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
+                  {a.patientName}
+                </span>
+                <HomeBadge record={a} />
+                {mrnoFor?.(a.patientId) && <span className="hidden shrink-0 font-num text-[11px] text-[var(--muted)] sm:inline" data-patient-id>{mrnoFor(a.patientId)}</span>}
+                {a.id === nextUpId && (
+                  <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
+                )}
               </span>
-              <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
-                {a.patientName}
-              </span>
-              <HomeBadge record={a} />
-              {mrnoFor?.(a.patientId) && <span className="hidden shrink-0 font-num text-[11px] text-[var(--muted)] sm:inline" data-patient-id>{mrnoFor(a.patientId)}</span>}
-              {a.id === nextUpId && (
-                <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
+              {/* Line 2 on mobile: Note, reason, and patient flags */}
+              {(mobileNote || reason?.text || flags.length > 0) && (
+                <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] sm:hidden">
+                  {mobileNote && <span className={noteClass}>{mobileNote}</span>}
+                  {mobileNote && (reason?.text || flags.length > 0) && <span>·</span>}
+                  {reason?.text && <span className="truncate">{reason.text}</span>}
+                  {reason?.text && flags.length > 0 && <span>·</span>}
+                  <PatientFlagPills flags={flags} max={2} />
+                </span>
               )}
-            </span>
-            {/* Line 2: Note, reason, and patient flags */}
-            {(mobileNote || reason?.text || flags.length > 0) && (
-              <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] sm:hidden">
-                {mobileNote && <span className={noteClass}>{mobileNote}</span>}
-                {mobileNote && (reason?.text || flags.length > 0) && <span>·</span>}
-                {reason?.text && <span className="truncate">{reason.text}</span>}
-                {reason?.text && flags.length > 0 && <span>·</span>}
-                <PatientFlagPills flags={flags} max={2} />
-              </span>
-            )}
-            <span className="mt-0.5 hidden min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] sm:flex">
+            </div>
+
+            {/* Desktop middle column: clinical context, condition, reason, flags */}
+            <div className="hidden min-w-0 flex-1 items-center gap-1.5 text-xs text-[var(--muted)] sm:flex">
               {wideDetail && <span className="truncate">{wideDetail}</span>}
               {wideDetail && flags.length > 0 && <span>·</span>}
               <PatientFlagPills flags={flags} max={2} />
-            </span>
-          </span>
-          {showTherapist && <span className="hidden w-32 shrink-0 truncate text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
-          <span className="hidden w-12 shrink-0 text-right text-xs tabular-nums text-[var(--muted)] sm:block">{length}</span>
+            </div>
+
+            {/* Desktop right metadata: therapist & length */}
+            <div className="hidden shrink-0 items-center justify-end gap-3 text-xs text-[var(--muted)] sm:flex">
+              {showTherapist && <span className="w-28 truncate text-right lg:w-32">{therapistNameFor(a)}</span>}
+              <span className="w-10 text-right tabular-nums">{length}</span>
+            </div>
+          </div>
         </button>
         {end && (
-          <span className={`shrink-0 self-center sm:flex sm:w-44 sm:justify-end ${showEndOnMobile ? '' : 'hidden sm:flex'}`}>
+          <span className={`shrink-0 self-center sm:flex sm:justify-end ${showEndOnMobile ? '' : 'hidden sm:flex'}`}>
             {end}
           </span>
         )}

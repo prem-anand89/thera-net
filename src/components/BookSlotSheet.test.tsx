@@ -123,7 +123,7 @@ describe('BookSlotSheet', () => {
   });
 
   it('opens on the length it was given (the stretch the therapist is free for), not the default slot length', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" prefilledLengthMinutes={45} />);
+    render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" prefilledLengthMinutes={45} />);
     expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
   });
 
@@ -149,7 +149,7 @@ describe('BookSlotSheet', () => {
 
     it('shows no Place row and books at the clinic when in OP', async () => {
       currentDepartment = 'clinic';
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fill();
       await book();
@@ -158,7 +158,7 @@ describe('BookSlotSheet', () => {
 
     it('shows no Place row and books at home when in Home care', async () => {
       currentDepartment = 'home';
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fill();
       await book();
@@ -168,7 +168,7 @@ describe('BookSlotSheet', () => {
     it('books ward rounds for admitted patient when in IP', async () => {
       currentDepartment = 'ward';
       data.admissions = [{ id: 'adm-1', patientId: 'p1', clinicId: 'c1', wardBed: 'Bed 4' }];
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(screen.queryByRole('radiogroup', { name: 'Place' })).toBeNull();
       fireEvent.change(screen.getByLabelText(/Patient \(live stay\)/), { target: { value: 'adm-1' } });
       fireEvent.click(slot('9:00 AM'));
@@ -181,36 +181,11 @@ describe('BookSlotSheet', () => {
     });
   });
 
-  it('has no visit type picker unless a service has a session length', () => {
-    data.catalog = [{ id: 's1', name: 'Consultation', active: true }];
-    render(<BookSlotSheet isOpen onClose={() => {}} />);
-    expect(screen.queryByLabelText(/Visit type/)).toBeNull();
-  });
-
-  it('choosing a visit type sets the length from the service; inactive services are not listed', () => {
-    data.catalog = [
-      { id: 's1', name: 'Assessment', active: true, durationMinutes: 45 },
-      { id: 's2', name: 'Follow-up', active: true, durationMinutes: 20 },
-      { id: 's3', name: 'Old service', active: false, durationMinutes: 90 },
-    ];
-    try {
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
-      const picker = screen.getByLabelText(/Visit type/);
-      expect(within(picker).queryByRole('option', { name: /Old service/ })).toBeNull();
-      fireEvent.change(picker, { target: { value: 's2' } });
-      expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '20m' })).toHaveAttribute('aria-checked', 'true');
-      fireEvent.change(picker, { target: { value: 's1' } });
-      expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' })).toHaveAttribute('aria-checked', 'true');
-    } finally {
-      data.catalog = [];
-    }
-  });
-
   it('a clinic with a midday closure offers no time inside it in the main list, only under "Outside hours"', () => {
     // Thursday 1 Oct: open 9-1 and 4-8; the therapist has no hours of their own
     data.clinic = { bookingStartHour: 9, bookingEndHour: 20, operatingHours: { '4': [[540, 780], [960, 1200]] }, staffBookingBufferHours: 0 };
     try {
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(screen.getByRole('button', { name: '10:30 AM' })).toBeEnabled();
       expect(screen.getByRole('button', { name: '4:30 PM' })).toBeEnabled();
       expect(screen.queryByRole('button', { name: '2:00 PM' })).toBeNull(); // in the closure
@@ -222,12 +197,12 @@ describe('BookSlotSheet', () => {
   });
 
   it('defaults the therapist to the logged-in therapist', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    render(<BookSlotSheet isOpen onClose={() => { }} />);
     expect(screen.getByRole('radio', { name: /Dr Asha/ })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('disables times that have already passed today', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    render(<BookSlotSheet isOpen onClose={() => { }} />);
     expect(slot('9:30 AM')).toBeDisabled();
     expect(slot('10:30 AM')).toBeEnabled();
   });
@@ -235,7 +210,7 @@ describe('BookSlotSheet', () => {
   it('offers start times every 15 minutes whatever the appointment length, with 15 minutes as a length', () => {
     data.clinic = { slotDurationMinutes: 60 };
     try {
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(slot('10:15 AM')).toBeEnabled();
       expect(slot('10:45 AM')).toBeEnabled();
       expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '15m' })).toBeInTheDocument();
@@ -245,7 +220,7 @@ describe('BookSlotSheet', () => {
   });
 
   it('disables occupied time for the chosen length', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
     expect(slot('11:00 AM')).toBeDisabled();
     expect(slot('10:30 AM')).toBeEnabled();
     fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '60m' }));
@@ -254,7 +229,7 @@ describe('BookSlotSheet', () => {
   });
 
   it("ignores other therapists' bookings", () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({ therapistId: 't2' })]} prefilledDate="2026-10-01" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} appointments={[appointment({ therapistId: 't2' })]} prefilledDate="2026-10-01" />);
     expect(slot('11:00 AM')).toBeEnabled();
   });
 
@@ -287,12 +262,12 @@ describe('BookSlotSheet', () => {
   });
 
   it('keeps what the person originally asked for in view, even for a request with no typed time or reason', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} requestId="r9" prefilledPatientName="Someone" prefilledPatientPhone="+91 9000000009" requestAsked="Was for 3 Nov" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} requestId="r9" prefilledPatientName="Someone" prefilledPatientPhone="+91 9000000009" requestAsked="Was for 3 Nov" />);
     expect(screen.getByText('Asked for').parentElement).toHaveTextContent('Asked for Was for 3 Nov');
   });
 
   it('shows no "Asked for" line on an ordinary booking', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    render(<BookSlotSheet isOpen onClose={() => { }} />);
     expect(screen.queryByText('Asked for')).toBeNull();
   });
 
@@ -300,18 +275,18 @@ describe('BookSlotSheet', () => {
     const known = data.patients[0];
     const original = known.phone;
     known.phone = '+91 9876543210';
-    const { unmount } = render(<BookSlotSheet isOpen onClose={() => {}} requestId="r1" prefilledPatientName={known.name} prefilledPatientPhone="+91 9876543210" />);
+    const { unmount } = render(<BookSlotSheet isOpen onClose={() => { }} requestId="r1" prefilledPatientName={known.name} prefilledPatientPhone="+91 9876543210" />);
     expect(screen.queryByLabelText('Patient name')).toBeNull();
     expect(screen.queryByText(/already on file/)).toBeNull();
     unmount();
-    render(<BookSlotSheet isOpen onClose={() => {}} requestId="r2" prefilledPatientName="Someone Else Entirely" prefilledPatientPhone="+91 9000000001" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} requestId="r2" prefilledPatientName="Someone Else Entirely" prefilledPatientPhone="+91 9000000001" />);
     expect(screen.getByLabelText('Patient name')).toHaveValue('Someone Else Entirely');
     known.phone = original;
   });
 
   it('a new patient whose name is already on file must be resolved: Use this patient, or Different person', async () => {
     const onBooked = vi.fn();
-    render(<BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} prefilledDate="2026-10-01" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} onBooked={onBooked} prefilledDate="2026-10-01" />);
     fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
     fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Priya' } });
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '9820000077' } });
@@ -327,7 +302,7 @@ describe('BookSlotSheet', () => {
   });
 
   it('asks for a phone when the chosen patient has none on file', async () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
     fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p2' } });
     fireEvent.click(slot('9:00 AM'));
     fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
@@ -362,12 +337,12 @@ describe('BookSlotSheet', () => {
   });
 
   it('resets everything when reopened with different prefill', () => {
-    const { rerender } = render(<BookSlotSheet isOpen onClose={() => {}} prefilledPatientName="Old" prefilledTherapistId="t2" />);
+    const { rerender } = render(<BookSlotSheet isOpen onClose={() => { }} prefilledPatientName="Old" prefilledTherapistId="t2" />);
     expect(screen.getByLabelText('Patient name')).toHaveValue('Old');
     fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Edited' } });
 
-    rerender(<BookSlotSheet isOpen={false} onClose={() => {}} />);
-    rerender(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    rerender(<BookSlotSheet isOpen={false} onClose={() => { }} />);
+    rerender(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
     // Back to "find" mode with no leftover name, and the therapist default re-applied.
     expect(screen.queryByLabelText('Patient name')).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Dr Asha/ })).toHaveAttribute('aria-checked', 'true');
@@ -375,7 +350,7 @@ describe('BookSlotSheet', () => {
 
   it('warns on a closed day but still allows booking', () => {
     data.closed = [{ closedDate: '2026-10-02', label: 'Gandhi Jayanti' }];
-    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-02" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-02" />);
     expect(screen.getByRole('status')).toHaveTextContent('closed this day (Gandhi Jayanti)');
     expect(slot('9:00 AM')).toBeEnabled();
   });
@@ -386,7 +361,7 @@ describe('BookSlotSheet', () => {
       { id: 't2', name: 'Dr Ravi' },
     ];
     try {
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(slot('9:30 AM')).toBeEnabled();
       expect(slot('11:00 AM')).toBeEnabled();
       expect(screen.queryByRole('button', { name: '10:00 AM' })).not.toBeInTheDocument(); // the break
@@ -447,7 +422,7 @@ describe('BookSlotSheet', () => {
       { id: 't2', name: 'Dr Ravi' },
     ];
     try {
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       expect(screen.getByText(/Dr Asha isn't working this day/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^Outside hours/ })).toHaveAttribute('aria-expanded', 'true');
       expect(slot('10:00 AM')).toBeEnabled();
@@ -489,7 +464,7 @@ describe('BookSlotSheet', () => {
       { id: 't2', name: 'Dr Ravi' },
     ];
     try {
-      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
       // Buffer 0 on 9-12 clinic: 6:00 AM and 8:30 AM should not exist at all
       expect(screen.queryByRole('button', { name: '6:00 AM' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '8:30 AM' })).not.toBeInTheDocument();
@@ -538,7 +513,7 @@ describe('BookSlotSheet', () => {
   });
 
   it('locks the therapist for a therapist login', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} lockTherapist prefilledTherapistId="t1" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} lockTherapist prefilledTherapistId="t1" />);
     expect(screen.queryByLabelText('Therapist')).not.toBeInTheDocument();
     expect(screen.getByText('Dr Asha')).toBeInTheDocument();
   });
@@ -547,7 +522,7 @@ describe('BookSlotSheet', () => {
     const moving = appointment({});
     const onBooked = vi.fn();
     render(
-      <BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} appointments={[moving]} rescheduleAppointment={moving} />
+      <BookSlotSheet isOpen onClose={() => { }} onBooked={onBooked} appointments={[moving]} rescheduleAppointment={moving} />
     );
     expect(screen.getByRole('heading', { name: 'Reschedule' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New patient' })).not.toBeInTheDocument();
@@ -563,7 +538,7 @@ describe('BookSlotSheet', () => {
     expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rescheduled', appointmentId: 'a1' }));
   });
   it('summarises the choice above the submit button', () => {
-    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" />);
     expect(screen.getByText('Pick a time to continue')).toBeInTheDocument();
     fireEvent.click(slot('10:30 AM'));
     expect(screen.getByText('Thu, 1 Oct, 10:30 AM · 30m · Dr Asha')).toBeInTheDocument();
@@ -575,7 +550,7 @@ describe('BookSlotSheet', () => {
       appointment({ id: 'b1', scheduledAt: localDateTime('2026-09-30', '10:00').toISOString() }),
       appointment({ id: 'b2', scheduledAt: localDateTime('2026-09-30', '10:30').toISOString() }),
     ];
-    render(<BookSlotSheet isOpen onClose={() => {}} appointments={busy} />);
+    render(<BookSlotSheet isOpen onClose={() => { }} appointments={busy} />);
     fireEvent.click(screen.getByRole('button', { name: 'First available' }));
     // Now is 10:00 today; 10:00 and 10:30 are taken for t1 -> 11:00.
     expect(slot('11:00 AM')).toHaveClass('bg-[var(--teal)]');
@@ -587,7 +562,7 @@ describe('BookSlotSheet', () => {
       appointment({ id: 'n2', patientId: 'p1', status: 'no_show', scheduledAt: localDateTime('2026-09-10', '10:00').toISOString() }),
       appointment({ id: 'u1', patientId: 'p1', scheduledAt: localDateTime('2026-10-05', '09:00').toISOString() }),
     ];
-    render(<BookSlotSheet isOpen onClose={() => {}} appointments={history} />);
+    render(<BookSlotSheet isOpen onClose={() => { }} appointments={history} />);
     fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
     expect(screen.getByText(/2 no-shows in the last 6 months/)).toBeInTheDocument();
     expect(screen.getByText(/Already booked: Mon, 5 Oct, 9:00 AM/)).toBeInTheDocument();
@@ -595,7 +570,7 @@ describe('BookSlotSheet', () => {
   it('books a repeat series, defaulting the count to sessions left in the package', async () => {
     const busy = [appointment({ id: 'x', scheduledAt: localDateTime('2026-10-08', '10:00').toISOString() })];
     const onBooked = vi.fn();
-    render(<BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} appointments={busy} prefilledDate="2026-10-01" />);
+    render(<BookSlotSheet isOpen onClose={() => { }} onBooked={onBooked} appointments={busy} prefilledDate="2026-10-01" />);
     fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
     fireEvent.click(slot('10:00 AM'));
     fireEvent.click(screen.getByLabelText('Repeat this booking'));

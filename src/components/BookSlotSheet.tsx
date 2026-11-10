@@ -14,8 +14,9 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { useDepartment } from '@/app/DepartmentContext';
+import { DepartmentPill } from '@/components/DepartmentSwitch';
 import { departmentHours, closedDateAppliesTo } from '@/domain/departmentHours';
-import { servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
+import { therapistsInDepartment } from '@/domain/departments';
 import {
   addDays,
   appointmentMinutes,
@@ -188,17 +189,6 @@ export function BookSlotSheet({
     () => (department === 'ward' ? repos.admissions.listOpen(clinic.id) : undefined),
     [clinic.id, department]
   );
-  const services = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
-  // Optional visit type: a service that has a session length, so picking it sets the appointment length. Nothing else is
-  // stored (appointments carry no service); services with no length set are not listed.
-  const visitTypes = useMemo(
-    () =>
-      servicesInDepartment(department, services ?? [])
-        .filter((service) => service.active && service.durationMinutes)
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [services, department]
-  );
-  const [visitTypeId, setVisitTypeId] = useState('');
   const { lastVisitOn } = usePatientDirectory(clinic.id, true);
   // A new patient typed in may already be on file: ask before booking them as someone new.
   const similar = useMemo(
@@ -259,10 +249,9 @@ export function BookSlotSheet({
           ...LENGTH_OPTIONS,
           slotMinutes,
           rescheduleAppointment ? appointmentMinutes(rescheduleAppointment, slotMinutes) : slotMinutes,
-          ...visitTypes.map((service) => service.durationMinutes!),
         ]),
       ].sort((a, b) => a - b),
-    [slotMinutes, rescheduleAppointment, visitTypes]
+    [slotMinutes, rescheduleAppointment]
   );
 
   useEffect(() => {
@@ -281,7 +270,6 @@ export function BookSlotSheet({
       setSelectedDate(date);
       setSelectedTime(prefilledTime ? prefilledTime.slice(0, 5) : null);
       setLengthMinutes(prefilledLengthMinutes ?? slotMinutes);
-      setVisitTypeId('');
       setTherapistId(prefilledTherapistId ?? '');
       setTherapistTouched(Boolean(prefilledTherapistId));
       setShowLater(date < today || date > addDays(today, 6));
@@ -691,7 +679,10 @@ export function BookSlotSheet({
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 pb-3 pt-3 sm:px-6 sm:pt-5">
           <div className="min-w-0">
             <span aria-hidden className="mx-auto mb-2 block h-1 w-10 rounded-full bg-[var(--border)] sm:hidden" />
-            <h2 id="book-slot-title" className="font-display text-lg font-semibold text-[var(--ink)]">{title}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="book-slot-title" className="font-display text-lg font-semibold text-[var(--ink)]">{title}</h2>
+              <DepartmentPill department={department} full />
+            </div>
             {rescheduleAppointment && (
               <p className="truncate text-sm text-[var(--muted)]">
                 <span className="font-display font-medium text-[var(--ink)]">{rescheduleAppointment.patientName}</span>, now{' '}
@@ -845,30 +836,6 @@ export function BookSlotSheet({
                   </button>
                 ))}
               </div>
-            )}
-            {visitTypes.length > 0 && !isReschedule && (
-              <label className="mb-2 block text-xs font-medium text-[var(--muted)]">
-                Visit type (sets the length)
-                <select
-                  className="mt-1 block min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]"
-                  value={visitTypeId}
-                  onChange={(e) => {
-                    const chosen = visitTypes.find((service) => service.id === e.target.value);
-                    setVisitTypeId(e.target.value);
-                    if (chosen?.durationMinutes) {
-                      setLengthMinutes(chosen.durationMinutes);
-                      setSelectedTime(null);
-                    }
-                  }}
-                >
-                  <option value="">Not set</option>
-                  {visitTypes.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} · {lengthLabel(service.durationMinutes!)}
-                    </option>
-                  ))}
-                </select>
-              </label>
             )}
             {location === 'home' && chosenPatient && (
               <p className="mb-2 rounded-lg bg-[var(--teal-light)] px-2.5 py-1.5 text-xs text-[var(--teal-strong)]">
