@@ -163,19 +163,25 @@ describe('Refresh app', () => {
 });
 
 describe('Clinic administration in AccountMenu', () => {
-  it('shows Clinic settings and Add another clinic for admin', () => {
+  it('shows Clinic settings directly and reveals Add another clinic when expanding clinic toggle', () => {
     openMenu('admin');
     expect(screen.getByRole('menuitem', { name: /clinic settings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /add another clinic/i })).not.toBeInTheDocument();
+
+    // Expand clinic toggle
+    fireEvent.click(screen.getByRole('button', { name: /city clinic/i }));
     expect(screen.getByRole('menuitem', { name: /add another clinic/i })).toBeInTheDocument();
   });
 
   it('hides Clinic settings and Add clinic for non-admin', () => {
     openMenu('therapist');
     expect(screen.queryByRole('menuitem', { name: /clinic settings/i })).toBeNull();
+    // Even when expanding clinic toggle, non-admin cannot add clinic
+    fireEvent.click(screen.getByRole('button', { name: /city clinic/i }));
     expect(screen.queryByRole('menuitem', { name: /add another clinic/i })).toBeNull();
   });
 
-  it('lists clinics to switch when account belongs to multiple clinics', () => {
+  it('collapses clinic list by default and expands on click when account belongs to multiple clinics', () => {
     render(
       <AccountMenu
         displayName="Ritu"
@@ -191,6 +197,11 @@ describe('Clinic administration in AccountMenu', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    // Collapsed by default
+    expect(screen.queryByText('Switch clinic')).not.toBeInTheDocument();
+
+    // Expand clinic toggle
+    fireEvent.click(screen.getByRole('button', { name: /city clinic/i }));
     expect(screen.getByText('Switch clinic')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: /alpha clinic/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: /beta rehab/i })).toBeInTheDocument();

@@ -91,6 +91,7 @@ export function AccountMenu({
   const clinic = useClinic();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [clinicsExpanded, setClinicsExpanded] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [hoursOpen, setHoursOpen] = useState(false);
@@ -131,6 +132,7 @@ export function AccountMenu({
 
   function closeMenu() {
     setOpen(false);
+    setClinicsExpanded(false);
   }
   function openSheet(set: (value: boolean) => void) {
     closeMenu();
@@ -196,81 +198,93 @@ export function AccountMenu({
                 </div>
               </div>
 
-              {/* Active clinic badge */}
-              <div className="mt-2.5 flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--ink)]">
-                <ClinicAvatar name={clinic.name} logoUrl={logoUrl} />
-                <span className="truncate font-medium">{clinic.name}</span>
-              </div>
+              {/* Active clinic dropdown toggle */}
+              <button
+                type="button"
+                aria-expanded={clinicsExpanded}
+                aria-label={`Current clinic: ${clinic.name}${clinics.length > 1 || role === 'admin' ? '. Click to switch clinic' : ''}`}
+                onClick={() => setClinicsExpanded((v) => !v)}
+                className="mt-2.5 flex w-full items-center justify-between gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
+              >
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <ClinicAvatar name={clinic.name} logoUrl={logoUrl} />
+                  <span className="truncate font-medium">{clinic.name}</span>
+                </div>
+                {(clinics.length > 1 || role === 'admin') && (
+                  <span className="text-[10px] text-[var(--muted)]" aria-hidden="true">
+                    {clinicsExpanded ? '▴' : '▾'}
+                  </span>
+                )}
+              </button>
 
-              {role === 'admin' && (
-                <div className="mt-2.5" onClick={closeMenu}>
-                  <SetupProgressBar clinicId={clinicId} />
+              {/* Collapsible clinic switcher list */}
+              {clinicsExpanded && (
+                <div className="mt-2 space-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
+                  {clinics.length > 1 && (
+                    <>
+                      <p className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        Switch clinic
+                      </p>
+                      {sortedClinics.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={c.id === clinic.id}
+                          onClick={() => void switchToClinic(c.id)}
+                          className={`flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs ${c.id === clinic.id
+                              ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+                              : 'text-[var(--ink)] hover:bg-[var(--paper)]'
+                            }`}
+                        >
+                          <span className="w-3.5 shrink-0 text-xs" aria-hidden>
+                            {c.id === clinic.id ? '✓' : ''}
+                          </span>
+                          <span className="truncate">{c.name}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {role === 'admin' && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                      onClick={() => {
+                        closeMenu();
+                        setAddingClinic(true);
+                      }}
+                    >
+                      <span className="w-3.5 shrink-0 text-center font-bold text-[var(--teal)]" aria-hidden>
+                        +
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">Add another clinic</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Clinic administration & switching */}
-            {(role === 'admin' || clinics.length > 1) && (
+            {/* Clinic administration */}
+            {role === 'admin' && (
               <div className="border-t border-[var(--border)] px-2 py-2">
-                {role === 'admin' && (
-                  <Link
-                    to="/settings"
-                    role="menuitem"
-                    className={rowCls}
-                    onClick={closeMenu}
-                  >
-                    <IconSettings className={rowIcon} />
-                    <span className="min-w-0 flex-1 text-left">
-                      <span className="block font-medium leading-tight">Clinic settings</span>
-                      <span className="mt-0.5 block text-xs text-[var(--muted)]">
-                        Profile, places, team, billing
-                      </span>
+                <Link
+                  to="/settings"
+                  role="menuitem"
+                  className={rowCls}
+                  onClick={closeMenu}
+                >
+                  <IconSettings className={rowIcon} />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block font-medium leading-tight">Clinic settings</span>
+                    <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                      Profile, places, team, billing
                     </span>
-                  </Link>
-                )}
-
-                {clinics.length > 1 && (
-                  <div className="mt-1 pt-1 border-t border-[var(--border)]">
-                    <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Switch clinic
-                    </p>
-                    {sortedClinics.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={c.id === clinic.id}
-                        onClick={() => void switchToClinic(c.id)}
-                        className={`flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm ${c.id === clinic.id
-                            ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                            : 'text-[var(--ink)] hover:bg-[var(--paper)]'
-                          }`}
-                      >
-                        <span className="w-4 shrink-0 text-xs" aria-hidden>
-                          {c.id === clinic.id ? '✓' : ''}
-                        </span>
-                        <span className="truncate">{c.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {role === 'admin' && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={rowCls}
-                    onClick={() => {
-                      closeMenu();
-                      setAddingClinic(true);
-                    }}
-                  >
-                    <span className="w-4 shrink-0 text-center font-bold text-[var(--teal)]" aria-hidden>
-                      +
-                    </span>
-                    <span className="min-w-0 flex-1 text-left">Add another clinic</span>
-                  </button>
-                )}
+                  </span>
+                </Link>
+                <div className="mt-1 px-1" onClick={closeMenu}>
+                  <SetupProgressBar clinicId={clinicId} />
+                </div>
               </div>
             )}
 
