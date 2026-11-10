@@ -30,7 +30,7 @@ import { inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
 import { packageMoveNote as buildPackageMoveNote } from './packageMoveNote';
-import { locationOf } from '@/domain/careLocations';
+import { homeCareOn, locationOf } from '@/domain/careLocations';
 import { appointmentSetsTherapist, toLocalDateStr, visitPrefillFromAppointment } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { syncEngine } from '@/sync/engine';
@@ -1750,6 +1750,43 @@ export function NewVisitPage() {
             <Pill tone="plum">
               {['Inpatient', activeAdmission.wardBed].filter(Boolean).join(' · ')}
             </Pill>
+          ) : homeCareOn(clinic) ? (
+            <div role="radiogroup" aria-label="Care location" className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={visitDept === 'clinic'}
+                aria-label="Clinic (OP)"
+                className={`rounded-full px-2.5 py-0.5 transition-colors ${
+                  visitDept === 'clinic'
+                    ? 'bg-[var(--teal)] text-white shadow-sm'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+                onClick={() => {
+                  setLocation('clinic');
+                  locationDecidedRef.current = true;
+                }}
+              >
+                OP
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={visitDept === 'home'}
+                aria-label="Home Care"
+                className={`rounded-full px-2.5 py-0.5 transition-colors ${
+                  visitDept === 'home'
+                    ? 'bg-[var(--sky)] text-white shadow-sm'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+                onClick={() => {
+                  setLocation('home');
+                  locationDecidedRef.current = true;
+                }}
+              >
+                Home
+              </button>
+            </div>
           ) : (
             <DepartmentPill department={visitDept} full />
           )}

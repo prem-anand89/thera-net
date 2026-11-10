@@ -23,6 +23,8 @@ import {
 } from '@/domain/fiscalYear';
 import { REFERRING_SOURCE_LABELS, type Patient, type Visit, type ReferringSourceItem } from '@/domain/types';
 import { isStale } from '@/domain/packageTracking';
+import { DEPARTMENT_LABELS, departmentOf } from '@/domain/departments';
+import { clinicCareLocations } from '@/domain/careLocations';
 import {
   th,
   thNum,
@@ -610,7 +612,22 @@ export function PatientsList() {
                       <td className={`${td} whitespace-nowrap`}>
                         {stats ? (
                           <>
-                            <div className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
+                              {clinicCareLocations(clinic).length > 1 && (
+                                <Pill
+                                  tone={
+                                    departmentOf(stats.latestVisit) === 'home'
+                                      ? 'sky'
+                                      : departmentOf(stats.latestVisit) === 'ward'
+                                        ? 'plum'
+                                        : 'teal'
+                                  }
+                                >
+                                  {DEPARTMENT_LABELS[departmentOf(stats.latestVisit)]}
+                                </Pill>
+                              )}
+                            </div>
                             <div className={cellSub}>
                               {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
                             </div>
@@ -816,6 +833,7 @@ function PatientCard({
   onRemind?: () => void;
   referringSources: ReferringSourceItem[];
 }) {
+  const clinic = useClinic();
   const initials = p.name
     .split(/\s+/)
     .slice(0, 2)
@@ -899,6 +917,19 @@ function PatientCard({
           {stats ? (
             <>
               <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
+              {clinicCareLocations(clinic).length > 1 && (
+                <Pill
+                  tone={
+                    departmentOf(stats.latestVisit) === 'home'
+                      ? 'sky'
+                      : departmentOf(stats.latestVisit) === 'ward'
+                        ? 'plum'
+                        : 'teal'
+                  }
+                >
+                  {DEPARTMENT_LABELS[departmentOf(stats.latestVisit)]}
+                </Pill>
+              )}
               <span>
                 {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
               </span>

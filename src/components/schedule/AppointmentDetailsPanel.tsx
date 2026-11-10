@@ -211,8 +211,8 @@ export function AppointmentDetailsPanel({
         {/* Facts in reading order. The patient's clinical lines sit in a soft card; then the therapist and the booking. The phone is not shown here: Call dials it and Remind uses it. */}
         <div className="mt-4 space-y-3 text-sm">
           {canManage && isHome && (
-            <div className="rounded-xl bg-[var(--teal-light)] px-3 py-2.5">
-              <p className="text-xs font-semibold text-[var(--teal-strong)]">Home visit</p>
+            <div className="rounded-xl bg-[var(--sky-light)] px-3 py-2.5">
+              <p className="text-xs font-semibold text-[var(--sky-strong)]">Home visit</p>
               {homeAddress === undefined ? null : homeAddress ? (
                 <>
                   <p className="mt-1 whitespace-pre-line text-[var(--ink)]">{homeAddress}</p>

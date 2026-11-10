@@ -266,7 +266,11 @@ export function ScheduleBookingsView({
   );
   const allAppointments = useLiveQuery(() => repos.appointments.listByClinic(clinic.id), [clinic.id]);
   const scopedAppointments = useMemo(
-    () => (allAppointments ?? []).filter((a) => inDepartment(department, a)),
+    () =>
+      (allAppointments ?? []).filter((a) => {
+        if (department === 'ward') return inDepartment('ward', a);
+        return inDepartment('clinic', a) || inDepartment('home', a);
+      }),
     [allAppointments, department]
   );
   const flagContext = usePatientFlagContext(clinic.id, allAppointments ?? EMPTY_APPOINTMENTS);

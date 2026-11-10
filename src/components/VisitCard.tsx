@@ -100,7 +100,17 @@ function VisitCardDetails({ data, onSplit }: { data: VisitCardData; onSplit?: ()
       )}
       {data.placeLabel && (
         <CardDetailRow label="Place">
-          <Pill tone="slate">{data.placeLabel}</Pill>
+          <Pill
+            tone={
+              data.placeLabel === 'Home'
+                ? 'sky'
+                : data.placeLabel === 'IP' || data.placeLabel === 'Inpatient'
+                  ? 'plum'
+                  : 'teal'
+            }
+          >
+            {data.placeLabel}
+          </Pill>
         </CardDetailRow>
       )}
       {data.details?.shares && (

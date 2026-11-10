@@ -2645,7 +2645,6 @@ scheduled_at           timestamptz NOT NULL
 source                 text NOT NULL (default 'booking') — 'booking' | 'walk_in'
 location               text NOT NULL (default 'clinic') — 'clinic' | 'home' | 'ward'. Set by `p_location` on `confirm_booking_slot`, `confirm_booking_series` and `start_walk_in` (optional; the app omits it for a clinic booking). Public online booking is always clinic until staff confirm it
                         (start_walk_in: a visit in progress started at the desk)
-admission_id           uuid (NULLABLE, FOREIGN KEY → admissions.id) — attached to live inpatient stays for ward rounds. Set atomically via `p_admission_id` on `confirm_booking_slot` and `confirm_booking_series` (called by `book_ward_rounds`, migration `20261110020000_fix_ward_booking_admission.sql`).
 series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
                         repeat booking (confirm_booking_series)
 duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule MVP;
@@ -2653,7 +2652,7 @@ duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule
 status                 text NOT NULL — 'confirmed'|'rescheduled'|'no_show'|'cancelled'|'arrived'
 request_id             uuid (NULLABLE, FOREIGN KEY → appointment_requests.id)
 visit_id               uuid (NULLABLE, FOREIGN KEY → visits.id)
-location               text NOT NULL (default 'clinic'; clinic|home|ward) — where it happens; set by the booking sheet's Place row (`defaultBookingLocation`), carried by the booking RPCs' `p_location`. Home appointments show a Home badge (list rows, calendar blocks, the appointment panel) and the panel shows the patient's address with Copy address — all only while the clinic has more than one place on (`useShowsHome`). Inpatient is not bookable yet
+location               text NOT NULL (default 'clinic'; clinic|home|ward) — where it happens; set by the booking sheet's Place row (`defaultBookingLocation`) or in-form toggle in New Visit (`[ OP | Home ]`), carried by the booking RPCs' `p_location`. In the schedule timeline, therapists see both OP slots and Home visits on their agenda with Sky Blue Home markers (`HomeBadge`/`HomeGlyph`), preventing double booking across places. Patient records and visit history display semantic place badges (`OP` teal, `Home` sky blue, `IP` plum).
 reschedule_count       integer NOT NULL (default 0)
 previous_scheduled_at  timestamptz (NULLABLE)
 created_by, updated_by uuid (NULLABLE)

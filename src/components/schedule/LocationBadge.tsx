@@ -29,7 +29,7 @@ export function HomeBadge({ record }: { record: { location?: string | null } }) 
   const show = useShowsHome(record);
   if (!show) return null;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--teal-light)] px-1.5 text-[10px] font-medium leading-4 text-[var(--teal-strong)]">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--sky-light)] px-1.5 text-[10px] font-medium leading-4 text-[var(--sky-strong)]">
       <House size={10} />
       Home
     </span>
