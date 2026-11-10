@@ -162,6 +162,7 @@ export const bookingService = {
     /** Omit to use the clinic's slot length. */
     durationMinutes?: number;
     location?: CareLocation;
+    admissionId?: UUID;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('confirm_booking_slot', {
@@ -173,6 +174,7 @@ export const bookingService = {
       p_scheduled_at: params.scheduledAt,
       p_request_id: params.requestId,
       p_duration_minutes: params.durationMinutes ?? null,
+      p_admission_id: params.admissionId ?? null,
       ...locationArg(params.location),
     });
     if (error) throw new Error(`Could not confirm booking: ${error.message}`);
@@ -190,6 +192,7 @@ export const bookingService = {
     starts: string[];
     durationMinutes: number;
     location?: CareLocation;
+    admissionId?: UUID;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('confirm_booking_series', {
@@ -200,6 +203,7 @@ export const bookingService = {
       p_starts: params.starts,
       p_patient_id: params.patientId,
       p_duration_minutes: params.durationMinutes,
+      p_admission_id: params.admissionId ?? null,
       ...locationArg(params.location),
     });
     if (error) throw new Error(`Could not book the sessions: ${localiseIsoTimes(error.message)}`);

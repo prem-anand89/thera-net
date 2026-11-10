@@ -299,37 +299,43 @@ export function PatientsList() {
           select (financial year + month in one) on the right. Phones: the
           chips scroll on one row, search and period share the next. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div
-          role="group"
-          aria-label="Patient filter"
-          className="hide-scrollbar flex h-10 w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1"
-        >
-          {(
-            [
-              { key: 'all', label: 'All' },
-              { key: 'mine', label: 'My patients' },
-            ] as const
-          ).map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              aria-pressed={chip === c.key}
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                chip === c.key
-                  ? 'bg-[var(--teal)] text-white shadow-sm'
-                  : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
-              }`}
-              onClick={() => setChip(c.key)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <button type="button" className="h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => setAdding(true)}>
+        <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
+          <div
+            role="group"
+            aria-label="Patient filter"
+            className="hide-scrollbar flex h-10 w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1"
+          >
+            {(
+              [
+                { key: 'all', label: 'All' },
+                { key: 'mine', label: 'My patients' },
+              ] as const
+            ).map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                aria-pressed={chip === c.key}
+                className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  chip === c.key
+                    ? 'bg-[var(--teal)] text-white shadow-sm'
+                    : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
+                }`}
+                onClick={() => setChip(c.key)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)] sm:hidden"
+            onClick={() => setAdding(true)}
+          >
             + Add patient
           </button>
-          <div className="relative flex-1 sm:w-64 sm:flex-none">
+        </div>
+        <div className="flex flex-1 flex-wrap items-center gap-2 sm:ml-auto">
+          <div className="relative min-w-[160px] flex-1 sm:w-64 sm:flex-none">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--muted)]">
               <svg
                 width="16"
@@ -362,59 +368,68 @@ export function PatientsList() {
               </button>
             )}
           </div>
-          <select
-            aria-label="Fiscal year"
-            className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
-            style={chipSelectChevron}
-            value={month === 'custom' ? 'custom' : String(fyStartYear)}
-            onChange={(e) => {
-              if (e.target.value === 'custom') {
-                setMonth('custom');
-              } else {
-                setFyStartYear(Number(e.target.value));
-                setMonth('');
-              }
-            }}
-          >
-            {[currentFy.startYear, currentFy.startYear - 1, currentFy.startYear - 2].map((y) => {
-              const label = fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label;
-              return (
-                <option key={y} value={y}>
-                  FY {label}{y === currentFy.startYear ? ' (Current)' : ''}
-                </option>
-              );
-            })}
-            <option value="custom">Custom range…</option>
-          </select>
-          {month !== 'custom' && (
+          <div className="flex items-center gap-1.5">
             <select
-              aria-label="Period within fiscal year"
+              aria-label="Fiscal year"
               className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
               style={chipSelectChevron}
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
+              value={month === 'custom' ? 'custom' : String(fyStartYear)}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setMonth('custom');
+                } else {
+                  setFyStartYear(Number(e.target.value));
+                  setMonth('');
+                }
+              }}
             >
-              <option value="">Full year</option>
-              {fyStartYear === currentFy.startYear && <option value="ytd">Year to date</option>}
-              {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth)
-                .filter((m) => {
-                  if (fyStartYear !== currentFy.startYear) return true;
-                  return (
-                    m.year < now.getFullYear() ||
-                    (m.year === now.getFullYear() && m.month <= now.getMonth() + 1)
-                  );
-                })
-                .map((m) => {
-                  const isCurrent =
-                    m.year === now.getFullYear() && m.month === now.getMonth() + 1;
-                  return (
-                    <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                      {monthName(m.month)} {m.year}{isCurrent ? ' (This month)' : ''}
-                    </option>
-                  );
-                })}
+              {[currentFy.startYear, currentFy.startYear - 1, currentFy.startYear - 2].map((y) => {
+                const label = fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label;
+                return (
+                  <option key={y} value={y}>
+                    FY {label}{y === currentFy.startYear ? ' (Current)' : ''}
+                  </option>
+                );
+              })}
+              <option value="custom">Custom range…</option>
             </select>
-          )}
+            {month !== 'custom' && (
+              <select
+                aria-label="Period within fiscal year"
+                className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+                style={chipSelectChevron}
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              >
+                <option value="">Full year</option>
+                {fyStartYear === currentFy.startYear && <option value="ytd">Year to date</option>}
+                {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth)
+                  .filter((m) => {
+                    if (fyStartYear !== currentFy.startYear) return true;
+                    return (
+                      m.year < now.getFullYear() ||
+                      (m.year === now.getFullYear() && m.month <= now.getMonth() + 1)
+                    );
+                  })
+                  .map((m) => {
+                    const isCurrent =
+                      m.year === now.getFullYear() && m.month === now.getMonth() + 1;
+                    return (
+                      <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                        {monthName(m.month)} {m.year}{isCurrent ? ' (This month)' : ''}
+                      </option>
+                    );
+                  })}
+              </select>
+            )}
+          </div>
+          <button
+            type="button"
+            className="hidden h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)] sm:inline-flex sm:items-center"
+            onClick={() => setAdding(true)}
+          >
+            + Add patient
+          </button>
         </div>
       </div>
       {month === 'custom' && (

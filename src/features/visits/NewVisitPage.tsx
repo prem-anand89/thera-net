@@ -715,8 +715,8 @@ export function NewVisitPage() {
     () =>
       patientVisits && patientPaid
         ? patientDue(patientVisits, patientPaid, statusByInvoiceId, {
-            department: visitDept,
-          })
+          department: visitDept,
+        })
         : null,
     [patientVisits, patientPaid, statusByInvoiceId, visitDept]
   );

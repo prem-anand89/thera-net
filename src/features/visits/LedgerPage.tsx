@@ -824,7 +824,6 @@ export function LedgerPage() {
           phone bar's + is New visit). */}
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
-        <DepartmentPill department={department} full />
         <div ref={tabStripRef} role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
           {filterLedgerTabs({ canBill, canViewPastInvoices, canCollectPayment, canViewCredits, entitlementsLoading, hideBillingTabs }).map((v) => (
             <button
@@ -857,9 +856,12 @@ export function LedgerPage() {
             </Link>
           </span>
         )}
-        <Link to="/visits/new" search={{ from: '/ledger' }} className={`${btnPrimary} ml-auto hidden items-center sm:inline-flex`}>
-          + New visit
-        </Link>
+        <div className="ml-auto hidden items-center gap-2 sm:flex">
+          <DepartmentPill department={department} full />
+          <Link to="/visits/new" search={{ from: '/ledger' }} className={`${btnPrimary} inline-flex items-center`}>
+            + New visit
+          </Link>
+        </div>
       </div>
 
       {recordsView === 'visits' && (

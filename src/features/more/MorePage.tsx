@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { usePermissions } from '@/app/usePermissions';
-import { IconReports, IconSettings } from '@/components/NavIcons';
+import { IconPatients, IconReports, IconSettings } from '@/components/NavIcons';
 import { IconChevronRight } from '@/components/StatIcons';
 
 /**
@@ -18,6 +18,7 @@ export function MorePage() {
     <div className="space-y-4">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">More</h1>
       <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+        <MoreItem to="/patients" label="Patients" icon={<IconPatients />} />
         {showReports && <MoreItem to="/insights" label="Reports" icon={<IconReports />} />}
         {canEditSettings && <MoreItem to="/settings" label="Settings" icon={<IconSettings />} />}
       </ul>
@@ -25,7 +26,7 @@ export function MorePage() {
   );
 }
 
-function MoreItem({ to, label, icon }: { to: '/insights' | '/settings'; label: string; icon: ReactNode }) {
+function MoreItem({ to, label, icon }: { to: '/insights' | '/settings' | '/patients'; label: string; icon: ReactNode }) {
   return (
     <li>
       <Link

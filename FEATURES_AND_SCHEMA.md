@@ -2645,6 +2645,7 @@ scheduled_at           timestamptz NOT NULL
 source                 text NOT NULL (default 'booking') — 'booking' | 'walk_in'
 location               text NOT NULL (default 'clinic') — 'clinic' | 'home' | 'ward'. Set by `p_location` on `confirm_booking_slot`, `confirm_booking_series` and `start_walk_in` (optional; the app omits it for a clinic booking). Public online booking is always clinic until staff confirm it
                         (start_walk_in: a visit in progress started at the desk)
+admission_id           uuid (NULLABLE, FOREIGN KEY → admissions.id) — attached to live inpatient stays for ward rounds. Set atomically via `p_admission_id` on `confirm_booking_slot` and `confirm_booking_series` (called by `book_ward_rounds`, migration `20261110020000_fix_ward_booking_admission.sql`).
 series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
                         repeat booking (confirm_booking_series)
 duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule MVP;
@@ -4144,9 +4145,5 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
   writes `shared_therapist_id/shared_pct` and now also two manual share rows (assistant = bill × pct
   rounded to the rupee, primary = remainder); clearing it returns the visit to auto shares.
 - **Catalog "never used"**: `visits.countByService` counts visits on the service plus live `visit_items`
-  on it (a service used only as a later line of a multi-service visit can't be hard-deleted).
-- **Deleting a therapist**: `hard_delete_therapist` (redefined in `20261024100000`) counts, as linked
-  records, each visit the therapist is on once — as its therapist, the old split's shared therapist, an
-  assistant on a line, or the holder of a share (live and soft-deleted lines/shares: a soft-deleted row
-  still references the therapist) — plus their notes and invoices, and refuses with "therapist 
+  on it (a service used only as a later line of a multi-service visit can't be hard-delet
 ... [truncated for diff preview]
