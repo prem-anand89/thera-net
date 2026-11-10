@@ -1399,9 +1399,10 @@ export function WorkspacePage() {
         </SectionCard>
       )}
 
-      <SectionCard
-        title="Follow up"
-        badge={followUpBadge}
+      {department !== 'ward' && (
+        <SectionCard
+          title="Follow up"
+          badge={followUpBadge}
         action={
           <button
             type="button"
@@ -1676,7 +1677,8 @@ export function WorkspacePage() {
             )}
           </>
         )}
-      </SectionCard>
+        </SectionCard>
+      )}
 
       {invoicing && (
         <IssueInvoiceDialog
