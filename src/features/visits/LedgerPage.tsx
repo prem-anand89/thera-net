@@ -1051,7 +1051,7 @@ export function LedgerPage() {
       )}
 
       {recordsView === 'visits' &&
-        (department !== 'ward' || canBillInpatientStay(clinic)) &&
+        department !== 'ward' &&
         outstanding &&
         outstanding.rows.length > 0 && (
           <SectionCard title="Unpaid invoices">
