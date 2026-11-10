@@ -425,7 +425,7 @@ export function WorkspacePage() {
   // "Follow up" card: Reviews (follow-ups due, missed, no-shows) and Packages share one card. With no reviews the
   // card is just Packages, as before. The tab the person last chose is remembered on this device; until then it opens
   // on Reviews when something is due and on Packages otherwise.
-  const followUp = useFollowUpData(clinic.id, viewTherapistId);
+  const followUp = useFollowUpData(clinic.id, viewTherapistId, department);
   const [chosenFollowTab, setChosenFollowTab] = useState<'reviews' | 'packages' | null>(() => {
     try {
       const saved = localStorage.getItem('workspace.followUpTab');
@@ -483,13 +483,13 @@ export function WorkspacePage() {
     () => dashboardService.todayWorklist(clinic.id, new Date(), effectiveVisitsTherapistId),
     [clinic.id, effectiveVisitsTherapistId]
   );
-  // Monthly counts scoped to match today's chosen view.
+  // Monthly counts scoped to match today's chosen view and active department.
   const monthlyNew = useLiveQuery(
-    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), effectiveVisitsTherapistId),
-    [clinic.id, effectiveVisitsTherapistId]
+    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), effectiveVisitsTherapistId, department),
+    [clinic.id, effectiveVisitsTherapistId, department]
   );
-  // Clinic-wide open-packages list — feeds the Packages panel below.
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  // Department-scoped open-packages list — feeds the Packages panel below.
+  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id, department), [clinic.id, department]);
   const openPackageGroupIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
@@ -542,10 +542,10 @@ export function WorkspacePage() {
 
   const now = new Date();
   const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
-  // "This month" numbers: a therapist's own row, or the clinic total.
+  // "This month" numbers: a therapist's own row, or the department total.
   const monthReport = useLiveQuery(
-    () => reportService.monthly(clinic.id, calendarMonth),
-    [clinic.id, calendarMonth.year, calendarMonth.month]
+    () => reportService.monthly(clinic.id, calendarMonth, department),
+    [clinic.id, calendarMonth.year, calendarMonth.month, department]
   );
   const myMonthRow = monthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
   // "Collected" = money received today (the Daybook's figure), scoped to the
@@ -1081,7 +1081,7 @@ export function WorkspacePage() {
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {(canManageBookings || scope.myTherapistId) && (
+            {(canManageBookings || scope.myTherapistId) && department !== 'ward' && (
               <button type="button" className={`${btnSecondary} hidden gap-1.5 sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
                 <IconBook className="h-4 w-4" />
                 Book
@@ -1403,280 +1403,280 @@ export function WorkspacePage() {
         <SectionCard
           title="Follow up"
           badge={followUpBadge}
-        action={
-          <button
-            type="button"
-            aria-expanded={followOpen}
-            className={pillNeutral}
-            onClick={() => setFollowOpen(!followOpen)}
-          >
-            <span>{followOpen ? 'Hide' : 'Show'}</span>
-            <span className="text-[10px] text-[var(--muted)]" aria-hidden="true">
-              {followOpen ? '▴' : '▾'}
-            </span>
-          </button>
-        }
-      >
-        {!followOpen && (
-          <p className="text-sm text-[var(--muted)]">
-            {[
-              followUp.due.length ? `${followUp.due.length} review${followUp.due.length === 1 ? '' : 's'} due` : null,
-              followUp.missed.length ? `${followUp.missed.length} missed` : null,
-              followUp.noShows.length ? `${followUp.noShows.length} no-show${followUp.noShows.length === 1 ? '' : 's'}` : null,
-              attentionCount ? `${attentionCount} package${attentionCount === 1 ? '' : 's'} need attention` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'Nothing needs following up.'}
-          </p>
-        )}
-        {followOpen && (
-          <>
-            <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
-              <div role="tablist" aria-label="Follow up" className={segTrack}>
-                {(
-                  [
-                    { key: 'reviews', label: 'Reviews', count: followUp.due.length },
-                    { key: 'packages', label: 'Packages', count: scopedPackages.length },
-                  ] as const
-                ).map((tab) => {
-                  const active = followTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => chooseFollowTab(tab.key)}
-                      className={`${segOption(active)} gap-1.5`}
-                    >
-                      {tab.label}
-                      <ChipCount n={tab.count} />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex items-center gap-3">
-                {hasMoreThanFiveFollowUps && (
-                  <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                    Rows
-                    <select
-                      aria-label="Rows per page"
-                      className={chipSelect}
-                      style={chipSelectChevron}
-                      value={followPageSize}
-                      onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                    </select>
-                  </label>
-                )}
-              </div>
-            </div>
-            {followTab === 'reviews' ? (
-              <ReviewsPanel
-                data={followUp}
-                pageSize={followPageSize}
-                clinicName={clinic.name}
-                showTherapist={scope.isClinicWideView}
-                therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
-                onBook={setBookingFollowUp}
-              />
-            ) : (
-              <>
-                <div className="mb-3 flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    {(
-                      [
-                        { key: 'open', label: 'Open', count: 0 },
-                        { key: 'attention', label: 'Needs attention', count: attentionCount },
-                      ] as const
-                    ).map((opt) => (
+          action={
+            <button
+              type="button"
+              aria-expanded={followOpen}
+              className={pillNeutral}
+              onClick={() => setFollowOpen(!followOpen)}
+            >
+              <span>{followOpen ? 'Hide' : 'Show'}</span>
+              <span className="text-[10px] text-[var(--muted)]" aria-hidden="true">
+                {followOpen ? '▴' : '▾'}
+              </span>
+            </button>
+          }
+        >
+          {!followOpen && (
+            <p className="text-sm text-[var(--muted)]">
+              {[
+                followUp.due.length ? `${followUp.due.length} review${followUp.due.length === 1 ? '' : 's'} due` : null,
+                followUp.missed.length ? `${followUp.missed.length} missed` : null,
+                followUp.noShows.length ? `${followUp.noShows.length} no-show${followUp.noShows.length === 1 ? '' : 's'}` : null,
+                attentionCount ? `${attentionCount} package${attentionCount === 1 ? '' : 's'} need attention` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || 'Nothing needs following up.'}
+            </p>
+          )}
+          {followOpen && (
+            <>
+              <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
+                <div role="tablist" aria-label="Follow up" className={segTrack}>
+                  {(
+                    [
+                      { key: 'reviews', label: 'Reviews', count: followUp.due.length },
+                      { key: 'packages', label: 'Packages', count: scopedPackages.length },
+                    ] as const
+                  ).map((tab) => {
+                    const active = followTab === tab.key;
+                    return (
                       <button
-                        key={opt.key}
+                        key={tab.key}
                         type="button"
-                        aria-pressed={pkgStatusFilter === opt.key}
-                        onClick={() => setPkgStatusFilter(opt.key)}
-                        className={filterChip(pkgStatusFilter === opt.key)}
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => chooseFollowTab(tab.key)}
+                        className={`${segOption(active)} gap-1.5`}
                       >
-                        {opt.label}
-                        {opt.count ? <ChipCount n={opt.count} /> : null}
+                        {tab.label}
+                        <ChipCount n={tab.count} />
                       </button>
-                    ))}
-                  </div>
-                  <span className="text-xs text-[var(--muted)]">
-                    {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
-                  </span>
+                    );
+                  })}
                 </div>
-                {filteredPackages.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-[var(--muted)]">
-                    No packages match this filter.
-                  </p>
-                ) : (
-                  <>
-                    {/* Below tab: pill cards on phone; table from iPad portrait up. */}
-                    <div className="tab:hidden space-y-2">
-                      {packageList.visible.map((p) => (
-                        <div
-                          key={p.packageGroupId}
-                          className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                <div className="flex items-center gap-3">
+                  {hasMoreThanFiveFollowUps && (
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      Rows
+                      <select
+                        aria-label="Rows per page"
+                        className={chipSelect}
+                        style={chipSelectChevron}
+                        value={followPageSize}
+                        onChange={(e) => setFollowPageSize(Number(e.target.value) as 5 | 10)}
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+              </div>
+              {followTab === 'reviews' ? (
+                <ReviewsPanel
+                  data={followUp}
+                  pageSize={followPageSize}
+                  clinicName={clinic.name}
+                  showTherapist={scope.isClinicWideView}
+                  therapistNameFor={(id) => (id ? workspaceTherapists?.find((t) => t.id === id)?.name ?? null : null)}
+                  onBook={setBookingFollowUp}
+                />
+              ) : (
+                <>
+                  <div className="mb-3 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      {(
+                        [
+                          { key: 'open', label: 'Open', count: 0 },
+                          { key: 'attention', label: 'Needs attention', count: attentionCount },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          aria-pressed={pkgStatusFilter === opt.key}
+                          onClick={() => setPkgStatusFilter(opt.key)}
+                          className={filterChip(pkgStatusFilter === opt.key)}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <Link
-                              to="/patients/$patientId"
-                              params={{ patientId: p.patientId }}
-                              search={{ from: '/workspace' }}
-                              className="min-w-0"
-                            >
-                              <div className="font-display text-sm font-medium text-[var(--ink)]">
-                                {p.patientName}
-                              </div>
-                              <div className="font-num text-xs text-[var(--muted)]">{p.mrno}</div>
-                            </Link>
-                            <PackageStatusPill pkg={p} />
-                          </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            <Pill tone="slate">{p.serviceName}</Pill>
-                            <Pill tone="slate">{p.startedByTherapistName}</Pill>
-                          </div>
-                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
-                              <PackageThread
-                                sessionIndex={p.sessionsLogged}
-                                packageTotal={p.packageTotal}
-                              />
-                              <span className="font-num">
-                                {p.sessionsLogged}/{p.packageTotal}
-                              </span>
-                              <span className="ml-1">
-                                Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} (
-                                {p.daysSinceLastVisit}d ago)
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {p.stale && !p.doNotMessage && (
-                                <button
-                                  type="button"
-                                  className={pillSmAccent}
-                                  onClick={() => {
-                                    void feedbackService
-                                      .sendStalePackageReminder(
-                                        clinic.id,
-                                        p.patientName,
-                                        p.phone,
-                                        clinic.name,
-                                        p.serviceName
-                                      )
-                                      .catch((e) => notify.error(toFriendlyMessage(e)));
-                                  }}
-                                >
-                                  Send reminder
-                                </button>
-                              )}
-                              <Link
-                                to="/visits/new"
-                                search={{ repeatVisitId: p.lastVisitId }}
-                                className={pillSmPrimary}
-                              >
-                                Log visit
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
+                          {opt.label}
+                          {opt.count ? <ChipCount n={opt.count} /> : null}
+                        </button>
                       ))}
                     </div>
-
-                    <div className="hidden tab:block overflow-x-auto">
-                      <table className="min-w-full divide-y divide-[var(--border)]">
-                        <thead className="bg-[var(--paper)]">
-                          <tr>
-                            <th className={th}>Patient</th>
-                            <th className={th}>Package</th>
-                            <th className={th}>Therapist</th>
-                            <th className={thNum}>Sessions</th>
-                            <th className={th}>Started</th>
-                            <th className={th}>Last visit</th>
-                            <th className={th}>Status</th>
-                            <th className={th}></th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border)]">
-                          {packageList.visible.map((p) => (
-                            <tr key={p.packageGroupId}>
-                              <td className={td}>
-                                <Link
-                                  to="/patients/$patientId"
-                                  params={{ patientId: p.patientId }}
-                                  search={{ from: '/workspace' }}
-                                  className="font-display font-medium text-[var(--ink)] hover:underline hover:text-[var(--teal)]"
-                                >
+                    <span className="text-xs text-[var(--muted)]">
+                      {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {filteredPackages.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-[var(--muted)]">
+                      No packages match this filter.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Below tab: pill cards on phone; table from iPad portrait up. */}
+                      <div className="tab:hidden space-y-2">
+                        {packageList.visible.map((p) => (
+                          <div
+                            key={p.packageGroupId}
+                            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <Link
+                                to="/patients/$patientId"
+                                params={{ patientId: p.patientId }}
+                                search={{ from: '/workspace' }}
+                                className="min-w-0"
+                              >
+                                <div className="font-display text-sm font-medium text-[var(--ink)]">
                                   {p.patientName}
-                                </Link>{' '}
-                                <span className="font-num text-xs text-[var(--muted)]">{p.mrno}</span>
-                              </td>
-                              <td className={td}>{p.serviceName}</td>
-                              <td className={td}>{p.startedByTherapistName}</td>
-                              <td className={tdNum}>
-                                <span className="inline-flex items-center gap-1.5">
-                                  <PackageThread
-                                    sessionIndex={p.sessionsLogged}
-                                    packageTotal={p.packageTotal}
-                                  />
-                                  <span className="font-num">
-                                    {p.sessionsLogged}/{p.packageTotal}
-                                  </span>
-                                </span>
-                              </td>
-                              <td className={td}>{formatDateDM(p.startedOn)}</td>
-                              <td className={td}>
-                                {formatDateDM(p.lastVisitOn)}{' '}
-                                <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
-                              </td>
-                              <td className={td}>
-                                <PackageStatusPill pkg={p} />
-                              </td>
-                              <td className={td}>
-                                <div className="flex items-center gap-2">
-                                  {p.stale && !p.doNotMessage && (
-                                    <button
-                                      type="button"
-                                      className={pillSmAccent}
-                                      onClick={() => {
-                                        void feedbackService
-                                          .sendStalePackageReminder(
-                                            clinic.id,
-                                            p.patientName,
-                                            p.phone,
-                                            clinic.name,
-                                            p.serviceName
-                                          )
-                                          .catch((e) => notify.error(toFriendlyMessage(e)));
-                                      }}
-                                    >
-                                      Send reminder
-                                    </button>
-                                  )}
-                                  <Link
-                                    to="/visits/new"
-                                    search={{ repeatVisitId: p.lastVisitId }}
-                                    className={pillSmPrimary}
-                                  >
-                                    Log visit
-                                  </Link>
                                 </div>
-                              </td>
+                                <div className="font-num text-xs text-[var(--muted)]">{p.mrno}</div>
+                              </Link>
+                              <PackageStatusPill pkg={p} />
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <Pill tone="slate">{p.serviceName}</Pill>
+                              <Pill tone="slate">{p.startedByTherapistName}</Pill>
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
+                                <PackageThread
+                                  sessionIndex={p.sessionsLogged}
+                                  packageTotal={p.packageTotal}
+                                />
+                                <span className="font-num">
+                                  {p.sessionsLogged}/{p.packageTotal}
+                                </span>
+                                <span className="ml-1">
+                                  Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} (
+                                  {p.daysSinceLastVisit}d ago)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {p.stale && !p.doNotMessage && (
+                                  <button
+                                    type="button"
+                                    className={pillSmAccent}
+                                    onClick={() => {
+                                      void feedbackService
+                                        .sendStalePackageReminder(
+                                          clinic.id,
+                                          p.patientName,
+                                          p.phone,
+                                          clinic.name,
+                                          p.serviceName
+                                        )
+                                        .catch((e) => notify.error(toFriendlyMessage(e)));
+                                    }}
+                                  >
+                                    Send reminder
+                                  </button>
+                                )}
+                                <Link
+                                  to="/visits/new"
+                                  search={{ repeatVisitId: p.lastVisitId }}
+                                  className={pillSmPrimary}
+                                >
+                                  Log visit
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="hidden tab:block overflow-x-auto">
+                        <table className="min-w-full divide-y divide-[var(--border)]">
+                          <thead className="bg-[var(--paper)]">
+                            <tr>
+                              <th className={th}>Patient</th>
+                              <th className={th}>Package</th>
+                              <th className={th}>Therapist</th>
+                              <th className={thNum}>Sessions</th>
+                              <th className={th}>Started</th>
+                              <th className={th}>Last visit</th>
+                              <th className={th}>Status</th>
+                              <th className={th}></th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <ShowMoreFooter list={packageList} noun="packages" />
-                  </>
-                )}
-              </>
-            )}
-          </>
-        )}
+                          </thead>
+                          <tbody className="divide-y divide-[var(--border)]">
+                            {packageList.visible.map((p) => (
+                              <tr key={p.packageGroupId}>
+                                <td className={td}>
+                                  <Link
+                                    to="/patients/$patientId"
+                                    params={{ patientId: p.patientId }}
+                                    search={{ from: '/workspace' }}
+                                    className="font-display font-medium text-[var(--ink)] hover:underline hover:text-[var(--teal)]"
+                                  >
+                                    {p.patientName}
+                                  </Link>{' '}
+                                  <span className="font-num text-xs text-[var(--muted)]">{p.mrno}</span>
+                                </td>
+                                <td className={td}>{p.serviceName}</td>
+                                <td className={td}>{p.startedByTherapistName}</td>
+                                <td className={tdNum}>
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <PackageThread
+                                      sessionIndex={p.sessionsLogged}
+                                      packageTotal={p.packageTotal}
+                                    />
+                                    <span className="font-num">
+                                      {p.sessionsLogged}/{p.packageTotal}
+                                    </span>
+                                  </span>
+                                </td>
+                                <td className={td}>{formatDateDM(p.startedOn)}</td>
+                                <td className={td}>
+                                  {formatDateDM(p.lastVisitOn)}{' '}
+                                  <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
+                                </td>
+                                <td className={td}>
+                                  <PackageStatusPill pkg={p} />
+                                </td>
+                                <td className={td}>
+                                  <div className="flex items-center gap-2">
+                                    {p.stale && !p.doNotMessage && (
+                                      <button
+                                        type="button"
+                                        className={pillSmAccent}
+                                        onClick={() => {
+                                          void feedbackService
+                                            .sendStalePackageReminder(
+                                              clinic.id,
+                                              p.patientName,
+                                              p.phone,
+                                              clinic.name,
+                                              p.serviceName
+                                            )
+                                            .catch((e) => notify.error(toFriendlyMessage(e)));
+                                        }}
+                                      >
+                                        Send reminder
+                                      </button>
+                                    )}
+                                    <Link
+                                      to="/visits/new"
+                                      search={{ repeatVisitId: p.lastVisitId }}
+                                      className={pillSmPrimary}
+                                    >
+                                      Log visit
+                                    </Link>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <ShowMoreFooter list={packageList} noun="packages" />
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </SectionCard>
       )}
 

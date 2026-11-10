@@ -414,5 +414,44 @@ describe('NewVisitPage department scoping', () => {
     expect(screen.getByRole('option', { name: /OP General Physio/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Ward ICU Physio/ })).not.toBeInTheDocument();
   });
+
+  it('in IP (ward) without ?admissionId in URL, picking an admitted patient auto-attaches their open admission and saves location: "ward"', async () => {
+    currentDept = 'ward';
+    searchParams = {};
+    render(<NewVisitPage />);
+
+    // Select patient p1 who has mockAdmission open
+    fireEvent.change(screen.getByPlaceholderText('Search ID, name or phone…'), { target: { value: 'Anita' } });
+    const patientOption = await screen.findByText('Anita Roy');
+    fireEvent.click(patientOption);
+
+    // Should auto-detect open admission and display Inpatient bed tag
+    await screen.findByText(/Inpatient · Bed 101/);
+
+    // Open therapist picker and select Dr Ward Only
+    const therapistPicker = await screen.findByRole('button', { name: /^Therapist:/ });
+    fireEvent.click(therapistPicker);
+    fireEvent.click(screen.getByRole('option', { name: 'Dr Ward Only' }));
+
+    // Select service
+    const servicePicker = screen.getByRole('combobox', { name: 'Service' });
+    fireEvent.change(servicePicker, { target: { value: 'Physio' } });
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Physiotherapy Session/ }));
+
+    // Save visit
+    const saveBtn = screen.getByRole('button', { name: /Save visit/ });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(createVisitMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          location: 'ward',
+          admissionId: 'adm-1',
+          therapistId: 't-ward',
+          patientId: 'p1',
+        })
+      );
+    });
+  }, 30000);
 });
 

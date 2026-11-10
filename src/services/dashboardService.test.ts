@@ -380,6 +380,23 @@ describe('dashboardService.openPackages', () => {
     const svc = createDashboardService(fake.repos);
     expect(await svc.openPackages('clinic-1')).toEqual([]);
   });
+
+  it('scopes open packages by department so OP packages do not leak into Home', async () => {
+    fake.visits.set(
+      'v-op',
+      baseVisit('v-op', { visitDate: '2026-06-01', packageGroupId: 'g-op', packageTotal: 3, location: 'clinic' })
+    );
+    fake.visits.set(
+      'v-home',
+      baseVisit('v-home', { visitDate: '2026-06-02', packageGroupId: 'g-home', packageTotal: 5, location: 'home' })
+    );
+    const svc = createDashboardService(fake.repos);
+    const opRows = await svc.openPackages('clinic-1', 'clinic');
+    const homeRows = await svc.openPackages('clinic-1', 'home');
+
+    expect(opRows.map((r) => r.packageGroupId)).toEqual(['g-op']);
+    expect(homeRows.map((r) => r.packageGroupId)).toEqual(['g-home']);
+  });
 });
 
 describe('dashboardService.receivedOnDate', () => {

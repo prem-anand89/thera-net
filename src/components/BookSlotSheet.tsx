@@ -234,8 +234,8 @@ export function BookSlotSheet({
     }
   }, [department, admissionId, openAdmissions, patients]);
   const openPackages = useLiveQuery(
-    () => (isOpen && repeat && patientId ? dashboardService.openPackages(clinic.id) : undefined),
-    [isOpen, repeat, patientId, clinic.id]
+    () => (isOpen && repeat && patientId ? dashboardService.openPackages(clinic.id, department) : undefined),
+    [isOpen, repeat, patientId, clinic.id, department]
   );
   const packageLeft = useMemo(() => {
     const row = (openPackages ?? []).find((p) => p.patientId === patientId);
@@ -340,7 +340,7 @@ export function BookSlotSheet({
     const lastAppt = appointments
       .filter((a) => a.patientId === patientId && a.status !== 'cancelled' && a.status !== 'no_show' && a.scheduledAt < new Date().toISOString())
       .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
-    
+
     if (lastAppt) {
       if (lastAppt.therapistId && !therapistTouched && !lockTherapist) {
         setTherapistId(lastAppt.therapistId);
@@ -441,15 +441,15 @@ export function BookSlotSheet({
   const plannedRows =
     repeat && selectedTime && therapistId
       ? seriesDates({ startDate: selectedDate, weekdays: repeatDays, count: repeatCount, isClosed: isClosedDate }).map((date) => {
-          const override = rowOverrides[date] ?? {};
-          const time = override.time ?? selectedTime;
-          return {
-            date,
-            time,
-            skipped: Boolean(override.skipped),
-            problem: seriesProblem({ appointments, therapistId, date, time, lengthMinutes, slotMinutes, now, working: workingOn(date) }),
-          };
-        })
+        const override = rowOverrides[date] ?? {};
+        const time = override.time ?? selectedTime;
+        return {
+          date,
+          time,
+          skipped: Boolean(override.skipped),
+          problem: seriesProblem({ appointments, therapistId, date, time, lengthMinutes, slotMinutes, now, working: workingOn(date) }),
+        };
+      })
       : [];
   const activeRows = plannedRows.filter((row) => !row.skipped);
   const unresolved = activeRows.filter((row) => row.problem !== null).length;
@@ -508,9 +508,9 @@ export function BookSlotSheet({
       const confirmMsg =
         hoursStatus === 'outside_clinic'
           ? (() => {
-              const closure = closureOverlapping(clinicOpenNow, scheduledMinutes, lengthMinutes);
-              return closure ? `The clinic is closed ${minutesLabel(closure.start)} – ${minutesLabel(closure.end)}. Book anyway?` : 'Outside clinic hours. Book anyway?';
-            })()
+            const closure = closureOverlapping(clinicOpenNow, scheduledMinutes, lengthMinutes);
+            return closure ? `The clinic is closed ${minutesLabel(closure.start)} – ${minutesLabel(closure.end)}. Book anyway?` : 'Outside clinic hours. Book anyway?';
+          })()
           : workingNow.length > 0
             ? `Outside ${therapistName ? `${therapistName}'s` : 'working'} hours (${workingNow.map((i) => `${minutesLabel(i.start)}–${minutesLabel(i.end)}`).join(', ')}). Book anyway?`
             : `${therapistName ? `${therapistName}` : 'This therapist'} isn't working this day. Book anyway?`;
@@ -675,8 +675,7 @@ export function BookSlotSheet({
     { label: 'Evening', slots: outsideSlots.filter((slot) => slot.minutes >= 17 * 60) },
   ].filter((part) => part.slots.length > 0);
   const chip = (on: boolean) =>
-    `flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium ${
-      on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]/50'
+    `flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium ${on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]/50'
     }`;
 
   return (
@@ -884,9 +883,8 @@ export function BookSlotSheet({
                   role="radio"
                   aria-checked={lengthMinutes === minutes}
                   onClick={() => { setLengthMinutes(minutes); setSelectedTime(null); }}
-                  className={`min-h-9 min-w-14 rounded-lg border px-2.5 text-xs font-medium ${
-                    lengthMinutes === minutes ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
-                  }`}
+                  className={`min-h-9 min-w-14 rounded-lg border px-2.5 text-xs font-medium ${lengthMinutes === minutes ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
+                    }`}
                 >
                   {lengthLabel(minutes)}
                 </button>
@@ -914,9 +912,8 @@ export function BookSlotSheet({
                     aria-checked={on}
                     aria-label={`${index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : displayDate(date)}${dayClosed ? ', closed' : ''}`}
                     onClick={() => { setSelectedDate(date); setSelectedTime(null); }}
-                    className={`flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border text-center leading-none sm:w-auto sm:flex-1 ${
-                      on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : dayClosed ? 'border-[var(--border)] bg-[var(--slate-light)] text-[var(--muted)]' : 'border-[var(--border)] text-[var(--ink)] hover:border-[var(--teal)]/50'
-                    }`}
+                    className={`flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border text-center leading-none sm:w-auto sm:flex-1 ${on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : dayClosed ? 'border-[var(--border)] bg-[var(--slate-light)] text-[var(--muted)]' : 'border-[var(--border)] text-[var(--ink)] hover:border-[var(--teal)]/50'
+                      }`}
                   >
                     <span className={`text-[10px] font-medium ${on ? 'text-white/80' : 'text-[var(--muted)]'}`}>
                       {index === 0 ? 'Today' : value.toLocaleDateString('en-IN', { weekday: 'short' })}
@@ -1057,9 +1054,8 @@ export function BookSlotSheet({
                       {plannedRows.map((row, index) => (
                         <li
                           key={row.date}
-                          className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs ${
-                            row.skipped ? 'bg-[var(--paper)] text-[var(--muted)] line-through' : row.problem ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--moss-light)] text-[var(--ink)]'
-                          }`}
+                          className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs ${row.skipped ? 'bg-[var(--paper)] text-[var(--muted)] line-through' : row.problem ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--moss-light)] text-[var(--ink)]'
+                            }`}
                         >
                           <span>
                             {index + 1}. {displayDate(row.date)}, {minutesLabel(Number(row.time.slice(0, 2)) * 60 + Number(row.time.slice(3, 5)))}

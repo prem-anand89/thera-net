@@ -137,10 +137,12 @@ export function Shell() {
   // Same resolution useWorkspaceScope() uses — can't call that hook here,
   // it needs ClinicContext, and this component is the one that provides
   // it further down (same constraint noted on appointmentRequests below).
-  const myTherapistId = useMemo(
-    () => therapists?.find((t) => t.userId === session?.user?.id)?.id,
+  const myTherapist = useMemo(
+    () => therapists?.find((t) => t.userId === session?.user?.id),
     [therapists, session?.user?.id]
   );
+  const myTherapistId = myTherapist?.id;
+  const effectiveMemberDepartments = memberDepartments ?? myTherapist?.careLocations;
 
   const appointmentRequests = useLiveQuery(
     () => clinic && (role === 'admin' || role === 'front_desk') ? repos.appointmentRequests.listByClinic(clinic.id) : undefined,
@@ -420,7 +422,7 @@ export function Shell() {
 
   return (
     <ClinicContext.Provider value={clinic}>
-      <DepartmentProvider clinic={clinic} userId={session?.user?.id} role={role} departments={memberDepartments}>
+      <DepartmentProvider clinic={clinic} userId={session?.user?.id} role={role} departments={effectiveMemberDepartments}>
         <div className="min-h-screen bg-[var(--paper)]">
           <header ref={trackAppHeaderHeight} className={`no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)] ${shouldShowPhoneAppHeader(pathname) ? '' : 'max-sm:hidden'}`}>
             {/* Header layout. Left: the Thera.Net mark (the product; wordmark
@@ -459,8 +461,8 @@ export function Shell() {
                       title={item.label}
                       activeProps={{}}
                       className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${isNavActive(pathname, item.to)
-                          ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                          : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                        ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+                        : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
                         }`}
                     >
                       <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
@@ -517,8 +519,8 @@ export function Shell() {
           <SyncStatusBanners />
           <main
             className={`mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${shouldShowPhoneBottomNav(pathname)
-                ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
-                : 'pb-6'
+              ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
+              : 'pb-6'
               }`}
           >
             <Suspense

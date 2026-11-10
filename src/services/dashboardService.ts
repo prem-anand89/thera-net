@@ -355,17 +355,20 @@ export function createDashboardService(repos: Repos) {
       return Promise.all(list.map((m) => reportService.monthly(clinicId, m, department)));
     },
 
-    async openPackages(clinicId: UUID): Promise<OpenPackageRow[]> {
+    async openPackages(clinicId: UUID, department?: Department): Promise<OpenPackageRow[]> {
       // Full history, deliberately unbounded: a date window would hide a
       // package's earlier sessions and miscount its progress (or resurrect
       // a completed package as open). Volume is small; visits.list scans
       // the clinic index either way.
-      const [visits, catalog, patients, therapists] = await Promise.all([
+      let [visits, catalog, patients, therapists] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.catalog.list(clinicId, true),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
       ]);
+      if (department) {
+        visits = visits.filter((v) => inDepartment(department, v));
+      }
       const serviceName = new Map(catalog.map((c) => [c.id, c.name]));
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));

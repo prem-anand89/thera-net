@@ -18,7 +18,13 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useDepartment } from '@/app/DepartmentContext';
-import { type Department, departmentOf, servicesInDepartment, therapistsInDepartment } from '@/domain/departments';
+import {
+  type Department,
+  DEPARTMENT_LABELS,
+  departmentOf,
+  servicesInDepartment,
+  therapistsInDepartment,
+} from '@/domain/departments';
 import { inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { VisitCapNotice } from '@/components/VisitCapNotice';
 import { packageSessionShares } from '@/domain/payBase';
@@ -442,11 +448,21 @@ export function NewVisitPage() {
   // Patient Profile's "New visit" button and an Expected-today card linked
   // to a registered patient both arrive with ?patientId=… — skip search and
   // pre-select that patient directly, same as repeatVisit does below.
-  // "Log session" on the ward-rounds card: the visit is an inpatient round on that stay (place fixed to Inpatient, saved
-  // unpaid until the discharge bill). It applies only while the chosen patient is the stay's own patient.
+  // "Log session" on the ward-rounds card passes ?admissionId=…; opening "+ New visit" while in the IP
+  // department also auto-attaches the selected patient's open admission so an IP session is never saved
+  // without its stay link.
   const admission = useLiveQuery(
-    async () => (search.admissionId ? ((await repos.admissions.get(search.admissionId)) ?? null) : undefined),
-    [search.admissionId]
+    async () => {
+      if (search.admissionId) {
+        return (await repos.admissions.get(search.admissionId)) ?? null;
+      }
+      if (department === 'ward' && patient?.id) {
+        const open = await repos.admissions.listOpen(clinic.id);
+        return open.find((a) => !a.deleted && !a.dischargedOn && a.patientId === patient.id) ?? null;
+      }
+      return undefined;
+    },
+    [search.admissionId, department, clinic.id, patient?.id]
   );
   const activeAdmission = admission && !admission.deleted && !admission.dischargedOn && patient?.id === admission.patientId ? admission : null;
   const visitDept: Department = activeAdmission
@@ -695,8 +711,13 @@ export function NewVisitPage() {
     return paid;
   }, [clinic.id, patient?.id, patientVisits]);
   const patientBalance = useMemo(
-    () => (patientVisits && patientPaid ? patientDue(patientVisits, patientPaid, statusByInvoiceId) : null),
-    [patientVisits, patientPaid, statusByInvoiceId]
+    () =>
+      patientVisits && patientPaid
+        ? patientDue(patientVisits, patientPaid, statusByInvoiceId, {
+            department: visitDept,
+          })
+        : null,
+    [patientVisits, patientPaid, statusByInvoiceId, visitDept]
   );
   // Everyone, retired therapists included: the last visit names who did it, even if they have since left.
   const allTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -1079,6 +1100,9 @@ export function NewVisitPage() {
     }
     if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
       return setError('Add a reason for the discount or extra.');
+    }
+    if (visitDept === 'ward' && !activeAdmission) {
+      return setError('Inpatient visits require an active admission. Admit this patient first or switch to OP / Home.');
     }
     if (
       entitlements.enforcementEnabled &&
@@ -1553,6 +1577,8 @@ export function NewVisitPage() {
               {patientVisits !== undefined && lastVisit && (
                 <div className={openPackages?.length || finishedPackage ? 'border-t border-[var(--border)] pt-2.5' : ''}>
                   {(() => {
+                    const lastVisitDept = departmentOf(lastVisit);
+                    const lastVisitIpMode = inpatientVisitBillingMode(lastVisit, clinic);
                     const state = computeVisitPaymentState(
                       lastVisit.actualBillPaise,
                       lastVisit.invoiceId,
@@ -1580,13 +1606,24 @@ export function NewVisitPage() {
                     return (
                       <div>
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-xs font-medium text-[var(--muted)]">Last visit</span>
-                            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-                              <span title={badge.title}>
-                                {badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}
-                              </span>
-                            </Pill>
+                            <Pill tone="slate">{DEPARTMENT_LABELS[lastVisitDept]}</Pill>
+                            {lastVisitIpMode === 'partner_billed' ? (
+                              <Pill tone="slate">
+                                <span title="Hospital bills the patient; logged for clinical and payout tracking">Logged</span>
+                              </Pill>
+                            ) : lastVisitIpMode === 'stay_bill' ? (
+                              <Pill tone="amber">
+                                <span title="Part of this inpatient stay; billed together at discharge">IP Bill</span>
+                              </Pill>
+                            ) : (
+                              <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                                <span title={badge.title}>
+                                  {badge.kind === 'none' && lastVisit.packageGroupId ? 'Package session' : badge.label}
+                                </span>
+                              </Pill>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -1710,10 +1747,29 @@ export function NewVisitPage() {
           <h2 className="font-display text-base font-semibold text-[var(--ink)] whitespace-nowrap shrink-0">This visit</h2>
           {activeAdmission && (
             <Pill tone="teal">
-              Inpatient{activeAdmission.wardBed ? ` · ${activeAdmission.wardBed}` : ''}
+              {['Inpatient', activeAdmission.wardBed].filter(Boolean).join(' · ')}
             </Pill>
           )}
         </div>
+
+        {visitDept === 'ward' && patient && admission !== undefined && !activeAdmission && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--amber)] bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]"
+          >
+            <span>{patient.name} is not currently admitted as an inpatient.</span>
+            <button
+              type="button"
+              className="font-semibold underline hover:no-underline"
+              onClick={() => {
+                setLocation('clinic');
+                locationDecidedRef.current = true;
+              }}
+            >
+              Log as OP visit instead
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2.5">
           <div>

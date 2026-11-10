@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
+import { useDepartment } from '@/app/DepartmentContext';
+import { inDepartment } from '@/domain/departments';
 import { countNoShows, type PatientFlagContext } from '@/domain/patientFlags';
 import type { Appointment } from '@/domain/types';
 
@@ -12,16 +14,18 @@ import type { Appointment } from '@/domain/types';
  * screen. Returns undefined until loaded, so flags simply appear.
  */
 export function usePatientFlagContext(clinicId: string, appointments: Appointment[]): PatientFlagContext | undefined {
+  const { department } = useDepartment();
   const data = useLiveQuery(async () => {
-    const [visits, patients, packages, outstanding, requests] = await Promise.all([
+    const [allVisits, patients, packages, outstanding, requests] = await Promise.all([
       repos.visits.list({ clinicId }),
       repos.patients.list(clinicId),
-      dashboardService.openPackages(clinicId),
-      dashboardService.outstandingInvoices(clinicId),
+      dashboardService.openPackages(clinicId, department),
+      dashboardService.outstandingInvoices(clinicId, department),
       repos.appointmentRequests.listByClinic(clinicId),
     ]);
+    const visits = allVisits.filter((v) => inDepartment(department, v));
     return { visits, patients, packages, outstanding, requests };
-  }, [clinicId]);
+  }, [clinicId, department]);
 
   const noShows = useMemo(() => countNoShows(appointments), [appointments]);
 

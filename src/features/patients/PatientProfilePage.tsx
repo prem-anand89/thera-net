@@ -125,7 +125,10 @@ export function PatientProfilePage() {
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
     [editPatientId]
   );
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  const openPackages = useLiveQuery(
+    () => dashboardService.openPackages(clinic.id, department),
+    [clinic.id, department]
+  );
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
     [clinic.id, patientId]
@@ -301,6 +304,8 @@ export function PatientProfilePage() {
     for (const v of deptVisits) {
       if (v.deleted) continue;
       totalBilled += v.actualBillPaise;
+      const ipMode = inpatientVisitBillingMode(v, clinic);
+      if (ipMode === 'partner_billed' || ipMode === 'stay_bill') continue;
       const state = computeVisitPaymentState(
         v.actualBillPaise,
         v.invoiceId ?? null,
@@ -315,7 +320,7 @@ export function PatientProfilePage() {
       if (!isCollected(state) && state !== 'zero_session') outstandingBalance += v.actualBillPaise;
     }
     return { totalBilled, totalCollected, outstandingBalance };
-  }, [deptVisits, statusByInvoiceId, directPaymentByVisitId]);
+  }, [deptVisits, clinic, statusByInvoiceId, directPaymentByVisitId]);
 
   const openPackageIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),

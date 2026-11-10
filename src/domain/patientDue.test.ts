@@ -29,4 +29,23 @@ describe('patientDue', () => {
   it('ignores deleted visits', () => {
     expect(patientDue([visit('a', 1500, { deleted: true })], new Map(), new Map())).toEqual({ duePaise: 0, unpaidVisits: 0 });
   });
+
+  it('ignores un-invoiced IP stay visits and scopes by department when requested', () => {
+    const ipStayVisit = { ...visit('ip-1', 1000), location: 'ward', admissionId: 'adm-1' };
+    const homeVisit = { ...visit('home-1', 800), location: 'home' };
+    const opVisit = { ...visit('op-1', 600), location: 'clinic' };
+
+    expect(patientDue([ipStayVisit], new Map(), new Map())).toEqual({
+      duePaise: 0,
+      unpaidVisits: 0,
+    });
+    expect(
+      patientDue([ipStayVisit, homeVisit, opVisit], new Map(), new Map(), {
+        department: 'clinic',
+      })
+    ).toEqual({
+      duePaise: 60000,
+      unpaidVisits: 1,
+    });
+  });
 });
