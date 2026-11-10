@@ -1267,14 +1267,7 @@ export function LedgerPage() {
                     <span className="font-medium text-[var(--ink)]">
                       {totals.visitCount} visit{totals.visitCount === 1 ? '' : 's'}
                     </span>
-                    {department === 'ward' ? (
-                      <>
-                        <span className="text-[var(--muted)]">·</span>
-                        <span>
-                          Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
-                        </span>
-                      </>
-                    ) : (
+                    {department === 'ward' ? null : (
                       <>
                         {totals.state === 'dues' && (
                           <>
@@ -1306,7 +1299,7 @@ export function LedgerPage() {
                   {department === 'ward' ? (
                     canBillInpatientStay(clinic) ? (
                       <span className="whitespace-nowrap font-medium text-[var(--teal-strong)]">
-                        On stay bill <span className="font-num">{formatAmount(totals.outstanding)}</span>
+                        IP Bill <span className="font-num">{formatAmount(totals.outstanding)}</span>
                       </span>
                     ) : (
                       <span className="whitespace-nowrap font-medium text-[var(--ink)]">
@@ -1334,15 +1327,9 @@ export function LedgerPage() {
                   <div className="flex items-center gap-x-3 text-right">
                     {department === 'ward' ? (
                       canBillInpatientStay(clinic) ? (
-                        <>
-                          <span>
-                            Billed <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>
-                          </span>
-                          <span className="text-[var(--muted)]">·</span>
-                          <span className="font-medium text-[var(--teal-strong)]">
-                            On stay bill <span className="font-num">{formatAmount(totals.outstanding)}</span>
-                          </span>
-                        </>
+                        <span className="font-medium text-[var(--teal-strong)]">
+                          IP Bill <span className="font-num">{formatAmount(totals.outstanding)}</span>
+                        </span>
                       ) : (
                         <span>
                           Logged <strong className="font-num text-[var(--ink)]">{formatAmount(totals.bill)}</strong>

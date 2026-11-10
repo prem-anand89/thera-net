@@ -256,7 +256,7 @@ export function SharedVisitCard({
         ) : data.inpatientBilling === 'stay_bill' && !data.invoiceId ? (
           <Pill tone="slate">
             <span className="whitespace-nowrap" title="Included on the inpatient stay / discharge bill">
-              On stay bill
+              IP Bill
             </span>
           </Pill>
         ) : (

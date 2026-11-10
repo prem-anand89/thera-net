@@ -241,7 +241,7 @@ export function VisitLoggedCard({
               className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--teal-light)] px-2.5 py-1 text-xs font-medium text-[var(--teal-strong)]"
               data-testid="inpatient-stay-bill-line"
             >
-              ✓ Added to stay bill · {formatAmount(justSaved.billPaise)}
+              ✓ Added to IP bill · {formatAmount(justSaved.billPaise)}
             </span>
           ) : paymentDue > 0 ? (
             <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)]">

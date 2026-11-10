@@ -65,7 +65,7 @@ export function TodayVisitsTotals({
           inpatientBillingMode === 'partner_billed' ? (
             cell('Logged', formatAmount(totals.billedPaise))
           ) : inpatientBillingMode === 'stay_bill' ? (
-            cell('On stay bill', formatAmount(totals.billedPaise), 'text-[var(--teal)]')
+            cell('IP Bill', formatAmount(totals.billedPaise), 'text-[var(--teal)]')
           ) : (
             <>
               {cell('Billed', formatAmount(totals.billedPaise))}
