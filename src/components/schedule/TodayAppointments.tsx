@@ -26,7 +26,7 @@ const listCls = '-mx-5 divide-y divide-[var(--border)] border-y tab:border-t-0 b
 
 function AppointmentListHeader({ showTherapist }: { showTherapist: boolean }) {
   const gridCols = showTherapist
-    ? 'tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_6.5rem_8rem]'
+    ? 'tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_10rem_8rem]'
     : 'tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem]';
   return (
     <div className={`-mx-5 hidden tab:grid ${gridCols} tab:items-center tab:gap-2.5 desktop:gap-3 px-4 py-2 border-y border-[var(--border)] bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}>
@@ -154,7 +154,7 @@ export function TodayAppointments({
             ? 'font-medium text-[var(--ink)]'
             : 'font-medium';
     const gridCols = showTherapist
-      ? 'tab:grid tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_6.5rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3'
+      ? 'tab:grid tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_10rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3'
       : 'tab:grid tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3';
 
     return (

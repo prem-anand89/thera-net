@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { Clinic, Therapist } from '@/domain/types';
+import type { Therapist } from '@/domain/types';
 import type { MySchedule } from '@/features/me/useMySchedule';
 
 let myTherapist: Therapist | undefined;
@@ -179,47 +179,15 @@ describe('Refresh app', () => {
 });
 
 describe('Clinic administration in AccountMenu', () => {
-  it('shows Clinic settings directly and reveals Add another clinic when expanding clinic toggle', () => {
+  it('shows Clinic settings for an admin and no clinic switching (that lives in the header)', () => {
     openMenu('admin');
     expect(screen.getByRole('menuitem', { name: /clinic settings/i })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: /add another clinic/i })).not.toBeInTheDocument();
-
-    // Expand clinic toggle
-    fireEvent.click(screen.getByRole('button', { name: /city clinic/i }));
-    expect(screen.getByRole('menuitem', { name: /add another clinic/i })).toBeInTheDocument();
+    expect(screen.queryByText('Switch clinic')).not.toBeInTheDocument();
   });
 
-  it('hides Clinic settings and Add clinic for non-admin', () => {
+  it('hides Clinic settings for a non-admin', () => {
     openMenu('therapist');
     expect(screen.queryByRole('menuitem', { name: /clinic settings/i })).toBeNull();
-    // Even when expanding clinic toggle, non-admin cannot add clinic
-    fireEvent.click(screen.getByRole('button', { name: /city clinic/i }));
-    expect(screen.queryByRole('menuitem', { name: /add another clinic/i })).toBeNull();
-  });
-
-  it('collapses clinic list by default and expands on click when account belongs to multiple clinics', () => {
-    render(
-      <AccountMenu
-        displayName="Ritu"
-        fallbackName="ritu"
-        role="admin"
-        setDisplayName={async () => { }}
-        clinicId="c1"
-        clinics={[
-          { id: 'c1', name: 'Alpha Clinic' } as unknown as Clinic,
-          { id: 'c2', name: 'Beta Rehab' } as unknown as Clinic,
-        ]}
-        hasPasswordIdentity
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-    // Collapsed by default
-    expect(screen.queryByText('Switch clinic')).not.toBeInTheDocument();
-
-    // Expand clinic toggle
-    fireEvent.click(screen.getByRole('button', { name: /city clinic/i }));
-    expect(screen.getByText('Switch clinic')).toBeInTheDocument();
-    expect(screen.getByRole('menuitemradio', { name: /alpha clinic/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitemradio', { name: /beta rehab/i })).toBeInTheDocument();
   });
 });

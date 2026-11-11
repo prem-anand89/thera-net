@@ -85,7 +85,7 @@ export function HomeVisitsCard({
   }
 
   const gridCols = showTherapist
-    ? 'tab:grid-cols-[4.25rem_8.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_7.5rem_6.5rem_7.5rem]'
+    ? 'tab:grid-cols-[4.25rem_8.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_7.5rem_10rem_7.5rem]'
     : 'tab:grid-cols-[4.25rem_9.5rem_minmax(0,1.2fr)_minmax(0,1.2fr)_8rem_7.5rem]';
 
   return (
@@ -119,12 +119,12 @@ export function HomeVisitsCard({
               return (
                 <li
                   key={a.id}
-                  className={`flex flex-col gap-2 py-3 px-4 tab:px-5 tab:grid ${gridCols} tab:items-center tab:gap-2.5 desktop:gap-4 hover:bg-[var(--teal-light)] transition-colors ${
+                  className={`flex flex-col gap-1 py-2.5 px-4 tab:px-5 tab:py-3 tab:gap-2 tab:grid ${gridCols} tab:items-center tab:gap-2.5 desktop:gap-4 hover:bg-[var(--teal-light)] transition-colors ${
                     i % 2 === 1 ? 'tab:bg-[var(--paper)]' : 'tab:bg-[var(--surface)]'
                   }`}
                 >
                   {/* Col 1: Time */}
-                  <div className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">
+                  <div className="hidden tab:block font-num text-sm font-semibold tabular-nums text-[var(--ink)]">
                     {timeStr}
                   </div>
 
@@ -146,6 +146,7 @@ export function HomeVisitsCard({
                       : {})}
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="tab:hidden font-num text-[13px] font-semibold tabular-nums text-[var(--ink)]">{timeStr}</span>
                       <h4 className="font-display font-medium text-sm text-[var(--ink)] truncate">
                         {a.patientName}
                       </h4>
@@ -189,18 +190,18 @@ export function HomeVisitsCard({
                           <CopyAddressButton address={address} />
                         </div>
                       ) : (
-                        <span>—</span>
+                        <span className="hidden tab:inline">—</span>
                       )}
                     </div>
 
                     {/* Col 5: Contact */}
                     <div className="min-w-0 text-xs text-[var(--muted)]">
                       {phone ? (
-                        <div>
-                          <div className="font-num font-medium text-sm tab:text-xs text-[var(--ink)]">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0 tab:block">
+                          <div className="font-num font-medium text-xs text-[var(--ink)]">
                             {phone}
                           </div>
-                          <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-0.5">
+                          <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] tab:mt-0.5">
                             <a
                               href={`tel:${phone}`}
                               className="font-medium text-[var(--teal)] hover:underline"
@@ -221,7 +222,7 @@ export function HomeVisitsCard({
                           </div>
                         </div>
                       ) : (
-                        <span>—</span>
+                        <span className="hidden tab:inline">—</span>
                       )}
                     </div>
 
@@ -237,7 +238,7 @@ export function HomeVisitsCard({
                     )}
 
                     {/* Col 7: Action */}
-                  <div className="flex shrink-0 items-center gap-2 justify-end tab:justify-end">
+                  <div className={`shrink-0 items-center gap-2 justify-end ${(isUpcoming && onMarkArrived) || isArrived ? 'flex' : 'hidden tab:flex'}`}>
                     {isUpcoming && onMarkArrived && (
                       <button
                         type="button"

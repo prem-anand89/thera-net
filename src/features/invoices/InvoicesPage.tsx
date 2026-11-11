@@ -15,9 +15,9 @@ const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 import { DatePresetBar, type DatePreset } from '@/components/DatePresetBar';
-import { ToolbarFilterToggle, ToolbarSearchInput } from '@/components/ToolbarControls';
+import { ToolbarSearchInput } from '@/components/ToolbarControls';
 import { remindToPay } from './remindToPay';
-import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard, KebabMenu, menuItem, chipSelectChevron, pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
+import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard, KebabMenu, menuItem, filterChip, pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -69,7 +69,6 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'outstanding'>('all');
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
@@ -347,29 +346,28 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
             ariaLabel="Search invoices"
             className="min-w-0 flex-1 sm:w-56 sm:flex-none"
           />
-          <ToolbarFilterToggle
-            open={filtersOpen}
-            activeCount={statusFilter !== 'all' ? 1 : 0}
-            onToggle={() => setFiltersOpen((o) => !o)}
-          />
         </div>
       </div>
 
-      {filtersOpen && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--ink)] shadow-sm">
-          <select
-            aria-label="Invoice status"
-            className="h-9 min-h-9 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
-            style={chipSelectChevron}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'paid' | 'outstanding')}
+      <div role="group" aria-label="Invoice status" className="hide-scrollbar flex items-center gap-1.5 overflow-x-auto">
+        {(
+          [
+            ['all', 'All'],
+            ['outstanding', 'Outstanding'],
+            ['paid', 'Paid'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={statusFilter === value}
+            onClick={() => setStatusFilter(value)}
+            className={filterChip(statusFilter === value)}
           >
-            <option value="all">All statuses</option>
-            <option value="outstanding">Outstanding</option>
-            <option value="paid">Paid</option>
-          </select>
-        </div>
-      )}
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-2 desktop:grid-cols-4 gap-3">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">

@@ -510,8 +510,6 @@ export function Shell() {
                     role={role}
                     setDisplayName={setDisplayName}
                     clinicId={clinic.id}
-                    clinics={clinics ?? []}
-                    logoUrl={logoUrl}
                     active={pathname.startsWith('/settings') || pathname.startsWith('/setup')}
                     hasPasswordIdentity={
                       session?.user.identities?.some((i) => i.provider === 'email') ?? true

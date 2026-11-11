@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { signOutSafely } from './signOut';
 import { checkForUpdateAndReload } from './registerServiceWorker';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
-import { setActiveClinic } from '@/app/useActiveClinic';
-import { syncEngine } from '@/sync/engine';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { InstallPrompt } from '@/features/notifications/InstallPrompt';
@@ -19,10 +17,7 @@ import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
 import { IconBell, IconCalendar, IconSettings, IconUser } from '@/components/NavIcons';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { BrandMark } from '@/components/BrandMark';
-import { AddClinicDialog } from '@/components/AddClinicDialog';
-import { ClinicAvatar } from './ClinicSwitcher';
 import { initialsFor } from './accountInitials';
-import type { Clinic } from '@/domain/types';
 
 const rowCls =
   'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]';
@@ -68,8 +63,6 @@ export function AccountMenu({
   role,
   setDisplayName,
   clinicId,
-  clinics = [],
-  logoUrl,
   hasPasswordIdentity,
 }: {
   /** True on Settings/Setup, which are reached from this menu on larger screens. */
@@ -79,22 +72,17 @@ export function AccountMenu({
   role: ClinicRole;
   setDisplayName: (name: string) => Promise<void>;
   clinicId: string;
-  clinics?: Clinic[];
-  logoUrl?: string | null;
   /** False for a Google-only account with no email/password identity yet —
    *  relabels the password action from "Change" to "Set". */
   hasPasswordIdentity: boolean;
 }) {
   const clinic = useClinic();
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [clinicsExpanded, setClinicsExpanded] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [addingClinic, setAddingClinic] = useState(false);
 
   const name = displayName ?? fallbackName;
   const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
@@ -107,10 +95,6 @@ export function AccountMenu({
   const photoUrl = myTherapist?.photoPath ? publicTherapistPhotoUrl(myTherapist.photoPath) : null;
   const install = useInstallState();
   const showInstall = !install.standalone && (install.canPromptInstall || install.iosSafari);
-
-  const sortedClinics = useMemo(() => {
-    return [...clinics].sort((a, b) => a.name.localeCompare(b.name));
-  }, [clinics]);
 
   const [seenAt, setSeenAt] = useState<string | null>(null);
   const myTherapistId = myTherapist?.id;
@@ -129,7 +113,6 @@ export function AccountMenu({
 
   function closeMenu() {
     setOpen(false);
-    setClinicsExpanded(false);
   }
   function openSheet(set: (value: boolean) => void) {
     closeMenu();
@@ -145,13 +128,6 @@ export function AccountMenu({
       setSeenAt(lastChangeAt);
     }
     openSheet(setHoursOpen);
-  }
-
-  async function switchToClinic(id: string) {
-    closeMenu();
-    if (id === clinic.id) return;
-    await setActiveClinic(id);
-    void navigate({ to: '/workspace' });
   }
 
   async function refreshApp() {
@@ -201,72 +177,6 @@ export function AccountMenu({
                   {roleLabel && <p className="text-xs text-[var(--muted)]">{roleLabel}</p>}
                 </div>
               </div>
-
-              {/* Active clinic dropdown toggle */}
-              <button
-                type="button"
-                aria-expanded={clinicsExpanded}
-                aria-label={`Current clinic: ${clinic.name}${clinics.length > 1 || role === 'admin' ? '. Click to switch clinic' : ''}`}
-                onClick={() => setClinicsExpanded((v) => !v)}
-                className="mt-2.5 flex w-full items-center justify-between gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
-              >
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <ClinicAvatar name={clinic.name} logoUrl={logoUrl} size="sm" />
-                  <span className="truncate font-medium">{clinic.name}</span>
-                </div>
-                {(clinics.length > 1 || role === 'admin') && (
-                  <span className="text-[10px] text-[var(--muted)]" aria-hidden="true">
-                    {clinicsExpanded ? '▴' : '▾'}
-                  </span>
-                )}
-              </button>
-
-              {/* Collapsible clinic switcher list */}
-              {clinicsExpanded && (
-                <div className="mt-2 space-y-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
-                  {clinics.length > 1 && (
-                    <>
-                      <p className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                        Switch clinic
-                      </p>
-                      {sortedClinics.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={c.id === clinic.id}
-                          onClick={() => void switchToClinic(c.id)}
-                          className={`flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs ${c.id === clinic.id
-                              ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                              : 'text-[var(--ink)] hover:bg-[var(--paper)]'
-                            }`}
-                        >
-                          <span className="w-3.5 shrink-0 text-xs" aria-hidden>
-                            {c.id === clinic.id ? '✓' : ''}
-                          </span>
-                          <span className="truncate">{c.name}</span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {role === 'admin' && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                      onClick={() => {
-                        closeMenu();
-                        setAddingClinic(true);
-                      }}
-                    >
-                      <span className="w-3.5 shrink-0 text-center font-bold text-[var(--teal)]" aria-hidden>
-                        +
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">Add another clinic</span>
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Clinic administration */}
@@ -402,16 +312,6 @@ export function AccountMenu({
         <ChangePasswordDialog
           isFirstPassword={!hasPasswordIdentity}
           onClose={() => setChangingPassword(false)}
-        />
-      )}
-      {addingClinic && (
-        <AddClinicDialog
-          onClose={() => setAddingClinic(false)}
-          onCreated={() => {
-            setAddingClinic(false);
-            void syncEngine.schedule(0);
-            void navigate({ to: '/workspace' });
-          }}
         />
       )}
       <HelpFeedbackDialog isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
