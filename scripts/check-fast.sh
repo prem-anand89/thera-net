@@ -15,9 +15,9 @@ fi
 tmp=$(mktemp -d)
 npx tsc --noEmit >"$tmp/tsc.log" 2>&1 & p1=$!
 # shellcheck disable=SC2086
-npx eslint $changed >"$tmp/eslint.log" 2>&1 & p2=$!
+npx eslint --cache --cache-strategy content $changed >"$tmp/eslint.log" 2>&1 & p2=$!
 # shellcheck disable=SC2086
-npx vitest related $changed --run --passWithNoTests >"$tmp/vitest.log" 2>&1 & p3=$!
+npx vitest related $changed --run --passWithNoTests --maxWorkers=2 >"$tmp/vitest.log" 2>&1 & p3=$!
 
 fail=0
 for pair in "typecheck:$p1:tsc" "lint:$p2:eslint" "tests:$p3:vitest"; do

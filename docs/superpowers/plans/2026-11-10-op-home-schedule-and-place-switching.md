@@ -69,3 +69,4 @@ Polish the operational workflow for clinics and therapists delivering both Outpa
 - **Commands**:
   - `npm run check:fast`
   - Update `FEATURES_AND_SCHEMA.md` documenting in-form place switching and unified OP/Home schedule.
+
