@@ -422,7 +422,7 @@ export function VisitLoggedCard({
         <button
           type="button"
           onClick={onDone}
-          className="col-span-4 min-h-11 py-2.5 px-3 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)] text-xs sm:text-sm font-semibold transition flex items-center justify-center"
+          className="col-span-4 min-h-11 py-2.5 px-3 rounded-xl bg-[var(--teal)] hover:bg-[var(--teal-strong)] text-white text-xs sm:text-sm font-semibold transition flex items-center justify-center shadow-xs"
         >
           Done
         </button>
@@ -430,7 +430,7 @@ export function VisitLoggedCard({
           type="button"
           aria-label="Log visit for next patient"
           onClick={onNewVisitNextPatient}
-          className="col-span-8 min-h-11 py-2.5 px-3 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--teal)] text-[var(--teal-strong)] text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
+          className="col-span-8 min-h-11 py-2.5 px-3 rounded-xl bg-[var(--surface)] hover:bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)] hover:border-[var(--teal)] text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs"
         >
           <NextPatientIcon />
           <span className="truncate">Log visit for next patient</span>

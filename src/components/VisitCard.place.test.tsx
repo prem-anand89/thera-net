@@ -4,7 +4,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
+  Link: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <a className={className}>{children}</a>
+  ),
 }));
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', name: 'Clinic' }) }));
 vi.mock('@/app/usePermissions', () => ({ usePermissions: () => ({ isAdmin: false, canViewClinicalNotes: false }) }));
@@ -42,18 +44,34 @@ function renderCard(d: VisitCardData) {
 }
 
 describe('SharedVisitCard place', () => {
-  it('shows the place for a visit away from the clinic', () => {
+  it('shows the place inline with Service (without creating a separate Place row)', () => {
     renderCard(data({ placeLabel: 'Home visit' }));
     expect(screen.getByText('Home visit')).toBeInTheDocument();
+    expect(screen.queryByText('Place')).not.toBeInTheDocument();
   });
   it('shows nothing for a clinic visit', () => {
     renderCard(data({ placeLabel: null }));
     expect(screen.queryByText('Home visit')).not.toBeInTheDocument();
     expect(screen.queryByText('Place')).not.toBeInTheDocument();
   });
-  it('shows Inpatient for a ward visit', () => {
+  it('shows Inpatient for a ward visit inline with Service', () => {
     renderCard(data({ placeLabel: 'Inpatient' }));
     expect(screen.getByText('Inpatient')).toBeInTheDocument();
+    expect(screen.queryByText('Place')).not.toBeInTheDocument();
+  });
+  it('allows long patient names to wrap rather than clipping/overlapping the bill amount', () => {
+    render(
+      <SharedVisitCard
+        data={data({ patientName: 'Siva Venkata Subramanyam' })}
+        showDate
+        showPatient
+        onInvoice={() => {}}
+        onDelete={() => {}}
+      />
+    );
+    const nameLink = screen.getByText('Siva Venkata Subramanyam');
+    expect(nameLink.className).not.toContain('whitespace-nowrap');
+    expect(nameLink.className).toContain('break-words');
   });
 });
 

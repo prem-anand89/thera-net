@@ -11,7 +11,8 @@ import { dayOfStay, splitWardBed, wardOf } from '@/domain/admissions';
 import { canBillInpatientStay } from '@/domain/departmentMoney';
 import { toLocalDateStr } from '@/domain/schedule';
 import { formatAmount } from '@/domain/money';
-import { filterChip, LoadingRows, Pill, SectionCard, pillAccent, pillNeutral } from '@/components/ui';
+import { formatDateDM } from '@/domain/fiscalYear';
+import { filterChip, LoadingRows, Pill, SectionCard, pillAccent, pillSmAccent, pillSmNeutral } from '@/components/ui';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { AddPatientSheet } from '@/features/patients/AddPatientSheet';
 import { AdmissionSheet } from '@/features/patients/AdmissionSheet';
@@ -123,6 +124,7 @@ export function InpatientsCard({ viewTherapistId }: InpatientsCardProps = {}) {
           bed,
           day,
           sessions,
+          totalSessions: sessions.length,
           lastSession,
           lastVisitId: lastSession?.id,
           todaySessions,
@@ -159,10 +161,12 @@ export function InpatientsCard({ viewTherapistId }: InpatientsCardProps = {}) {
       }));
   }, [rowsInScope]);
 
+  // A chosen ward that has since emptied (last patient discharged) falls back to All, so the card is never blank.
+  const activeWard = selectedWard !== 'all' && groups.some((g) => g.key === selectedWard) ? selectedWard : 'all';
   const displayedGroups = useMemo(() => {
-    if (selectedWard === 'all') return groups;
-    return groups.filter((g) => g.key === selectedWard);
-  }, [groups, selectedWard]);
+    if (activeWard === 'all') return groups;
+    return groups.filter((g) => g.key === activeWard);
+  }, [groups, activeWard]);
 
   const canAdmit = entitlements.can('inpatient');
   if (!wardOn || (data && data.stays.length === 0 && !canAdmit)) return null;
@@ -200,12 +204,12 @@ export function InpatientsCard({ viewTherapistId }: InpatientsCardProps = {}) {
                 <button
                   type="button"
                   onClick={() => setSelectedWard('all')}
-                  className={filterChip(selectedWard === 'all')}
+                  className={filterChip(activeWard === 'all')}
                 >
                   All <span className="ml-1 text-xs opacity-80">({rowsInScope.length})</span>
                 </button>
                 {groups.map((g) => {
-                  const active = selectedWard === g.key;
+                  const active = activeWard === g.key;
                   return (
                     <button
                       key={g.key || 'none'}
@@ -220,102 +224,177 @@ export function InpatientsCard({ viewTherapistId }: InpatientsCardProps = {}) {
               </div>
             )}
 
-            {displayedGroups.map((g) => (
-              <section key={g.key || 'none'} aria-label={g.label}>
-                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                  {g.label}
-                </h3>
-                <ul className="-mx-5 divide-y divide-[var(--border)] border-y border-[var(--border)]">
-                  {g.rows.map((row) => (
-                    <li
-                      key={row.stay.id}
-                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3"
-                    >
-                      <div className="min-w-[12rem] flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            to="/patients/$patientId"
-                            params={{ patientId: row.patient.id }}
-                            className="font-medium text-[var(--ink)] hover:text-[var(--teal)] hover:underline"
+            {displayedGroups.map((g) => {
+              const inpatientGridCols =
+                'tab:grid tab:grid-cols-[9.5rem_minmax(0,1fr)_7.5rem_6rem_10.5rem] desktop:grid-cols-[10.5rem_minmax(0,1fr)_8rem_6.5rem_15rem] tab:items-center tab:gap-2.5 desktop:gap-4';
+              return (
+                <section key={g.key || 'none'} aria-label={g.label}>
+                  <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                    {g.label}
+                  </h3>
+                  <div className="-mx-5 overflow-x-auto overflow-y-visible">
+                    <div className="min-w-full">
+                      <div className={`hidden ${inpatientGridCols} px-4 tab:px-5 py-2.5 border-y border-[var(--border)] bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}>
+                        <div>Patient & Bed</div>
+                        <div>Doctor & Condition</div>
+                        <div>Rounds Today</div>
+                        <div className="text-right">Unbilled</div>
+                        <div className="text-right">Actions</div>
+                      </div>
+                      <ul className="divide-y divide-[var(--border)] border-y border-[var(--border)] tab:border-t-0">
+                        {g.rows.map((row, i) => (
+                          <li
+                            key={row.stay.id}
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1.5 py-2.5 px-4 tab:px-5 ${inpatientGridCols} hover:bg-[var(--teal-light)] transition-colors ${
+                              i % 2 === 1 ? 'tab:bg-[var(--paper)]' : 'tab:bg-[var(--surface)]'
+                            }`}
                           >
-                            {row.patient.name}
-                          </Link>
-                          {row.bed && <Pill tone="slate">{row.bed}</Pill>}
-                          <Pill tone="slate">Day {row.day}</Pill>
-                          {row.seenToday > 0 ? (
-                            <Pill tone="green">
-                              Seen today
-                              {row.seenByNames.length > 0 ? ` · ${row.seenByNames.join(', ')}` : ''}
-                              {row.seenToday > 1 ? ` (${row.seenToday})` : ''}
-                            </Pill>
-                          ) : row.nextRoundTime ? (
-                            <Pill tone="teal">Next round {row.nextRoundTime}</Pill>
-                          ) : (
-                            <Pill tone="amber">Pending round</Pill>
-                          )}
-                        </div>
-                        <p className="mt-1 text-xs text-[var(--muted)]">
-                          {[
-                            row.stay.ipdNo && `IPD ${row.stay.ipdNo}`,
-                            row.stay.admittingDoctor &&
-                            `Dr. ${row.stay.admittingDoctor.replace(/^Dr\.?\s*/i, '')}`,
-                            row.patient.primaryCondition || row.lastSession?.condition,
-                            row.unbilledSessions.length > 0 &&
-                            `${row.unbilledSessions.length} session${row.unbilledSessions.length === 1 ? '' : 's'} · ${formatAmount(row.unbilledPaise)}`,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </p>
-                      </div>
+                            {/* Col 1: Patient & Bed */}
+                            <div className="min-w-0 tab:col-auto">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Link
+                                  to="/patients/$patientId"
+                                  params={{ patientId: row.patient.id }}
+                                  className="font-display text-sm font-medium text-[var(--ink)] hover:text-[var(--teal)] hover:underline truncate"
+                                >
+                                  {row.patient.name}
+                                </Link>
+                                {row.bed && <Pill tone="slate">{row.bed}</Pill>}
+                                <Pill tone="slate">Day {row.day}</Pill>
+                              </div>
+                              <div className="hidden tab:flex items-center gap-1.5 font-num text-xs text-[var(--muted)] mt-0.5 truncate">
+                                {row.stay.ipdNo && <span>IPD {row.stay.ipdNo}</span>}
+                                {row.stay.ipdNo && row.stay.admittedOn && <span>·</span>}
+                                {row.stay.admittedOn && <span>Adm {formatDateDM(row.stay.admittedOn)}</span>}
+                              </div>
+                            </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          className={pillNeutral}
-                          onClick={() => setEditingStay({ stay: row.stay, patient: row.patient })}
-                        >
-                          Edit stay
-                        </button>
-                        {canBill &&
-                          canBillInpatientStay(clinic) &&
-                          row.unbilledSessions.length > 0 &&
-                          row.unbilledPaise > 0 && (
-                            <button
-                              type="button"
-                              className={pillNeutral}
-                              onClick={() =>
-                                setInvoicingStay({
-                                  visitId: row.unbilledSessions[0].id,
-                                  visitIds: row.unbilledSessions.map((v) => v.id),
+                            {/* Col 2: Doctor & Condition */}
+                            <div className="col-span-2 text-xs tab:col-auto tab:text-sm text-[var(--muted)] min-w-0">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 tab:block">
+                                {row.stay.admittingDoctor ? (
+                                  <span className="font-medium text-[var(--ink)] truncate tab:block">
+                                    Dr. {row.stay.admittingDoctor.replace(/^Dr\.?\s*/i, '')}
+                                  </span>
+                                ) : (
+                                  <span className="text-[var(--muted)] font-normal hidden tab:block">—</span>
+                                )}
+                                {(row.patient.primaryCondition || row.lastSession?.condition) && (
+                                  <>
+                                    <span className="tab:hidden text-[var(--border)]">·</span>
+                                    <span className="truncate tab:block tab:text-xs text-[var(--muted)]">
+                                      {row.patient.primaryCondition || row.lastSession?.condition}
+                                    </span>
+                                  </>
+                                )}
+                                {row.stay.ipdNo && (
+                                  <span className="tab:hidden text-[var(--muted)]">
+                                    · IPD {row.stay.ipdNo}
+                                  </span>
+                                )}
+                                {row.stay.admittedOn && (
+                                  <span className="tab:hidden text-[var(--muted)] font-num">
+                                    · Adm {formatDateDM(row.stay.admittedOn)}
+                                  </span>
+                                )}
+                                {row.unbilledSessions.length > 0 && (
+                                  <span className="tab:hidden font-num font-medium text-[var(--ink)]">
+                                    · {row.unbilledSessions.length} sess · {formatAmount(row.unbilledPaise)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Col 3: Rounds Today */}
+                            <div className="col-start-2 row-start-1 justify-self-end shrink-0 tab:col-auto tab:row-auto tab:justify-self-start tab:min-w-0">
+                              {row.seenToday > 0 ? (
+                                <Pill tone="green">
+                                  Seen today
+                                  {row.seenByNames.length > 0 ? ` · ${row.seenByNames.join(', ')}` : ''}
+                                  {row.seenToday > 1 ? ` (${row.seenToday})` : ''}
+                                </Pill>
+                              ) : row.nextRoundTime ? (
+                                <Pill tone="teal">Next round {row.nextRoundTime}</Pill>
+                              ) : (
+                                <Pill tone="amber">Pending round</Pill>
+                              )}
+                            </div>
+
+                            {/* Col 4: Unbilled */}
+                            <div className="hidden tab:block text-right tab:col-auto">
+                              {row.unbilledSessions.length > 0 ? (
+                                <div>
+                                  <div className="font-num text-sm font-medium text-[var(--ink)]">
+                                    {formatAmount(row.unbilledPaise)}
+                                  </div>
+                                  <div className="text-xs text-[var(--muted)]">
+                                    {row.unbilledSessions.length} sess unbilled
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-sm text-[var(--muted)]">—</span>
+                                  {row.totalSessions > 0 && (
+                                    <div className="text-xs text-[var(--muted)] font-num">
+                                      {row.totalSessions} sess total
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Col 5: Actions */}
+                            <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-end gap-1.5 pt-1 border-t border-[var(--border)]/50 tab:col-auto tab:pt-0 tab:border-t-0">
+                              <button
+                                type="button"
+                                className={pillSmNeutral}
+                                onClick={() => setEditingStay({ stay: row.stay, patient: row.patient })}
+                              >
+                                Edit stay
+                              </button>
+                              {canBill &&
+                                canBillInpatientStay(clinic) &&
+                                row.unbilledSessions.length > 0 &&
+                                row.unbilledPaise > 0 && (
+                                  <button
+                                    type="button"
+                                    className={pillSmNeutral}
+                                    onClick={() =>
+                                      setInvoicingStay({
+                                        visitId: row.unbilledSessions[0].id,
+                                        visitIds: row.unbilledSessions.map((v) => v.id),
+                                        patientId: row.patient.id,
+                                        patientLabel: row.patient.name,
+                                        serviceLabel: `Inpatient stay, ${row.unbilledSessions.length} session${row.unbilledSessions.length === 1 ? '' : 's'}`,
+                                        isPackage: false,
+                                        alreadyCollected: false,
+                                      })
+                                    }
+                                  >
+                                    Bill stay
+                                  </button>
+                                )}
+                              <Link
+                                to="/visits/new"
+                                search={{
                                   patientId: row.patient.id,
-                                  patientLabel: row.patient.name,
-                                  serviceLabel: `Inpatient stay, ${row.unbilledSessions.length} session${row.unbilledSessions.length === 1 ? '' : 's'}`,
-                                  isPackage: false,
-                                  alreadyCollected: false,
-                                })
-                              }
-                            >
-                              Bill stay
-                            </button>
-                          )}
-                        <Link
-                          to="/visits/new"
-                          search={{
-                            patientId: row.patient.id,
-                            admissionId: row.stay.id,
-                            from: '/workspace',
-                            ...(row.lastVisitId ? { repeatVisitId: row.lastVisitId } : {}),
-                          }}
-                          className={row.seenToday > 0 ? pillNeutral : pillAccent}
-                        >
-                          {row.seenToday > 0 ? '+ Log another' : '+ Log session'}
-                        </Link>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+                                  admissionId: row.stay.id,
+                                  from: '/workspace',
+                                  ...(row.lastVisitId ? { repeatVisitId: row.lastVisitId } : {}),
+                                }}
+                                className={row.seenToday > 0 ? pillSmNeutral : pillSmAccent}
+                              >
+                                {row.seenToday > 0 ? '+ Log another' : '+ Log session'}
+                              </Link>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </SectionCard>

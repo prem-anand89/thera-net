@@ -786,7 +786,7 @@ export function ScheduleBookingsView({
       therapistId,
       requestNotes: request.notes ?? undefined,
       requestPreferredTimeText: request.preferredTimeText ?? undefined,
-        requestAsked: awaitingWants(request, today),
+      requestAsked: awaitingWants(request, today),
     });
   }
 
@@ -960,13 +960,13 @@ export function ScheduleBookingsView({
   const noShow = liveDay.filter((a) => a.status === 'no_show').length;
   const daySummary = liveDay.length
     ? [
-        `${liveDay.length} booked`,
-        upcoming ? `${upcoming} to come` : '',
-        arrived ? `${arrived} arrived` : '',
-        noShow ? `${noShow} no-show` : '',
-      ]
-        .filter(Boolean)
-        .join(' · ')
+      `${liveDay.length} booked`,
+      upcoming ? `${upcoming} to come` : '',
+      arrived ? `${arrived} arrived` : '',
+      noShow ? `${noShow} no-show` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
     : 'No appointments';
   const closureForDate = closures.find((range) => range.from <= date && range.to >= date)
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
@@ -990,15 +990,15 @@ export function ScheduleBookingsView({
     // On tablet and desktop Find a time / Reminders live in the page's own controls.
     ...(isPhone
       ? [
-          {
-            id: 'find-time',
-            label: findTime ? 'Back to schedule' : 'Find a time',
-            hint: findTime ? undefined : 'Free times by therapist',
-            icon: 'find' as const,
-            group: 'view' as const,
-            onSelect: () => setFindTime((current) => !current),
-          },
-        ]
+        {
+          id: 'find-time',
+          label: findTime ? 'Back to schedule' : 'Find a time',
+          hint: findTime ? undefined : 'Free times by therapist',
+          icon: 'find' as const,
+          group: 'view' as const,
+          onSelect: () => setFindTime((current) => !current),
+        },
+      ]
       : []),
     {
       id: 'show-cancelled',
@@ -1009,14 +1009,14 @@ export function ScheduleBookingsView({
     },
     ...(canManageAll
       ? ([
-          ...(isPhone
-            ? [{ id: 'reminders', label: 'Send reminders', hint: 'WhatsApp, one tap each', icon: 'bell' as const, group: 'actions' as const, onSelect: () => setReminderOpen(true) }]
-            : []),
-          { id: 'waitlist', label: 'Add to awaiting', hint: 'For an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
-          { id: 'closed-days', label: 'Set closed days', hint: 'Clinic holidays', icon: 'closed', group: 'manage', onSelect: () => setClosedSheetOpen(true) },
-          { id: 'assign-shift', label: 'Assign shift…', hint: 'Per therapist', icon: 'shift', group: 'manage', onSelect: () => chooseTherapist('shift') },
-          { id: 'working-hours', label: 'Working hours…', hint: 'Hours and breaks', icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },
-        ] satisfies ScheduleMenuItem[])
+        ...(isPhone
+          ? [{ id: 'reminders', label: 'Send reminders', hint: 'WhatsApp, one tap each', icon: 'bell' as const, group: 'actions' as const, onSelect: () => setReminderOpen(true) }]
+          : []),
+        { id: 'waitlist', label: 'Add to awaiting', hint: 'For an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
+        { id: 'closed-days', label: 'Set closed days', hint: 'Clinic holidays', icon: 'closed', group: 'manage', onSelect: () => setClosedSheetOpen(true) },
+        { id: 'assign-shift', label: 'Assign shift…', hint: 'Per therapist', icon: 'shift', group: 'manage', onSelect: () => chooseTherapist('shift') },
+        { id: 'working-hours', label: 'Working hours…', hint: 'Hours and breaks', icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },
+      ] satisfies ScheduleMenuItem[])
       : []),
     // Phones: "My hours" lives here so the tab row stays just Schedule · History.
     ...(isPhone && isTherapist && myTherapistId
@@ -1106,8 +1106,8 @@ export function ScheduleBookingsView({
                   onConfirm={confirmRequest}
                   onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
                   onMessage={messageAwaiting}
-                    canMessage={canMessageRequest}
-                    bookedNoteFor={bookedNoteForRequest}
+                  canMessage={canMessageRequest}
+                  bookedNoteFor={bookedNoteForRequest}
                   onSeeAll={() => setSchedule({ view: 'requests' })}
                 />
               </div>
@@ -1128,8 +1128,8 @@ export function ScheduleBookingsView({
                         summary: threeDayCountLabel(scopedAppointments, t.id, threeDays, showCancelled),
                       }))}
                       visibleIds={[]}
-                      onToggle={() => {}}
-                      onShowAll={() => {}}
+                      onToggle={() => { }}
+                      onShowAll={() => { }}
                       showLabel
                       sheet
                       single={{ selectedId: threeDayTherapist?.id ?? null, onSelect: setThreeDayPick }}
@@ -1434,9 +1434,9 @@ export function ScheduleBookingsView({
             }}
             onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
             onMessage={messageAwaiting}
-                    canMessage={canMessageRequest}
-                    bookedNoteFor={bookedNoteForRequest}
-            onSeeAll={() => {}}
+            canMessage={canMessageRequest}
+            bookedNoteFor={bookedNoteForRequest}
+            onSeeAll={() => { }}
           />
         )}
       </Panel>
@@ -1481,19 +1481,19 @@ export function ScheduleBookingsView({
         seriesFollowingCount={
           selectedAppointment?.seriesId
             ? (allAppointments ?? []).filter(
-                (a) =>
-                  a.seriesId === selectedAppointment.seriesId &&
-                  a.scheduledAt >= selectedAppointment.scheduledAt &&
-                  isActiveAppointmentStatus(a.status)
-              ).length
+              (a) =>
+                a.seriesId === selectedAppointment.seriesId &&
+                a.scheduledAt >= selectedAppointment.scheduledAt &&
+                isActiveAppointmentStatus(a.status)
+            ).length
             : undefined
         }
         onCancelSeries={
           selectedAppointment?.seriesId
             ? (appointment) =>
-                void bookingService
-                  .cancelAppointmentSeries(appointment.seriesId!, appointment.scheduledAt)
-                  .catch((error) => notify.error(toFriendlyMessage(error)))
+              void bookingService
+                .cancelAppointmentSeries(appointment.seriesId!, appointment.scheduledAt)
+                .catch((error) => notify.error(toFriendlyMessage(error)))
             : undefined
         }
         slotMinutes={slotMinutes}
@@ -1508,9 +1508,9 @@ export function ScheduleBookingsView({
         onStartNote={
           clinic.clinicalDocsEnabled && canViewClinicalNotes
             ? (appointment) => {
-                setSelectedId(null);
-                setStartNoteFor(appointment);
-              }
+              setSelectedId(null);
+              setStartNoteFor(appointment);
+            }
             : undefined
         }
       />
@@ -1675,25 +1675,23 @@ export function ScheduleBookingsView({
             ? 'Move outside clinic hours?'
             : pendingMove?.status === 'outside_therapist'
               ? (rosterById.get(pendingMove.target.therapistId ?? pendingMove.appointment.therapistId ?? '')?.name
-                  ? `Move outside ${rosterById.get(pendingMove.target.therapistId ?? pendingMove.appointment.therapistId ?? '')!.name}'s hours?`
-                  : 'Move outside working hours?')
+                ? `Move outside ${rosterById.get(pendingMove.target.therapistId ?? pendingMove.appointment.therapistId ?? '')!.name}'s hours?`
+                : 'Move outside working hours?')
               : pendingMove && pendingMove.target.therapistId !== pendingMove.appointment.therapistId
                 ? 'Move to another therapist?'
                 : 'Move to another date?'
         }
         message={
           pendingMove
-            ? `${pendingMove.appointment.patientName} → ${
-                pendingMove.target.therapistId !== pendingMove.appointment.therapistId
-                  ? `${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, `
-                  : ''
-              }${shortDate(pendingMove.target.date)}, ${minutesLabel(pendingMove.target.start)}.${
-                pendingMove.status === 'outside_clinic'
-                  ? ' Outside clinic hours.'
-                  : pendingMove.status === 'outside_therapist'
-                    ? ' Outside working hours.'
-                    : ''
-              }`
+            ? `${pendingMove.appointment.patientName} → ${pendingMove.target.therapistId !== pendingMove.appointment.therapistId
+              ? `${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, `
+              : ''
+            }${shortDate(pendingMove.target.date)}, ${minutesLabel(pendingMove.target.start)}.${pendingMove.status === 'outside_clinic'
+              ? ' Outside clinic hours.'
+              : pendingMove.status === 'outside_therapist'
+                ? ' Outside working hours.'
+                : ''
+            }`
             : ''
         }
         confirmLabel="Move"

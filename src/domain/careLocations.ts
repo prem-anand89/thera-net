@@ -19,6 +19,14 @@ export function clinicCareLocations(clinic: { careLocations?: readonly string[] 
   return set.length > 0 ? set : ['clinic'];
 }
 
+/**
+ * Inpatient stays & rounds toggle is currently restricted to Physio Clinic for testing
+ * before general release to other clinics.
+ */
+export function inpatientAvailableForClinic(clinic: { name?: string | null } | null | undefined): boolean {
+  return (clinic?.name ?? '').trim().toLowerCase() === 'physio clinic';
+}
+
 /** More than one location: only then does the app show a location choice, badge, filter or breakdown. */
 export function offersLocationChoice(clinic: { careLocations?: readonly string[] | null } | null | undefined): boolean {
   return clinicCareLocations(clinic).length > 1;

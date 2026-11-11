@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { PatientsList } from './PatientsPage';
 
@@ -62,5 +62,27 @@ describe('PatientsList chips', () => {
     expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'My patients' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /needs invoice/i })).not.toBeInTheDocument();
+  });
+
+  it('uses FY and Month dropdowns directly on the toolbar without duplicating period tabs or a Filters drawer', () => {
+    render(<PatientsList />);
+    expect(screen.queryByRole('group', { name: 'Patient period' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Filters/ })).not.toBeInTheDocument();
+
+    const fySelect = screen.getByRole('combobox', { name: 'Fiscal year' });
+    const monthSelect = screen.getByRole('combobox', { name: 'Period within fiscal year' });
+    expect(fySelect).toBeInTheDocument();
+    expect(monthSelect).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Search patients' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\+ Add/i })).toBeInTheDocument();
+
+    // Selecting "All time" hides the month selector cleanly
+    fireEvent.change(fySelect, { target: { value: 'all' } });
+    expect(screen.queryByRole('combobox', { name: 'Period within fiscal year' })).not.toBeInTheDocument();
+
+    // Selecting "Custom range…" reveals From / To date pickers
+    fireEvent.change(fySelect, { target: { value: 'custom' } });
+    expect(screen.getByLabelText('From date')).toBeInTheDocument();
+    expect(screen.getByLabelText('To date')).toBeInTheDocument();
   });
 });

@@ -7,9 +7,11 @@ import { paymentsForDepartment, advancesForDepartment } from '@/domain/departmen
 import { repos } from '@/services';
 import { formatAmount } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
-import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
+import { th, td, tdNum, thNum, SectionCard, Pill, chipSelectChevron } from '@/components/ui';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
 import { DatePresetBar, DAYBOOK_DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
+import { methodMatchesFilter } from './daybookFilters';
+import { ToolbarFilterToggle, ToolbarSearchInput } from '@/components/ToolbarControls';
 
 // Local Y/M/D components
 const toIsoDate = (d: Date) =>
@@ -27,6 +29,10 @@ export function DaybookPage() {
   const [from, setFrom] = useState(todayIso);
   const [to, setTo] = useState(todayIso);
   const [preset, setPreset] = useState<DatePreset>('today');
+  const [query, setQuery] = useState('');
+  const [methodFilter, setMethodFilter] = useState<'all' | 'cash' | 'upi' | 'card' | 'other' | 'partner'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'Bill Payment' | 'Advance Deposit'>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // Short, readable method text for the table (UPI/CASH stay capitalised as before; the partner reads in full).
   const methodText = (m: string) => (m === 'partner' ? paymentMethodLabel('partner', clinic) : m.toUpperCase());
 
@@ -69,7 +75,7 @@ export function DaybookPage() {
       setTo(lastMonthRange.to);
     }
   }, [preset, todayIso, yesterdayIso, weekRange, monthRange, lastMonthRange]);
-  
+
   const data = useLiveQuery(async () => {
     const payments = await db.payments.where('clinicId').equals(clinic.id)
       .filter(p => !!p.receivedDate && p.receivedDate.slice(0, 10) >= from && p.receivedDate.slice(0, 10) <= to)
@@ -80,15 +86,15 @@ export function DaybookPage() {
       .toArray();
 
     const visitIds = [...new Set(payments.map(p => p.visitId).filter(Boolean))];
-    const visits = visitIds.length > 0 
-      ? await db.visits.where('id').anyOf(visitIds).toArray() 
+    const visits = visitIds.length > 0
+      ? await db.visits.where('id').anyOf(visitIds).toArray()
       : [];
 
     const patientIds = [...new Set([
       ...advances.map(a => a.patientId),
       ...visits.map(v => v.patientId)
     ].filter(Boolean))];
-    
+
     const patients = patientIds.length > 0
       ? await db.patients.where('id').anyOf(patientIds).toArray()
       : [];
@@ -140,60 +146,60 @@ export function DaybookPage() {
 
     // 1. Regular Payments
     for (const p of deptPayments) {
-        if (p.advanceId) continue;
-        const amt = p.amountPaise;
-        if (p.method === 'cash') cash += amt;
-        else if (p.method === 'upi') upi += amt;
-        else if (p.method === 'card') card += amt;
-        else if (p.method === 'partner') partner += amt;
-        else other += amt;
+      if (p.advanceId) continue;
+      const amt = p.amountPaise;
+      if (p.method === 'cash') cash += amt;
+      else if (p.method === 'upi') upi += amt;
+      else if (p.method === 'card') card += amt;
+      else if (p.method === 'partner') partner += amt;
+      else other += amt;
 
-        const visit = visitById.get(p.visitId);
-        const pId = visit?.patientId;
-        const pName = pId ? (patientNameById.get(pId) ?? 'Unknown') : 'Unknown';
-        
-        let note = p.notes ?? '';
-        
-        if (visit && visit.adjustmentPaise < 0) {
-          const adjReason = visit.adjustmentReason || 'no reason';
-          const discountStr = `Included ${formatAmount(Math.abs(visit.adjustmentPaise))} discount (${adjReason})`;
-          note = note ? `${discountStr}. ${note}` : discountStr;
-        } else if (visit && visit.adjustmentPaise > 0) {
-          const adjReason = visit.adjustmentReason || 'no reason';
-          const topUpStr = `Included ${formatAmount(visit.adjustmentPaise)} top-up (${adjReason})`;
-          note = note ? `${topUpStr}. ${note}` : topUpStr;
-        }
+      const visit = visitById.get(p.visitId);
+      const pId = visit?.patientId;
+      const pName = pId ? (patientNameById.get(pId) ?? 'Unknown') : 'Unknown';
 
-        transactions.push({
-          id: p.id,
-          date: p.receivedDate,
-          patientName: pName,
-          type: 'Bill Payment',
-          method: p.method,
-          amount: amt,
-          notes: note
-        });
+      let note = p.notes ?? '';
+
+      if (visit && visit.adjustmentPaise < 0) {
+        const adjReason = visit.adjustmentReason || 'no reason';
+        const discountStr = `Included ${formatAmount(Math.abs(visit.adjustmentPaise))} discount (${adjReason})`;
+        note = note ? `${discountStr}. ${note}` : discountStr;
+      } else if (visit && visit.adjustmentPaise > 0) {
+        const adjReason = visit.adjustmentReason || 'no reason';
+        const topUpStr = `Included ${formatAmount(visit.adjustmentPaise)} top-up (${adjReason})`;
+        note = note ? `${topUpStr}. ${note}` : topUpStr;
+      }
+
+      transactions.push({
+        id: p.id,
+        date: p.receivedDate,
+        patientName: pName,
+        type: 'Bill Payment',
+        method: p.method,
+        amount: amt,
+        notes: note
+      });
     }
 
     // 2. New Advances collected
     for (const a of deptAdvances) {
-        const amt = a.amountPaise;
-        if (a.method === 'cash') cash += amt;
-        else if (a.method === 'upi') upi += amt;
-        else if (a.method === 'card') card += amt;
-        else if (a.method === 'partner') partner += amt;
-        else other += amt;
+      const amt = a.amountPaise;
+      if (a.method === 'cash') cash += amt;
+      else if (a.method === 'upi') upi += amt;
+      else if (a.method === 'card') card += amt;
+      else if (a.method === 'partner') partner += amt;
+      else other += amt;
 
-        const pName = patientNameById.get(a.patientId) ?? 'Unknown';
-        transactions.push({
-          id: a.id,
-          date: a.receivedDate,
-          patientName: pName,
-          type: 'Advance Deposit',
-          method: a.method,
-          amount: amt,
-          notes: a.notes ?? ''
-        });
+      const pName = patientNameById.get(a.patientId) ?? 'Unknown';
+      transactions.push({
+        id: a.id,
+        date: a.receivedDate,
+        patientName: pName,
+        type: 'Advance Deposit',
+        method: a.method,
+        amount: amt,
+        notes: a.notes ?? ''
+      });
     }
 
     transactions.sort((a, b) => b.date.localeCompare(a.date));
@@ -202,10 +208,40 @@ export function DaybookPage() {
     return { cash, upi, card, other, partner, total: cash + upi + card + other, transactions };
   }, [deptPayments, deptAdvances, data.patients, visitById]);
 
+  const activeFilterCount = [methodFilter !== 'all', typeFilter !== 'all'].filter(Boolean).length;
+  const filteredTransactions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return transactions.filter((t) => {
+      if (!methodMatchesFilter(t.method, methodFilter)) return false;
+      if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+      if (q) {
+        const match =
+          t.patientName.toLowerCase().includes(q) ||
+          t.notes.toLowerCase().includes(q) ||
+          t.type.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [transactions, query, methodFilter, typeFilter]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <DatePresetBar presets={DAYBOOK_DATE_PRESETS} value={preset} onChange={setPreset} />
+        {(query || activeFilterCount > 0) && (
+          <button
+            type="button"
+            className="text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={() => {
+              setQuery('');
+              setMethodFilter('all');
+              setTypeFilter('all');
+            }}
+          >
+            Reset filters
+          </button>
+        )}
         {preset === 'custom' && (
           <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
             <input
@@ -225,7 +261,57 @@ export function DaybookPage() {
             />
           </div>
         )}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <ToolbarSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search patient or note"
+            ariaLabel="Search transactions"
+            className="min-w-0 flex-1 sm:w-56 sm:flex-none"
+          />
+          <ToolbarFilterToggle
+            open={filtersOpen}
+            activeCount={activeFilterCount}
+            onToggle={() => setFiltersOpen((o) => !o)}
+          />
+        </div>
       </div>
+
+      {filtersOpen && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--ink)] shadow-sm">
+          <select
+            aria-label="Payment method"
+            className="h-9 min-h-9 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            style={chipSelectChevron}
+            value={methodFilter}
+            onChange={(e) =>
+              setMethodFilter(
+                e.target.value as 'all' | 'cash' | 'upi' | 'card' | 'other' | 'partner'
+              )
+            }
+          >
+            <option value="all">All payment modes</option>
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
+            <option value="card">Card</option>
+            <option value="other">Other (Bank/Cheque)</option>
+            <option value="partner">{paymentMethodLabel('partner', clinic)}</option>
+          </select>
+          <select
+            aria-label="Transaction type"
+            className="h-9 min-h-9 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            style={chipSelectChevron}
+            value={typeFilter}
+            onChange={(e) =>
+              setTypeFilter(e.target.value as 'all' | 'Bill Payment' | 'Advance Deposit')
+            }
+          >
+            <option value="all">All types</option>
+            <option value="Bill Payment">Bill Payment</option>
+            <option value="Advance Deposit">Advance Deposit</option>
+          </select>
+        </div>
+      )}
 
       <div className="max-w-xl">
         <SectionCard title={`Collections for ${from === to ? formatDateDMY(from) : `${formatDateDMY(from)} – ${formatDateDMY(to)}`}`}>
@@ -360,7 +446,7 @@ export function DaybookPage() {
               </tr>
             </thead>
             <tbody>
-              {transactions.map((t) => (
+              {filteredTransactions.map((t) => (
                 <tr key={t.id} className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                   <td className={td}>{formatDateDMY(t.date)}</td>
                   <td className={`${td} font-medium truncate`} title={t.patientName}>{t.patientName}</td>
@@ -374,19 +460,23 @@ export function DaybookPage() {
                   <td className={`${td} text-[var(--muted)] whitespace-normal break-words leading-snug`} title={t.notes}>{t.notes || '—'}</td>
                 </tr>
               ))}
-              {transactions.length === 0 && (
+              {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">No transactions in this period.</td>
+                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                    {transactions.length === 0 ? 'No transactions in this period.' : 'No transactions match filters.'}
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-          
+
           <div className="tab:hidden flex flex-col space-y-3">
-            {transactions.length === 0 && (
-              <div className="py-8 text-center text-[var(--muted)] text-sm">No transactions in this period.</div>
+            {filteredTransactions.length === 0 && (
+              <div className="py-8 text-center text-[var(--muted)] text-sm">
+                {transactions.length === 0 ? 'No transactions in this period.' : 'No transactions match filters.'}
+              </div>
             )}
-            {transactions.map((t) => (
+            {filteredTransactions.map((t) => (
               <div key={t.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-display font-medium text-[var(--ink)]">{t.patientName}</div>

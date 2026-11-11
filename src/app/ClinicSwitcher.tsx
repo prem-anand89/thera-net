@@ -3,14 +3,20 @@ import { useNavigate } from '@tanstack/react-router';
 import { setActiveClinic } from '@/app/useActiveClinic';
 import { syncEngine } from '@/sync/engine';
 import { AddClinicDialog } from '@/components/AddClinicDialog';
+import { initialsFor } from './accountInitials';
 import type { Clinic } from '@/domain/types';
 
+/** First word of the clinic name so the desktop/iPad-landscape header keeps room for modules. */
+function clinicFirstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
 /**
- * The header's clinic pill — where you are, kept visually separate from the
- * Thera.Net mark (the product) on the far left. Shows the clinic's own logo
- * (or its initial) and name. It is the one place to switch clinics (the
- * account menu no longer repeats it) and, for an admin, to add another
- * clinic. A non-admin with a single clinic gets a static label.
+ * The header's clinic pill — sits before the Place switcher (`DepartmentSwitch`)
+ * so clinic identity never collides with the user's own profile avatar on the right.
+ * Desktop & iPad landscape (`desktop:`): logo/initials + first name (+ caret if multiple clinics).
+ * iPad portrait & mobile (`< desktop:`): logo/initials only (+ caret if multiple clinics).
+ * Static badge when only one clinic is available (`Add another clinic` stays in AccountMenu).
  */
 export function ClinicSwitcher({
   clinic,
@@ -29,7 +35,7 @@ export function ClinicSwitcher({
   const [addingClinic, setAddingClinic] = useState(false);
   const navigate = useNavigate();
   const many = clinics.length > 1;
-  const hasMenu = many || isAdmin;
+  const hasMenu = many;
   const sorted = [...clinics].sort((a, b) => a.name.localeCompare(b.name));
 
   function toggleMenu() {
@@ -51,11 +57,12 @@ export function ClinicSwitcher({
     void navigate({ to: '/workspace' });
   }
 
+  const shortName = clinicFirstName(clinic.name);
   const identity = (
     <>
       <ClinicAvatar name={clinic.name} logoUrl={logoUrl} />
-      <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)] sm:max-w-[10rem] desktop:max-w-[14rem]">
-        {clinic.name}
+      <span className="hidden min-w-0 max-w-[8rem] truncate text-xs font-semibold text-[var(--ink)] desktop:inline">
+        {shortName}
       </span>
       {hasMenu && (
         <svg aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
@@ -64,11 +71,11 @@ export function ClinicSwitcher({
       )}
     </>
   );
-  // On iPad widths the nav shows only the active item's label (see Shell),
-  // which leaves room for the name; it truncates rather than squashing the
-  // avatar or chevron (both shrink-0).
-  const pill =
-    'flex min-h-10 min-w-0 max-w-full items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] py-1 pl-1 pr-3';
+  // Compact logo/initials pill on phone & iPad portrait (< desktop);
+  // logo/initials + clinic first word on desktop & iPad landscape (`desktop:`).
+  const pill = hasMenu
+    ? 'flex min-h-8 min-w-0 max-w-full items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--paper)] px-1.5 py-0.5 desktop:gap-2 desktop:px-2 desktop:py-1 transition-colors'
+    : 'flex min-h-8 min-w-0 max-w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 desktop:px-2 desktop:py-1';
 
   if (!hasMenu) {
     return (
@@ -88,7 +95,7 @@ export function ClinicSwitcher({
         aria-label={`Clinic: ${clinic.name}. ${many ? 'Switch clinic' : 'Clinic menu'}`}
         title={clinic.name}
         onClick={toggleMenu}
-        className={`${pill} hover:border-[var(--teal)]/40 hover:bg-[var(--surface)]`}
+        className={`${pill} hover:border-[var(--teal)]/40`}
       >
         {identity}
       </button>
@@ -153,21 +160,30 @@ export function ClinicSwitcher({
   );
 }
 
-/** The clinic's uploaded logo in a small rounded square, or its initial. */
-function ClinicAvatar({ name, logoUrl }: { name: string; logoUrl: string | null | undefined }) {
+/** The clinic's uploaded logo in a small rounded square, or its 2-letter initials. */
+export function ClinicAvatar({
+  name,
+  logoUrl,
+  size = 'md',
+}: {
+  name: string;
+  logoUrl: string | null | undefined;
+  size?: 'sm' | 'md';
+}) {
+  const dims = size === 'sm' ? 'h-5 w-5 rounded-md text-[10px]' : 'h-7 w-7 rounded-md text-xs';
   if (logoUrl) {
     return (
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-white">
-        <img src={logoUrl} alt="" className="h-full w-full object-contain p-0.5" />
+      <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-[var(--paper)] ${dims}`}>
+        <img src={logoUrl} alt="" className="h-full w-full object-contain" />
       </span>
     );
   }
   return (
     <span
       aria-hidden
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--ink)] text-xs font-semibold text-white"
+      className={`flex shrink-0 items-center justify-center rounded-md bg-[var(--ink)] font-semibold text-white ${dims}`}
     >
-      {name.trim().charAt(0).toUpperCase() || '?'}
+      {initialsFor(name)}
     </span>
   );
 }

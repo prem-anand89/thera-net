@@ -20,21 +20,25 @@ describe('TodayTherapistFilter', () => {
 });
 
 describe('TodayVisitsTotals', () => {
-  it('shows visits, billed, paid and due', () => {
+  it('shows billed, paid and due without redundant Visits count or Total label', () => {
     render(<TodayVisitsTotals totals={totals} label="Asha, today" showMoney />);
     const group = screen.getByRole('group', { name: 'Totals for the visits shown' });
     expect(group).toHaveTextContent('Asha, today');
-    expect(group).toHaveTextContent('Visits 3');
+    expect(group).not.toHaveTextContent('Visits 3');
     expect(group).toHaveTextContent(/Billed .*1,800/);
     expect(group).toHaveTextContent(/Paid .*1,000/);
     expect(group).toHaveTextContent(/Due .*800/);
   });
 
-  it('shows only the visit count without money rights', () => {
-    render(<TodayVisitsTotals totals={totals} label="Today" showMoney={false} />);
+  it('omits generic Total label when unfiltered', () => {
+    render(<TodayVisitsTotals totals={totals} label="Total" showMoney />);
     const group = screen.getByRole('group', { name: 'Totals for the visits shown' });
-    expect(group).toHaveTextContent('Visits 3');
-    expect(group).not.toHaveTextContent('Billed');
-    expect(group).not.toHaveTextContent('Due');
+    expect(group).not.toHaveTextContent('Total');
+    expect(group).toHaveTextContent(/Billed .*1,800/);
+  });
+
+  it('renders nothing without money rights and no therapist label', () => {
+    const { container } = render(<TodayVisitsTotals totals={totals} label="Total" showMoney={false} />);
+    expect(container.firstChild).toBeNull();
   });
 });

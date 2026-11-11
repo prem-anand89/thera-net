@@ -1757,11 +1757,10 @@ export function NewVisitPage() {
                 role="radio"
                 aria-checked={visitDept === 'clinic'}
                 aria-label="Clinic (OP)"
-                className={`rounded-full px-2.5 py-0.5 transition-colors ${
-                  visitDept === 'clinic'
+                className={`rounded-full px-2.5 py-0.5 transition-colors ${visitDept === 'clinic'
                     ? 'bg-[var(--teal)] text-white shadow-sm'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
+                  }`}
                 onClick={() => {
                   setLocation('clinic');
                   locationDecidedRef.current = true;
@@ -1774,11 +1773,10 @@ export function NewVisitPage() {
                 role="radio"
                 aria-checked={visitDept === 'home'}
                 aria-label="Home Care"
-                className={`rounded-full px-2.5 py-0.5 transition-colors ${
-                  visitDept === 'home'
+                className={`rounded-full px-2.5 py-0.5 transition-colors ${visitDept === 'home'
                     ? 'bg-[var(--sky)] text-white shadow-sm'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                }`}
+                  }`}
                 onClick={() => {
                   setLocation('home');
                   locationDecidedRef.current = true;

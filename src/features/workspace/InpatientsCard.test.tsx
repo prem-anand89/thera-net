@@ -191,6 +191,27 @@ describe('InpatientsCard', () => {
     expect(screen.getByText('Ravi')).toBeInTheDocument();
   });
 
+  it('falls back to All when the chosen ward empties, instead of a blank card', () => {
+    const two = {
+      stays: [
+        stay('s1', 'p1', { wardBed: 'Ortho, Bed 1' }),
+        stay('s2', 'p2', { wardBed: 'ICU, Bed 2' }),
+      ],
+      patients: [patient('p1', 'Asha'), patient('p2', 'Ravi')],
+      therapists: [],
+      appointments: [],
+      visits: [],
+    };
+    dataRef.current = two;
+    const { rerender } = render(<InpatientsCard />);
+    fireEvent.click(screen.getByRole('button', { name: /^ICU/ }));
+    expect(screen.queryByText('Asha')).toBeNull();
+    // Ravi is discharged: ICU no longer exists.
+    dataRef.current = { ...two, stays: [two.stays[0]] };
+    rerender(<InpatientsCard />);
+    expect(screen.getByText('Asha')).toBeInTheDocument();
+  });
+
   it('shows Bill stay button when clinic bills stay and unbilled sessions exist, hides when partner bills', () => {
     clinicRef.current = { id: 'c', careLocations: ['clinic', 'ward'], ipBilledByPartner: false };
     dataRef.current = {

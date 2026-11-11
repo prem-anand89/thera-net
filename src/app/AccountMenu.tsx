@@ -20,6 +20,7 @@ import { IconBell, IconCalendar, IconSettings, IconUser } from '@/components/Nav
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { BrandMark } from '@/components/BrandMark';
 import { AddClinicDialog } from '@/components/AddClinicDialog';
+import { ClinicAvatar } from './ClinicSwitcher';
 import { initialsFor } from './accountInitials';
 import type { Clinic } from '@/domain/types';
 
@@ -42,28 +43,24 @@ function Avatar({ name, photoUrl, size }: { name: string; photoUrl: string | nul
   );
 }
 
-function ClinicAvatar({ name, logoUrl }: { name: string; logoUrl: string | null | undefined }) {
-  if (logoUrl) {
-    return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-white">
-        <img src={logoUrl} alt="" className="h-full w-full object-contain p-0.5" />
-      </span>
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--ink)] text-[10px] font-semibold text-white"
-    >
-      {name.trim().charAt(0).toUpperCase() || '?'}
-    </span>
-  );
-}
-
 /**
  * The unified account and clinic hub. Houses personal profile, working hours,
  * notifications, and clinic settings & switching for admins and multi-clinic staff.
  */
+/**
+ * Short name for compact mobile header: first name if <= 8 chars, else initials.
+ */
+function mobileDisplayName(fullName: string): string {
+  const trimmed = fullName.trim();
+  const first = trimmed.split(/\s+/)[0] || trimmed;
+  if (first.length <= 8) return first;
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return first.slice(0, 6) + '…';
+}
+
 export function AccountMenu({
   active = false,
   displayName,
@@ -165,20 +162,27 @@ export function AccountMenu({
     <div className="relative">
       <button
         type="button"
-        className={`flex items-center gap-2 rounded-full p-0.5 hover:bg-[var(--paper)] sm:rounded-md sm:px-1.5 sm:py-1 ${active ? 'sm:bg-[var(--teal-light)] sm:ring-1 sm:ring-[var(--teal)]/40' : ''
+        className={`flex items-center gap-1.5 rounded-full p-0.5 hover:bg-[var(--paper)] sm:rounded-lg sm:px-1.5 sm:py-1 desktop:gap-2 ${active ? 'sm:bg-[var(--teal-light)] sm:ring-1 sm:ring-[var(--teal)]/40' : ''
           }`}
         aria-label="Account"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
         <Avatar name={name} photoUrl={photoUrl} size="sm" />
-        <div className="hidden max-w-[9rem] text-left desktop:block">
-          <span className="block truncate text-xs font-semibold text-[var(--ink)]">
+        <div className="flex flex-col text-left max-w-[4.75rem] desktop:max-w-[9rem]">
+          {/* Mobile & iPad portrait: first name (or initials if too long) */}
+          <span className="truncate text-xs font-semibold leading-tight text-[var(--ink)] desktop:hidden">
+            {mobileDisplayName(name)}
+          </span>
+          {/* Desktop & iPad landscape: full name */}
+          <span className="hidden truncate text-xs font-semibold leading-tight text-[var(--ink)] desktop:block">
             {name}
           </span>
-          <span className="block truncate text-[10px] text-[var(--muted)]">
-            {clinic.name}
-          </span>
+          {roleLabel && (
+            <span className="truncate text-[10px] leading-tight text-[var(--muted)] desktop:text-[11px]">
+              {roleLabel}
+            </span>
+          )}
         </div>
       </button>
 
@@ -207,7 +211,7 @@ export function AccountMenu({
                 className="mt-2.5 flex w-full items-center justify-between gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
               >
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <ClinicAvatar name={clinic.name} logoUrl={logoUrl} />
+                  <ClinicAvatar name={clinic.name} logoUrl={logoUrl} size="sm" />
                   <span className="truncate font-medium">{clinic.name}</span>
                 </div>
                 {(clinics.length > 1 || role === 'admin') && (

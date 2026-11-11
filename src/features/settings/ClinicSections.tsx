@@ -7,9 +7,9 @@ import { PhoneField } from '@/components/PhoneField';
 import { useMemo, useState } from 'react';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { type CareLocation, type Clinic } from '@/domain/types';
-import { CARE_LOCATION_LABELS, clinicCareLocations } from '@/domain/careLocations';
+import { CARE_LOCATION_LABELS, clinicCareLocations, inpatientAvailableForClinic } from '@/domain/careLocations';
 import { validateEmail } from '@/domain/publicBookingDays';
-import { ConfirmDialog, Field, inputCls, SectionCard, InfoTip } from '@/components/ui';
+import { ConfirmDialog, Field, inputCls, Pill, SectionCard, InfoTip } from '@/components/ui';
 import { OpenDaysStrip } from './OpenDaysStrip';
 import { withOpenDays } from '@/domain/operatingHours';
 import { LetterheadPreview } from './LetterheadPreview';
@@ -733,8 +733,10 @@ export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty:
     onDirtyChange
   );
   const entitlements = useEntitlements(clinic.id);
+  const inpatientEnabled = inpatientAvailableForClinic(clinic);
   const on = clinicCareLocations(form);
   const toggle = (loc: CareLocation, next: boolean) => {
+    if (loc === 'ward' && next && (!inpatientEnabled || !entitlements.can('inpatient'))) return;
     const list = next ? [...on, loc] : on.filter((l) => l !== loc);
     if (list.length === 0) return;
     set({ careLocations: clinicCareLocations({ careLocations: list }) });
@@ -779,7 +781,16 @@ export function CareLocationsSection({ onDirtyChange }: { onDirtyChange: (dirty:
             disabled={onlyOne && on.includes('home')}
             onChange={(v) => toggle('home', v)}
           />
-          {entitlements.planPending ? null : entitlements.can('inpatient') || on.includes('ward') ? (
+          {!inpatientEnabled ? (
+            <SwitchRow
+              label={CARE_LOCATION_LABELS.ward}
+              badge={<Pill tone="slate">Coming soon</Pill>}
+              hint="Admit patients, ward rounds, discharge bill."
+              checked={on.includes('ward')}
+              disabled={!on.includes('ward') || (onlyOne && on.includes('ward'))}
+              onChange={(v) => toggle('ward', v)}
+            />
+          ) : entitlements.planPending ? null : entitlements.can('inpatient') || on.includes('ward') ? (
             <>
               <SwitchRow
                 label={CARE_LOCATION_LABELS.ward}

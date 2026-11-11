@@ -9,9 +9,9 @@ import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { useDepartment } from '@/app/DepartmentContext';
-import { DepartmentPill } from '@/components/DepartmentSwitch';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import { inDepartment } from '@/domain/departments';
+import { offersLocationChoice } from '@/domain/careLocations';
 import { canBillInpatientStay, inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -58,6 +58,7 @@ import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { PatientsList } from '@/features/patients/PatientsPage';
 import { DaybookPage } from './DaybookPage';
 import { DatePresetBar, DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
+import { ToolbarFilterToggle, ToolbarSearchInput } from '@/components/ToolbarControls';
 import { partnerPaymentsByVisit } from '@/domain/paymentMethods';
 
 const PATIENT_SEARCH_LIMIT = 6;
@@ -137,7 +138,8 @@ export function visitToCardData(
   googleReviewUrl: string | null,
   details?: VisitDetails,
   partnerPaymentByVisitId?: Map<UUID, number>,
-  inpatientBilling?: 'stay_bill' | 'partner_billed' | null
+  inpatientBilling?: 'stay_bill' | 'partner_billed' | null,
+  _offersChoice = false
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -176,6 +178,8 @@ export function visitToCardData(
     age: p?.age ?? null,
     sex: p?.sex ?? null,
     condition: v.condition ?? null,
+    // Ledger is already filtered by active department (visible in subheader pill / department switcher)
+    placeLabel: null,
     serviceName: serviceName.get(v.serviceCatalogId) ?? '-',
     sessionIndex: v.sessionIndex ?? null,
     packageTotal: v.packageTotal ?? null,
@@ -636,7 +640,8 @@ export function LedgerPage() {
           clinic.googleReviewUrl ?? null,
           visitDetails.get(v.id),
           partnerPaymentByVisitId,
-          inpatientVisitBillingMode(v, clinic)
+          inpatientVisitBillingMode(v, clinic),
+          offersLocationChoice(clinic)
         )
       ),
     [
@@ -659,11 +664,9 @@ export function LedgerPage() {
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
       consultationNotes,
-      clinic.enablePatientComms,
       feedbackRequestByVisitId,
       responseByRequestId,
       googleReviewEligibleIds,
-      clinic.googleReviewUrl,
       visitDetails,
       clinic,
     ]
@@ -856,12 +859,13 @@ export function LedgerPage() {
             </Link>
           </span>
         )}
-        <div className="ml-auto hidden items-center gap-2 sm:flex">
-          <DepartmentPill department={department} full />
-          <Link to="/visits/new" search={{ from: '/ledger' }} className={`${btnPrimary} inline-flex items-center`}>
-            + New visit
-          </Link>
-        </div>
+        {recordsView === 'visits' && (
+          <div className="ml-auto hidden items-center gap-2 sm:flex">
+            <Link to="/visits/new" search={{ from: '/ledger' }} className={`${btnPrimary} inline-flex items-center`}>
+              + New visit
+            </Link>
+          </div>
+        )}
       </div>
 
       {recordsView === 'visits' && (
@@ -898,41 +902,14 @@ export function LedgerPage() {
             )}
             <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
               <div className="relative min-w-0 flex-1 sm:w-60 sm:flex-none">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--muted)]">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    aria-hidden="true"
-                    className="h-4 w-4"
-                  >
-                    <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8" />
-                    <path d="M13.5 13.5L18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <input
-                  type="search"
-                  aria-label="Find patient"
-                  className="h-10 min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-8 text-sm text-[var(--ink)] placeholder-[var(--muted)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 [&::-webkit-search-cancel-button]:hidden"
-                  placeholder="Search patient or ID"
+                <ToolbarSearchInput
                   value={patientQuery}
-                  onChange={(e) => setPatientQuery(e.target.value)}
+                  onChange={setPatientQuery}
+                  placeholder="Search patient or ID"
+                  ariaLabel="Find patient"
+                  className="w-full"
                   onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
                 />
-                {patientQuery && (
-                  <button
-                    type="button"
-                    aria-label="Clear search"
-                    className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setPatientQuery('');
-                    }}
-                  >
-                    ✕
-                  </button>
-                )}
                 {patientMatches.length > 0 && (
                   <div className="absolute left-0 sm:left-auto sm:right-0 z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-md">
                     {patientMatches.map((p) => (
@@ -958,38 +935,11 @@ export function LedgerPage() {
                 )}
               </div>
               <div className="hidden gap-2 sm:flex">{therapistSelect}</div>
-              <button
-                type="button"
-                aria-expanded={filtersOpen}
-                onClick={() => setFiltersOpen((current) => !current)}
-                className={`flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${activeFilterCount > 0
-                  ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
-                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                  }`}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5"
-                >
-                  <path
-                    d="M2 3.5h12M4.5 8h7M7 12.5h2"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span>Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
-                    {activeFilterCount}
-                  </span>
-                )}
-                <span className="text-xs opacity-60">{filtersOpen ? '▲' : '▼'}</span>
-              </button>
+              <ToolbarFilterToggle
+                open={filtersOpen}
+                activeCount={activeFilterCount}
+                onToggle={() => setFiltersOpen((current) => !current)}
+              />
               <div className="hidden tab:block">
                 <VisitColumnPicker
                   columnPrefs={visitColumnPrefs}

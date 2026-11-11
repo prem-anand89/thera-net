@@ -6,8 +6,8 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
 const logPayment = vi.fn();
-const mockVisits = new Map<string, any>();
-let mockOpenAdvances: any[] = [];
+const mockVisits = new Map<string, unknown>();
+let mockOpenAdvances: unknown[] = [];
 const applyAdvanceMock = vi.fn();
 
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1', hasPartner: false }) }));

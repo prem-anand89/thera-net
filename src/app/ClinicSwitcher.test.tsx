@@ -16,15 +16,23 @@ const clinic = (id: string, name: string) => ({ id, name }) as Clinic;
 describe('ClinicSwitcher (header clinic pill)', () => {
   afterEach(cleanup);
 
-  it('is a static label for a non-admin with one clinic', () => {
+  it('is a static pill with first word and initials when there is only one clinic (including admins)', () => {
     render(<ClinicSwitcher clinic={clinic('a', 'Apex Physio')} clinics={[clinic('a', 'Apex Physio')]} logoUrl={null} isAdmin={false} />);
-    expect(screen.getByText('Apex Physio')).toBeInTheDocument();
-    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('Apex')).toBeInTheDocument();
+    expect(screen.queryByText('Apex Physio')).not.toBeInTheDocument();
+    expect(screen.getByText('AP')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+
+    cleanup();
+    render(<ClinicSwitcher clinic={clinic('a', 'Physio Clinic')} clinics={[clinic('a', 'Physio Clinic')]} logoUrl={null} isAdmin />);
+    expect(screen.getByText('Physio')).toBeInTheDocument();
+    expect(screen.getByText('PC')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('lets an admin add a clinic even with one clinic', () => {
-    render(<ClinicSwitcher clinic={clinic('a', 'Apex Physio')} clinics={[clinic('a', 'Apex Physio')]} logoUrl={null} isAdmin />);
+  it('offers Add another clinic inside the dropdown when an admin has multiple clinics', () => {
+    const clinics = [clinic('a', 'Apex Physio'), clinic('b', 'Bay Rehab')];
+    render(<ClinicSwitcher clinic={clinics[0]} clinics={clinics} logoUrl={null} isAdmin />);
     fireEvent.click(screen.getByRole('button', { name: /Clinic: Apex Physio/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Add another clinic/ }));
     expect(screen.getByText('Add clinic dialog')).toBeInTheDocument();

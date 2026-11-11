@@ -694,7 +694,7 @@ export function PatientProfilePage() {
             </div>
             {upcomingAppointments.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--ink)]">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-[var(--teal)]" />
                   <span className="font-medium text-[var(--teal)]">Next appointment:</span>
                   <span className="font-num font-semibold">
@@ -1278,25 +1278,27 @@ function PaymentsSummarySection({
   return (
     <SideCard title="Payments">
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div>
+        <div className="rounded-lg bg-[var(--paper)] p-2 border border-[var(--border)]/60">
           <div className="font-num text-sm font-semibold text-[var(--ink)]">
             {formatAmount(billed)}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Billed</div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)] mt-0.5">Billed</div>
         </div>
-        <div>
+        <div className="rounded-lg bg-[var(--teal-light)]/60 p-2 border border-[var(--teal)]/20">
           <div className="font-num text-sm font-semibold text-[var(--teal)]">
             {formatAmount(collected)}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Collected</div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--teal-strong)] mt-0.5">Collected</div>
         </div>
-        <div>
+        <div className={`rounded-lg p-2 border ${outstanding > 0 ? 'bg-[var(--rust-light)]/60 border-[var(--rust)]/20' : 'bg-[var(--paper)] border-[var(--border)]/60'}`}>
           <div
             className={`font-num text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}
           >
             {formatAmount(outstanding)}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Outstanding</div>
+          <div className={`text-[10px] uppercase tracking-wide mt-0.5 ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
+            Outstanding
+          </div>
         </div>
       </div>
       {billCount > 0 && (

@@ -32,9 +32,9 @@ export function TodayTherapistFilter({
 }
 
 /**
- * Sums the visits the card is showing (all of them, not just the page on screen): visits, billed, paid, due.
- * Without `showMoney` only the visit count appears.
- * In inpatient mode, per-session Paid/Due are suppressed in favour of stay/partner billing summary.
+ * Sums the visits the card is showing (all of them, not just the page on screen): billed, paid, due
+ * (or stay/logged totals in IP). Count lives in the card header badge, so Visits N & generic "Total"
+ * labels are omitted to avoid duplication.
  */
 export function TodayVisitsTotals({
   totals,
@@ -43,10 +43,13 @@ export function TodayVisitsTotals({
   inpatientBillingMode,
 }: {
   totals: TodayTotals;
-  label: string;
+  label?: string;
   showMoney: boolean;
   inpatientBillingMode?: 'stay_bill' | 'partner_billed' | null;
 }) {
+  const displayLabel = label && label !== 'Total' && label !== 'Today' ? label : undefined;
+  if (!showMoney && !displayLabel) return null;
+
   const cell = (name: string, value: string, tone?: string) => (
     <span className="whitespace-nowrap">
       <span className="text-[var(--muted)]">{name}</span> <span className={`font-num font-semibold ${tone ?? 'text-[var(--ink)]'}`}>{value}</span>
@@ -56,13 +59,14 @@ export function TodayVisitsTotals({
     <div
       role="group"
       aria-label="Totals for the visits shown"
-      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-xs"
+      className={`flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-xs ${
+        displayLabel ? 'justify-between' : 'justify-end'
+      }`}
     >
-      <span className="font-medium text-[var(--ink)]">{label}</span>
-      <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        {cell('Visits', String(totals.visits))}
-        {showMoney && (
-          inpatientBillingMode === 'partner_billed' ? (
+      {displayLabel && <span className="font-medium text-[var(--ink)]">{displayLabel}</span>}
+      {showMoney && (
+        <span className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1">
+          {inpatientBillingMode === 'partner_billed' ? (
             cell('Logged', formatAmount(totals.billedPaise))
           ) : inpatientBillingMode === 'stay_bill' ? (
             cell('IP Bill', formatAmount(totals.billedPaise), 'text-[var(--teal)]')
@@ -72,9 +76,9 @@ export function TodayVisitsTotals({
               {cell('Paid', formatAmount(totals.paidPaise), 'text-[var(--teal)]')}
               {cell('Due', formatAmount(totals.duePaise), totals.duePaise > 0 ? 'text-[var(--rust)]' : undefined)}
             </>
-          )
-        )}
-      </span>
+          )}
+        </span>
+      )}
     </div>
   );
 }

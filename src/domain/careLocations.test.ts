@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, locationOf, offersBookingChoice, offersLocationChoice, placeLabelFor } from './careLocations';
+import { bookableLocations, CARE_LOCATION_LABELS, defaultBookingLocation, clinicCareLocations, homeCareOn, inpatientAvailableForClinic, locationOf, offersBookingChoice, offersLocationChoice, placeLabelFor } from './careLocations';
 
 describe('clinicCareLocations', () => {
   it('reads as clinic only until a clinic turns something on, including older rows and bad values', () => {
@@ -85,5 +85,14 @@ describe('offersBookingChoice', () => {
     expect(offersBookingChoice({ careLocations: ['clinic', 'home', 'ward'] })).toBe(true);
     expect(offersBookingChoice({ careLocations: ['clinic'] })).toBe(false);
     expect(offersLocationChoice({ careLocations: ['clinic', 'ward'] })).toBe(true);
+  });
+});
+
+describe('inpatientAvailableForClinic', () => {
+  it('allows only Physio Clinic while keeping other clinics gated', () => {
+    expect(inpatientAvailableForClinic({ name: 'Physio Clinic' })).toBe(true);
+    expect(inpatientAvailableForClinic({ name: '  physio clinic ' })).toBe(true);
+    expect(inpatientAvailableForClinic({ name: 'Apex Physio' })).toBe(false);
+    expect(inpatientAvailableForClinic(null)).toBe(false);
   });
 });

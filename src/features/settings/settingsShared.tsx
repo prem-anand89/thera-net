@@ -216,21 +216,26 @@ export function LockedCard({ id, title, feature }: { id: string; title: string; 
  */
 export function SwitchRow({
   label,
+  badge,
   hint,
   checked,
   onChange,
   disabled = false,
 }: {
   label: string;
+  badge?: ReactNode;
   hint?: ReactNode;
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
 }) {
   return (
-    <label className={`flex min-h-11 items-center justify-between gap-3 ${disabled ? 'opacity-70' : 'cursor-pointer'}`}>
+    <label className={`flex min-h-11 items-center justify-between gap-3 ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
       <span>
-        <span className="block text-sm font-medium text-[var(--ink)]">{label}</span>
+        <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--ink)]">
+          <span>{label}</span>
+          {badge}
+        </span>
         {hint && <span className="block text-xs text-[var(--muted)]">{hint}</span>}
       </span>
       {/* The input stays the real control (role="switch", keyboard, screen readers); the track and thumb are its picture. */}
@@ -241,7 +246,9 @@ export function SwitchRow({
         className="peer sr-only"
         checked={checked}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={(e) => {
+          if (!disabled) onChange(e.target.checked);
+        }}
       />
       <span
         aria-hidden="true"

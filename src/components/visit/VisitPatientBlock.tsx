@@ -18,19 +18,20 @@ export function PatientNameBlock({
 }) {
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <div className="flex min-w-0 items-center gap-1.5">
         <Link
           to="/patients/$patientId"
           params={{ patientId: data.patientId }}
           search={backTo ? { from: backTo } : undefined}
-          className="whitespace-nowrap font-display text-sm font-medium text-[var(--ink)] hover:underline"
+          title={data.patientName}
+          className="min-w-0 truncate break-words font-display text-sm font-medium text-[var(--ink)] hover:underline"
         >
           {data.patientName}
         </Link>
         {onEditPatient && (
           <button
             type="button"
-            className="text-[var(--muted)] hover:text-[var(--ink)]"
+            className="shrink-0 text-[var(--muted)] hover:text-[var(--ink)]"
             aria-label="Edit patient"
             title="Edit patient"
             onClick={onEditPatient}
@@ -39,7 +40,7 @@ export function PatientNameBlock({
           </button>
         )}
       </div>
-      <div className="text-xs text-[var(--muted)]">
+      <div className="truncate text-xs text-[var(--muted)]">
         {patientIdentityLine(data.mrno, data.age, data.sex)}
       </div>
     </div>

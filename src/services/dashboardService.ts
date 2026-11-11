@@ -360,12 +360,13 @@ export function createDashboardService(repos: Repos) {
       // package's earlier sessions and miscount its progress (or resurrect
       // a completed package as open). Volume is small; visits.list scans
       // the clinic index either way.
-      let [visits, catalog, patients, therapists] = await Promise.all([
+      const [allVisits, catalog, patients, therapists] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.catalog.list(clinicId, true),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
       ]);
+      let visits = allVisits;
       if (department) {
         visits = visits.filter((v) => inDepartment(department, v));
       }

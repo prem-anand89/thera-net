@@ -71,4 +71,16 @@ describe('Places you see patients', () => {
     expect(screen.queryByRole('switch', { name: /Inpatient/ })).toBeNull();
     expect(screen.getByText('Clinic plan and above')).toBeInTheDocument();
   });
+
+  it('disables the Inpatient toggle with Coming soon for clinics other than Physio Clinic', () => {
+    clinicRef.current = { id: 'c2', name: 'Apex Physio' };
+    inpatientOnPlan.current = true;
+    render(<CareLocationsSection onDirtyChange={vi.fn()} />);
+    const inpatientSwitch = sw('Inpatient');
+    expect(inpatientSwitch).toBeDisabled();
+    expect(inpatientSwitch).not.toBeChecked();
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    fireEvent.click(inpatientSwitch);
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
 });

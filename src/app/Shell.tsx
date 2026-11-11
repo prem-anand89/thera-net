@@ -41,6 +41,7 @@ import {
   IconMore,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
+import { ClinicSwitcher } from './ClinicSwitcher';
 import { ForeignPendingScreen } from './ForeignPendingScreen';
 import { purgeAllButOutbox } from './unsyncedWork';
 import { PreparingEscape } from './PreparingEscape';
@@ -431,7 +432,7 @@ export function Shell() {
               are: the clinic's own logo + name, and the clinic switcher),
               then sync and the account avatar. Keeping the clinic on the
               right, as its own bordered pill, stops it blurring into the
-              app brand. Width budget inside max-w-6xl:
+              app brand. Width budget inside max-w-7xl:
                 1. Only the clinic name shrinks (truncates). Nav and the
                    sync/account cluster are shrink-0, so a tight row eats
                    into the name rather than squeezing things you click.
@@ -443,7 +444,7 @@ export function Shell() {
                    expands with text at every width when there is.
                 4. The account trigger's name shows from desktop: only; the
                    dropdown repeats it anyway. */}
-            <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 tab:gap-4">
+            <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 tab:gap-4">
               <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
                 <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
               </Link>
@@ -476,7 +477,13 @@ export function Shell() {
                   ))}
                 </nav>
               )}
-              <div className="ml-auto flex min-w-0 items-center gap-2 tab:gap-3">
+              <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2 tab:gap-3">
+                <ClinicSwitcher
+                  clinic={clinic}
+                  clinics={clinics ?? []}
+                  logoUrl={logoUrl}
+                  isAdmin={role === 'admin'}
+                />
                 <DepartmentSwitch />
                 <div className="flex shrink-0 items-center gap-1 tab:gap-2">
                   {(role === 'admin' || role === 'front_desk') && (
@@ -517,7 +524,7 @@ export function Shell() {
           <UpdateBanner />
           <SyncStatusBanners />
           <main
-            className={`mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${shouldShowPhoneBottomNav(pathname)
+            className={`mx-auto max-w-7xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${shouldShowPhoneBottomNav(pathname)
               ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
               : 'pb-6'
               }`}

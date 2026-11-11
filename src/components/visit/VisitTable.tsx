@@ -6,14 +6,14 @@ import {
 } from '@/domain/types';
 import { formatAmount } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import { PackageThread, Pill, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
+import { PackageThread, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import type { PatientProfileBackTarget } from '@/app/router';
 
 import type { VisitCardData, VisitSelectionProps } from './types';
 import { treatmentsDisplayText } from './formatters';
 import { PatientNameBlock } from './VisitPatientBlock';
 import { SharedSplitLine, SharesRing } from './VisitSharedSplit';
-import { VisitServicesList, hasServiceDetails } from './VisitServiceDetails';
+import { VisitServicesList, VisitPlacePill, hasServiceDetails } from './VisitServiceDetails';
 import { PaymentStatusDisplay } from './VisitPaymentDisplay';
 import { NoteCell } from './VisitNotesFeedback';
 import { RowActionsMenu } from './VisitRowActions';
@@ -221,15 +221,17 @@ export function VisitTable({
                   switch (key) {
                     case 'service':
                       return (
-                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG} min-w-[13.5rem]`}>
                           {hasServiceDetails(row.details) && row.details.services.length > 0 ? (
-                            <VisitServicesList services={row.details.services} max={2} />
+                            <VisitServicesList
+                              services={row.details.services}
+                              max={2}
+                              trailing={row.placeLabel ? <VisitPlacePill label={row.placeLabel} /> : undefined}
+                            />
                           ) : (
-                            <div>{row.serviceName}</div>
-                          )}
-                          {row.placeLabel && (
-                            <div className="mt-1">
-                              <Pill tone="slate">{row.placeLabel}</Pill>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span>{row.serviceName}</span>
+                              {row.placeLabel && <span className="shrink-0"><VisitPlacePill label={row.placeLabel} /></span>}
                             </div>
                           )}
                           {row.sessionIndex && row.packageTotal && (
@@ -255,7 +257,7 @@ export function VisitTable({
                                 shares={row.details.shares}
                                 primaryName={row.therapistName}
                                 edited={row.creditsManual}
-                services={row.details?.services}
+                                services={row.details?.services}
                                 onEdit={row.canSplit && onSplit ? () => onSplit(row) : undefined}
                               />
                             )}
@@ -296,17 +298,17 @@ export function VisitTable({
                   />
                 </td>
                 {showActionsColumn && (
-                <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
-                  <NoteCell
-                    data={row}
-                    backTo={backTo}
-                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
-                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
-                    onAskForGoogleReview={
-                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
-                    }
-                  />
-                </td>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
+                    <NoteCell
+                      data={row}
+                      backTo={backTo}
+                      onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                      onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                      onAskForGoogleReview={
+                        onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                      }
+                    />
+                  </td>
                 )}
                 <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <RowActionsMenu

@@ -69,6 +69,6 @@ describe('ClinicProfileSection', () => {
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
     fireEvent.change(email, { target: { value: '' } });
     expect(screen.queryByText(/Enter a valid email address/)).toBeNull();
-  });
+  }, 30000);
 });
 

@@ -5,7 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import type { Invoice, Visit } from '@/domain/types';
 
 let mockVisits: Visit[] = [];
-let mockCatalog: { id: string; name: string }[] = [{ id: 's1', name: 'Physio' }];
+const mockCatalog: { id: string; name: string }[] = [{ id: 's1', name: 'Physio' }];
 
 vi.mock('dexie-react-hooks', () => ({
   useLiveQuery: (q: () => unknown) => {

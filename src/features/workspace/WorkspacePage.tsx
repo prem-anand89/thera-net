@@ -66,13 +66,14 @@ import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 import { resolveWorkspaceView, type WorkspaceViewChoice } from './workspaceView';
 import { WorkspaceViewToggle } from './WorkspaceViewToggle';
-import { TodayTherapistFilter, TodayVisitsTotals } from './TodayVisitsExtras';
-import { therapistsInRows, todayVisitTotals } from './todayTotals';
+import { TodayVisitsTotals } from './TodayVisitsExtras';
+import { todayVisitTotals } from './todayTotals';
 
 import { useClinicRole } from '@/app/useClinicRole';
 import { useDepartment } from '@/app/DepartmentContext';
 import { departmentHours } from '@/domain/departmentHours';
-import { inDepartment } from '@/domain/departments';
+import { inDepartment, DEPARTMENT_LABELS, therapistsInDepartment } from '@/domain/departments';
+import { offersLocationChoice } from '@/domain/careLocations';
 import { runningCharges, canBillInpatientStay, inpatientVisitBillingMode } from '@/domain/departmentMoney';
 import { collectionsLine } from '@/domain/collectionsByMethod';
 import { saveLedgerPrefs } from '@/features/visits/ledgerPrefs';
@@ -152,7 +153,8 @@ export function todayRowToCardData(
   googleReviewEligibleIds: Set<string>,
   googleReviewUrl: string | null,
   details?: VisitDetails,
-  inpatientBilling?: 'stay_bill' | 'partner_billed' | null
+  inpatientBilling?: 'stay_bill' | 'partner_billed' | null,
+  _offersChoice = false
 ): VisitCardData {
   const { canModify, canDelete } = visitPermissions({
     isAdmin,
@@ -179,6 +181,8 @@ export function todayRowToCardData(
     age: row.age,
     sex: row.sex,
     condition: row.condition,
+    // Section header already carries the active department badge; omit per row to avoid clutter
+    placeLabel: null,
     canEdit: canModify,
     serviceName: row.serviceName,
     sessionIndex: row.sessionIndex,
@@ -316,9 +320,25 @@ export function WorkspacePage() {
   // The person's own All | Mine choice (null until they make one); what it means is worked out on every render from
   // the role and therapist link, so it is right once those have loaded (see `resolveWorkspaceView`).
   const [viewChoice, setViewChoice] = useState<WorkspaceViewChoice | null>(null);
+  const [selectedTherapistId, setSelectedTherapistId] = useState('');
   const workspaceView = resolveWorkspaceView(scope, viewChoice);
   const workspaceMineOnly = workspaceView.mineOnly;
-  const viewTherapistId = workspaceView.viewTherapistId;
+  const deptTherapists = useMemo(
+    () =>
+      therapistsInDepartment(department, workspaceTherapists ?? []).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
+    [workspaceTherapists, department]
+  );
+  const scopedTherapistSelectId =
+    !workspaceMineOnly &&
+      scope.isClinicWideView &&
+      deptTherapists.some((t) => t.id === selectedTherapistId)
+      ? selectedTherapistId
+      : '';
+  const viewTherapistId = workspaceMineOnly
+    ? workspaceView.viewTherapistId
+    : scopedTherapistSelectId || workspaceView.viewTherapistId;
 
   const expectedToday = useMemo(() => {
     const todayStr = toLocalDateStr(new Date());
@@ -828,19 +848,11 @@ export function WorkspacePage() {
         ? [collectedCell, duesCell]
         : [collectedCell];
 
-  // Today's visits can be narrowed to one therapist when the card shows more than the viewer's own.
-  const [visitTherapistId, setVisitTherapistId] = useState('');
   const visitsInDept = useMemo(
     () => (today?.visits ?? []).filter((v) => inDepartment(department, v)),
     [today, department]
   );
-  const therapistOptions = useMemo(() => therapistsInRows(visitsInDept), [visitsInDept]);
-  const visitsFilterId =
-    !workspaceMineOnly && therapistOptions.some((o) => o.id === visitTherapistId) ? visitTherapistId : '';
-  const visitsInView = useMemo(
-    () => (visitsFilterId ? visitsInDept.filter((v) => v.therapistId === visitsFilterId) : visitsInDept),
-    [visitsInDept, visitsFilterId]
-  );
+  const visitsInView = visitsInDept;
   const visitTotals = useMemo(() => todayVisitTotals(visitsInView), [visitsInView]);
 
   const todayRows = useMemo(
@@ -864,7 +876,8 @@ export function WorkspacePage() {
             googleReviewEligibleIds,
             clinic.googleReviewUrl ?? null,
             todayDetails.get(row.visitId),
-            inpatientVisitBillingMode({ location: row.location, admissionId: row.admissionId }, clinic)
+            inpatientVisitBillingMode({ location: row.location, admissionId: row.admissionId }, clinic),
+            offersLocationChoice(clinic)
           )
         )
         : [],
@@ -880,15 +893,14 @@ export function WorkspacePage() {
       treatmentName,
       invoicedSiblingGroupIds,
       consultationNotes,
-      clinic.enablePatientComms,
+      clinic,
       feedbackRequestByVisitId,
       responseByRequestId,
       googleReviewEligibleIds,
-      clinic.googleReviewUrl,
       todayDetails,
     ]
   );
-  const todayList = useShowMore(todayRows, `${todayStr}|${workspaceMineOnly}|${visitsFilterId}`, 10);
+  const todayList = useShowMore(todayRows, `${todayStr}|${workspaceMineOnly}|${scopedTherapistSelectId}`, 10);
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
   const dueByVisitId = new Map(visitsInDept.map((row) => [row.visitId, hasDue(row.paymentState)]));
@@ -1163,14 +1175,55 @@ export function WorkspacePage() {
         )}
       </header>
 
-      {workspaceView.canToggle && (
-        <WorkspaceViewToggle
-          mineOnly={workspaceMineOnly}
-          onChange={(next) => {
-            setViewChoice(next);
-            setVisitTherapistId('');
-          }}
-        />
+      {(workspaceView.canToggle || (scope.isClinicWideView && deptTherapists.length > 1)) && (
+        workspaceView.canToggle ? (
+          <WorkspaceViewToggle
+            mineOnly={workspaceMineOnly}
+            onChange={(next) => {
+              setViewChoice(next);
+              setSelectedTherapistId('');
+            }}
+            extra={
+              deptTherapists.length > 1 ? (
+                <select
+                  aria-label="Filter by therapist"
+                  className={chipSelect}
+                  style={chipSelectChevron}
+                  value={workspaceMineOnly ? '' : scopedTherapistSelectId}
+                  onChange={(e) => {
+                    setViewChoice('all');
+                    setSelectedTherapistId(e.target.value);
+                  }}
+                >
+                  <option value="">All therapists</option>
+                  {deptTherapists.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <span className="text-xs text-[var(--muted)]">Showing</span>
+            <select
+              aria-label="Filter by therapist"
+              className={chipSelect}
+              style={chipSelectChevron}
+              value={scopedTherapistSelectId}
+              onChange={(e) => setSelectedTherapistId(e.target.value)}
+            >
+              <option value="">All therapists</option>
+              {deptTherapists.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )
       )}
 
       {scope.isUnlinkedTherapist && (
@@ -1273,14 +1326,27 @@ export function WorkspacePage() {
         />
       )}
 
-      {department === 'ward' && (
-        <InpatientsCard
-          viewTherapistId={workspaceMineOnly ? scope.myTherapistId : (visitsFilterId || undefined)}
-        />
-      )}
+      {department === 'ward' && <InpatientsCard viewTherapistId={viewTherapistId} />}
 
       <SectionCard
-        title="Today's visits"
+        title={
+          <span className="flex items-center gap-2">
+            <span>Today's visits</span>
+            {offersLocationChoice(clinic) && (
+              <Pill
+                tone={
+                  department === 'home'
+                    ? 'sky'
+                    : department === 'ward'
+                      ? 'plum'
+                      : 'teal'
+                }
+              >
+                {DEPARTMENT_LABELS[department]}
+              </Pill>
+            )}
+          </span>
+        }
         badge={
           visitsInView.length > 0 ? (
             <span className="font-num rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-semibold text-[var(--ink)]">
@@ -1290,16 +1356,11 @@ export function WorkspacePage() {
         }
         action={
           visitsInView.length > 0 ? (
-            <div className="flex items-center gap-2">
-              {!workspaceMineOnly && therapistOptions.length > 1 && (
-                <TodayTherapistFilter options={therapistOptions} value={visitsFilterId} onChange={setVisitTherapistId} />
-              )}
-              <div className="hidden tab:block">
-                <VisitColumnPicker
-                  columnPrefs={visitColumnPrefs}
-                  onColumnPrefsChange={setVisitColumnPref}
-                />
-              </div>
+            <div className="hidden tab:block">
+              <VisitColumnPicker
+                columnPrefs={visitColumnPrefs}
+                onColumnPrefsChange={setVisitColumnPref}
+              />
             </div>
           ) : null
         }
@@ -1365,7 +1426,11 @@ export function WorkspacePage() {
             <ShowMoreFooter list={todayList} noun="visits" />
             <TodayVisitsTotals
               totals={visitTotals}
-              label={therapistOptions.find((o) => o.id === visitsFilterId)?.name ?? 'Total'}
+              label={
+                scopedTherapistSelectId
+                  ? therapistRoster.get(scopedTherapistSelectId)?.name
+                  : undefined
+              }
               showMoney={canBill || canCollectPayment}
               inpatientBillingMode={
                 department === 'ward'

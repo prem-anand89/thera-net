@@ -15,8 +15,9 @@ const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 import { DatePresetBar, type DatePreset } from '@/components/DatePresetBar';
+import { ToolbarFilterToggle, ToolbarSearchInput } from '@/components/ToolbarControls';
 import { remindToPay } from './remindToPay';
-import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard, KebabMenu, menuItem, pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
+import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard, KebabMenu, menuItem, chipSelectChevron, pillSmPrimary, pillSmAccent, pillSmNeutral } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -66,6 +67,9 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   const [from, setFrom] = useState(toIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [to, setTo] = useState(toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'outstanding'>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
@@ -203,18 +207,30 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   }
 
   const filteredInvoices = useMemo(() => {
+    const q = query.trim().toLowerCase();
     let filtered = deptInvoices;
     if (from) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) >= from);
     if (to) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) <= to);
+    if (q) {
+      filtered = filtered.filter(
+        (i) =>
+          i.invoiceNo.toLowerCase().includes(q) ||
+          i.patientSnapshot.name.toLowerCase().includes(q) ||
+          (i.patientSnapshot.mrno ?? '').toLowerCase().includes(q)
+      );
+    }
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((i) => invoiceStatus(i.id) === statusFilter);
+    }
     return filtered;
-  }, [deptInvoices, from, to]);
+  }, [deptInvoices, from, to, query, statusFilter, invoiceStatus]);
 
   const sortedInvoices = useMemo(
     () => applySort(filteredInvoices, INVOICE_COMPARATORS, sort),
     [filteredInvoices, sort]
   );
 
-  const invPager = usePagination(sortedInvoices, `${from}|${to}|${sort.key}|${sort.dir}`, 'invoices');
+  const invPager = usePagination(sortedInvoices, `${from}|${to}|${query}|${statusFilter}|${sort.key}|${sort.dir}`, 'invoices');
   const needsReceiptPager = usePagination(needsReceipt ?? [], 'needs-receipt', 'invoices-needs-receipt', 10);
 
   const supersededInvoiceIds = useMemo(
@@ -290,51 +306,91 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <DatePresetBar value={datePreset} onChange={applyDatePreset} />
-          {datePreset === 'custom' && (
-            <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <input
-                type="date"
-                aria-label="From date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
-              />
-              <span className="font-medium text-[var(--muted)]">–</span>
-              <input
-                type="date"
-                aria-label="To date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
-              />
-            </div>
-          )}
+      <div className="flex flex-wrap items-center gap-2">
+        <DatePresetBar value={datePreset} onChange={applyDatePreset} />
+        {(statusFilter !== 'all' || query) && (
+          <button
+            type="button"
+            className="text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={() => {
+              setQuery('');
+              setStatusFilter('all');
+            }}
+          >
+            Reset filters
+          </button>
+        )}
+        {datePreset === 'custom' && (
+          <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+            <input
+              type="date"
+              aria-label="From date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+            />
+            <span className="font-medium text-[var(--muted)]">–</span>
+            <input
+              type="date"
+              aria-label="To date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+            />
+          </div>
+        )}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <ToolbarSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search invoice or patient"
+            ariaLabel="Search invoices"
+            className="min-w-0 flex-1 sm:w-56 sm:flex-none"
+          />
+          <ToolbarFilterToggle
+            open={filtersOpen}
+            activeCount={statusFilter !== 'all' ? 1 : 0}
+            onToggle={() => setFiltersOpen((o) => !o)}
+          />
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      {filtersOpen && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--ink)] shadow-sm">
+          <select
+            aria-label="Invoice status"
+            className="h-9 min-h-9 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            style={chipSelectChevron}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'paid' | 'outstanding')}
+          >
+            <option value="all">All statuses</option>
+            <option value="outstanding">Outstanding</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 desktop:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Invoice Collections</div>
           <div className="text-2xl font-display font-semibold text-[var(--ink)]">
             {formatAmount(totalCollected)}
           </div>
         </div>
-        <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Outstanding Invoices</div>
           <div className="text-2xl font-display font-semibold text-[var(--rust)]">
             {formatAmount(totalOutstanding)}
           </div>
         </div>
-        <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Invoiced</div>
           <div className="text-2xl font-display font-semibold text-[var(--ink)]">
             {formatAmount(totalInvoiced)}
           </div>
         </div>
-        <div className="flex-1 min-w-48 rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)] p-4">
+        <div className="rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)] p-4">
           <div className="text-xs text-[var(--teal-strong)] mb-1">Unbilled Visits</div>
           <div className="text-2xl font-display font-semibold text-[var(--teal-strong)]">
             {formatAmount(unbilledTotal)}
@@ -510,23 +566,21 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
           </div>
 
           <div className="hidden tab:block overflow-x-auto">
-            <table className="w-full min-w-[980px] table-fixed text-sm">
+            <table className="w-full min-w-[860px] table-fixed text-sm">
               <colgroup>
                 <col className="w-32" />
                 <col className="w-24" />
-                <col className="w-40" />
-                <col className="w-24" />
+                <col className="w-48" />
                 <col className="w-28" />
                 <col className="w-24" />
                 <col className="w-36" />
-                <col className="w-72" />
+                <col className="w-52" />
               </colgroup>
               <thead>
                 <tr className="border-b border-[var(--border)]">
                   <SortHeader label="Invoice No" k="no" sort={sort} firstDir="desc" />
                   <SortHeader label="Date" k="date" sort={sort} firstDir="desc" />
                   <SortHeader label="Patient" k="patient" sort={sort} />
-                  <th className={th}>Patient ID</th>
                   <SortHeader label="Total" k="total" sort={sort} numeric firstDir="desc" />
                   <th className={th}>Mode</th>
                   <SortHeader label="Status" k="status" sort={sort} />
@@ -539,13 +593,17 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                   const status = invoiceStatus(inv.id);
                   const { paidPaise, remainingPaise } = balanceFor(inv);
                   const display = invoiceDisplayStatus({ isSuperseded, status, paidPaise });
-              const isPartial = display.isPartial;
+                  const isPartial = display.isPartial;
                   return (
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
                       <td className={td}>{formatDateDM(inv.issuedAt)}</td>
-                      <td className={`${td} font-display truncate`} title={inv.patientSnapshot.name}>{inv.patientSnapshot.name}</td>
-                      <td className={td}>{inv.patientSnapshot.mrno}</td>
+                      <td className={td}>
+                        <div className="font-display truncate" title={inv.patientSnapshot.name}>
+                          {inv.patientSnapshot.name}
+                        </div>
+                        <div className="text-xs text-[var(--muted)]">{inv.patientSnapshot.mrno}</div>
+                      </td>
                       <td className={tdNum}>{formatAmount(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
@@ -567,7 +625,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
                 })}
                 {invoices !== undefined && sortedInvoices.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-3">
+                    <td colSpan={7} className="p-3">
                       {invoicesEmpty}
                     </td>
                   </tr>

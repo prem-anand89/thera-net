@@ -9,7 +9,8 @@ import { DepartmentProvider } from '@/app/DepartmentContext';
 import { DepartmentSwitch, DepartmentPill } from './DepartmentSwitch';
 
 const multiClinic = { id: 'c1', careLocations: ['clinic', 'home', 'ward'] } as unknown as Clinic;
-const singleClinic = { id: 'c2', careLocations: ['clinic'] } as unknown as Clinic;
+const twoPlaceClinic = { id: 'c2', careLocations: ['clinic', 'home'] } as unknown as Clinic;
+const singleClinic = { id: 'c3', careLocations: ['clinic'] } as unknown as Clinic;
 
 describe('DepartmentSwitch', () => {
   beforeEach(async () => {
@@ -26,71 +27,73 @@ describe('DepartmentSwitch', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders desktop segmented control with aria-pressed on the active place', () => {
+  it('renders segmented toggle for desktop when clinic has 2 places', () => {
     render(
-      <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
+      <DepartmentProvider clinic={twoPlaceClinic} userId="u1" role="admin" departments={null}>
         <DepartmentSwitch />
       </DepartmentProvider>
     );
 
-    const opButtons = screen.getAllByRole('button', { name: 'OP' });
-    const opSegment = opButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    expect(opSegment).toHaveAttribute('aria-pressed', 'true');
-
-    const homeButtons = screen.getAllByRole('button', { name: 'Home' });
-    const homeSegment = homeButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    expect(homeSegment).toHaveAttribute('aria-pressed', 'false');
-
-    const ipButtons = screen.getAllByRole('button', { name: 'IP' });
-    const ipSegment = ipButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    expect(ipSegment).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('group', { name: 'Place switch' })).toBeInTheDocument();
+    const opButton = screen.getAllByRole('button', { name: 'OP' }).find((b) => b.getAttribute('aria-pressed') !== null);
+    expect(opButton).toHaveAttribute('aria-pressed', 'true');
+    const homeButton = screen.getAllByRole('button', { name: 'Home' }).find((b) => b.getAttribute('aria-pressed') !== null);
+    expect(homeButton).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('clicking a place switches the active place', async () => {
+  it('shifts to compact dropdown everywhere when clinic has 3 places (OP, Home, IP)', () => {
     render(
       <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
         <DepartmentSwitch />
       </DepartmentProvider>
     );
 
-    const homeButtons = screen.getAllByRole('button', { name: 'Home' });
-    const homeSegment = homeButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    expect(homeSegment).toBeDefined();
-
-    await act(async () => {
-      fireEvent.click(homeSegment!);
-    });
-
-    await waitFor(() => {
-      const updatedHome = screen.getAllByRole('button', { name: 'Home' }).find((b) => b.getAttribute('aria-pressed') !== null);
-      expect(updatedHome).toHaveAttribute('aria-pressed', 'true');
-    });
-
-    const opButtons = screen.getAllByRole('button', { name: 'OP' });
-    const opSegment = opButtons.find((b) => b.getAttribute('aria-pressed') !== null);
-    expect(opSegment).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('group', { name: 'Place switch' })).not.toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: /Place: OP\. Switch place/ });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
   });
 
-  it('opens mobile menu, allows choosing a place, and closes', async () => {
+  it('opens dropdown menu, lists all visible places, switches place, and closes', async () => {
     render(
       <DepartmentProvider clinic={multiClinic} userId="u1" role="admin" departments={null}>
         <DepartmentSwitch />
       </DepartmentProvider>
     );
 
-    const mobileTrigger = screen.getByRole('button', { name: /Place: OP\. Switch place/ });
-    expect(mobileTrigger).toBeInTheDocument();
-
+    const trigger = screen.getByRole('button', { name: /Place: OP\. Switch place/ });
     await act(async () => {
-      fireEvent.click(mobileTrigger);
+      fireEvent.click(trigger);
     });
 
     const menu = screen.getByRole('menu', { name: /Switch place/ });
     expect(menu).toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /Outpatient \(OP\)/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemradio', { name: /Home care/ })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('menuitemradio', { name: /Inpatient \(IP\)/ })).toHaveAttribute('aria-checked', 'false');
 
-    const ipMenuItem = screen.getByRole('menuitem', { name: /IP/ });
     await act(async () => {
-      fireEvent.click(ipMenuItem);
+      fireEvent.keyDown(menu, { key: 'Escape' });
+    });
+    expect(screen.queryByRole('menu', { name: /Switch place/ })).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Place: OP\. Switch place/ }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Home care/ }));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu', { name: /Switch place/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Place: Home\. Switch place/ })).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Place: Home\. Switch place/ }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Inpatient \(IP\)/ }));
     });
 
     await waitFor(() => {

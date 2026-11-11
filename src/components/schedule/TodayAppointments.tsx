@@ -5,13 +5,14 @@ import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
-import { Pill, pillSmAccent, pillSmDanger, pillSmNeutral, pillSmPrimary } from '@/components/ui';
+import { Pill, TherapistPill, pillSmAccent, pillSmDanger, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { useShowMore, ShowMoreFooter } from '@/components/ShowMore';
 import { partitionTodayAppointments } from './todayPartition';
 import { AwaitingList } from './AwaitingList';
 import { appointmentFill } from './scheduleColors';
 import { PatientFlagPills } from './PatientFlagPills';
 import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
+import { buildWhatsAppSendUrl } from '@/lib/pdfShare';
 
 const UPCOMING_LIMIT = 5;
 const DONE_OPEN_KEY = 'theranet:today-done-open';
@@ -21,7 +22,23 @@ const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
 /** Flat divided rows bleeding to the card edge — the same density as the
  *  Visits tab's list (`ResponsiveVisitList`), and the Schedule grid's colour
  *  code (`appointmentFill`): therapist-colour edge, status fill. */
-const listCls = '-mx-5 divide-y divide-[var(--border)] border-y border-[var(--border)]';
+const listCls = '-mx-5 divide-y divide-[var(--border)] border-y tab:border-t-0 border-[var(--border)]';
+
+function AppointmentListHeader({ showTherapist }: { showTherapist: boolean }) {
+  const gridCols = showTherapist
+    ? 'tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_6.5rem_8rem]'
+    : 'tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem]';
+  return (
+    <div className={`-mx-5 hidden tab:grid ${gridCols} tab:items-center tab:gap-2.5 desktop:gap-3 px-4 py-2 border-y border-[var(--border)] bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}>
+      <div>Time</div>
+      <div>Patient</div>
+      <div>Condition / Notes</div>
+      <div>Phone / Comms</div>
+      {showTherapist && <div>Therapist</div>}
+      <div className="text-right">Action</div>
+    </div>
+  );
+}
 
 /**
  * Workspace → Today → Appointments. Kept short so it never pushes the rest
@@ -136,66 +153,118 @@ export function TodayAppointments({
           : note === 'Walk-in' || note === 'Arrived'
             ? 'font-medium text-[var(--ink)]'
             : 'font-medium';
+    const gridCols = showTherapist
+      ? 'tab:grid tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_6.5rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3'
+      : 'tab:grid tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3';
+
     return (
       <li
         key={a.id}
-        className="flex min-h-14 items-center gap-2 border-l-4 py-2 pl-3 pr-3 sm:gap-3 sm:py-2.5 sm:pl-4 sm:pr-5"
+        className={`flex flex-col gap-1.5 border-l-4 py-2.5 px-3 tab:px-4 ${gridCols} hover:bg-[var(--teal-light)] transition-colors`}
         style={{ borderLeftColor: color, background: fill.background }}
       >
-        <button type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onSelect(a)}>
-          {/* sm+: a fixed time column so every row lines up. Phones put the time inline on line 1. */}
-          <span className="hidden w-[4.5rem] shrink-0 self-start whitespace-nowrap pt-0.5 text-sm font-semibold tabular-nums text-[var(--ink)] sm:block">
+        {/* Col 1: Time & duration */}
+        <div className="hidden tab:block text-xs text-[var(--ink)]">
+          <div className="font-semibold tabular-nums text-sm font-num">
             {minutesLabel(minutesOfDay(a.scheduledAt))}
-            {isOtherDay && <span className="block text-[11px] font-normal text-[var(--muted)]">{formatDateDM(a.scheduledAt)}</span>}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-4">
-            {/* Patient identity column: name, MRNO, flags on mobile */}
-            <div className="min-w-0 sm:w-52 sm:shrink-0 lg:w-60">
-              {/* Line 1: (time on phones) name + Next chip only, so the name keeps the width */}
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[var(--ink)] sm:hidden">
-                  {minutesLabel(minutesOfDay(a.scheduledAt))}
-                  {isOtherDay && <span className="font-normal text-[var(--muted)]"> · {formatDateDM(a.scheduledAt)}</span>}
-                </span>
-                <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
-                  {a.patientName}
-                </span>
-                <HomeBadge record={a} />
-                {mrnoFor?.(a.patientId) && <span className="hidden shrink-0 font-num text-[11px] text-[var(--muted)] sm:inline" data-patient-id>{mrnoFor(a.patientId)}</span>}
-                {a.id === nextUpId && (
-                  <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
-                )}
-              </span>
-              {/* Line 2 on mobile: Note, reason, and patient flags */}
-              {(mobileNote || reason?.text || flags.length > 0) && (
-                <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] sm:hidden">
-                  {mobileNote && <span className={noteClass}>{mobileNote}</span>}
-                  {mobileNote && (reason?.text || flags.length > 0) && <span>·</span>}
-                  {reason?.text && <span className="truncate">{reason.text}</span>}
-                  {reason?.text && flags.length > 0 && <span>·</span>}
-                  <PatientFlagPills flags={flags} max={2} />
-                </span>
-              )}
-            </div>
+          </div>
+          <div className="text-[11px] font-normal text-[var(--muted)] font-num tabular-nums">{length}</div>
+          {isOtherDay && <div className="text-[11px] font-normal text-[var(--muted)]">{formatDateDM(a.scheduledAt)}</div>}
+        </div>
 
-            {/* Desktop middle column: clinical context, condition, reason, flags */}
-            <div className="hidden min-w-0 flex-1 items-center gap-1.5 text-xs text-[var(--muted)] sm:flex">
-              {wideDetail && <span className="truncate">{wideDetail}</span>}
-              {wideDetail && flags.length > 0 && <span>·</span>}
+        {/* Col 2: Patient */}
+        <button
+          type="button"
+          className="min-w-0 text-left cursor-pointer focus:outline-none"
+          onClick={() => onSelect(a)}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[var(--ink)] tab:hidden font-num">
+              {minutesLabel(minutesOfDay(a.scheduledAt))}
+              {isOtherDay && <span className="font-normal text-[var(--muted)]"> · {formatDateDM(a.scheduledAt)}</span>}
+            </span>
+            <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
+              {a.patientName}
+            </span>
+            <HomeBadge record={a} />
+            {a.id === nextUpId && (
+              <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
+            )}
+          </div>
+          {mrnoFor?.(a.patientId) && (
+            <div className="hidden truncate font-num text-xs text-[var(--muted)] tab:block" data-patient-id>
+              {mrnoFor(a.patientId)}
+            </div>
+          )}
+          {/* Mobile line 2 */}
+          {(mobileNote || reason?.text || flags.length > 0) && (
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] tab:hidden">
+              {mobileNote && <span className={noteClass}>{mobileNote}</span>}
+              {mobileNote && (reason?.text || flags.length > 0) && <span>·</span>}
+              {reason?.text && <span className="truncate">{reason.text}</span>}
+              {reason?.text && flags.length > 0 && <span>·</span>}
               <PatientFlagPills flags={flags} max={2} />
             </div>
-
-            {/* Desktop right metadata: therapist & length */}
-            <div className="hidden shrink-0 items-center justify-end gap-3 text-xs text-[var(--muted)] sm:flex">
-              {showTherapist && <span className="w-28 truncate text-right lg:w-32">{therapistNameFor(a)}</span>}
-              <span className="w-10 text-right tabular-nums">{length}</span>
-            </div>
-          </div>
+          )}
         </button>
+
+        {/* Col 3: Condition / Notes */}
+        <div className="hidden tab:flex min-w-0 items-center gap-1.5 text-sm text-[var(--ink)]">
+          {wideDetail ? (
+            <span className="truncate" title={wideDetail}>{wideDetail}</span>
+          ) : (
+            <span className="text-[var(--muted)]">—</span>
+          )}
+          {wideDetail && flags.length > 0 && <span className="text-[var(--muted)]">·</span>}
+          <PatientFlagPills flags={flags} max={2} />
+        </div>
+
+        {/* Col 4: Phone & Comms */}
+        <div className="hidden tab:block text-xs text-[var(--ink)]">
+          {a.patientPhone ? (
+            <div>
+              <div className="font-num font-medium text-[var(--ink)]">{a.patientPhone}</div>
+              <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-0.5">
+                <a
+                  href={`tel:${a.patientPhone}`}
+                  className="font-medium text-[var(--teal)] hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Call
+                </a>
+                <span>·</span>
+                <a
+                  href={buildWhatsAppSendUrl('', a.patientPhone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--moss)] hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  WhatsApp
+                </a>
+              </div>
+            </div>
+          ) : (
+            <span className="text-[var(--muted)]">—</span>
+          )}
+        </div>
+
+        {/* Col 5: Therapist */}
+        {showTherapist && (
+          <div className="hidden tab:block min-w-0 truncate">
+            {therapistNameFor(a) ? (
+              <TherapistPill>{therapistNameFor(a)}</TherapistPill>
+            ) : (
+              <span className="text-xs text-[var(--muted)]">—</span>
+            )}
+          </div>
+        )}
+
+        {/* Col 6: Action */}
         {end && (
-          <span className={`shrink-0 self-center sm:flex sm:justify-end ${showEndOnMobile ? '' : 'hidden sm:flex'}`}>
+          <div className={`tab:flex tab:justify-end ${showEndOnMobile ? 'mt-2 tab:mt-0 flex justify-end' : 'hidden tab:flex'}`}>
             {end}
-          </span>
+          </div>
         )}
       </li>
     );
@@ -289,6 +358,7 @@ export function TodayAppointments({
       {inProgress.length > 0 && (
         <section aria-label="In progress">
           <h3 className={sectionHeading}>In progress, add the service and payment</h3>
+          <AppointmentListHeader showTherapist={showTherapist} />
           <ul className={listCls}>
             {inProgress.map((a) =>
               row(
@@ -331,6 +401,7 @@ export function TodayAppointments({
       {upcoming.length > 0 && (
         <section aria-label="Upcoming">
           {sectionCount > 1 && <h3 className={sectionHeading}>Upcoming</h3>}
+          <AppointmentListHeader showTherapist={showTherapist} />
           <ul className={listCls}>
             {shownUpcoming.map((a) =>
               row(

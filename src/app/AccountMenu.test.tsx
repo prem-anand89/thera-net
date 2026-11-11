@@ -57,6 +57,22 @@ afterEach(() => {
 });
 
 describe('AccountMenu rows by role', () => {
+  it('shows the user name and role right on the closed header trigger', () => {
+    render(
+      <AccountMenu
+        displayName="Ritu"
+        fallbackName="ritu"
+        role="admin"
+        setDisplayName={async () => { }}
+        clinicId="c1"
+        hasPasswordIdentity
+      />
+    );
+    const trigger = screen.getByRole('button', { name: 'Account' });
+    expect(trigger).toHaveTextContent('Ritu');
+    expect(trigger).toHaveTextContent('Admin');
+  });
+
   it('gives every role My account and Notifications, and no Settings in the menu', () => {
     openMenu('front_desk');
     expect(screen.getByRole('menuitem', { name: /my account/i })).toBeInTheDocument();

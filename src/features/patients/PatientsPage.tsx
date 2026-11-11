@@ -23,7 +23,8 @@ import {
 } from '@/domain/fiscalYear';
 import { REFERRING_SOURCE_LABELS, type Patient, type Visit, type ReferringSourceItem } from '@/domain/types';
 import { isStale } from '@/domain/packageTracking';
-import { DEPARTMENT_LABELS, departmentOf } from '@/domain/departments';
+import { DEPARTMENT_LABELS, departmentOf, type Department } from '@/domain/departments';
+import { isInpatientVisit } from '@/domain/departmentMoney';
 import { clinicCareLocations } from '@/domain/careLocations';
 import {
   th,
@@ -45,6 +46,7 @@ import {
 import { Pager, usePagination } from '@/components/Pager';
 import { EmptyState } from '@/components/EmptyState';
 import { IconCalendar } from '@/components/NavIcons';
+import { ToolbarSearchInput } from '@/components/ToolbarControls';
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -98,22 +100,18 @@ export function PatientsList() {
   const now = new Date();
   const currentFy = fiscalYearOf(now, clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  // '' = Full FY, 'ytd' = year to date (current FY only), 'custom' = customFrom/customTo,
-  // otherwise a specific "YYYY-M" month value. A long list is paged (see Pager below),
-  // so the wide default doesn't bloat the page.
+  // '' = Full FY, 'ytd' = year to date (current FY only), 'all' = every visit,
+  // 'custom' = customFrom/customTo, otherwise a specific "YYYY-M" month value.
   const [month, setMonth] = useState('');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
   const selectedPeriod = useMemo(() => {
-    if (!month || month === 'ytd' || month === 'custom') return null;
+    if (!month || month === 'ytd' || month === 'all' || month === 'custom') return null;
     const [y, m] = month.split('-').map(Number);
     return { year: y, month: m };
   }, [month]);
 
-  // No month picked doesn't mean "no filter" — it means "the whole selected
-  // fiscal year," so the FY dropdown actually does something. A genuinely
-  // unfiltered "every patient ever" view isn't offered by this control.
   const selectedRange = useMemo(() => {
     if (selectedPeriod) return monthDateRange(selectedPeriod);
     if (month === 'ytd') return fiscalYearToDateRange(fyStartYear, clinic.fyStartMonth);
@@ -122,8 +120,10 @@ export function PatientsList() {
   }, [selectedPeriod, month, fyStartYear, clinic.fyStartMonth, customFrom, customTo]);
   const periodVisits = useLiveQuery(
     () =>
-      repos.visits.list({ clinicId: clinic.id, from: selectedRange.from, to: selectedRange.to }),
-    [clinic.id, selectedRange.from, selectedRange.to]
+      month === 'all'
+        ? Promise.resolve(undefined)
+        : repos.visits.list({ clinicId: clinic.id, from: selectedRange.from, to: selectedRange.to }),
+    [clinic.id, month, selectedRange.from, selectedRange.to]
   );
   const periodPatientIds = useMemo(
     () => (periodVisits ? new Set(periodVisits.map((v) => v.patientId)) : null),
@@ -146,14 +146,24 @@ export function PatientsList() {
   );
 
   const visitStatsByPatient = useMemo(() => {
-    const map = new Map<string, { lastVisitOn: string; visitCount: number; latestVisit: Visit }>();
+    const map = new Map<
+      string,
+      { lastVisitOn: string; visitCount: number; latestVisit: Visit; places: Set<Department> }
+    >();
     for (const v of allVisits ?? []) {
       if (v.deleted) continue;
+      const place = departmentOf(v);
       const cur = map.get(v.patientId);
       if (!cur) {
-        map.set(v.patientId, { lastVisitOn: v.visitDate, visitCount: 1, latestVisit: v });
+        map.set(v.patientId, {
+          lastVisitOn: v.visitDate,
+          visitCount: 1,
+          latestVisit: v,
+          places: new Set([place]),
+        });
       } else {
         cur.visitCount += 1;
+        cur.places.add(place);
         if (v.visitDate > cur.lastVisitOn) {
           cur.lastVisitOn = v.visitDate;
           cur.latestVisit = v;
@@ -225,9 +235,11 @@ export function PatientsList() {
       p.name.toLowerCase().includes(q) ||
       (phoneQ.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(phoneQ));
     if (!matchesQuery) return false;
-    // When a search term is typed, search across the entire clinic directory;
+    // When a search term is typed or "All" period is selected, search across the directory;
     // otherwise scope to the selected month/fiscal year.
-    if (!q && periodPatientIds !== null && !periodPatientIds.has(p.id)) return false;
+    if (!q && month !== 'all' && periodPatientIds !== null && !periodPatientIds.has(p.id)) {
+      return false;
+    }
     const stats = visitStatsByPatient.get(p.id);
     if (chip === 'mine') {
       return stats?.latestVisit.therapistId === myTherapistId;
@@ -241,6 +253,9 @@ export function PatientsList() {
     `${q}|${chip}|${fyStartYear}|${month}|${customFrom}|${customTo}|${sort.key}|${sort.dir}`,
     'patients'
   );
+  const hasActiveFilters =
+    fyStartYear !== currentFy.startYear ||
+    month !== '';
 
   async function hide(p: Patient) {
     const ok = await askConfirm({
@@ -294,143 +309,138 @@ export function PatientsList() {
     }
   }
 
+  const selectCls =
+    'h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20';
+
   return (
     <div className="space-y-4">
-      {/* The page title above already says "Patients", so no card heading.
-          One toolbar: the chips on the left; search and a single period
-          select (financial year + month in one) on the right. Phones: the
-          chips scroll on one row, search and period share the next. */}
+      {/* Redesigned toolbar anchored on FY + Month dropdowns (no duplicating preset strip).
+          Desktop collapses onto one row; phones/narrow screens wrap period selectors above Search + Scope + Add. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Fiscal year"
+            className={selectCls}
+            style={chipSelectChevron}
+            value={month === 'all' ? 'all' : month === 'custom' ? 'custom' : String(fyStartYear)}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === 'all') {
+                setMonth('all');
+              } else if (val === 'custom') {
+                setMonth('custom');
+              } else {
+                setFyStartYear(Number(val));
+                setMonth('');
+              }
+            }}
+          >
+            {[currentFy.startYear, currentFy.startYear - 1, currentFy.startYear - 2].map((y) => {
+              const label = fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label;
+              return (
+                <option key={y} value={y}>
+                  FY {label}{y === currentFy.startYear ? ' (Current)' : ''}
+                </option>
+              );
+            })}
+            <option value="all">All time</option>
+            <option value="custom">Custom range…</option>
+          </select>
+
+          {month !== 'custom' && month !== 'all' && (
+            <select
+              aria-label="Period within fiscal year"
+              className={selectCls}
+              style={chipSelectChevron}
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            >
+              <option value="">Full year</option>
+              {fyStartYear === currentFy.startYear && <option value="ytd">Year to date</option>}
+              {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth)
+                .filter((m) => {
+                  if (fyStartYear !== currentFy.startYear) return true;
+                  return (
+                    m.year < now.getFullYear() ||
+                    (m.year === now.getFullYear() && m.month <= now.getMonth() + 1)
+                  );
+                })
+                .map((m) => {
+                  const isCurrent =
+                    m.year === now.getFullYear() && m.month === now.getMonth() + 1;
+                  return (
+                    <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                      {monthName(m.month)} {m.year}{isCurrent ? ' (This month)' : ''}
+                    </option>
+                  );
+                })}
+            </select>
+          )}
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="text-xs font-medium text-[var(--teal)] hover:underline"
+              onClick={() => {
+                setFyStartYear(currentFy.startYear);
+                setMonth('');
+              }}
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+          <ToolbarSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search ID, name or phone"
+            ariaLabel="Search patients"
+            className="min-w-[100px] flex-1 sm:w-52 sm:flex-none"
+          />
           <div
             role="group"
             aria-label="Patient filter"
-            className="hide-scrollbar flex h-10 w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1"
+            className="flex h-10 shrink-0 items-center gap-0.5 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1"
           >
             {(
               [
                 { key: 'all', label: 'All' },
-                { key: 'mine', label: 'My patients' },
+                { key: 'mine', label: 'My patients', shortLabel: 'Mine' },
               ] as const
             ).map((c) => (
               <button
                 key={c.key}
                 type="button"
                 aria-pressed={chip === c.key}
-                className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                   chip === c.key
                     ? 'bg-[var(--teal)] text-white shadow-sm'
                     : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
                 }`}
                 onClick={() => setChip(c.key)}
               >
-                {c.label}
+                {'shortLabel' in c ? (
+                  <>
+                    <span className="sm:hidden" aria-hidden="true">
+                      {c.shortLabel}
+                    </span>
+                    <span className="sr-only sm:not-sr-only">{c.label}</span>
+                  </>
+                ) : (
+                  c.label
+                )}
               </button>
             ))}
           </div>
           <button
             type="button"
-            className="h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)] sm:hidden"
+            className="h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)] sm:px-3.5 sm:text-sm"
             onClick={() => setAdding(true)}
           >
-            + Add patient
-          </button>
-        </div>
-        <div className="flex flex-1 flex-wrap items-center gap-2 sm:ml-auto">
-          <div className="relative min-w-[160px] flex-1 sm:w-64 sm:flex-none">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--muted)]">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 20 20"
-                fill="none"
-                aria-hidden="true"
-                className="h-4 w-4"
-              >
-                <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M13.5 13.5L18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </div>
-            <input
-              type="search"
-              aria-label="Search patients"
-              className="h-10 min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-8 text-sm text-[var(--ink)] placeholder-[var(--muted)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 [&::-webkit-search-cancel-button]:hidden"
-              placeholder="Search ID, name or phone"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            {query && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
-                onClick={() => setQuery('')}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <select
-              aria-label="Fiscal year"
-              className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
-              style={chipSelectChevron}
-              value={month === 'custom' ? 'custom' : String(fyStartYear)}
-              onChange={(e) => {
-                if (e.target.value === 'custom') {
-                  setMonth('custom');
-                } else {
-                  setFyStartYear(Number(e.target.value));
-                  setMonth('');
-                }
-              }}
-            >
-              {[currentFy.startYear, currentFy.startYear - 1, currentFy.startYear - 2].map((y) => {
-                const label = fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label;
-                return (
-                  <option key={y} value={y}>
-                    FY {label}{y === currentFy.startYear ? ' (Current)' : ''}
-                  </option>
-                );
-              })}
-              <option value="custom">Custom range…</option>
-            </select>
-            {month !== 'custom' && (
-              <select
-                aria-label="Period within fiscal year"
-                className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
-                style={chipSelectChevron}
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              >
-                <option value="">Full year</option>
-                {fyStartYear === currentFy.startYear && <option value="ytd">Year to date</option>}
-                {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth)
-                  .filter((m) => {
-                    if (fyStartYear !== currentFy.startYear) return true;
-                    return (
-                      m.year < now.getFullYear() ||
-                      (m.year === now.getFullYear() && m.month <= now.getMonth() + 1)
-                    );
-                  })
-                  .map((m) => {
-                    const isCurrent =
-                      m.year === now.getFullYear() && m.month === now.getMonth() + 1;
-                    return (
-                      <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                        {monthName(m.month)} {m.year}{isCurrent ? ' (This month)' : ''}
-                      </option>
-                    );
-                  })}
-              </select>
-            )}
-          </div>
-          <button
-            type="button"
-            className="hidden h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)] sm:inline-flex sm:items-center"
-            onClick={() => setAdding(true)}
-          >
-            + Add patient
+            <span className="sm:hidden">+ Add</span>
+            <span className="hidden sm:inline">+ Add patient</span>
           </button>
         </div>
       </div>
@@ -496,10 +506,11 @@ export function PatientsList() {
                   billing={billingByPatient.get(p.id)}
                   nextAction={
                     visitStatsByPatient.get(p.id) &&
-                    canBill &&
-                    paymentActions(
-                      latestState(visitStatsByPatient.get(p.id)!.latestVisit)
-                    ).includes('issue_invoice')
+                      canBill &&
+                      !isInpatientVisit(visitStatsByPatient.get(p.id)!.latestVisit) &&
+                      paymentActions(
+                        latestState(visitStatsByPatient.get(p.id)!.latestVisit)
+                      ).includes('issue_invoice')
                       ? 'invoice'
                       : 'visit'
                   }
@@ -509,14 +520,14 @@ export function PatientsList() {
                   onBook={canBook ? () => setBooking(p) : undefined}
                   onRemind={
                     !p.doNotMessage &&
-                    p.phone &&
-                    visitStatsByPatient.get(p.id) &&
-                    isStale(visitStatsByPatient.get(p.id)!.lastVisitOn)
+                      p.phone &&
+                      visitStatsByPatient.get(p.id) &&
+                      isStale(visitStatsByPatient.get(p.id)!.lastVisitOn)
                       ? () => {
-                          void feedbackService
-                            .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
-                            .catch((e) => notify.error(toFriendlyMessage(e)));
-                        }
+                        void feedbackService
+                          .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
+                          .catch((e) => notify.error(toFriendlyMessage(e)));
+                      }
                       : undefined
                   }
                   referringSources={referringSources}
@@ -532,9 +543,9 @@ export function PatientsList() {
                 <col className="w-56" />
                 <col className="w-32" />
                 <col className="w-40" />
+                <col className="w-32" />
                 <col className="w-28" />
-                <col className="w-28" />
-                <col className="w-56" />
+                <col className="w-48" />
               </colgroup>
               <thead className="bg-[var(--paper)]">
                 <tr>

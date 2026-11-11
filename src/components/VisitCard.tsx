@@ -11,7 +11,7 @@ import type { VisitCardData, VisitSelectionProps } from './visit/types';
 import { treatmentsDisplayText, patientIdentityLine } from './visit/formatters';
 import { PatientNameBlock } from './visit/VisitPatientBlock';
 import { SharedSplitLine, SharesRing } from './visit/VisitSharedSplit';
-import { VisitServicesList, VisitSharesLine, hasServiceDetails } from './visit/VisitServiceDetails';
+import { VisitServicesList, VisitSharesLine, VisitPlacePill, hasServiceDetails } from './visit/VisitServiceDetails';
 import { PAYMENT_CHIP, PartnerCollectedPill, VisitBillLink } from './visit/VisitPaymentDisplay';
 import { isFullyPartnerCollected } from '@/domain/paymentMethods';
 import { VisitNoteLink, VisitFeedbackLink } from './visit/VisitNotesFeedback';
@@ -93,25 +93,24 @@ function VisitCardDetails({ data, onSplit }: { data: VisitCardData; onSplit?: ()
       )}
       {hasServiceDetails(data.details) && data.details.services.length > 0 ? (
         <CardDetailRow label="Services">
-          <VisitServicesList services={data.details.services} />
+          <VisitServicesList
+            services={data.details.services}
+            trailing={data.placeLabel ? <VisitPlacePill label={data.placeLabel} /> : undefined}
+          />
+        </CardDetailRow>
+      ) : data.serviceName ? (
+        <CardDetailRow label="Service">
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <span>{data.serviceName}</span>
+            {data.placeLabel && <VisitPlacePill label={data.placeLabel} />}
+          </span>
         </CardDetailRow>
       ) : (
-        data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>
-      )}
-      {data.placeLabel && (
-        <CardDetailRow label="Place">
-          <Pill
-            tone={
-              data.placeLabel === 'Home'
-                ? 'sky'
-                : data.placeLabel === 'IP' || data.placeLabel === 'Inpatient'
-                  ? 'plum'
-                  : 'teal'
-            }
-          >
-            {data.placeLabel}
-          </Pill>
-        </CardDetailRow>
+        data.placeLabel && (
+          <CardDetailRow label="Place">
+            <VisitPlacePill label={data.placeLabel} />
+          </CardDetailRow>
+        )
       )}
       {data.details?.shares && (
         <CardDetailRow label="Share">
@@ -227,7 +226,7 @@ export function SharedVisitCard({
             )}
           </div>
         </div>
-        <div className="flex shrink-0 items-start gap-0.5">
+        <div className="flex shrink-0 items-start gap-1 pl-2">
           {data.paymentState !== 'zero_session' && (
             <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">
               {bill}
