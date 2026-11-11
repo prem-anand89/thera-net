@@ -89,7 +89,7 @@ describe('HomeVisitsCard', () => {
 
     const callLinks = screen.getAllByRole('link', { name: 'Call' });
     expect(callLinks).toHaveLength(2);
-    expect(callLinks[0]).toHaveAttribute('href', 'tel:9876543210');
+    expect(callLinks[0]).toHaveAttribute('href', 'tel:+919876543210');
 
     const arrivedButtons = screen.getAllByRole('button', { name: /arrived/i });
     expect(arrivedButtons).toHaveLength(2);

@@ -12,7 +12,7 @@ import { AwaitingList } from './AwaitingList';
 import { appointmentFill } from './scheduleColors';
 import { PatientFlagPills } from './PatientFlagPills';
 import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
-import { buildWhatsAppSendUrl } from '@/lib/pdfShare';
+import { buildWhatsAppSendUrl, telHref } from '@/lib/pdfShare';
 
 const UPCOMING_LIMIT = 5;
 const DONE_OPEN_KEY = 'theranet:today-done-open';
@@ -26,14 +26,14 @@ const listCls = '-mx-5 divide-y divide-[var(--border)] border-y tab:border-t-0 b
 
 function AppointmentListHeader({ showTherapist }: { showTherapist: boolean }) {
   const gridCols = showTherapist
-    ? 'tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_10rem_8rem]'
+    ? 'tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_8rem]'
     : 'tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem]';
   return (
     <div className={`-mx-5 hidden tab:grid ${gridCols} tab:items-center tab:gap-2.5 desktop:gap-3 px-4 py-2 border-y border-[var(--border)] bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}>
       <div>Time</div>
       <div>Patient</div>
       <div>Condition / Notes</div>
-      <div>Phone / Comms</div>
+      <div>Contact</div>
       {showTherapist && <div>Therapist</div>}
       <div className="text-right">Action</div>
     </div>
@@ -154,7 +154,7 @@ export function TodayAppointments({
             ? 'font-medium text-[var(--ink)]'
             : 'font-medium';
     const gridCols = showTherapist
-      ? 'tab:grid tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_7.5rem_10rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3'
+      ? 'tab:grid tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3'
       : 'tab:grid tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3';
 
     return (
@@ -219,30 +219,28 @@ export function TodayAppointments({
           <PatientFlagPills flags={flags} max={2} />
         </div>
 
-        {/* Col 4: Phone & Comms */}
-        <div className="hidden tab:block text-xs text-[var(--ink)]">
+        {/* Col 4: Contact: the number is not shown, only the two ways to reach the patient */}
+        <div className="hidden tab:block text-xs">
           {a.patientPhone ? (
-            <div>
-              <div className="font-num font-medium text-[var(--ink)]">{a.patientPhone}</div>
-              <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] mt-0.5">
-                <a
-                  href={`tel:${a.patientPhone}`}
-                  className="font-medium text-[var(--teal)] hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Call
-                </a>
-                <span>·</span>
-                <a
-                  href={buildWhatsAppSendUrl('', a.patientPhone)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-[var(--moss)] hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  WhatsApp
-                </a>
-              </div>
+            <div className="flex items-center gap-1.5">
+              <a
+                href={telHref(a.patientPhone)}
+                aria-label={`Call ${a.patientName}`}
+                className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)] hover:border-[var(--teal)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Call
+              </a>
+              <a
+                href={buildWhatsAppSendUrl('', a.patientPhone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`WhatsApp ${a.patientName}`}
+                className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs font-medium text-[var(--moss)] hover:border-[var(--moss)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                WhatsApp
+              </a>
             </div>
           ) : (
             <span className="text-[var(--muted)]">—</span>

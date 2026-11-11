@@ -3,9 +3,10 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-vi.mock('@/app/clinicContext', () => ({
-  useClinic: () => ({ id: 'c1', name: 'Physio Clinic', address: '1 Main Road', clinicType: 'individual', hasPartner: false, invoicePrefix: 'PC', walkInMrnoPrefix: 'PC', fyStartMonth: 4 }),
+const mockClinic = vi.hoisted(() => ({
+  value: { id: 'c1', name: 'Physio Clinic', address: '1 Main Road', clinicType: 'individual', hasPartner: false, invoicePrefix: 'PC', walkInMrnoPrefix: 'PC', fyStartMonth: 4 } as Record<string, unknown>,
 }));
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => mockClinic.value }));
 vi.mock('@/services', () => ({ repos: { clinics: { get: () => undefined, put: vi.fn() } } }));
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => null, publicLogoUrl: () => null }));
 
@@ -22,6 +23,22 @@ describe('ClinicProfileSection', () => {
     expect(screen.getByDisplayValue('Physio Clinic')).toBeEnabled();
     expect(screen.queryByText('Therapist Setup')).toBeNull();
     expect(screen.queryByText(/Single Therapist|Multiple Therapists/)).toBeNull();
+  });
+
+  it('a complete profile opens as a summary with Edit, and Edit shows the form', () => {
+    const before = mockClinic.value;
+    mockClinic.value = { ...before, phone: '+91 9876543210' };
+    try {
+      render(<ClinicProfileSection onDirtyChange={vi.fn()} />);
+      expect(screen.getAllByText('1 Main Road').length).toBeGreaterThan(0);
+      expect(screen.queryByRole('textbox', { name: /Clinic code/ })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+      expect(screen.getByRole('textbox', { name: /Clinic code/ })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+      expect(screen.queryByRole('textbox', { name: /Clinic code/ })).toBeNull();
+    } finally {
+      mockClinic.value = before;
+    }
   });
 
   it('has one Clinic code field for patient IDs and invoices, and no separate prefix fields', () => {

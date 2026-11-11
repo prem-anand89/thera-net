@@ -520,9 +520,24 @@ export function PackageThread({
   sessionIndex: number;
   packageTotal: number;
 }) {
+  // One dot per session reads well up to a dozen; a long package (20, 30 sessions) would run out of its cell, so it
+  // becomes a slim progress bar of fixed width.
+  if (packageTotal > 12) {
+    const pct = Math.min(100, Math.max(0, Math.round((sessionIndex / packageTotal) * 100)));
+    return (
+      <span
+        className="inline-block h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-[var(--border)] align-middle"
+        title={`Session ${sessionIndex} of ${packageTotal}`}
+        role="img"
+        aria-label={`Session ${sessionIndex} of ${packageTotal}`}
+      >
+        <span className="block h-full rounded-full bg-[var(--teal)]" style={{ width: `${pct}%` }} />
+      </span>
+    );
+  }
   return (
     <span
-      className="inline-flex items-center gap-0.5 align-middle"
+      className="inline-flex max-w-full items-center gap-0.5 align-middle"
       title={`Session ${sessionIndex} of ${packageTotal}`}
     >
       {Array.from({ length: packageTotal }, (_, i) => {

@@ -304,9 +304,28 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <DatePresetBar value={datePreset} onChange={applyDatePreset} />
+        <div role="group" aria-label="Invoice status" className="hide-scrollbar flex items-center gap-1.5 overflow-x-auto">
+          {(
+            [
+              ['all', 'All'],
+              ['outstanding', 'Outstanding'],
+              ['paid', 'Paid'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={statusFilter === value}
+              onClick={() => setStatusFilter(value)}
+              className={filterChip(statusFilter === value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {(statusFilter !== 'all' || query) && (
           <button
             type="button"
@@ -349,48 +368,29 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
         </div>
       </div>
 
-      <div role="group" aria-label="Invoice status" className="hide-scrollbar flex items-center gap-1.5 overflow-x-auto">
-        {(
-          [
-            ['all', 'All'],
-            ['outstanding', 'Outstanding'],
-            ['paid', 'Paid'],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={statusFilter === value}
-            onClick={() => setStatusFilter(value)}
-            className={filterChip(statusFilter === value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
 
-      <div className="grid grid-cols-2 desktop:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)] mb-1">Invoice Collections</div>
-          <div className="text-2xl font-display font-semibold text-[var(--ink)]">
+      <div className="grid grid-cols-2 tab:grid-cols-4 gap-2">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+          <div className="text-xs text-[var(--muted)]">Invoice Collections</div>
+          <div className="text-xl font-display font-semibold text-[var(--ink)]">
             {formatAmount(totalCollected)}
           </div>
         </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)] mb-1">Outstanding Invoices</div>
-          <div className="text-2xl font-display font-semibold text-[var(--rust)]">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+          <div className="text-xs text-[var(--muted)]">Outstanding Invoices</div>
+          <div className="text-xl font-display font-semibold text-[var(--rust)]">
             {formatAmount(totalOutstanding)}
           </div>
         </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)] mb-1">Total Invoiced</div>
-          <div className="text-2xl font-display font-semibold text-[var(--ink)]">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+          <div className="text-xs text-[var(--muted)]">Total Invoiced</div>
+          <div className="text-xl font-display font-semibold text-[var(--ink)]">
             {formatAmount(totalInvoiced)}
           </div>
         </div>
-        <div className="rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)] p-4">
-          <div className="text-xs text-[var(--teal-strong)] mb-1">Unbilled Visits</div>
-          <div className="text-2xl font-display font-semibold text-[var(--teal-strong)]">
+        <div className="rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)] px-3 py-2">
+          <div className="text-xs text-[var(--teal-strong)]">Unbilled Visits</div>
+          <div className="text-xl font-display font-semibold text-[var(--teal-strong)]">
             {formatAmount(unbilledTotal)}
           </div>
         </div>

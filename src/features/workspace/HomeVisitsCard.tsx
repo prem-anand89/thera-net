@@ -4,7 +4,7 @@ import type { Appointment, Patient } from '@/domain/types';
 import { minutesLabel, minutesOfDay } from '@/domain/schedule';
 import { SectionCard, Pill, TherapistPill, pillSmAccent, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { CopyAddressButton } from '@/components/CopyAddressButton';
-import { buildWhatsAppSendUrl } from '@/lib/pdfShare';
+import { buildWhatsAppSendUrl, telHref } from '@/lib/pdfShare';
 
 export interface HomeVisitsCardProps {
   appointments: Appointment[];
@@ -203,7 +203,7 @@ export function HomeVisitsCard({
                           </div>
                           <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)] tab:mt-0.5">
                             <a
-                              href={`tel:${phone}`}
+                              href={telHref(phone)}
                               className="font-medium text-[var(--teal)] hover:underline"
                               onClick={(e) => e.stopPropagation()}
                             >

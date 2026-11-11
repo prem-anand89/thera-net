@@ -37,3 +37,33 @@ describe('joinPhone', () => {
     expect(splitPhone(stored)).toEqual({ code: '+44', national: '7911123456' });
   });
 });
+
+import { tidyPhone } from './countryCodes';
+
+describe('tidyPhone', () => {
+  it('drops a country code that was added twice', () => {
+    expect(tidyPhone('+91 +91 86882 33328')).toBe('+91 8688233328');
+    expect(tidyPhone('+91 +91 733-0834399')).toBe('+91 7330834399');
+    expect(tidyPhone('+91 ‪+91 96423 75817‬')).toBe('+91 9642375817');
+  });
+  it('drops a 91 in front of a 10-digit number only when there are 12 digits', () => {
+    expect(tidyPhone('+91 919876543210')).toBe('+91 9876543210');
+    expect(tidyPhone('+91 +91 919876543210')).toBe('+91 9876543210');
+  });
+  it('leaves normal numbers, including ones that start with 91, alone', () => {
+    expect(tidyPhone('+91 9123456789')).toBe('+91 9123456789');
+    expect(tidyPhone('+91 91234 56789')).toBe('+91 91234 56789');
+    expect(tidyPhone('9876543210')).toBe('9876543210');
+    expect(tidyPhone('+971 501234567')).toBe('+971 501234567');
+    expect(tidyPhone('')).toBe('');
+  });
+  it('splitPhone reads a doubled number as one', () => {
+    expect(splitPhone('+91 +91 86882 33328')).toEqual({ code: '+91', national: '8688233328' });
+  });
+});
+
+describe('joinPhone with a pasted code', () => {
+  it('does not store the country code twice', () => {
+    expect(joinPhone('+91', '+91 98765 43210')).toBe('+91 9876543210');
+  });
+});

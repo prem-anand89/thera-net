@@ -14,8 +14,16 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
+// Runs the query when the mocked repos answer at once; anything else (async, or a repo this test does not mock) is [].
 vi.mock('dexie-react-hooks', () => ({
-  useLiveQuery: () => [],
+  useLiveQuery: (q: () => unknown) => {
+    try {
+      const r = q();
+      return r instanceof Promise ? [] : r;
+    } catch {
+      return [];
+    }
+  },
 }));
 
 vi.mock('@/app/clinicContext', () => ({
@@ -26,10 +34,12 @@ vi.mock('@/app/clinicContext', () => ({
   }),
 }));
 
+const scopeMock = vi.hoisted(() => ({ clinicWide: false }));
 vi.mock('@/app/useWorkspaceScope', () => ({
   useWorkspaceScope: () => ({
     myTherapistId: 't1',
     isFrontDesk: false,
+    isClinicWideView: scopeMock.clinicWide,
   }),
 }));
 
@@ -45,7 +55,7 @@ vi.mock('@/services', () => ({
     referringSourceCatalog: { list: () => [] },
     visits: { list: () => [] },
     patients: { list: () => [] },
-    therapists: { list: () => [] },
+    therapists: { list: () => [{ id: 't1', name: 'Asha', active: true }, { id: 't2', name: 'Ravi', active: true }] },
     appointments: { listByClinic: () => [] },
     invoicePayments: { list: () => [] },
     payments: { list: () => [] },
@@ -55,6 +65,27 @@ vi.mock('@/services', () => ({
 }));
 
 afterEach(cleanup);
+
+describe('Seen by filter', () => {
+  it('is offered to admin and front desk, and choosing a therapist drops My patients', async () => {
+    scopeMock.clinicWide = true;
+    render(<PatientsList />);
+    const select = await screen.findByRole('combobox', { name: 'Seen by' });
+    fireEvent.click(screen.getByRole('button', { name: 'My patients' }));
+    expect(screen.getByRole('button', { name: 'My patients' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(select, { target: { value: 't2' } });
+    expect(screen.getByRole('button', { name: 'My patients' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    scopeMock.clinicWide = false;
+  });
+
+  it('is not shown to a therapist', async () => {
+    scopeMock.clinicWide = false;
+    render(<PatientsList />);
+    await screen.findByRole('button', { name: 'All' });
+    expect(screen.queryByRole('combobox', { name: 'Seen by' })).toBeNull();
+  });
+});
 
 describe('PatientsList chips', () => {
   it('renders only "All" and "My patients" chips, with "Needs invoice" removed', () => {

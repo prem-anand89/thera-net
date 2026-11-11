@@ -5,6 +5,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, patientService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { useDepartment } from '@/app/DepartmentContext';
+import { therapistsInDepartment } from '@/domain/departments';
 import { usePermissions } from '@/app/usePermissions';
 import { formatAmount } from '@/domain/money';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
@@ -80,7 +82,7 @@ export function PatientsList() {
     () => repos.referringSourceCatalog.list(clinic.id),
     [clinic.id]
   ) ?? [];
-  const { myTherapistId, isFrontDesk } = useWorkspaceScope();
+  const { myTherapistId, isFrontDesk, isClinicWideView } = useWorkspaceScope();
   const { canBill, isAdmin } = usePermissions();
   // create_appointment_staff (the RPC the "Book" action calls) rejects
   // anyone who isn't admin or front_desk server-side — same role check
@@ -90,6 +92,8 @@ export function PatientsList() {
   const canBook = isAdmin || isFrontDesk;
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<'all' | 'mine'>('all');
+  // Admin and front desk: only patients whose latest visit was with this therapist ('' = everyone).
+  const [seenBy, setSeenBy] = useState('');
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
@@ -102,7 +106,9 @@ export function PatientsList() {
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
   // '' = Full FY, 'ytd' = year to date (current FY only), 'all' = every visit,
   // 'custom' = customFrom/customTo, otherwise a specific "YYYY-M" month value.
-  const [month, setMonth] = useState('');
+  // Opens on the current month (the working view); "Full year" and "All time" are one tap away.
+  const defaultMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  const [month, setMonth] = useState(defaultMonth);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
@@ -133,6 +139,11 @@ export function PatientsList() {
   const all = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const allVisits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const { department } = useDepartment();
+  const seenByOptions = useMemo(
+    () => therapistsInDepartment(department, therapists ?? []).sort((a, b) => a.name.localeCompare(b.name)),
+    [therapists, department]
+  );
   const appointments = useLiveQuery(
     () => (canBook ? repos.appointments.listByClinic(clinic.id) : undefined),
     [canBook, clinic.id]
@@ -244,18 +255,19 @@ export function PatientsList() {
     if (chip === 'mine') {
       return stats?.latestVisit.therapistId === myTherapistId;
     }
+    if (seenBy) return stats?.latestVisit.therapistId === seenBy;
     return true;
   });
   const hidden = (all ?? []).filter((p) => p.deletedAt);
   const rows = applySort(active, comparators, sort);
   const pager = usePagination(
     rows,
-    `${q}|${chip}|${fyStartYear}|${month}|${customFrom}|${customTo}|${sort.key}|${sort.dir}`,
+    `${q}|${chip}|${seenBy}|${fyStartYear}|${month}|${customFrom}|${customTo}|${sort.key}|${sort.dir}`,
     'patients'
   );
   const hasActiveFilters =
     fyStartYear !== currentFy.startYear ||
-    month !== '';
+    month !== defaultMonth;
 
   async function hide(p: Patient) {
     const ok = await askConfirm({
@@ -383,7 +395,7 @@ export function PatientsList() {
               className="text-xs font-medium text-[var(--teal)] hover:underline"
               onClick={() => {
                 setFyStartYear(currentFy.startYear);
-                setMonth('');
+                setMonth(defaultMonth);
               }}
             >
               Reset filters
@@ -419,7 +431,10 @@ export function PatientsList() {
                     ? 'bg-[var(--teal)] text-white shadow-sm'
                     : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
                 }`}
-                onClick={() => setChip(c.key)}
+                onClick={() => {
+                  setChip(c.key);
+                  if (c.key === 'mine') setSeenBy('');
+                }}
               >
                 {'shortLabel' in c ? (
                   <>
@@ -434,6 +449,25 @@ export function PatientsList() {
               </button>
             ))}
           </div>
+          {isClinicWideView && seenByOptions.length > 1 && (
+            <select
+              aria-label="Seen by"
+              className={selectCls}
+              style={chipSelectChevron}
+              value={seenBy}
+              onChange={(e) => {
+                setSeenBy(e.target.value);
+                if (e.target.value) setChip('all');
+              }}
+            >
+              <option value="">Seen by: anyone</option>
+              {seenByOptions.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             className="h-10 shrink-0 rounded-lg bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)] sm:px-3.5 sm:text-sm"

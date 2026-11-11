@@ -358,11 +358,11 @@ export function LedgerPage() {
   // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
   // (or a patient deep link) always wins and never overwrites what was remembered.
   const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));
-  const initialPreset: DatePreset = dueLanding ? 'all' : (prefs.datePreset ?? 'week');
+  const initialPreset: DatePreset = dueLanding ? 'all' : (prefs.datePreset ?? 'month');
   const initialRange =
     initialPreset === 'custom'
       ? { from: prefs.from ?? '', to: prefs.to ?? '' }
-      : (presetRange(initialPreset) ?? currentWeekRange());
+      : (presetRange(initialPreset) ?? presetRange('month') ?? currentWeekRange());
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
@@ -701,9 +701,9 @@ export function LedgerPage() {
   }, [therapistId, therapists]);
 
   const filtersAreDefault =
-    datePreset === 'week' && !therapistId && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented;
+    datePreset === 'month' && !therapistId && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented;
   function resetFilters() {
-    applyDatePreset('week');
+    applyDatePreset('month');
     setTherapistId('');
     setOnlyCollectedNoReceipt(false);
     setOnlyNotCollected(false);

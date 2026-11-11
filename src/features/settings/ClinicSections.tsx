@@ -51,6 +51,13 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
       }),
       onDirtyChange
     );
+  // A profile that is filled in is rarely revisited: it opens as a one-glance summary with an Edit button, and stays
+  // open while anything needed on bills is missing or while there are unsaved changes.
+  const profileComplete = Boolean(
+    clinic.name?.trim() && clinic.address?.trim() && clinic.phone?.trim() && clinic.invoicePrefix?.trim()
+  );
+  const [editingProfile, setEditingProfile] = useState(false);
+  const showProfileForm = !profileComplete || editingProfile || dirty;
   const [previewOpen, setPreviewOpen] = useState(false);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
   // Partner name and logo are edited in Payments & billing → Partner revenue share; the letterhead preview shows the saved ones.
@@ -107,7 +114,34 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
         <SectionCard
           id="settings-card-general-profile"
           title="Clinic profile"
+          action={
+            profileComplete && !dirty ? (
+              <button
+                type="button"
+                aria-expanded={showProfileForm}
+                className="text-sm font-semibold text-[var(--teal)] hover:underline"
+                onClick={() => setEditingProfile((v) => !v)}
+              >
+                {showProfileForm ? 'Hide' : 'Edit'}
+              </button>
+            ) : undefined
+          }
         >
+          {!showProfileForm && (
+            <div className="flex items-center gap-3">
+              {logoPreviewUrl ? (
+                <img src={logoPreviewUrl} alt="Clinic logo" className="h-12 w-12 shrink-0 rounded-lg border border-[var(--border)] bg-white object-contain p-1" />
+              ) : null}
+              <div className="min-w-0 text-sm">
+                <p className="truncate font-medium text-[var(--ink)]">{form.name}</p>
+                <p className="truncate text-[var(--muted)]">{form.address}</p>
+                <p className="truncate text-[var(--muted)]">
+                  {[form.phone, form.email, `Code ${form.invoicePrefix}`].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+            </div>
+          )}
+          {showProfileForm && (
           <fieldset disabled={busy} className="contents">
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row gap-6 items-start">
@@ -255,8 +289,9 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
             </div>
 
           </fieldset>
+          )}
 
-          {showSaveBar && (
+          {showSaveBar && showProfileForm && (
             <SectionSaveBar
               dirty={dirty}
               saved={saved}

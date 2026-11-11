@@ -221,7 +221,7 @@ export function VisitTable({
                   switch (key) {
                     case 'service':
                       return (
-                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG} min-w-[13.5rem]`}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG} min-w-[11rem]`}>
                           {hasServiceDetails(row.details) && row.details.services.length > 0 ? (
                             <VisitServicesList
                               services={row.details.services}
@@ -273,13 +273,18 @@ export function VisitTable({
                     case 'condition':
                       return (
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
-                          {row.condition ?? '—'}
+                          <div className="line-clamp-2 max-w-[11rem]" title={row.condition ?? undefined}>
+                            {row.condition ?? '—'}
+                          </div>
                         </td>
                       );
                     case 'treatments':
                       return (
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
-                          <div className="max-w-[200px]">
+                          <div
+                            className="line-clamp-2 max-w-[200px]"
+                            title={treatmentsDisplayText(row.treatmentNames, row.treatmentNotes) || undefined}
+                          >
                             {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
                           </div>
                         </td>

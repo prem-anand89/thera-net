@@ -221,6 +221,12 @@ export function normalizePhoneForWaMe(phone: string, defaultCountryCode: string 
   return `${code}${national}`.replace(/\D/g, '');
 }
 
+/** `tel:` link for a stored number, with the country code once (a doubled "+91 +91" would not dial). */
+export function telHref(phone: string): string {
+  const digits = normalizePhoneForWaMe(phone);
+  return digits ? `tel:+${digits}` : `tel:${phone}`;
+}
+
 export function buildWhatsAppSendUrl(text: string, toPhone?: string | null): string {
   const waPhone = toPhone ? normalizePhoneForWaMe(toPhone) : '';
   return waPhone
