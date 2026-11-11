@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Department } from '@/domain/departments';
 import type { Appointment, Patient, Visit } from '@/domain/types';
 import type { TodayVisitRow } from '@/services/dashboardService';
@@ -260,7 +260,7 @@ const mockWardVisits: Visit[] = [
 vi.mock('@/services', () => ({
   repos: {
     appointments: { listByClinic: () => mockAppointments },
-    therapists: { list: () => [{ id: 'th-1', name: 'Dr. Prem', color: 'teal', active: true }] },
+    therapists: { list: () => [{ id: 'th-1', name: 'Dr. Prem', color: 'teal', active: true }, { id: 'th-2', name: 'Asha Rao', color: 'sky', active: true }] },
     visits: {
       list: () => mockWardVisits,
       get: () => Promise.resolve(null),
@@ -336,6 +336,17 @@ describe('WorkspacePage department scoping (G3)', () => {
     expect(screen.getByText('Collected')).toBeInTheDocument();
     expect(screen.getByText('Dues · 1')).toBeInTheDocument();
     expect(screen.queryByText(/Running charges/)).toBeNull();
+  });
+
+  it('shows a "Showing: <therapist>" chip while a therapist is picked, and clears it', () => {
+    currentDept = 'clinic';
+    render(<WorkspacePage />);
+    expect(screen.queryByText(/^Showing:/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Filter by therapist'), { target: { value: 'th-2' } });
+    const chip = screen.getByRole('button', { name: /Showing only Asha Rao/ });
+    expect(chip).toHaveTextContent('Showing: Asha Rao');
+    fireEvent.click(chip);
+    expect(screen.queryByText(/^Showing:/)).toBeNull();
   });
 
   it('Home care department: shows Home visits today card and Home visits, hides Appointments and IP cards', () => {

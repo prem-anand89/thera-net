@@ -1225,6 +1225,19 @@ export function WorkspacePage() {
           </div>
         )
       )}
+      {workspaceView.canToggle && !workspaceMineOnly && scopedTherapistSelectId && (
+        <div className="px-1">
+          <button
+            type="button"
+            onClick={() => setSelectedTherapistId('')}
+            aria-label={`Showing only ${deptTherapists.find((t) => t.id === scopedTherapistSelectId)?.name ?? 'one therapist'}. Clear filter`}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-[var(--teal)] bg-[var(--teal-light)] px-3 text-xs font-medium text-[var(--teal-strong)]"
+          >
+            <span>Showing: {deptTherapists.find((t) => t.id === scopedTherapistSelectId)?.name ?? 'one therapist'}</span>
+            <span aria-hidden>✕</span>
+          </button>
+        </div>
+      )}
 
       {scope.isUnlinkedTherapist && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">

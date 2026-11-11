@@ -1751,13 +1751,13 @@ export function NewVisitPage() {
               {['Inpatient', activeAdmission.wardBed].filter(Boolean).join(' · ')}
             </Pill>
           ) : homeCareOn(clinic) ? (
-            <div role="radiogroup" aria-label="Care location" className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs font-medium">
+            <div role="radiogroup" aria-label="Care location" className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 font-medium">
               <button
                 type="button"
                 role="radio"
                 aria-checked={visitDept === 'clinic'}
                 aria-label="Clinic (OP)"
-                className={`rounded-full px-2.5 py-0.5 transition-colors ${visitDept === 'clinic'
+                className={`min-h-8 rounded-full px-3.5 py-1.5 text-sm transition-colors ${visitDept === 'clinic'
                     ? 'bg-[var(--teal)] text-white shadow-sm'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                   }`}
@@ -1773,7 +1773,7 @@ export function NewVisitPage() {
                 role="radio"
                 aria-checked={visitDept === 'home'}
                 aria-label="Home Care"
-                className={`rounded-full px-2.5 py-0.5 transition-colors ${visitDept === 'home'
+                className={`min-h-8 rounded-full px-3.5 py-1.5 text-sm transition-colors ${visitDept === 'home'
                     ? 'bg-[var(--sky)] text-white shadow-sm'
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                   }`}
