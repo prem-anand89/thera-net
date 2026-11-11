@@ -1709,6 +1709,7 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
 upi_qr_enabled               boolean (NULLABLE) — all four UPI fields are set in Settings → General → Payments ("UPI collection": show-QR switch, UPI ID, payee name, QR image), so every plan reaches them, Lite included; Billing & invoicing no longer holds them
 signature_path               text (NULLABLE)
+signatory_name              text (NULLABLE) — the clinic's authorised signatory, printed under the signature image (and under the blank line when none is uploaded) on invoices, advance receipts, notes and session logs. The treating therapist prints separately as "Therapist" (name · registration no.). Set in Settings → General → Clinic profile (migration `20261112100000_clinic_signatory_name.sql`)
 slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
 timezone                     text NOT NULL DEFAULT 'Asia/Kolkata' — IANA zone for every server-sent time (emails, push, the agenda, the public booking page); a trigger rejects names Postgres does not know (migration `20261021100000_clinic_region.sql`)
@@ -3764,6 +3765,7 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
 upi_qr_enabled               boolean (NULLABLE) — all four UPI fields are set in Settings → General → Payments ("UPI collection": show-QR switch, UPI ID, payee name, QR image), so every plan reaches them, Lite included; Billing & invoicing no longer holds them
 signature_path               text (NULLABLE)
+signatory_name              text (NULLABLE) — the clinic's authorised signatory, printed under the signature image (and under the blank line when none is uploaded) on invoices, advance receipts, notes and session logs. The treating therapist prints separately as "Therapist" (name · registration no.). Set in Settings → General → Clinic profile (migration `20261112100000_clinic_signatory_name.sql`)
 slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 start_step_minutes           smallint NULL — LEGACY, no longer read or shown: staff start times are always every 15 minutes (`START_STEP_MINUTES`). Kept so old rows and migrations stay valid; drop in a later cleanup.
 timezone                     text NOT NULL DEFAULT 'Asia/Kolkata' — IANA zone for every server-sent time (emails, push, the agenda, the public booking page); a trigger rejects names Postgres does not know (migration `20261021100000_clinic_region.sql`)

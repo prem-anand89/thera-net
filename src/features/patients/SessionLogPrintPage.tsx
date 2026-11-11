@@ -199,6 +199,7 @@ export function SessionLogContent({
                   <div className="mb-1 h-10 w-40 border-b border-[var(--border)]" />
                 )}
                 <p>Authorised signature</p>
+                {clinic.signatoryName && <p className="font-semibold text-[var(--ink)]">{clinic.signatoryName}</p>}
               </div>
             </div>
           </footer>

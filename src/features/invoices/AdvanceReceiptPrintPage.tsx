@@ -123,6 +123,7 @@ export function AdvanceReceiptPrintPage() {
 
         <PrintSignatureFooter
           signatureUrl={signatureUrl}
+          signerName={clinic.signatoryName}
           left={
             <p>
               {receiptLabel} · issued {formatDateDMY(advance.receivedDate)}

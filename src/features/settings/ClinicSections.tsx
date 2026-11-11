@@ -32,7 +32,7 @@ type ProfileFields = Pick<
   | 'tagline'
   | 'logoPath'
   | 'signaturePath'
-
+  | 'signatoryName'
 >;
 
 export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDirtyChange: (dirty: boolean) => void; invoicing?: boolean }) {
@@ -48,6 +48,7 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
         signaturePath: c.signaturePath,
+        signatoryName: c.signatoryName ?? null,
       }),
       onDirtyChange
     );
@@ -260,8 +261,19 @@ export function ClinicProfileSection({ onDirtyChange, invoicing = true }: { onDi
                 <div>
                   <p className="mb-1.5 block text-label font-medium text-[var(--muted)]">Authorised signature</p>
                   <p className="text-hint text-[var(--muted)] mb-3 leading-relaxed">
-                    Printed on every invoice in place of the blank signature line.
+                    Printed on bills, receipts and notes in place of the blank signature line, with the signatory's name
+                    below it. The treating therapist is printed separately.
                   </p>
+                  <label className="mb-3 block max-w-xs">
+                    <span className="mb-1 block text-label font-medium text-[var(--muted)]">Signatory name</span>
+                    <input
+                      type="text"
+                      className={inputCls}
+                      value={form.signatoryName ?? ''}
+                      placeholder="e.g. Dr Prem Anand"
+                      onChange={(e) => set({ signatoryName: e.target.value || null })}
+                    />
+                  </label>
                   <div className="flex flex-col items-start gap-2">
                     {signaturePreviewUrl ? (
                       <img

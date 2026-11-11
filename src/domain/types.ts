@@ -129,6 +129,8 @@ export interface Clinic {
    * "Authorised signature" line. Not a cryptographic e-signature.
    */
   signaturePath?: string | null;
+  /** Name printed under the signature: the clinic's authorised signatory (not the treating therapist, who prints as "Therapist"). */
+  signatoryName?: string | null;
   slotDurationMinutes: number;
   /** Staff start times come every this many minutes (15 or 30). Absent/null = every slotDurationMinutes. Public booking ignores it. */
   startStepMinutes?: number | null;

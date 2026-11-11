@@ -641,11 +641,7 @@ export function InvoicePrintPage() {
         <div className={`${paper === 'A5' ? 'mt-7' : 'mt-10'} print:break-inside-avoid`} data-pdf-block>
           <PrintSignatureFooter
             signatureUrl={signatureUrl}
-            signerName={
-              footerTherapists.length === 1
-                ? `${footerTherapists[0].name}${footerTherapists[0].registrationNo ? ` · Reg. ${footerTherapists[0].registrationNo}` : ''}`
-                : null
-            }
+            signerName={clinic.signatoryName}
             left={
               <>
                 <h4 className="mb-0.5 font-semibold text-[var(--ink)]">Terms & Conditions</h4>
