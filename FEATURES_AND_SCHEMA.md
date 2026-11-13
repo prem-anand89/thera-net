@@ -678,6 +678,20 @@ Front desk's `visits_update` reach is the same as an admin's or the visit's own 
   email** action right on `LoginPage.tsx` (`auth.resend({ type: 'signup' })`)
   — previously a self-signup with a lost/undelivered confirmation email had
   no in-app recovery path at all.
+- **After email sign-up** the card becomes **Check your email**: it names the
+  address the link went to, says to look in Spam/Promotions, and offers
+  **Resend email** and **Wrong address? Change it** (back to the form, address
+  kept). It used to say "Account created! Sign in with your email and
+  password", so people signed in, hit "Email not confirmed" and dropped out.
+  `signUp` and `resend` pass `emailRedirectTo: <origin>/workspace`, so the
+  confirmation link returns to the app the person signed up from, not the
+  project's Site URL. When `signUp` answers with a user that has **no
+  identities**, the address already has an account (Supabase hides this and
+  sends no email): the form says so with **Sign in** / **Reset password**
+  instead of a "check your email" screen for a message that never comes. When
+  it answers with a session (confirmation turned off for the project), no
+  email screen shows and the app opens. Password boxes require 8 characters,
+  matching the submit check.
 
 #### Onboarding
 - **Therapist invites** from Settings → Team create login *and* service-roster entry in one step

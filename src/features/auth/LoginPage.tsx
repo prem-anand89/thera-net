@@ -3,7 +3,12 @@ import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
 import { authErrorMessage } from '@/lib/errors';
 import { UnsyncedNotice } from '@/app/UnsyncedNotice';
-import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
+import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, AuthBrandHeader } from '@/components/ui';
+
+/** Where a sign-up confirmation link lands: this app, at whatever address it is being used from. */
+function confirmRedirect(): string {
+  return `${window.location.origin}/workspace`;
+}
 
 /** Google's official four-color "G" mark, per Google's Sign in with Google
  *  branding guidelines — this is the one piece of UI that must render the
@@ -66,7 +71,10 @@ export function LoginPage() {
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
-  const [signupSuccess, setSignupSuccess] = useState(false);
+  /** The address a confirmation email was just sent to (the "Check your email" screen), else null. */
+  const [signupSentTo, setSignupSentTo] = useState<string | null>(null);
+  /** Sign-up answered for an address that already has an account (Supabase hides this; see onSignup). */
+  const [signupExists, setSignupExists] = useState(false);
   const [confirmationResent, setConfirmationResent] = useState(false);
 
   if (!hasSupabaseConfig) {
@@ -117,15 +125,30 @@ export function LoginPage() {
     }
     setBusy(true);
     setError(null);
-    const { error } = await getSupabase()!.auth.signUp({ email, password });
+    setSignupExists(false);
+    const { data, error } = await getSupabase()!.auth.signUp({
+      email,
+      password,
+      // The confirmation link brings the person back to this app (whatever its address), not the project's Site URL.
+      options: { emailRedirectTo: confirmRedirect() },
+    });
     setBusy(false);
     if (error) {
       setError(authErrorMessage(error));
-    } else {
-      setSignupSuccess(true);
-      setPassword('');
-      setConfirmPassword('');
+      return;
     }
+    // Supabase does not reveal an existing account: it answers success with no identities and sends no email.
+    // Saying "check your email" there leaves the person waiting for a message that never comes.
+    if (data.user && (data.user.identities?.length ?? 0) === 0) {
+      setSignupExists(true);
+      return;
+    }
+    setPassword('');
+    setConfirmPassword('');
+    // A session means this project does not require confirmation: useSession picks it up and the app opens.
+    if (data.session) return;
+    setConfirmationResent(false);
+    setSignupSentTo(email);
   }
 
   async function onRequestReset(e: FormEvent) {
@@ -171,7 +194,7 @@ export function LoginPage() {
   async function onResendConfirmation() {
     setBusy(true);
     setError(null);
-    const { error } = await getSupabase()!.auth.resend({ type: 'signup', email });
+    const { error } = await getSupabase()!.auth.resend({ type: 'signup', email, options: { emailRedirectTo: confirmRedirect() } });
     setBusy(false);
     if (error) {
       console.error('Resend confirmation error:', error);
@@ -186,18 +209,41 @@ export function LoginPage() {
       <div className="mx-auto mt-24 max-w-sm">
         <AuthBrandHeader subtitle="Create an account" />
         <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
-          {signupSuccess ? (
+          {signupSentTo ? (
             <>
+              <h2 className="font-display text-lg font-semibold text-[var(--ink)]">Check your email</h2>
               <p className="text-sm text-[var(--ink)]">
-                Account created! Sign in with your email address and password.
+                We sent a link to <span className="font-semibold break-all">{signupSentTo}</span>. Open it to finish
+                creating your account; it brings you straight back here.
               </p>
+              <p className="text-xs text-[var(--muted)]">
+                Not there after a minute? Look in Spam or Promotions, and check the address above is right.
+              </p>
+              <ErrorNote message={error} />
+              {confirmationResent ? (
+                <p className="text-xs text-[var(--moss-strong)]">Sent again. It can take a minute to arrive.</p>
+              ) : (
+                <button type="button" disabled={busy} className={`${btnSecondary} w-full`} onClick={() => void onResendConfirmation()}>
+                  {busy ? 'Sending…' : 'Resend email'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="w-full text-center text-xs text-[var(--teal)] hover:underline"
+                onClick={() => {
+                  setSignupSentTo(null);
+                  setError(null);
+                }}
+              >
+                Wrong address? Change it
+              </button>
               <button
                 type="button"
                 className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
                 onClick={() => {
                   setMode('signin');
                   setError(null);
-                  setSignupSuccess(false);
+                  setSignupSentTo(null);
                 }}
               >
                 ← Back to sign in
@@ -207,6 +253,35 @@ export function LoginPage() {
             <>
               <GoogleButton onClick={onGoogleSignIn} busy={busy} label="Sign up with Google" />
               <ErrorNote message={error} />
+              {signupExists && (
+                <div className="rounded-[10px] border border-[var(--border)] bg-[var(--paper)] p-3 text-sm text-[var(--ink)]">
+                  <p>This email already has an account. Sign in instead, or reset the password if you have forgotten it.</p>
+                  <div className="mt-2 flex gap-4 text-xs font-medium">
+                    <button
+                      type="button"
+                      className="text-[var(--teal)] hover:underline"
+                      onClick={() => {
+                        setMode('signin');
+                        setSignupExists(false);
+                        setPassword('');
+                        setConfirmPassword('');
+                      }}
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[var(--teal)] hover:underline"
+                      onClick={() => {
+                        setMode('reset');
+                        setSignupExists(false);
+                      }}
+                    >
+                      Reset password
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="relative flex items-center">
                 <div className="flex-grow border-t border-[var(--border)]" />
                 <span className="mx-2 text-xs text-[var(--muted)]">or</span>
@@ -226,7 +301,7 @@ export function LoginPage() {
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     className={inputCls}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -236,7 +311,7 @@ export function LoginPage() {
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     className={inputCls}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
