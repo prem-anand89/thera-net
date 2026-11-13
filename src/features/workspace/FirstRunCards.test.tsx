@@ -12,9 +12,10 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 let hasTherapist = false;
+let visitLogged = false;
 let loading = false;
 vi.mock('@/features/setup/useSetupProgress', () => ({
-  useSetupProgress: () => (loading ? undefined : { signals: { hasTherapist, servicesPriced: false, visitLogged: false } }),
+  useSetupProgress: () => (loading ? undefined : { signals: { hasTherapist, servicesPriced: false, visitLogged } }),
 }));
 
 import { FirstRunCards } from './FirstRunCards';
@@ -22,6 +23,7 @@ import { FirstRunCards } from './FirstRunCards';
 afterEach(() => {
   cleanup();
   hasTherapist = false;
+  visitLogged = false;
   loading = false;
 });
 
@@ -38,6 +40,24 @@ describe('FirstRunCards', () => {
     hasTherapist = true;
     render(<FirstRunCards clinicId="c1" isAdmin />);
     expect(screen.queryByText('Add a therapist to start logging visits')).not.toBeInTheDocument();
+  });
+
+  it('a therapist and no visit yet shows the first-visit card linking to New Visit', () => {
+    hasTherapist = true;
+    render(<FirstRunCards clinicId="c1" isAdmin />);
+    expect(screen.getByText(/Log your first visit/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Log first visit' })).toHaveAttribute('href', '/visits/new');
+  });
+
+  it('the first-visit card is gone once a visit is logged, and is admin-only', () => {
+    hasTherapist = true;
+    visitLogged = true;
+    render(<FirstRunCards clinicId="c1" isAdmin />);
+    expect(screen.queryByRole('link', { name: 'Log first visit' })).not.toBeInTheDocument();
+    cleanup();
+    visitLogged = false;
+    render(<FirstRunCards clinicId="c1" isAdmin={false} />);
+    expect(screen.queryByRole('link', { name: 'Log first visit' })).not.toBeInTheDocument();
   });
 
   it('is hidden for a non-admin and while loading', () => {
