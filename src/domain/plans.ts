@@ -38,12 +38,16 @@ export interface TierLimits {
   visitsPerMonth: number | null;
   /** Team members on the schedule with no login of their own, besides the owner. */
   rosterWithoutLogin: number;
+  /** HEP: library exercises the clinic can keep (not deleted). Mirrors `hep_tier_limits()` (HEP migration). */
+  exercises: number | null;
+  /** HEP: programs with status 'active' at once. Paused, ended and completed ones don't count. */
+  activePrograms: number | null;
 }
 export const TIER_LIMITS: Record<PlanTier, TierLimits> = {
-  lite: { seats: 1, visitsPerMonth: 50, rosterWithoutLogin: 1 },
-  solo: { seats: 1, visitsPerMonth: 200, rosterWithoutLogin: 1 },
-  clinic: { seats: 5, visitsPerMonth: null, rosterWithoutLogin: 3 },
-  clinic_plus: { seats: 10, visitsPerMonth: null, rosterWithoutLogin: 10 },
+  lite: { seats: 1, visitsPerMonth: 50, rosterWithoutLogin: 1, exercises: 10, activePrograms: 5 },
+  solo: { seats: 1, visitsPerMonth: 200, rosterWithoutLogin: 1, exercises: null, activePrograms: null },
+  clinic: { seats: 5, visitsPerMonth: null, rosterWithoutLogin: 3, exercises: null, activePrograms: null },
+  clinic_plus: { seats: 10, visitsPerMonth: null, rosterWithoutLogin: 10, exercises: null, activePrograms: null },
 };
 
 export function tierIncludes(tier: PlanTier, feature: PlanFeature): boolean {

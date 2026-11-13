@@ -18,11 +18,34 @@ describe('plan_tier_defaults matches TIER_LIMITS', () => {
   for (const tier of ['lite', 'solo', 'clinic', 'clinic_plus'] as const) {
     it(`${tier}: seats, monthly visits and team without a login are the same`, () => {
       const row = rows.find((r) => r[1] === tier)!;
+      const { seats, visitsPerMonth, rosterWithoutLogin } = TIER_LIMITS[tier];
       expect({
         seats: Number(row[2]),
         visitsPerMonth: row[3].startsWith('null') ? null : Number(row[3]),
         rosterWithoutLogin: Number(row[4]),
-      }).toEqual(TIER_LIMITS[tier]);
+      }).toEqual({ seats, visitsPerMonth, rosterWithoutLogin });
+    });
+  }
+});
+
+/** The HEP caps: `hep_tier_limits()` in the HEP migration and TIER_LIMITS.exercises / activePrograms. */
+describe('hep_tier_limits matches TIER_LIMITS', () => {
+  const sql = readFileSync('supabase/migrations/20261113200000_hep_module.sql', 'utf8');
+  const fn = sql.slice(sql.indexOf('function public.hep_tier_limits'));
+  const rows = [...fn.matchAll(/\(\s*'(lite|solo|clinic|clinic_plus)'\s*,\s*(\d+|null(?:::int)?)\s*,\s*(\d+|null(?:::int)?)\s*\)/g)];
+  const num = (v: string) => (v.startsWith('null') ? null : Number(v));
+
+  it('lists every tier once', () => {
+    expect(rows.map((r) => r[1]).sort()).toEqual(['clinic', 'clinic_plus', 'lite', 'solo']);
+  });
+
+  for (const tier of ['lite', 'solo', 'clinic', 'clinic_plus'] as const) {
+    it(`${tier}: exercises and active programs are the same`, () => {
+      const row = rows.find((r) => r[1] === tier)!;
+      expect({ exercises: num(row[2]), activePrograms: num(row[3]) }).toEqual({
+        exercises: TIER_LIMITS[tier].exercises,
+        activePrograms: TIER_LIMITS[tier].activePrograms,
+      });
     });
   }
 });
