@@ -159,7 +159,7 @@ export async function hydratePublicHepWithSignedUrls<
   T extends { items: Array<{ mediaKeys?: string[]; [k: string]: unknown }>; [k: string]: unknown },
 >(payload: T, r2Config: R2Config, allowedPrefix: string, now?: Date) {
   const keys: string[] = [];
-  for (const item of payload.items ?? []) for (const k of item.mediaKeys ?? []) if (k && k.startsWith(allowedPrefix)) keys.push(k);
+  for (const item of payload.items ?? []) for (const k of item.mediaKeys ?? []) if (k && k.startsWith(allowedPrefix) && !k.includes('..')) keys.push(k);
   const signed = await mintPublicHepViewUrls({ pinVerified: true, keys, r2Config, now });
   return {
     ...payload,

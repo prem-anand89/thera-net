@@ -80,6 +80,24 @@ language sql immutable as $$
   where v.tier = p_tier;
 $$;
 
+-- True when every picture key in a list of items (the p_items jsonb of the template and program RPCs) sits inside
+-- this clinic's own exercise folder. Items are snapshots sent by the client, so their keys are checked like
+-- save_exercise checks an exercise's own keys (review 2026-11-13).
+create or replace function public.hep_item_keys_ok(p_clinic_id uuid, p_items jsonb)
+returns boolean
+language sql
+immutable
+as $$
+  select not exists (
+    select 1
+      from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) i,
+           jsonb_array_elements_text(case when jsonb_typeof(i->'mediaKeys') = 'array' then i->'mediaKeys' else '[]'::jsonb end) k
+     where k not like 'clinics/' || p_clinic_id::text || '/exercises/%'
+        or position('..' in k) > 0
+  );
+$$;
+revoke all on function public.hep_item_keys_ok(uuid, jsonb) from public, anon;
+
 -- 2. Clinic-owned exercises (cached in Dexie for offline browse; written via RPC)
 create table if not exists public.exercises (
   id uuid primary key default gen_random_uuid(),
@@ -188,6 +206,7 @@ create table if not exists public.exercise_template_items (
   sort_order smallint not null default 0
 );
 
+create index if not exists exercise_template_items_template_idx on public.exercise_template_items (template_id);
 alter table public.exercise_template_items enable row level security;
 
 create policy exercise_template_items_select on public.exercise_template_items
@@ -260,6 +279,7 @@ create table if not exists public.program_items (
   removed_on date
 );
 
+create index if not exists program_items_program_idx on public.program_items (program_id);
 alter table public.program_items enable row level security;
 
 create policy program_items_select on public.program_items
@@ -444,7 +464,7 @@ begin
   -- Pictures must sit inside this clinic's own prefix (the hep-media function also checks this before it signs anything).
   if exists (
        select 1 from unnest(coalesce(p_media_keys, '{}'::text[]) || coalesce(array[p_thumb_key], '{}'::text[])) k
-        where k is not null and k not like 'clinics/' || p_clinic_id::text || '/exercises/%'
+        where k is not null and (k not like 'clinics/' || p_clinic_id::text || '/exercises/%' or position('..' in k) > 0)
      ) then
     raise exception 'Picture does not belong to this clinic.';
   end if;
@@ -535,6 +555,10 @@ begin
     raise exception 'Not a member of this clinic.';
   end if;
 
+  if not public.hep_item_keys_ok(p_clinic_id, p_items) then
+    raise exception 'Picture does not belong to this clinic.';
+  end if;
+
   select exists (select 1 from public.exercise_templates where id = v_id and clinic_id = p_clinic_id)
     into v_exists;
 
@@ -601,7 +625,7 @@ create or replace function public.create_program(
   p_items jsonb default '[]'::jsonb,
   p_custom_pin text default null,
   p_source_template_id uuid default null,
-  p_today date default current_date,
+  p_today date default null,                    -- null = the clinic's own today (not the server's UTC date)
   p_settings jsonb default '{}'::jsonb
 ) returns jsonb
 language plpgsql
@@ -613,14 +637,25 @@ declare
   v_resolved_patient_id uuid := p_patient_id;
   v_pin text;
   v_needs_pin boolean;
+  v_revoked boolean;
   v_program_id uuid := gen_random_uuid();
   v_token text;
   v_item jsonb;
   v_idx smallint := 0;
   v_spd smallint;
+  v_today date;
 begin
   if not public.is_hep_staff(p_clinic_id) then
     raise exception 'Not a member of this clinic.';
+  end if;
+  v_today := coalesce(p_today, platform_admin.clinic_today(p_clinic_id));
+
+  if p_therapist_id is not null
+     and not exists (select 1 from public.therapists t where t.id = p_therapist_id and t.clinic_id = p_clinic_id) then
+    raise exception 'Therapist does not belong to this clinic.';
+  end if;
+  if not public.hep_item_keys_ok(p_clinic_id, p_items) then
+    raise exception 'Picture does not belong to this clinic.';
   end if;
 
   -- Prescribing never creates a patient: the patient must already exist in this clinic (Add patient sheet first).
@@ -651,10 +686,10 @@ begin
     duration_days, target_pct, checkin_on, feedback_default, sessions_per_day
   ) values (
     v_program_id, p_clinic_id, v_resolved_patient_id, p_therapist_id, p_source_template_id,
-    btrim(p_title), 'active', coalesce(p_today, current_date),
+    btrim(p_title), 'active', v_today,
     case when coalesce(p_settings, '{}'::jsonb) ? 'durationDays' then nullif(p_settings->>'durationDays', '')::smallint else 7 end,
     coalesce(nullif(p_settings->>'targetPct', '')::smallint, 70),
-    coalesce(p_today, current_date) + case when coalesce(p_settings, '{}'::jsonb) ? 'checkinDays'
+    v_today + case when coalesce(p_settings, '{}'::jsonb) ? 'checkinDays'
       then nullif(p_settings->>'checkinDays', '')::int else 7 end,
     coalesce(nullif(p_settings->>'feedbackDefault', ''), 'pain'),
     coalesce(nullif(p_settings->>'sessionsPerDay', '')::smallint, 1)
@@ -680,12 +715,12 @@ begin
       nullif(v_item->>'reps', '')::smallint,
       nullif(v_item->>'holdSeconds', '')::smallint,
       v_spd,
-      jsonb_build_array(jsonb_build_object('from', coalesce(p_today, current_date)::text, 'sessionsPerDay', v_spd)),
+      jsonb_build_array(jsonb_build_object('from', v_today::text, 'sessionsPerDay', v_spd)),
       coalesce(v_item->>'side', 'none'),
       coalesce(v_item->>'stopIf', ''),
       coalesce(v_item->>'specialInstructions', ''),
       v_idx,
-      coalesce(p_today, current_date),
+      v_today,
       coalesce(array(select jsonb_array_elements_text(coalesce(v_item->'equipment', '[]'::jsonb))), '{}'::text[]),
       coalesce(nullif(v_item->>'doseType', ''), 'reps'),
       nullif(v_item->>'durationSeconds', '')::smallint,
@@ -709,8 +744,22 @@ begin
   values (v_resolved_patient_id, p_clinic_id)
   on conflict (patient_id) do nothing;
 
-  select token, (pin_hash is null) into v_token, v_needs_pin
-    from public.patient_hep_access where patient_id = v_resolved_patient_id;
+  select (pin_hash is null), (link_revoked_at is not null) into v_needs_pin, v_revoked
+    from public.patient_hep_access where patient_id = v_resolved_patient_id
+     for update;
+
+  -- A revoked link never comes back to life: prescribing again issues a new link (the old one stays dead), forgets
+  -- remembered phones and needs a new PIN, because whoever had the old link may also know the old PIN.
+  if v_revoked then
+    update public.patient_hep_access
+       set token = public.generate_url_safe_token(),
+           link_revoked_at = null,
+           failed_attempts = 0, locked_until = null,
+           updated_at = now()
+     where patient_id = v_resolved_patient_id;
+    delete from public.hep_device_sessions where patient_id = v_resolved_patient_id;
+    v_needs_pin := true;
+  end if;
 
   if v_pin is null and v_needs_pin then
     v_pin := lpad(((get_byte(extensions.gen_random_bytes(2), 0) * 256 + get_byte(extensions.gen_random_bytes(2), 1)) % 10000)::text, 4, '0');
@@ -718,10 +767,12 @@ begin
   if v_pin is not null then
     update public.patient_hep_access
        set pin_hash = extensions.crypt(v_pin, extensions.gen_salt('bf')),
-           link_revoked_at = null,
+           failed_attempts = 0, locked_until = null,
            updated_at = now()
      where patient_id = v_resolved_patient_id;
   end if;
+
+  select token into v_token from public.patient_hep_access where patient_id = v_resolved_patient_id;
 
   return jsonb_build_object('programId', v_program_id, 'patientId', v_resolved_patient_id, 'token', v_token, 'pin', v_pin);
 end;
@@ -737,7 +788,7 @@ create or replace function public.update_program(
   p_status text,
   p_items jsonb,
   p_custom_pin text default null,
-  p_today date default current_date,
+  p_today date default null,                    -- null = the clinic's own today
   p_settings jsonb default null
 ) returns void
 language plpgsql
@@ -755,8 +806,9 @@ declare
   v_new_spd smallint;
   v_today_spd smallint;
   v_sched jsonb;
-  v_today_str text := coalesce(p_today, current_date)::text;
-  v_tomorrow text := (coalesce(p_today, current_date) + 1)::text;
+  v_today date;
+  v_today_str text;
+  v_tomorrow text;
 begin
   select * into v_prog from public.programs where id = p_program_id for update;
   if not found then
@@ -765,6 +817,12 @@ begin
   if not public.is_hep_staff(v_prog.clinic_id) then
     raise exception 'Not a member of this clinic.';
   end if;
+  if not public.hep_item_keys_ok(v_prog.clinic_id, p_items) then
+    raise exception 'Picture does not belong to this clinic.';
+  end if;
+  v_today := coalesce(p_today, platform_admin.clinic_today(v_prog.clinic_id));
+  v_today_str := v_today::text;
+  v_tomorrow := (v_today + 1)::text;
 
   if p_status = 'active' and v_prog.status <> 'active' then
     if not public.clinic_has_unlimited_hep(v_prog.clinic_id) then
@@ -878,12 +936,12 @@ begin
         nullif(v_item->>'reps', '')::smallint,
         nullif(v_item->>'holdSeconds', '')::smallint,
         v_new_spd,
-        jsonb_build_array(jsonb_build_object('from', coalesce(p_today, current_date)::text, 'sessionsPerDay', v_new_spd)),
+        jsonb_build_array(jsonb_build_object('from', v_today::text, 'sessionsPerDay', v_new_spd)),
         coalesce(v_item->>'side', 'none'),
         coalesce(v_item->>'stopIf', ''),
         coalesce(v_item->>'specialInstructions', ''),
         v_idx,
-        coalesce(p_today, current_date),
+        v_today,
         coalesce(array(select jsonb_array_elements_text(coalesce(v_item->'equipment', '[]'::jsonb))), '{}'::text[]),
         coalesce(nullif(v_item->>'doseType', ''), 'reps'),
         nullif(v_item->>'durationSeconds', '')::smallint,
@@ -899,7 +957,7 @@ begin
 
   -- Soft-remove items omitted from the updated list so past logs stay intact
   update public.program_items
-     set removed_on = coalesce(p_today, current_date)
+     set removed_on = v_today
    where program_id = p_program_id
      and removed_on is null
      and not (id = any(v_kept_ids));
@@ -927,7 +985,7 @@ create or replace function public.copy_template_to_program(
   p_patient_id uuid,
   p_therapist_id uuid default null,
   p_custom_pin text default null,
-  p_today date default current_date
+  p_today date default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -1285,6 +1343,9 @@ declare
   v record;
   v_device text;
 begin
+  if not public.hep_rate_ok(p_token) then
+    return jsonb_build_object('ok', false, 'reason', 'busy');
+  end if;
   select * into v from public.hep_verify(p_token, p_pin);
   if v.outcome <> 'ok' then
     return jsonb_build_object('ok', false, 'reason', v.outcome, 'attemptsLeft', v.attempts_left);
@@ -1330,6 +1391,10 @@ begin
      set pin_hash = extensions.crypt(v_pin, extensions.gen_salt('bf')),
          failed_attempts = 0, locked_until = null, updated_at = now()
    where patient_id = p_patient_id;
+  if not found then
+    -- Never hand back a PIN that was not saved.
+    raise exception 'This patient has no exercise link yet.';
+  end if;
   delete from public.hep_device_sessions where patient_id = p_patient_id;
   return v_pin;
 end;
@@ -1901,6 +1966,9 @@ begin
          updated_at = now()
    where patient_id = p_patient_id
    returning token into v_token;
+  if v_token is null then
+    raise exception 'This patient has no exercise link yet.';
+  end if;
 
   delete from public.hep_device_sessions where patient_id = p_patient_id;
 

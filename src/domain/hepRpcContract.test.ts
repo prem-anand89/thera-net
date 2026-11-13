@@ -77,5 +77,13 @@ describe('HEP Locked Database Migration Contract', () => {
     expect(sql).toContain('create or replace function public.hep_rate_ok');
     expect(sql).not.toMatch(/create table if not exists public\.program_logs \([^;]*pain_score/); // pain lives on the session check now
     expect(sql).toContain("'hep_reminder'");
+    // Review 2026-11-13: item picture keys checked per clinic; dates default to the clinic's day, never UTC;
+    // a revoked link comes back only as a new link; no PIN is handed back unless it was saved.
+    expect(sql.match(/public\.hep_item_keys_ok\((p_clinic_id|v_prog\.clinic_id), p_items\)/g)?.length).toBe(3);
+    expect(sql).not.toContain('p_today date default current_date');
+    expect(sql).not.toContain('coalesce(p_today, current_date)');
+    expect(sql).toContain('Therapist does not belong to this clinic.');
+    expect(sql).toContain('A revoked link never comes back to life');
+    expect(sql).toContain('This patient has no exercise link yet.');
   });
 });
