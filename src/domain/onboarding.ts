@@ -22,6 +22,9 @@ export function isPathAllowedDuringClinicOnboarding(pathname: string): boolean {
   if (pathname === '/setup') return true;
   if (pathname.startsWith('/f/')) return true;
   if (pathname.startsWith('/book/')) return true;
+  // HEP: the patient's exercise page (no login) and the HEP area, so an exercise-first signup is not forced through the wizard.
+  if (pathname.startsWith('/p/')) return true;
+  if (pathname === '/hep') return true;
   return false;
 }
 

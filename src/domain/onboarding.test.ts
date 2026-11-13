@@ -20,6 +20,8 @@ describe('onboarding helpers', () => {
 
   it('isPathAllowedDuringClinicOnboarding', () => {
     expect(isPathAllowedDuringClinicOnboarding('/onboarding')).toBe(true);
+    expect(isPathAllowedDuringClinicOnboarding('/p/abc123')).toBe(true);
+    expect(isPathAllowedDuringClinicOnboarding('/hep')).toBe(true);
     expect(isPathAllowedDuringClinicOnboarding('/setup')).toBe(true);
     expect(isPathAllowedDuringClinicOnboarding('/onboarding/profile')).toBe(false);
     expect(isPathAllowedDuringClinicOnboarding('/workspace')).toBe(false);
