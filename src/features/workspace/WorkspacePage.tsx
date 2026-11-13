@@ -86,6 +86,8 @@ import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
+import { useSetupProgress } from '@/features/setup/useSetupProgress';
+import { FirstRunCards } from './FirstRunCards';
 import { NotificationNudge } from '@/features/notifications/NotificationNudge';
 import {
   IconBook,
@@ -270,6 +272,18 @@ export function WorkspacePage() {
   const { displayName: accountName } = useClinicRole(clinic.id);
   const { canBill, canCollectPayment, canViewClinicalNotes, canEditSettings } = usePermissions();
   const navigate = useNavigate();
+  // The install prompt waits for the first saved visit, so a new clinic is not asked for it before it has seen the app work.
+  const visitLogged = useSetupProgress(clinic.id)?.signals.visitLogged ?? false;
+  // While Workspace sits idle, fetch New Visit's code so the first New Visit tap opens at once.
+  useEffect(() => {
+    const load = () => void import('@/features/visits/NewVisitPage');
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(load);
+      return () => cancelIdleCallback(id);
+    }
+    const timer = setTimeout(load, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { therapistSplit } = clinicBillingConfig(clinic);
   // Patient Communications, Slice 2 — "something arrived" surface per the
@@ -938,7 +952,8 @@ export function WorkspacePage() {
 
   return (
     <div className="space-y-5">
-      <InstallAppBanner />
+      {visitLogged && <InstallAppBanner />}
+      <FirstRunCards clinicId={clinic.id} isAdmin={canEditSettings} />
       <AppointmentDetailsPanel
         returnTo="/workspace"
         appointment={openAppointment}

@@ -22,6 +22,8 @@ import {
 export interface SetupState extends SetupProgress {
   /** Whether the pinned bar on Workspace/Settings/account menu shows. */
   nudgeVisible: boolean;
+  /** The facts behind the steps (a therapist exists, a service is priced, a visit was logged). */
+  signals: SetupSignals;
   /** True once a visit has been logged: only then can the bar be hidden. */
   canHide: boolean;
   /** Hide the pinned bar on this device (the same flag the old checklist's dismissal wrote). */
@@ -96,6 +98,7 @@ export function useSetupProgress(clinicId: string): SetupState | undefined {
 
   return {
     ...progress,
+    signals,
     nudgeVisible: isSetupNudgeVisible(signals, progress, metaRows.dismissed),
     canHide: hasVisits,
     hide: async () => {

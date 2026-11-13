@@ -83,6 +83,7 @@ import { useIsPhone } from './useIsPhone';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
+import { NoTherapistsNotice } from './NoTherapistsNotice';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
@@ -1025,6 +1026,16 @@ export function ScheduleBookingsView({
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keys', group: 'view', desktopOnly: true, onSelect: () => setShortcutsOpen(true) },
   ];
   const moreMenu = <ScheduleMenu items={menuItems} isPhone={isPhone} />;
+
+  // Nobody on the roster yet: send the admin to add one instead of showing an empty grid.
+  if (therapists !== undefined && !therapists.some((t) => t.active !== false)) {
+    return (
+      <div className="space-y-4 pb-24 tab:pb-20">
+        <ScheduleTabs {...tabs} />
+        <NoTherapistsNotice canManage={canManageAll} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-24 tab:pb-20">

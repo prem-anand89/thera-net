@@ -153,7 +153,7 @@ export function VisitLoggedCard({
   therapistName,
   paymentDue,
   receivedPaise = 0,
-  canBill,
+  canBill: canBillProp,
   followUpSlot,
   clinicalDocsEnabled,
   enablePatientComms,
@@ -166,6 +166,9 @@ export function VisitLoggedCard({
   onDone,
   onEdit,
 }: VisitLoggedCardProps) {
+  // A free visit has nothing to bill, unless it is a later session of a package that was paid for.
+  const isPackageContinuation = justSaved.isPackage && (justSaved.packageSessionNumber ?? 1) > 1;
+  const canBill = canBillProp && (justSaved.billPaise > 0 || isPackageContinuation);
   const patientFirstName = justSaved.patientName.trim().split(/\s+/)[0] || 'patient';
 
   // Primary hero action: what is owed > clinical note > bill

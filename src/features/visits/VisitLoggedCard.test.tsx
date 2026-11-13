@@ -14,6 +14,23 @@ vi.mock('@tanstack/react-router', () => ({
 
 afterEach(cleanup);
 
+function baseSaved() {
+  return {
+    visitId: 'visit-123',
+    patientId: 'patient-456',
+    patientName: 'Eeshaan Sharma',
+    patientPhone: '9876543210',
+    serviceLabel: 'Physiotherapy Assessment',
+    isPackage: false,
+    alreadyCollected: true,
+    collectedLabel: 'UPI',
+    therapistId: 'therapist-789',
+    billPaise: 150000,
+    visitDate: '2026-10-25',
+    mrno: '1042',
+  };
+}
+
 function renderCard(props: Partial<VisitLoggedCardProps> = {}) {
   const defaultProps: VisitLoggedCardProps = {
     justSaved: {
@@ -96,6 +113,22 @@ describe('VisitLoggedCard', () => {
 
     rerender(<VisitLoggedCard {...props} clinicalDocsEnabled={false} />);
     expect(screen.queryByTestId('clinical-note-link')).not.toBeInTheDocument();
+  });
+
+  it('no Give bill for a free visit', () => {
+    renderCard({ justSaved: { ...baseSaved(), billPaise: 0, alreadyCollected: false }, clinicalDocsEnabled: false });
+    expect(screen.queryByRole('button', { name: /Give bill/ })).not.toBeInTheDocument();
+  });
+
+  it('Give bill still shows for a priced visit and for a package continuation', () => {
+    const { unmount } = renderCard({ justSaved: baseSaved(), clinicalDocsEnabled: false });
+    expect(screen.getByRole('button', { name: /Give bill/ })).toBeInTheDocument();
+    unmount();
+    renderCard({
+      justSaved: { ...baseSaved(), billPaise: 0, isPackage: true, packageSessionNumber: 2, packageTotalSessions: 5 },
+      clinicalDocsEnabled: false,
+    });
+    expect(screen.getByRole('button', { name: /Give bill/ })).toBeInTheDocument();
   });
 
   it('handles give bill button', () => {

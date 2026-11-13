@@ -34,6 +34,10 @@ vi.mock('@/features/setup/SetupProgressBar', () => ({
   SetupProgressBar: () => null,
 }));
 
+vi.mock('@/features/setup/useSetupProgress', () => ({
+  useSetupProgress: () => ({ signals: { visitLogged: true, hasTherapist: true, servicesPriced: true } }),
+}));
+
 vi.mock('@/features/notifications/NotificationNudge', () => ({
   NotificationNudge: () => null,
 }));
