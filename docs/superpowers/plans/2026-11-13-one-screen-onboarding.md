@@ -1,10 +1,10 @@
-# One-Screen Onboarding Implementation Plan
+# Short Onboarding (Practice + Services) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A new clinic goes from sign-up to a usable Workspace through one screen (practice name, your name, "I treat patients myself", where you see patients) and one tap, with everything else asked later, when it is needed.
+**Goal:** A new clinic goes from sign-up to a usable Workspace through two short screens on one page: **Your practice** (practice name, your name, "I treat patients myself", where you see patients) and **Your services** (at least one service priced above 0), then one tap. Everything else is asked later, when it is needed.
 
-**Architecture:** `create_clinic_with_admin` gains optional parameters (code, time zone, country code, care locations, complete-onboarding) and marks onboarding complete in the same transaction, so Shell never blocks. The client then writes the owner's therapist row and the ₹0 starter services through the normal local-first repos (Dexie first, outbox after), so they are on the device at once and the first New Visit works offline-fast. The old `/onboarding` wizard stays only for clinics created before this change that never finished it.
+**Architecture:** `create_clinic_with_admin` gains optional parameters (code, time zone, country code, care locations, complete-onboarding) and marks onboarding complete in the same transaction, so Shell never blocks. Nothing is created until the final **Start** tap (both screens are client state only), so there is never a clinic without services. The client then writes the owner's therapist row and the priced services through the normal local-first repos (Dexie first, outbox after), so they are on the device at once and the first New Visit works offline-fast. The old `/onboarding` wizard stays only for clinics created before this change that never finished it.
 
 **Tech Stack:** React 18 + TypeScript, Tailwind v4, Dexie (offline-first) + Supabase (RPC + outbox sync), Vitest + jsdom, TanStack Router.
 
@@ -12,14 +12,15 @@
 
 ## Decisions (binding)
 
-1. One screen: **Practice or clinic name** (required, blank, placeholder "e.g. Apex Physio"), the derived code line "Bills and patient IDs start with {CODE} · Edit", **Your name** (required, pre-filled from the account's `full_name`/`name` metadata), checkbox **I treat patients myself** (ticked), **Where do you see patients?** with **At the clinic** (ticked) and **Home visits** (unticked). Button **Start using Thera.Net**. No address, phone, email, logo, team or services on this screen.
+1. Screen 1 **Your practice**: **Practice or clinic name** (required, blank, placeholder "e.g. Apex Physio"), the derived code line "Bills and patient IDs start with {CODE} · Edit", **Your name** (required, pre-filled from the account's `full_name`/`name` metadata), checkbox **I treat patients myself** (ticked), **Where do you see patients?** with **At the clinic** (ticked) and **Home visits** (unticked). Button **Next: your services**. No address, phone, email, logo or team.
+1b. Screen 2 **Your services** (same route, client state; **Back** returns to screen 1 with everything kept): the existing `ServiceCatalogTemplateEditor` showing `STARTER_CATALOG_TEMPLATE` with **prices blank** (no example amounts), the dashed "+ Add a service" row, and the hint "Price at least one service to start logging visits. Unpriced ones aren't added; you can add more in Settings." Button **Start using Thera.Net** is disabled until at least one included row has a price **above 0** (₹0 does not count; the old "We don't charge patients" shortcut is not offered here). Duplicate-name check as today. Only rows with a price above 0 are saved.
 2. The clinic code is `clinicCode(name)` until the user edits it; edits go through `cleanClinicCode` and must be 2–6 characters. If the signed-in user already has another clinic with the same code, show "Your other clinic {name} also uses {CODE}." (warning only, never blocks).
 3. Time zone comes from the browser; `UTC`, `Etc/*` or an unknown zone sends `null` and the database default applies. Country code comes only from a small sure table keyed by time zone; anything else sends `null`. Currency and tax regime are **not** set (they are stored-only today).
-4. Starter services = `STARTER_CATALOG_TEMPLATE` with every price **0**.
+4. Services saved = the rows from screen 2 that are included and priced above 0 (owner decision 2026-11-13, replaces the earlier ₹0 seeding).
 5. "Price your services" is done only when an active service has a price above 0, or the clinic chose "We don't charge patients" (the existing manual tick on the `price-services` step).
 6. No therapist (box unticked): setup gets an "Add your first therapist" essential step before prices; Workspace shows "Add a therapist to start logging visits" with a button to Settings → Team.
-7. New Visit: when a chosen single-visit service has price 0 and the clinic hasn't chosen "We don't charge", show an inline notice with a price box (empty, no example amount). Admins get **Save price** (updates the catalog item; the row's price follows). Everyone gets **This visit is free** (hides the notice for this visit). Non-admins also see "Ask an admin to set the price." **Packages are included**: a new package purchase at ₹0 shows it too (the price typed is the whole package's price, e.g. "Physiotherapy Package · 5 sessions"). Only package **continuation** rows (`row.continuation`, a session of a package already paid for) never show it. (Review 2026-11-13: `isPackageRow` is true for any multi-session item, so using it would hide the notice for the unpriced starter package and let it save at ₹0.)
-8. Workspace after a new sign-up: a one-time card "Set your prices · 2 min" with **Set prices** (Settings → Services) and **Later** (hides it for good on this device). The install-app banner shows only after the first visit is saved. New Visit's code is preloaded while Workspace is idle.
+7. **Dropped** (2026-11-13: services are priced in onboarding, so there are no ₹0 starter services). Original text kept for reference: New Visit: when a chosen single-visit service has price 0 and the clinic hasn't chosen "We don't charge", show an inline notice with a price box (empty, no example amount). Admins get **Save price** (updates the catalog item; the row's price follows). Everyone gets **This visit is free** (hides the notice for this visit). Non-admins also see "Ask an admin to set the price." **Packages are included**: a new package purchase at ₹0 shows it too (the price typed is the whole package's price, e.g. "Physiotherapy Package · 5 sessions"). Only package **continuation** rows (`row.continuation`, a session of a package already paid for) never show it. (Review 2026-11-13: `isPackageRow` is true for any multi-session item, so using it would hide the notice for the unpriced starter package and let it save at ₹0.)
+8. No "Set your prices" card (dropped with 7). The install-app banner shows only after the first visit is saved. New Visit's code is preloaded while Workspace is idle.
 9a. Setup checklist gets an **optional** step "Set a password" shown only when the signed-in user has no password identity (`hasPasswordIdentity` from `src/domain/onboarding.ts`), linking to My account (which already offers "Set a password"). Never blocks.
 9b. A ₹0 visit that is not a package continuation shows no **Give bill** on the post-save card (`VisitLoggedCard`): there is nothing to bill.
 9c. Schedule with no active therapist shows "No therapists yet" with a button to Settings → Team instead of an empty grid.
@@ -41,8 +42,8 @@
 
 1. Deployed old clients still call `create_clinic_with_admin` with the old five named arguments: it must keep working (new parameters all have defaults; the old overload is dropped so PostgREST never sees two). → Task 1 SQL check.
 2. A second clinic added from the header (`AddClinicDialog`, `variant="dialog"`) goes through the same form and must not navigate the page away or leave the old wizard showing. → Task 3 test.
-3. The tab closes between the RPC and the local writes: the clinic exists with no therapist and no services. Setup must then show "Add your first therapist" and "Price your services" with an empty list, not crash. → Task 4 test.
-4. A ₹0 price saved from New Visit must not change visits already saved; a new ₹0 **package** must offer it; a package **continuation** must never offer it. → Task 5 tests.
+3. The tab closes in the instant between the RPC and the local writes: the clinic exists with no therapist and no services. Setup must then show "Add your first therapist" and "Price your services" with an empty list, not crash. → Task 4 test.
+4. Services screen: a 0 typed in a row must not count as priced; a priced row that is then unticked must not count; a 5-session package priced alone is enough to start. → Task 2 and Task 3 tests.
 5. A browser reporting `UTC` (VPNs, misconfigured phones) must not set the clinic to UTC. → Task 2 test.
 
 ---
@@ -83,39 +84,47 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
   - `browserTimezone(): string | null` — `Intl.DateTimeFormat().resolvedOptions().timeZone` through `canonicalTimezone`; `null` for `UTC`, `GMT`, `Etc/*`, empty or throwing.
   - `countryCodeForTimezone(tz: string | null): string | null` — table: `Asia/Kolkata → '+91'`, `Asia/Dubai → '+971'`, `Asia/Singapore → '+65'`, `Asia/Kathmandu → '+977'`, `Asia/Colombo → '+94'`, `Asia/Dhaka → '+880'`, `Europe/London → '+44'`, `Australia/Sydney → '+61'`, `Australia/Melbourne → '+61'`; anything else `null`.
   - `isValidClinicCode(code: string): boolean` — `cleanClinicCode(code) === code && code.length >= 2 && code.length <= CLINIC_CODE_MAX`.
-  - `starterCatalogItems(clinicId: UUID, now: string): CatalogItem[]` — one item per `STARTER_CATALOG_TEMPLATE` row, `id: crypto.randomUUID()`, `category: group`, `basePricePaise: 0`, `active: true`, `updatedAt: now`.
+  - `createBlankStarterCatalogDrafts(): CatalogTemplateDraft[]` — `createStarterCatalogDrafts()` with every `basePricePaise` set to `null` (blank box).
+  - `hasPositivePricedDraft(drafts: CatalogTemplateDraft[]): boolean` — true when an `enabled` draft has `basePricePaise > 0`.
+  - `catalogItemsFromDrafts(clinicId: UUID, drafts: CatalogTemplateDraft[], now: string): CatalogItem[]` — one item per `enabled` draft with `basePricePaise > 0`, `id: d.key`, `category: d.group.trim()`, `name: d.name.trim()`, `sessionCount: Math.max(1, d.sessionCount)`, `active: true`, `updatedAt: now` (same mapping as `OnboardingPage.finishOnboarding`).
 
-- [ ] **Step 1: Write failing tests**: `browserTimezone` returns `null` when `Intl` reports `'UTC'` and `'Etc/GMT+5'`, and `'Asia/Kolkata'` when it reports `'Asia/Calcutta'` (mock `Intl.DateTimeFormat`); `countryCodeForTimezone('Asia/Dubai') === '+971'`, `('America/New_York') === null`, `(null) === null`; `isValidClinicCode('DP')` true, `('D')` false, `('dp')` false, `('ABCDEFG')` false, `('A-B')` false; `starterCatalogItems('c1', 't')` has the template's length, every `basePricePaise === 0`, unique ids, names equal the template names.
+- [ ] **Step 1: Write failing tests**: `browserTimezone` returns `null` when `Intl` reports `'UTC'` and `'Etc/GMT+5'`, and `'Asia/Kolkata'` when it reports `'Asia/Calcutta'` (mock `Intl.DateTimeFormat`); `countryCodeForTimezone('Asia/Dubai') === '+971'`, `('America/New_York') === null`, `(null) === null`; `isValidClinicCode('DP')` true, `('D')` false, `('dp')` false, `('ABCDEFG')` false, `('A-B')` false; `createBlankStarterCatalogDrafts()` has the template's length and every price `null`; `hasPositivePricedDraft` is false for all-blank, false when the only price is 0, false when the only priced row is disabled, true for one enabled row at 80000; `catalogItemsFromDrafts` drops blank, 0 and disabled rows and keeps a 5-session package at 350000.
 - [ ] **Step 2: Run** `npx vitest run src/domain/clinicRegion.test.ts src/domain/clinicCode.test.ts src/domain/onboardingCatalogTemplates.test.ts` → FAIL.
 - [ ] **Step 3: Implement** the four functions with the signatures above.
 - [ ] **Step 4: Run** the same command → PASS.
-- [ ] **Step 5: Commit** `feat(onboarding): helpers for browser time zone, country code, clinic code and ₹0 starter services` (stage the six files).
+- [ ] **Step 5: Commit** `feat(onboarding): helpers for browser time zone, country code, clinic code and onboarding services` (stage the six files).
 
-### Task 3: The one-screen form
+### Task 3: The two-screen form (Your practice → Your services)
 
 **Files:**
 - Modify (rewrite the fields and submit): `src/features/settings/CreateClinicForm.tsx` (keep the file name and export so `Shell.tsx` and `AddClinicDialog.tsx` don't change)
+- Modify: `src/features/onboarding/ServiceCatalogTemplateEditor.tsx` only if it can't show blank prices or the new hint as it is (prefer passing props)
 - Test: `src/features/settings/CreateClinicForm.test.tsx` (create or replace)
 
 **Interfaces:**
-- Consumes: Task 1 RPC; Task 2 `browserTimezone`, `countryCodeForTimezone`, `isValidClinicCode`, `starterCatalogItems`, `clinicCode`, `cleanClinicCode`.
+- Consumes: Task 1 RPC; Task 2 `browserTimezone`, `countryCodeForTimezone`, `isValidClinicCode`, `createBlankStarterCatalogDrafts`, `hasPositivePricedDraft`, `catalogItemsFromDrafts`, `firstDuplicateName` (as used in `OnboardingPage`), `clinicCode`, `cleanClinicCode`.
 - Produces: unchanged props `{ onSuccess: () => void; variant?: 'page' | 'dialog' }`.
 
 - [ ] **Step 1: Write failing tests** (mock `getSupabase`, `repos`, `catalogService`, `setActiveClinic`, router `useNavigate`):
-  - `renders only the four fields and the Start button` — queries by label: "Practice or clinic name", "Your name", "I treat patients myself" (checked), "At the clinic" (checked), "Home visits" (not checked); no "Address"/"Phone"/"Email" labels.
+  - `screen 1 renders only the four fields and Next` — queries by label: "Practice or clinic name", "Your name", "I treat patients myself" (checked), "At the clinic" (checked), "Home visits" (not checked); no "Address"/"Phone"/"Email" labels.
   - `shows the derived code line` — typing "Apex Physio" shows "Bills and patient IDs start with AP".
-  - `blocks Start with a one-letter code` — Edit → type "A" → Start disabled and the hint "2 to 6 letters or numbers" shows.
-  - `calls the RPC with the new parameters` — submit → `rpc('create_clinic_with_admin', expect.objectContaining({ p_name: 'Apex Physio', p_invoice_prefix: 'AP', p_walk_in_mrno_prefix: 'AP', p_care_locations: ['clinic'], p_complete_onboarding: true }))`.
-  - `writes the owner therapist and ₹0 starter services locally` — `repos.therapists.put` called once with `userId` = session user, `name` = typed name, `profileConfirmedAt` set, `active: true`; `catalogService.addServices` called with items all priced 0.
+  - `blocks Next with a one-letter code` — Edit → type "A" → Next disabled and the hint "2 to 6 letters or numbers" shows.
+  - `Next shows the services screen with blank prices` — every price box empty; Start disabled; hint "Price at least one service to start logging visits."
+  - `Start stays disabled with only ₹0 prices` — type 0 in one row → still disabled.
+  - `Back keeps screen 1 values` — Next → Back → practice name and ticks unchanged.
+  - `nothing is created before Start` — Next alone → `rpc` not called.
+  - `duplicate service names block Start` with the existing message.
+  - `calls the RPC with the new parameters` — price one row 800 → Start → `rpc('create_clinic_with_admin', expect.objectContaining({ p_name: 'Apex Physio', p_invoice_prefix: 'AP', p_walk_in_mrno_prefix: 'AP', p_care_locations: ['clinic'], p_complete_onboarding: true }))`.
+  - `writes the owner therapist and only the priced services locally` — `repos.therapists.put` called once with `userId` = session user, `name` = typed name, `profileConfirmedAt` set, `active: true`; `catalogService.addServices` called with exactly the rows priced above 0 (one item at 80000 when one row was priced).
   - `skips the therapist when unticked` — untick → submit → `repos.therapists.put` not called.
   - `page variant lands on /workspace` — `navigate({ to: '/workspace' })`.
   - `dialog variant does not navigate` — `variant="dialog"` → `onSuccess` called, `navigate` not called.
   - `Home visits ticked sends both locations` — `p_care_locations: ['clinic','home']`.
-  - `unticking both locations blocks Start` — hint "Choose at least one place".
+  - `unticking both locations blocks Next` — hint "Choose at least one place".
 - [ ] **Step 2: Run** `npx vitest run src/features/settings/CreateClinicForm.test.tsx` → FAIL.
-- [ ] **Step 3: Implement.** Keep the existing `getUser()` signed-in check and its message. Submit order: RPC → `repos.clinics.putLocal(clinic)` (map the returned row with `rowToDomain<Clinic>` instead of the hand-written object) → therapist `repos.therapists.put` (fields as in `OnboardingTeamStep.linkSelfToRoster`, color from `nextUnusedColor([])`) → `catalogService.addServices(starterCatalogItems(...))` → `setActiveClinic` → `void syncEngine.schedule(0)` → page: `navigate({ to: '/workspace' })`; dialog: `onSuccess()`. A failure after the RPC shows the error but still activates the clinic (the setup guide covers the missing pieces). Button text while busy: "Setting up your practice…". Same-owner duplicate code warning from `repos.clinics` list (Decision 2). Remove the logo upload and the bill preview from this form (they live in Settings → General).
+- [ ] **Step 3: Implement.** Keep the existing `getUser()` signed-in check and its message. Submit order: RPC → `repos.clinics.putLocal(clinic)` (map the returned row with `rowToDomain<Clinic>` instead of the hand-written object) → therapist `repos.therapists.put` (fields as in `OnboardingTeamStep.linkSelfToRoster`, color from `nextUnusedColor([])`) → `catalogService.addServices(catalogItemsFromDrafts(...))` → `setActiveClinic` → `void syncEngine.schedule(0)` → page: `navigate({ to: '/workspace' })`; dialog: `onSuccess()`. A failure after the RPC shows the error but still activates the clinic (the setup guide covers the missing pieces). Button text while busy: "Setting up your practice…". Same-owner duplicate code warning from `repos.clinics` list (Decision 2). Remove the logo upload and the bill preview from this form (they live in Settings → General). Screens are a local `step: 'practice' | 'services'` state; both screens' values live in this component until Start. On phones (360px) screen 2 scrolls and the Start button stays visible at the bottom (sticky footer as in the current Step 3).
 - [ ] **Step 4: Run** the test file → PASS; `npm run check:fast` → PASS.
-- [ ] **Step 5: Commit** `feat(onboarding): one-screen clinic setup` (stage the two files).
+- [ ] **Step 5: Commit** `feat(onboarding): short clinic setup (practice, then services)` (stage the changed files).
 
 ### Task 4: Setup guide — real price check, no-therapist step, Hide
 
@@ -128,7 +137,6 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
 
 - [ ] **Step 1: Write failing tests**:
   - `servicesPriced is false when every service is ₹0` and true when one is 50000.
-  - `price-services is done when manually ticked even at ₹0` (the "We don't charge" path; the manual tick already exists — assert it still wins).
   - `add-therapist is the first essential step when there is no therapist` and is absent (or done) when `hasTherapist`.
   - `nudge shows when there is no therapist` and `when no service is priced`.
   - `empty clinic does not crash` — no therapists, empty catalog → steps build, `next.id === 'add-therapist'`.
@@ -139,33 +147,11 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
 - [ ] **Step 4: Run** → PASS; `npm run check:fast`.
 - [ ] **Step 5: Commit** `feat(setup): price check needs a real price, add-therapist step, Hide after the first visit`.
 
-### Task 5: ₹0 price notice in New Visit
+### Task 5: (dropped 2026-11-13)
 
-**Files:**
-- Create: `src/features/visits/ZeroPriceNotice.tsx`
-- Modify: `src/features/visits/NewVisitPage.tsx` (render it right under `<ServiceRows …/>` inside the "Services" `SectionCard`)
-- Test: `src/features/visits/ZeroPriceNotice.test.tsx`
+Services are priced during onboarding, so the ₹0 price notice is not built. Keep the task number so later references stay valid.
 
-**Interfaces:**
-- Consumes: `DraftLine` from `./ServiceRows` (do **not** use `isPackageRow` to skip rows: skip only `row.continuation`); `CatalogItem`; `catalogService` or `repos.catalog.put`; `completedStepsKey`/`parseCompletedSteps` from `@/domain/setupGuide` (the "We don't charge" manual tick).
-- Produces: `ZeroPriceNotice({ rows, catalog, isAdmin, clinicId }: { rows: DraftLine[]; catalog: CatalogItem[]; isAdmin: boolean; clinicId: UUID })`.
-
-- [ ] **Step 1: Write failing tests**:
-  - `shows for a chosen single-visit ₹0 service` — text "{service name} has no price yet."
-  - `shown for a new ₹0 package purchase` — the starter "Physiotherapy Package" (5 sessions) at 0 → notice shows, saving "3500" sets `basePricePaise: 350000`.
-  - `not shown for a package continuation row` (`row.continuation` set).
-  - `not shown when the clinic chose We don't charge` (manual tick on `price-services` in `db.meta`).
-  - `admin saves a price` — type "800" → **Save price** → catalog put with `basePricePaise: 80000`, other fields unchanged.
-  - `Save price disabled while the box is empty or 0`.
-  - `non-admin sees no Save price` and sees "Ask an admin to set the price."
-  - `This visit is free hides it` and it stays hidden for that row while the page is open.
-  - `price box starts empty` (no example amount).
-- [ ] **Step 2: Run** `npx vitest run src/features/visits/ZeroPriceNotice.test.tsx` → FAIL.
-- [ ] **Step 3: Implement.** Amount input reuses the app's existing rupee input (`RupeeInput`, as in `ServiceCatalogTemplateEditor`); label via `currencySymbol()`. Saving updates only the catalog item (saved visits keep their own `catalogPricePaise` snapshot). One notice per distinct ₹0 service.
-- [ ] **Step 4: Run** → PASS; `npm run check:fast`.
-- [ ] **Step 5: Commit** `feat(visits): ask for a price when a ₹0 service is picked`.
-
-### Task 6: Workspace landing — price card, no-therapist message, install banner timing, preload
+### Task 6: Workspace landing — no-therapist message, Give bill on ₹0, Schedule empty state, install banner timing, preload
 
 **Files:**
 - Create: `src/features/workspace/FirstRunCards.tsx`
@@ -175,20 +161,17 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
 
 **Interfaces:**
 - Consumes: Task 4 signals via `useSetupProgress(clinicId)` (`servicesPriced`, `hasTherapist`, `visitLogged` — expose them on `SetupState` if not already).
-- Produces: `FirstRunCards({ clinicId, isAdmin }: { clinicId: UUID; isAdmin: boolean })`; `db.meta` key `firstRunPriceCardDismissedKey(clinicId)` (add beside `setupDismissedKey` in `setupGuide.ts`).
+- Produces: `FirstRunCards({ clinicId, isAdmin }: { clinicId: UUID; isAdmin: boolean })` (only the no-therapist card for now).
 
 - [ ] **Step 1: Write failing tests**:
-  - `admin with no priced service and no visit sees "Set your prices · 2 min"` with **Set prices** linking to Settings → Services and **Later**.
-  - `Later hides it for good` (writes the meta key; re-render shows nothing).
-  - `not shown once a service is priced or a visit exists`.
-  - `no therapist shows "Add a therapist to start logging visits"` with a button to Settings → Team, and hides the price card.
-  - `non-admin sees neither card`.
+  - `no therapist shows "Add a therapist to start logging visits"` with a button to Settings → Team.
+  - `hidden once a therapist exists`; `non-admin does not see it`.
   - In `src/features/visits/VisitLoggedCard.test.tsx`: `no Give bill for a ₹0 visit` (billPaise 0, no continuation) and `Give bill still shows for a priced visit`.
   - In the Schedule tests (`src/features/schedule/ScheduleBookingsView` test file, or a new `NoTherapistsNotice.test.tsx`): `no active therapist shows No therapists yet with a link to Settings → Team`.
 - [ ] **Step 2: Run** → FAIL.
 - [ ] **Step 3: Implement.** Preload: in `WorkspacePage`, a `useEffect` that calls `requestIdleCallback` (fallback `setTimeout(…, 1500)`) to `import()` the same module the router lazily loads for `/visits/new` (copy the import path from `src/app/router.tsx`). Install banner renders only when `useSetupProgress(...)?.visitLogged` is true.
 - [ ] **Step 4: Run** → PASS; `npm run check:fast`.
-- [ ] **Step 5: Commit** `feat(workspace): first-run price card, no-therapist prompt, install banner after the first visit, preload New Visit`.
+- [ ] **Step 5: Commit** `feat(workspace): no-therapist prompt, no Give bill on ₹0, Schedule empty state, install banner after the first visit, preload New Visit`.
 
 ### Task 7: Locked invite row on one-login plans
 
