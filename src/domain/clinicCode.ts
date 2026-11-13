@@ -32,3 +32,8 @@ export function clinicCode(name: string): string {
 export function cleanClinicCode(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CLINIC_CODE_MAX);
 }
+
+/** True when `code` is already clean (uppercase letters and digits) and 2 to {@link CLINIC_CODE_MAX} characters long. */
+export function isValidClinicCode(code: string): boolean {
+  return cleanClinicCode(code) === code && code.length >= 2 && code.length <= CLINIC_CODE_MAX;
+}

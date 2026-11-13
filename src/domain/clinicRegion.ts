@@ -65,6 +65,40 @@ export function canonicalTimezone(zone: string): string {
   return TIMEZONE_ALIASES[zone] ?? zone;
 }
 
+/**
+ * The browser's time zone under its current name, or null when it is empty, throws, or is a placeholder (UTC, GMT,
+ * Etc/*: VPNs and misconfigured phones report these), so the database default applies instead.
+ */
+export function browserTimezone(): string | null {
+  try {
+    const raw = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!raw) return null;
+    const zone = canonicalTimezone(raw);
+    if (zone === 'UTC' || zone === 'GMT' || zone.startsWith('Etc/')) return null;
+    return zone;
+  } catch {
+    return null;
+  }
+}
+
+/** Phone country codes we are sure of, by time zone. Anything not listed is left to the database default. */
+const COUNTRY_CODE_BY_TIMEZONE: Record<string, string> = {
+  'Asia/Kolkata': '+91',
+  'Asia/Dubai': '+971',
+  'Asia/Singapore': '+65',
+  'Asia/Kathmandu': '+977',
+  'Asia/Colombo': '+94',
+  'Asia/Dhaka': '+880',
+  'Europe/London': '+44',
+  'Australia/Sydney': '+61',
+  'Australia/Melbourne': '+61',
+};
+
+/** The phone country code for a time zone when it is certain, else null. */
+export function countryCodeForTimezone(tz: string | null): string | null {
+  return tz ? (COUNTRY_CODE_BY_TIMEZONE[tz] ?? null) : null;
+}
+
 export type TimezoneChoice = { zone: string; label: string };
 export type TimezoneGroup = { region: string; zones: TimezoneChoice[] };
 

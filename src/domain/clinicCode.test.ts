@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanClinicCode, clinicCode } from './clinicCode';
+import { cleanClinicCode, clinicCode, isValidClinicCode } from './clinicCode';
 
 describe('clinicCode', () => {
   it('takes the first letter of the first two words', () => {
@@ -39,5 +39,15 @@ describe('cleanClinicCode', () => {
     expect(cleanClinicCode('bm/26 x')).toBe('BM26X');
     expect(cleanClinicCode('abcdefghij')).toBe('ABCDEF');
     expect(cleanClinicCode('  ')).toBe('');
+  });
+});
+
+describe('isValidClinicCode', () => {
+  it('needs 2 to 6 clean uppercase characters', () => {
+    expect(isValidClinicCode('DP')).toBe(true);
+    expect(isValidClinicCode('D')).toBe(false);
+    expect(isValidClinicCode('dp')).toBe(false);
+    expect(isValidClinicCode('ABCDEFG')).toBe(false);
+    expect(isValidClinicCode('A-B')).toBe(false);
   });
 });

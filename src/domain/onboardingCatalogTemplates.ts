@@ -5,6 +5,8 @@
  * the admin prices (and leaves enabled) are written to `service_catalog` on finish.
  */
 
+import type { CatalogItem, UUID } from './types';
+
 export interface CatalogTemplateDraft {
   /** Stable React key — not persisted. */
   key: string;
@@ -64,3 +66,34 @@ export function zeroCatalogDrafts(drafts: CatalogTemplateDraft[]): CatalogTempla
   return drafts.map((d) => ({ ...d, basePricePaise: 0 }));
 }
 
+
+/** The starter rows with every price box blank (no example amounts) for the onboarding services screen. */
+export function createBlankStarterCatalogDrafts(): CatalogTemplateDraft[] {
+  return createStarterCatalogDrafts().map((d) => ({ ...d, basePricePaise: null }));
+}
+
+/** True when an included row has a price above 0 (₹0 does not count). */
+export function hasPositivePricedDraft(drafts: CatalogTemplateDraft[]): boolean {
+  return drafts.some((d) => d.enabled && d.basePricePaise != null && d.basePricePaise > 0);
+}
+
+/** Start is allowed: charging needs one price above 0; not charging needs one ticked, named row. */
+export function servicesReadyToStart(drafts: CatalogTemplateDraft[], chargesPatients: boolean): boolean {
+  return chargesPatients ? hasPositivePricedDraft(drafts) : drafts.some((d) => d.enabled && d.name.trim() !== '');
+}
+
+/** The catalog rows to save: priced above 0 when charging, every ticked named row at 0 when not. */
+export function catalogItemsFromDrafts(clinicId: UUID, drafts: CatalogTemplateDraft[], now: string, chargesPatients: boolean): CatalogItem[] {
+  return drafts
+    .filter((d) => (chargesPatients ? d.enabled && d.basePricePaise != null && d.basePricePaise > 0 : d.enabled && d.name.trim() !== ''))
+    .map((d) => ({
+      id: d.key,
+      clinicId,
+      category: d.group.trim(),
+      name: d.name.trim(),
+      sessionCount: Math.max(1, d.sessionCount),
+      basePricePaise: chargesPatients ? d.basePricePaise! : 0,
+      active: true,
+      updatedAt: now,
+    }));
+}

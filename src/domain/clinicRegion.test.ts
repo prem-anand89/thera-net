@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { canonicalTimezone, timezoneGroups, clinicCountryCode, clinicCurrencyCode, clinicTaxRegime, clinicTimezone, CURRENCY_CODES, isGstIndia, TAX_REGIMES, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { browserTimezone, countryCodeForTimezone, canonicalTimezone, timezoneGroups, clinicCountryCode, clinicCurrencyCode, clinicTaxRegime, clinicTimezone, CURRENCY_CODES, isGstIndia, TAX_REGIMES, isValidTimezone, regionSummary, timezoneHint } from './clinicRegion';
 
 describe('clinic region', () => {
   it('defaults to India until set', () => {
@@ -66,5 +66,38 @@ describe('regionSummary', () => {
   });
   it('leaves the financial year out when the month is not valid', () => {
     expect(regionSummary({ country: 'UK (+44)', timezone: 'Europe/London', fyStartMonth: 0 }, new Date('2026-01-15T00:00:00Z'))).not.toMatch(/Financial year/);
+  });
+});
+
+describe('browserTimezone', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const mockZone = (tz: string | undefined) =>
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((() => ({ resolvedOptions: () => ({ timeZone: tz }) })) as never);
+  it('is null for UTC and Etc zones', () => {
+    mockZone('UTC');
+    expect(browserTimezone()).toBeNull();
+    mockZone('Etc/GMT+5');
+    expect(browserTimezone()).toBeNull();
+  });
+  it('is null when empty or throwing', () => {
+    mockZone(undefined);
+    expect(browserTimezone()).toBeNull();
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((() => {
+      throw new Error('no');
+    }) as never);
+    expect(browserTimezone()).toBeNull();
+  });
+  it('maps an old name to the current one', () => {
+    mockZone('Asia/Calcutta');
+    expect(browserTimezone()).toBe('Asia/Kolkata');
+  });
+});
+
+describe('countryCodeForTimezone', () => {
+  it('maps sure zones only', () => {
+    expect(countryCodeForTimezone('Asia/Dubai')).toBe('+971');
+    expect(countryCodeForTimezone('Asia/Kolkata')).toBe('+91');
+    expect(countryCodeForTimezone('America/New_York')).toBeNull();
+    expect(countryCodeForTimezone(null)).toBeNull();
   });
 });
