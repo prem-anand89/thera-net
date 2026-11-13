@@ -2,12 +2,13 @@
 // Dependency-free on purpose: the send-push edge function and the app's settings screen
 // both import this one file, so the mapping cannot drift between them.
 
-export type PushCategory = 'booking_request' | 'appointment_changes' | 'low_rating_feedback' | 'hide_patient_names';
+export type PushCategory = 'booking_request' | 'appointment_changes' | 'low_rating_feedback' | 'hep_high_pain' | 'hide_patient_names';
 
 export const PUSH_CATEGORIES: readonly PushCategory[] = [
   'booking_request',
   'appointment_changes',
   'low_rating_feedback',
+  'hep_high_pain',
   'hide_patient_names',
 ];
 
@@ -16,6 +17,7 @@ export const PUSH_CATEGORY_DEFAULT: Record<PushCategory, boolean> = {
   booking_request: true,
   appointment_changes: true,
   low_rating_feedback: true,
+  hep_high_pain: true,
   hide_patient_names: false,
 };
 
@@ -28,6 +30,7 @@ export const PUSH_CATEGORY_BY_KIND = {
   booking_request: 'booking_request',
   overnight_requests: 'booking_request',
   low_rating_feedback: 'low_rating_feedback',
+  hep_high_pain: 'hep_high_pain',
 } as const satisfies Record<string, PushCategory>;
 
 export const PUSH_CATEGORY_COPY: Record<PushCategory, { label: string; description: string }> = {
@@ -43,6 +46,10 @@ export const PUSH_CATEGORY_COPY: Record<PushCategory, { label: string; descripti
     label: 'Low-rated feedback',
     description: 'When a patient rates their visit 2 stars or lower.',
   },
+  hep_high_pain: {
+    label: 'Patient exercise alerts',
+    description: 'When a patient reports pain of 7 or more after their home exercises.',
+  },
   hide_patient_names: {
     label: 'Hide patient names in notifications',
     description: 'Notifications show the time but not the patient name, so nothing shows on a locked screen.',
@@ -55,6 +62,9 @@ export function pushCategoriesFor(role: string, hasTherapistProfile: boolean): P
   if (role === 'admin' || role === 'front_desk') out.push('booking_request');
   if (hasTherapistProfile) out.push('appointment_changes');
   if (role === 'admin') out.push('low_rating_feedback');
+  // HEP pain alerts go to the prescribing therapist (found through their linked therapist profile), or to the admins
+  // when there is none. So admins and linked therapists get the switch; front desk never does (HEP is clinical only).
+  if (role === 'admin' || (role === 'therapist' && hasTherapistProfile)) out.push('hep_high_pain');
   // Anyone who receives an alert naming a patient can choose to keep the name off their lock screen.
   if (out.length) out.push('hide_patient_names');
   return out;
