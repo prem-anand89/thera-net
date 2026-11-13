@@ -83,6 +83,17 @@ describe('CreateClinicForm screen 1', () => {
     await waitFor(() => expect(screen.getByLabelText('Your name')).toHaveValue('Dr Priya'));
   });
 
+  it('Enter on screen 1 moves to services once the fields are valid, and never creates anything', async () => {
+    render(<CreateClinicForm onSuccess={vi.fn()} />);
+    fireEvent.submit(nameBox().closest('form')!);
+    expect(screen.queryByText('Do your patients pay you?')).not.toBeInTheDocument();
+    fireEvent.change(nameBox(), { target: { value: 'Apex Physio' } });
+    await waitFor(() => expect(screen.getByLabelText('Your name')).toHaveValue('Dr Priya'));
+    fireEvent.submit(nameBox().closest('form')!);
+    expect(await screen.findByText('Do your patients pay you?')).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('shows the derived code line', () => {
     render(<CreateClinicForm onSuccess={vi.fn()} />);
     fireEvent.change(nameBox(), { target: { value: 'Apex Physio' } });

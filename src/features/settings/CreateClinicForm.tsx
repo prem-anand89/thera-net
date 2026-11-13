@@ -109,7 +109,11 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
 
   async function handleStart(e: FormEvent) {
     e.preventDefault();
-    if (step !== 'services') return;
+    if (step === 'practice') {
+      // Enter in a field on screen 1 does what the Next button does.
+      if (practiceOk) setStep('services');
+      return;
+    }
     if (created) {
       finish();
       return;
