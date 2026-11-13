@@ -10,6 +10,7 @@ import { colorClashes, nextUnusedColor, therapistColor } from '@/components/sche
 import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
+import { upgradeMailto } from '@/lib/support';
 import { PLAN_TIER_LABELS, TIER_LIMITS, loginsLabel, nextTierWithMore } from '@/domain/plans';
 import { rosterAddBlocked, rosterLimitMessage, rosterOverLimit, rosterUsed } from '@/domain/roster';
 import { getSupabase, publicTherapistPhotoUrl } from '@/lib/supabase';
@@ -1004,6 +1005,38 @@ export function AddTeamMemberForm({
   );
 }
 
+/** One-login plans (Lite, Solo) cannot invite a colleague with their own login: the row below is shown instead. */
+export function showLockedInvite(e: { enforcementEnabled: boolean; loading: boolean; maxMembers: number }): boolean {
+  return e.enforcementEnabled && !e.loading && e.maxMembers <= 1;
+}
+
+/** A locked "Invite a colleague with their own login" row with the way to upgrade; not a disabled form. */
+export function LockedInviteRow({ clinicName, tierLabel, clinicId }: { clinicName: string; tierLabel: string; clinicId: string }) {
+  const href = upgradeMailto(clinicName, tierLabel, { clinicId });
+  return (
+    <div
+      className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 text-sm text-[var(--muted)]"
+      data-testid="locked-invite-row"
+    >
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
+        <rect x="4.5" y="9" width="11" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M7 9V6.5a3 3 0 016 0V9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <span className="min-w-0 flex-1">
+        <span className="font-medium text-[var(--ink)]">Invite a colleague with their own login</span>
+        {' · '}Available on Clinic and Clinic+
+      </span>
+      {href ? (
+        <a href={href} className="text-xs font-medium text-[var(--teal)] underline hover:no-underline">
+          Ask to upgrade
+        </a>
+      ) : (
+        <span className="text-xs">Contact us to upgrade</span>
+      )}
+    </div>
+  );
+}
+
 export function Therapists() {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
@@ -1286,6 +1319,9 @@ export function Therapists() {
           Your plan includes {rosterLimit} team member{rosterLimit === 1 ? '' : 's'} without a login; {rosterUsed(rawTherapists ?? [])} are active. Choose who stays active
           {nextForRoster ? `, or upgrade to ${PLAN_TIER_LABELS[nextForRoster]} (${TIER_LIMITS[nextForRoster].rosterWithoutLogin})` : ''}. Visits and existing staff keep working.
         </p>
+      )}
+      {showLockedInvite(entitlements) && (
+        <LockedInviteRow clinicName={clinic.name} tierLabel={PLAN_TIER_LABELS[entitlements.tier]} clinicId={clinic.id} />
       )}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
         <div className="flex flex-wrap gap-2">
