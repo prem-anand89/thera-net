@@ -152,7 +152,8 @@ function TemplateRow({
 
   return (
     <div className={`px-2.5 py-2.5 sm:px-3 ${row.enabled ? '' : 'opacity-50'}`}>
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* On a phone the name gets the full line and the price drops below it (right-aligned under the Price header), so long names are not cut off. */}
+      <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-2">
         <input
           type="checkbox"
           className="h-4 w-4 shrink-0 rounded accent-[var(--teal)]"
@@ -161,14 +162,14 @@ function TemplateRow({
           aria-label="Include this service"
         />
         <input
-          className={`${inputCls} min-w-0 flex-1 !px-2 py-1.5 sm:!px-3 ${hasExactDuplicate ? '!border-[var(--rust)]' : ''}`}
+          className={`${inputCls} !w-[calc(100%-1.75rem)] min-w-0 flex-none !px-2 py-1.5 sm:!w-auto sm:flex-1 sm:!px-3 ${hasExactDuplicate ? '!border-[var(--rust)]' : ''}`}
           value={row.name}
           onChange={(e) => onUpdate({ name: e.target.value })}
           placeholder="Service name on visits & invoices"
           aria-label="Service name"
         />
         {showPrices && (
-        <div className="relative w-[5.25rem] shrink-0 sm:w-28">
+        <div className="relative ml-auto w-32 shrink-0 sm:ml-0 sm:w-28">
           <span
             aria-hidden="true"
             className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]"
