@@ -153,7 +153,7 @@ describe('CreateClinicForm screen 2', () => {
   it('No path: no price boxes and Start enabled', async () => {
     render(<CreateClinicForm onSuccess={vi.fn()} />);
     await toServices();
-    fireEvent.click(screen.getByLabelText('No: the hospital bills them, or my service is free'));
+    fireEvent.click(screen.getByLabelText('No: I don\'t bill, or the hospital bills'));
     expect(screen.queryAllByLabelText('Price in rupees')).toHaveLength(0);
     expect(startBtn()).toBeEnabled();
     expect(screen.getByText('Name the services you give. No prices needed.')).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('CreateClinicForm screen 2', () => {
   it('switching No to Yes keeps names with blank prices', async () => {
     render(<CreateClinicForm onSuccess={vi.fn()} />);
     await toServices();
-    fireEvent.click(screen.getByLabelText('No: the hospital bills them, or my service is free'));
+    fireEvent.click(screen.getByLabelText('No: I don\'t bill, or the hospital bills'));
     fireEvent.change(screen.getAllByLabelText('Service name')[0], { target: { value: 'My own service' } });
     fireEvent.click(screen.getByLabelText('Yes, I charge patients'));
     expect(screen.getAllByLabelText('Service name')[0]).toHaveValue('My own service');
@@ -220,7 +220,7 @@ describe('CreateClinicForm submit', () => {
   it('No path saves services at 0 and stores the answer', async () => {
     render(<CreateClinicForm onSuccess={vi.fn()} />);
     await toServices();
-    fireEvent.click(screen.getByLabelText('No: the hospital bills them, or my service is free'));
+    fireEvent.click(screen.getByLabelText('No: I don\'t bill, or the hospital bills'));
     fireEvent.click(startBtn());
     await waitFor(() => expect(addServices).toHaveBeenCalled());
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_charges_patients: false });

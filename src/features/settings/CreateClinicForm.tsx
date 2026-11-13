@@ -284,7 +284,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         </label>
         <label className="flex min-h-11 items-center gap-3 text-sm text-[var(--ink)]">
           <input type="radio" name="charges-patients" className="h-5 w-5 accent-[var(--teal)]" checked={!chargesPatients} onChange={() => chooseCharges(false)} />
-          No: the hospital bills them, or my service is free
+          No: I don't bill, or the hospital bills
         </label>
       </fieldset>
       <ServiceCatalogTemplateEditor
