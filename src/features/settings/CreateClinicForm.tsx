@@ -1,84 +1,125 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
-import { PhoneField } from '@/components/PhoneField';
-import { clinicCode } from '@/domain/clinicCode';
-import { fiscalYearOf } from '@/domain/fiscalYear';
-import { formatInvoiceNo } from '@/domain/invoiceNumber';
-import { formatWalkInMrno } from '@/domain/walkInMrno';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { setActiveClinic } from '@/app/useActiveClinic';
-import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
-import { repos } from '@/services';
+import { signOutSafely } from '@/app/signOut';
+import { catalogService, repos } from '@/services';
 import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
-import type { Clinic } from '@/domain/types';
+import { nextUnusedColor } from '@/components/schedule/scheduleColors';
+import { ServiceCatalogTemplateEditor } from '@/features/onboarding/ServiceCatalogTemplateEditor';
+import { cleanClinicCode, clinicCode, isValidClinicCode } from '@/domain/clinicCode';
+import { browserTimezone, countryCodeForTimezone } from '@/domain/clinicRegion';
+import { firstDuplicateName } from '@/domain/nameCheck';
+import {
+  type CatalogTemplateDraft,
+  catalogItemsFromDrafts,
+  createBlankStarterCatalogDrafts,
+  servicesReadyToStart,
+} from '@/domain/onboardingCatalogTemplates';
+import type { CareLocation, Clinic } from '@/domain/types';
+import { rowToDomain } from '@/repositories/rowMapping';
+import { syncEngine } from '@/sync/engine';
 import { getSupabase } from '@/lib/supabase';
 import { toFriendlyMessage } from '@/lib/errors';
-import { signOutSafely } from '@/app/signOut';
-import { formatAmount } from '@/domain/money';
 
 interface CreateClinicFormProps {
   onSuccess: () => void;
-  /** `'page'` (default) is the original zero-clinic-account screen — logo,
-   *  heading, and a Sign out fallback since there's nowhere else to go
-   *  yet. `'dialog'` is the same fields/submit/RPC logic, bare, meant to
-   *  be slotted inside a modal shell (`AddClinicDialog`) that supplies its
-   *  own heading and a Cancel affordance instead. */
+  /** `'page'` (default) is the zero-clinic-account screen: heading and a Sign out fallback, since there is nowhere
+   *  else to go yet. `'dialog'` is the same two screens, bare, to slot inside a modal shell (`AddClinicDialog`)
+   *  that supplies its own heading and a Cancel affordance. */
   variant?: 'page' | 'dialog';
 }
 
 /**
- * Clinic creation is a one-time, online-only operation — the user is by
- * definition at a login/setup screen with a live connection, exactly like
- * invoice issuance. It goes through the create_clinic_with_admin() RPC
- * (one synchronous, authoritative round trip) rather than the local-first
- * outbox: routing it through repos.clinics.put() plus a separate direct
- * client-side clinic_members insert used to fail RLS almost every time,
- * because that insert requires is_clinic_admin(clinic_id), which depends on
- * the clinic row already existing on the server — but the outbox push is
- * async and debounced, so it usually hadn't landed yet. The RPC's AFTER
- * INSERT trigger (add_creator_as_admin) adds the creator as admin
- * atomically in the same transaction, so there's nothing left to race.
+ * Clinic setup in two short screens on one page: Your practice, then Your services. Both screens are client state
+ * only; nothing is created until the final Start tap, so there is never a clinic without services.
+ *
+ * Creation is a one-time, online-only operation, so it goes through the create_clinic_with_admin() RPC (one
+ * synchronous, authoritative round trip; its AFTER INSERT trigger adds the creator as admin in the same transaction)
+ * rather than the local-first outbox. The RPC also marks onboarding complete. The owner's therapist row and the
+ * priced services are then written through the normal local-first repos, so they are on this device at once.
  */
 export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFormProps) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-  });
+  const [step, setStep] = useState<'practice' | 'services'>('practice');
+  const [name, setName] = useState('');
+  const [yourName, setYourName] = useState('');
+  const [iTreat, setITreat] = useState(true);
+  const [atClinic, setAtClinic] = useState(true);
+  const [atHome, setAtHome] = useState(false);
+  /** null = use the code made from the name; a string = the user edited it. */
+  const [codeEdit, setCodeEdit] = useState<string | null>(null);
+  const [chargesPatients, setChargesPatients] = useState(true);
+  const [drafts, setDrafts] = useState<CatalogTemplateDraft[]>(() => createBlankStarterCatalogDrafts());
+  const [otherClinics, setOtherClinics] = useState<{ name: string; invoicePrefix?: string | null; walkInMrnoPrefix?: string | null }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Held locally — the clinic (and the id the storage path needs) doesn't
-  // exist until the RPC below resolves, so the actual upload happens right
-  // after that, not on file selection.
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const logoPreviewRef = useRef<string | null>(null);
+  /** Set once the clinic exists on the server but a later local write failed: Start becomes Continue. */
+  const [created, setCreated] = useState(false);
 
-  function pickLogo(file: File | null) {
-    setLogoFile(file);
-    setLogoPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      const next = file ? URL.createObjectURL(file) : null;
-      logoPreviewRef.current = next;
-      return next;
-    });
-  }
-
-  useEffect(() => () => {
-    if (logoPreviewRef.current) URL.revokeObjectURL(logoPreviewRef.current);
+  // Pre-fill "Your name" from the account, never over something already typed.
+  useEffect(() => {
+    let live = true;
+    void getSupabase()
+      ?.auth.getUser()
+      .then(({ data }) => {
+        const meta = data.user?.user_metadata as { full_name?: string; name?: string } | undefined;
+        const known = (meta?.full_name || meta?.name || '').trim();
+        if (live && known) setYourName((cur) => cur || known);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, []);
 
-  async function handleSubmit(e: FormEvent) {
+  useEffect(() => {
+    let live = true;
+    void repos.clinics
+      .list()
+      .then((rows) => {
+        if (live) setOtherClinics(rows as typeof otherClinics);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const derivedCode = clinicCode(name);
+  const code = codeEdit ?? derivedCode;
+  const codeOk = codeEdit === null || isValidClinicCode(codeEdit);
+  const locations: CareLocation[] = [...(atClinic ? (['clinic'] as const) : []), ...(atHome ? (['home'] as const) : [])];
+  const practiceOk = name.trim() !== '' && yourName.trim() !== '' && codeOk && locations.length > 0;
+  const sameCodeClinic = code ? otherClinics.find((c) => [c.invoicePrefix, c.walkInMrnoPrefix].some((p) => p?.toUpperCase() === code)) : undefined;
+
+  const savedNames = useMemo(() => catalogItemsFromDrafts('', drafts, '', chargesPatients).map((i) => i.name), [drafts, chargesPatients]);
+  const twice = firstDuplicateName(savedNames);
+  const canStart = servicesReadyToStart(drafts, chargesPatients) && !twice;
+
+  function chooseCharges(next: boolean) {
+    setChargesPatients(next);
+    // Prices typed on one path are not carried to the other: Yes always starts with blank boxes.
+    if (next !== chargesPatients) setDrafts((d) => d.map((r) => ({ ...r, basePricePaise: null })));
+  }
+
+  function finish() {
+    onSuccess();
+    if (variant === 'page') void navigate({ to: '/workspace' });
+  }
+
+  async function handleStart(e: FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) {
-      setError('Clinic name is required');
+    if (step !== 'services') return;
+    if (created) {
+      finish();
       return;
     }
+    if (!practiceOk || !canStart) return;
 
     setBusy(true);
     setError(null);
 
+    let clinic: Clinic | null = null;
     try {
       const supabase = getSupabase();
       if (!supabase) {
@@ -87,15 +128,9 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         return;
       }
 
-      // create_clinic_with_admin raises 'not signed in' server-side when
-      // auth.uid() is null — which happens if the client's session never
-      // got picked up (most commonly: confirming a brand-new signup's
-      // email lands the session in one browser/tab, then "Create clinic"
-      // is submitted in a different one with no session at all). Checking
-      // here, with a round trip to the server rather than trusting the
-      // locally cached session, catches that before wasting the RPC call
-      // and gives a specific, actionable message instead of the RPC's
-      // generic-looking failure.
+      // create_clinic_with_admin raises 'not signed in' server-side when auth.uid() is null, which happens when the
+      // session never got picked up (confirming a signup's email in a different browser or tab). Checking with a
+      // round trip first gives a specific, actionable message instead of the RPC's generic failure.
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         setError(
@@ -104,253 +139,198 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         setBusy(false);
         return;
       }
+      const userId = userData.user.id;
 
-      // One clinic code starts both the invoice numbers and the Patient IDs.
-      const code = clinicCode(form.name);
+      const zone = browserTimezone();
       const { data, error: rpcError } = await supabase.rpc('create_clinic_with_admin', {
-        p_name: form.name.trim(),
-        p_email: form.email.trim(),
-        p_phone: form.phone.trim(),
-        p_address: form.address.trim(),
+        p_name: name.trim(),
         p_invoice_prefix: code || 'INV',
+        p_walk_in_mrno_prefix: code || null,
+        p_timezone: zone,
+        p_default_country_code: countryCodeForTimezone(zone),
+        p_care_locations: locations,
+        p_complete_onboarding: true,
+        p_charges_patients: chargesPatients,
       });
-
       if (rpcError) {
         setError(toFriendlyMessage(rpcError));
         setBusy(false);
         return;
       }
 
-      const row = data as {
-        id: string;
-        name: string;
-        email: string | null;
-        phone: string | null;
-        address: string | null;
-        gst_no: string | null;
-        logo_path: string | null;
-        partner_hospital_name: string | null;
-        partner_hospital_logo_path: string | null;
-        invoice_prefix: string;
-        clinic_split_pct: number;
-        tax_pct: number;
-        tds_basis: 'gross_bill' | 'clinic_share';
-        fy_start_month: number;
-        enable_therapist_split: boolean;
-        updated_at: string;
-      };
-
-      // Best-effort: the clinic is already created at this point, so a
-      // failed logo upload shouldn't block onboarding — it can always be
-      // added later in Settings. Uses the same bucket/path convention as
-      // Settings' own uploadLogo.
-      let logoPath = row.logo_path;
-      if (logoFile) {
-        const path = `${row.id}/logo-${Date.now()}.${logoFile.name.split('.').pop()}`;
-        const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, logoFile);
-        if (!uploadError) logoPath = path;
-        else console.error('Clinic logo upload failed:', uploadError);
-      }
-
-      const clinic: Clinic = {
-        id: row.id,
-        name: row.name,
-        slotDurationMinutes: 30,
-        email: row.email,
-        phone: row.phone,
-        address: row.address,
-        gstNo: row.gst_no,
-        logoPath,
-        partnerHospitalName: row.partner_hospital_name,
-        partnerHospitalLogoPath: row.partner_hospital_logo_path,
-        invoicePrefix: row.invoice_prefix,
-        walkInMrnoPrefix: code || null,
-        clinicSplitPct: row.clinic_split_pct,
-        taxPct: row.tax_pct,
-        tdsBasis: row.tds_basis,
-        fyStartMonth: row.fy_start_month,
-        enableTherapistSplit: row.enable_therapist_split,
-        onboardingCompletedAt:
-          (row as { onboarding_completed_at?: string | null }).onboarding_completed_at ?? null,
-        updatedAt: row.updated_at,
-      };
-
-      // Server already confirmed this row (and added us as admin, in the
-      // same transaction) — cache it locally without re-queuing an outbox
-      // push of our own.
+      clinic = rowToDomain<Clinic>(data as Record<string, unknown>);
+      // The server already confirmed this row (and added us as admin): cache it without queuing a push of our own.
       await repos.clinics.putLocal(clinic);
-      // The uploaded logo path exists only in storage and this local cache
-      // so far — the RPC's row has `logo_path: null` since it predates the
-      // upload, and the RPC does not set the Patient ID prefix. A normal `put` (not `putLocal`) queues those fields for
-      // the usual outbox sync, same as any later edit in Settings.
-      if ((logoFile && logoPath !== row.logo_path) || code) {
-        await repos.clinics.put(clinic);
+      const now = new Date().toISOString();
+      if (iTreat) {
+        await repos.therapists.put({
+          id: crypto.randomUUID(),
+          clinicId: clinic.id,
+          name: yourName.trim(),
+          userId,
+          active: true,
+          registrationNo: null,
+          phone: null,
+          // Confirmed here, so the first visit to Workspace is not intercepted by the "How you appear on bills" page.
+          profileConfirmedAt: now,
+          color: nextUnusedColor([]),
+          updatedAt: now,
+        });
       }
+      await catalogService.addServices(catalogItemsFromDrafts(clinic.id, drafts, now, chargesPatients));
       await setActiveClinic(clinic.id);
-
+      void syncEngine.schedule(0);
       setBusy(false);
-      if (variant === 'page') {
-        onSuccess();
-        void navigate({ to: '/onboarding', search: { step: 2 } });
-      } else {
-        onSuccess();
-      }
+      finish();
     } catch (err) {
       console.error('Clinic creation error:', err);
       setError(err instanceof Error ? toFriendlyMessage(err) : 'Failed to create clinic');
       setBusy(false);
+      if (clinic) {
+        // The clinic exists: use it. The setup guide shows whatever is missing (therapist, prices).
+        setCreated(true);
+        try {
+          await setActiveClinic(clinic.id);
+          void syncEngine.schedule(0);
+        } catch (activateErr) {
+          console.error('Could not open the new clinic:', activateErr);
+        }
+      }
     }
   }
 
-  const code = clinicCode(form.name);
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(2);
-  const fyLabel = fiscalYearOf(now, 4).label;
-
-  const formEl = (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-4"
-    >
-      <Field label="Clinic name *">
+  const practiceScreen = (
+    <div className="space-y-4">
+      <Field label="Practice or clinic name">
         <input
           type="text"
-          required
           className={inputCls}
-          placeholder="e.g., Sunrise Physiotherapy"
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          placeholder="e.g. Apex Physio"
+          autoComplete="organization"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
         />
       </Field>
-      <Field
-        label="Logo (optional)"
-        hint={!logoFile && 'No logo yet? Skip this — you can add one later in Settings.'}
-      >
-        <div className="flex items-center gap-3">
-          {logoPreview ? (
-            <img src={logoPreview} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-[var(--border)] bg-white object-contain p-1.5" />
-          ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)] text-[var(--muted)]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-            </div>
-          )}
-          <div className="flex flex-col items-start gap-1 text-xs">
-            <label className="cursor-pointer font-semibold text-[var(--teal)] hover:underline">
-              {logoFile ? 'Change' : 'Upload a logo'}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => pickLogo(e.target.files?.[0] ?? null)}
-              />
-            </label>
-            {logoFile && (
-              <button type="button" className="text-[var(--muted)] hover:underline" onClick={() => pickLogo(null)}>
-                Remove
-              </button>
-            )}
-          </div>
-        </div>
-      </Field>
-      <Field label="Email">
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          autoCapitalize="none"
-          spellCheck={false}
-          className={inputCls}
-          placeholder="clinic@example.com"
-          value={form.email}
-          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-        />
-      </Field>
-      <Field label="Phone" htmlFor="clinic-phone">
-        <PhoneField id="clinic-phone" value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} />
-      </Field>
-      <Field label="Address">
-        {/* Same box as in Settings: the address prints on bills one line per row. */}
-        <textarea
-          className={`${inputCls} resize-none`}
-          rows={2}
-          autoComplete="street-address"
-          placeholder={'Street\nCity, State — PIN'}
-          value={form.address}
-          onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-        />
-      </Field>
-      <p className="-mt-2 text-xs text-[var(--muted)]">Printed on bills and receipts. Add it now or later in Settings.</p>
-      {variant === 'page' && code ? (
-        // Phones: the full preview sits below the buttons, so show the numbering here, where the name was typed.
-        <p className="rounded-lg bg-[var(--paper)] px-3 py-2 font-mono text-xs text-[var(--muted)] tab:hidden" data-testid="invoice-code-preview-mobile">
-          Invoices {formatInvoiceNo(code, fyLabel, 1)} · Patient IDs {formatWalkInMrno(code, yy, 1)}
+      {codeEdit === null ? (
+        derivedCode ? (
+          <p className="-mt-2 text-xs text-[var(--muted)]">
+            Bills and patient IDs start with {derivedCode} ·{' '}
+            <button type="button" className="font-semibold text-[var(--teal)] hover:underline" onClick={() => setCodeEdit(derivedCode)}>
+              Edit
+            </button>
+          </p>
+        ) : null
+      ) : (
+        <Field label="Clinic code" hint={codeOk ? 'Bills and patient IDs start with this.' : '2 to 6 letters or numbers'}>
+          <input
+            type="text"
+            aria-label="Clinic code"
+            className={`${inputCls} font-mono uppercase`}
+            value={codeEdit}
+            maxLength={6}
+            autoCapitalize="characters"
+            onChange={(e) => setCodeEdit(cleanClinicCode(e.target.value))}
+          />
+        </Field>
+      )}
+      {sameCodeClinic ? (
+        <p className="-mt-2 text-xs text-[var(--amber-strong)]">
+          Your other clinic {sameCodeClinic.name} also uses {code}.
         </p>
       ) : null}
-      <ErrorNote message={error} />
-      <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
-        {busy ? 'Creating clinic…' : variant === 'page' ? 'Continue' : 'Create clinic'}
+      <Field label="Your name">
+        <input
+          type="text"
+          className={inputCls}
+          autoComplete="name"
+          value={yourName}
+          onChange={(e) => setYourName(e.target.value)}
+        />
+      </Field>
+      <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-[var(--ink)]">
+        <input type="checkbox" className="h-5 w-5 accent-[var(--teal)]" checked={iTreat} onChange={(e) => setITreat(e.target.checked)} />
+        I treat patients myself
+      </label>
+      <fieldset className="space-y-1">
+        <legend className="mb-1 text-label font-medium text-[var(--muted)]">Where do you see patients?</legend>
+        <label className="flex min-h-11 items-center gap-3 text-sm text-[var(--ink)]">
+          <input type="checkbox" className="h-5 w-5 accent-[var(--teal)]" checked={atClinic} onChange={(e) => setAtClinic(e.target.checked)} />
+          At a clinic or hospital
+        </label>
+        <label className="flex min-h-11 items-center gap-3 text-sm text-[var(--ink)]">
+          <input type="checkbox" className="h-5 w-5 accent-[var(--teal)]" checked={atHome} onChange={(e) => setAtHome(e.target.checked)} />
+          Home visits
+        </label>
+        {locations.length === 0 ? <p className="text-xs text-[var(--rust)]">Choose at least one place</p> : null}
+      </fieldset>
+      <button type="button" disabled={!practiceOk} className={`${btnPrimary} w-full`} onClick={() => setStep('services')}>
+        Next: your services
       </button>
       {variant === 'page' && (
-        <button
-          type="button"
-          className={`${btnSecondary} w-full`}
-          onClick={() => void signOutSafely()}
-        >
+        <button type="button" className={`${btnSecondary} w-full`} onClick={() => void signOutSafely()}>
           Sign out
         </button>
       )}
+    </div>
+  );
+
+  const servicesScreen = (
+    <div className="space-y-4">
+      <fieldset className="space-y-1">
+        <legend className="mb-1 text-sm font-semibold text-[var(--ink)]">Do your patients pay you?</legend>
+        <label className="flex min-h-11 items-center gap-3 text-sm text-[var(--ink)]">
+          <input type="radio" name="charges-patients" className="h-5 w-5 accent-[var(--teal)]" checked={chargesPatients} onChange={() => chooseCharges(true)} />
+          Yes, I charge patients
+        </label>
+        <label className="flex min-h-11 items-center gap-3 text-sm text-[var(--ink)]">
+          <input type="radio" name="charges-patients" className="h-5 w-5 accent-[var(--teal)]" checked={!chargesPatients} onChange={() => chooseCharges(false)} />
+          No: the hospital bills them, or my service is free
+        </label>
+      </fieldset>
+      <ServiceCatalogTemplateEditor
+        drafts={drafts}
+        onChange={setDrafts}
+        showPrices={chargesPatients}
+        rowNotes={false}
+        hint={
+          chargesPatients
+            ? "Price at least one service to start logging visits. Unpriced ones aren't added; you can add more in Settings."
+            : 'Name the services you give. No prices needed.'
+        }
+      />
+      {twice ? <p role="alert" className="text-sm text-[var(--rust)]">&quot;{twice}&quot; is listed twice. Give each service its own name.</p> : null}
+      <ErrorNote message={error} />
+      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-[var(--surface)] px-1 pb-1 pt-2">
+        {!created && (
+          <button type="button" disabled={busy} className={btnSecondary} onClick={() => setStep('practice')}>
+            Back
+          </button>
+        )}
+        <button type="submit" disabled={busy || (!created && !canStart)} className={`${btnPrimary} flex-1`}>
+          {busy ? 'Setting up your practice…' : created ? 'Continue' : 'Start using Thera.Net'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const formEl = (
+    <form onSubmit={handleStart} className="space-y-4">
+      {step === 'practice' ? practiceScreen : servicesScreen}
     </form>
   );
 
   if (variant === 'dialog') return formEl;
 
   return (
-    <div className="mx-auto mt-4 sm:mt-10 max-w-md px-4 tab:max-w-4xl">
-      <div className="mx-auto max-w-md tab:max-w-none">
-        <OnboardingProgress step={1} />
-      </div>
-      <div className="tab:grid tab:grid-cols-2 tab:items-start tab:gap-6">
-        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7">
-          <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Create your clinic</h1>
-          <p className="mb-6 mt-2 text-sm text-[var(--muted)]">
-            This is what patients see on invoices. GST can wait until Settings.
-          </p>
-          {formEl}
-        </div>
-        {/* A sheet of paper, sized to its content: what this form turns into. Blank fields are simply left out. */}
-        <aside aria-label="Invoice header preview" className="mt-6 tab:mt-0 tab:self-start">
-          <p className="mb-2 text-xs font-medium text-[var(--muted)]">How your bills will look</p>
-          <div className="rounded-lg border border-[var(--border)] bg-white p-5 text-[var(--ink)] shadow-sm sm:p-6">
-            <div className="flex items-start gap-3 border-b border-[var(--border)] pb-3">
-              {logoPreview && (
-                <img src={logoPreview} alt="" className="h-12 w-12 shrink-0 rounded object-contain" />
-              )}
-              <div className="min-w-0">
-                <p className={`break-words font-display text-lg font-semibold leading-tight ${form.name.trim() ? '' : 'text-[var(--muted)]'}`}>
-                  {form.name.trim() || 'Your clinic name'}
-                </p>
-                {form.address.trim() && <p className="mt-1 whitespace-pre-line text-xs text-[var(--muted)]">{form.address.trim()}</p>}
-                {(form.phone.trim() || form.email.trim()) && (
-                  <p className="mt-0.5 break-words text-xs text-[var(--muted)]">
-                    {[form.phone.trim(), form.email.trim()].filter(Boolean).join(' · ')}
-                  </p>
-                )}
-              </div>
-            </div>
-            <p className="mt-3 text-center text-xs font-semibold uppercase tracking-wide">Bill cum receipt</p>
-            {code ? (
-              <p className="mt-2 flex flex-wrap justify-between gap-x-3 font-mono text-[11px] text-[var(--muted)]" data-testid="invoice-code-preview">
-                <span>Bill No {formatInvoiceNo(code, fyLabel, 1)}</span>
-                <span>Patient ID {formatWalkInMrno(code, yy, 1)}</span>
-              </p>
-            ) : null}
-            <div aria-hidden="true" className="mt-3 space-y-1.5 text-xs text-[var(--muted)]">
-              <p className="flex justify-between border-t border-[var(--border)] pt-2"><span>Sample service</span><span className="font-num">{formatAmount(80000)}</span></p>
-              <p className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--ink)]"><span>Total</span><span className="font-num">{formatAmount(80000)}</span></p>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-[var(--muted)]">Sample amounts. Bill numbers run in sequence and never skip.</p>
-        </aside>
+    <div className="mx-auto mt-4 max-w-md px-4 sm:mt-10">
+      <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7">
+        <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">
+          {step === 'practice' ? 'Your practice' : 'Your services'}
+        </h1>
+        <p className="mb-6 mt-2 text-sm text-[var(--muted)]">
+          {step === 'practice' ? 'Two short steps and you can log your first visit.' : 'These appear when you log a visit.'}
+        </p>
+        {formEl}
       </div>
     </div>
   );

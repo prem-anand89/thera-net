@@ -17,9 +17,18 @@ const MAX_SESSIONS = 100;
 export function ServiceCatalogTemplateEditor({
   drafts,
   onChange,
+  showPrices = true,
+  hint,
+  rowNotes = true,
 }: {
   drafts: CatalogTemplateDraft[];
   onChange: (next: CatalogTemplateDraft[]) => void;
+  /** False hides the price boxes (names only). */
+  showPrices?: boolean;
+  /** Replaces the line under the list. */
+  hint?: string;
+  /** False drops the per-row "add a price" reminder (the caller's hint says it once). */
+  rowNotes?: boolean;
 }) {
   const groups = useMemo(
     () => [...groupCatalogDrafts(drafts).entries()],
@@ -56,7 +65,7 @@ export function ServiceCatalogTemplateEditor({
         <div className="flex items-center gap-1.5 border-b border-[var(--border)] bg-[var(--paper)] px-2.5 py-2 text-[11px] sm:gap-2 sm:px-3 font-semibold uppercase tracking-wider text-[var(--muted)]">
           <span className="w-4 shrink-0" aria-hidden="true" />
           <span className="flex-1">Service name</span>
-          <span className="w-[5.25rem] shrink-0 text-right sm:w-28">Price ({currencySymbol()})</span>
+          {showPrices && <span className="w-[5.25rem] shrink-0 text-right sm:w-28">Price ({currencySymbol()})</span>}
         </div>
 
         {groups.map(([group, rows], gIdx) => (
@@ -69,6 +78,8 @@ export function ServiceCatalogTemplateEditor({
                 <TemplateRow
                   key={row.key}
                   row={row}
+                  showPrices={showPrices}
+                  rowNotes={rowNotes}
                   otherSavedItems={pricedSavedItems.filter((item) => item.id !== row.key)}
                   onUpdate={(patch) => updateRow(row.key, patch)}
                 />
@@ -98,7 +109,7 @@ export function ServiceCatalogTemplateEditor({
         </div>
       </div>
       <p className="text-xs text-[var(--muted)]">
-        You can change prices, groups and treatments anytime in Settings → Services &amp; treatments.
+        {hint ?? <>You can change prices, groups and treatments anytime in Settings → Services &amp; treatments.</>}
       </p>
     </div>
   );
@@ -106,10 +117,14 @@ export function ServiceCatalogTemplateEditor({
 
 function TemplateRow({
   row,
+  showPrices,
+  rowNotes,
   otherSavedItems,
   onUpdate,
 }: {
   row: CatalogTemplateDraft;
+  showPrices: boolean;
+  rowNotes: boolean;
   otherSavedItems: { id: string; name: string; active: boolean }[];
   onUpdate: (patch: Partial<CatalogTemplateDraft>) => void;
 }) {
@@ -121,7 +136,7 @@ function TemplateRow({
 
   const willBeSaved = isPricedDraft(row);
   // A ticked row with no price or no name is left out at Finish: say so on the row, not silently. ₹0 is a real price.
-  const missing = !row.enabled
+  const missing = !row.enabled || !rowNotes
     ? null
     : row.basePricePaise == null
       ? `Add a price to include this (${currencySymbol()}0 if it's free).`
@@ -152,6 +167,7 @@ function TemplateRow({
           placeholder="Service name on visits & invoices"
           aria-label="Service name"
         />
+        {showPrices && (
         <div className="relative w-[5.25rem] shrink-0 sm:w-28">
           <span
             aria-hidden="true"
@@ -167,6 +183,7 @@ function TemplateRow({
             className={`font-num ${inputCls} !py-1.5 !pl-4 !pr-1.5 text-right sm:!pl-5 sm:!pr-2 font-semibold tabular-nums text-[var(--ink)]`}
           />
         </div>
+        )}
       </div>
 
       {missing && (
