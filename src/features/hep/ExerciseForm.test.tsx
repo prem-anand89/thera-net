@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import type { Exercise } from '@/domain/hep';
+import { db } from '@/lib/db';
 import { ExerciseForm } from './ExerciseForm';
 
 const saveExercise = vi.fn();
@@ -152,6 +154,20 @@ describe('ExerciseForm', () => {
       id, clinicId: 'c1', title: 'Bird dog', bodyRegion: 'Core', mediaType: 'stills', mediaCaptions: ['Start', ''],
       mediaKeys: [`clinics/c1/exercises/${id}/0-abcdefgh`, `clinics/c1/exercises/${id}/1-abcdefgh`], thumbKey: `clinics/c1/exercises/${id}/thumb-abcdefgh`,
     }));
+  });
+
+  it('hands the saved exercise back (with its new id) and shows it in the local list at once', async () => {
+    const user = userEvent.setup();
+    await db.exercises.clear();
+    saveExercise.mockResolvedValue('server-id');
+    const { onSaved, onClose } = renderForm({ initialTitle: 'Bird dog' });
+    expect(screen.getByLabelText('Name')).toHaveValue('Bird dog');
+    await user.selectOptions(screen.getByLabelText('Body region'), 'Core');
+    await user.click(saveButton());
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onSaved).toHaveBeenCalledWith('server-id', expect.objectContaining({ id: 'server-id', clinicId: 'c1', title: 'Bird dog', bodyRegion: 'Core', active: true, isFavorite: false }));
+    expect((await db.exercises.get('server-id'))?.title).toBe('Bird dog');
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('a GIF is one picture and cannot be mixed with photos', async () => {

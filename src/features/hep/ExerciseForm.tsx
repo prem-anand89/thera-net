@@ -18,6 +18,7 @@ import {
 } from '@/domain/hep';
 import { describeDose, doseToExerciseFields, exerciseToDose, isDoseValid, withKind, type DoseValue } from '@/domain/hepDose';
 import { similarExercise } from '@/domain/hepLibrary';
+import { db } from '@/lib/db';
 import { compressImageForUpload, createThumbnailBlob } from '@/lib/imageCompression';
 import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService } from '@/services/hepService';
@@ -47,11 +48,15 @@ export interface ExerciseFormProps {
   /** Every exercise of the clinic (for the "Similar:" warning and the region list). */
   allExercises: Exercise[];
   onClose: () => void;
-  /** Called with the saved exercise id once it is saved, so the list can refresh and a picker can use it. */
-  onSaved: (id: string) => void;
+  /** The Save button's words (the picker says "Save and add"). */
+  saveLabel?: string;
+  /** A name to start a new exercise with (the picker's "+ New exercise" passes what was typed). */
+  initialTitle?: string;
+  /** Called once it is saved, with the exercise as saved so a picker can use it straight away. */
+  onSaved: (id: string, saved: Exercise) => void;
 }
 
-export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, onSaved }: ExerciseFormProps) {
+export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTitle, saveLabel = 'Save exercise', onClose, onSaved }: ExerciseFormProps) {
   const online = useOnline();
   const isEdit = !!exercise;
   const [id, setId] = useState<string>(() => exercise?.id ?? crypto.randomUUID());
@@ -80,7 +85,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, 
     if (!open) return;
     const ex = exercise;
     setId(ex?.id ?? crypto.randomUUID());
-    setTitle(ex?.title ?? '');
+    setTitle(ex?.title ?? initialTitle ?? '');
     const r = ex ? canonicalRegion(ex.bodyRegion) : '';
     setRegion(r);
     setCustomRegion('');
@@ -174,9 +179,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, 
       }
       if (pictures.length === 0) thumbKey = null;
       const finalKeys = keys.filter((k): k is string => !!k);
-      const saved = await hepService.saveExercise({
-        id,
-        clinicId,
+      const fields = {
         title: title.trim(),
         otherNames,
         bodyRegion: effectiveRegion,
@@ -191,8 +194,13 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, 
         ...doseToExerciseFields(dose),
         stopIf: stopIf.trim(),
         active: exercise?.active ?? true,
-      });
-      onSaved(saved);
+      };
+      const savedId = await hepService.saveExercise({ id, clinicId, ...fields });
+      // Show it in the local list at once; the next sync pull replaces this row with the server's.
+      const now = new Date().toISOString();
+      const saved: Exercise = { ...fields, id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
+      await db.exercises.put(saved).catch(() => {});
+      onSaved(savedId, saved);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the exercise.');
@@ -207,7 +215,8 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, 
     setError(null);
     try {
       await hepService.saveExercise(exerciseToSaveInput(exercise, { active }));
-      onSaved(exercise.id);
+      await db.exercises.update(exercise.id, { active }).catch(() => {});
+      onSaved(exercise.id, { ...exercise, active });
       onClose();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not change the exercise.'); } finally { setBusy(false); }
   }
@@ -218,7 +227,8 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, 
     setError(null);
     try {
       await hepService.saveExercise(exerciseToSaveInput(exercise, { deleted: true }));
-      onSaved(exercise.id);
+      await db.exercises.update(exercise.id, { deleted: true }).catch(() => {});
+      onSaved(exercise.id, { ...exercise, deleted: true });
       onClose();
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not delete the exercise.'); } finally { setBusy(false); }
   }
@@ -241,7 +251,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, onClose, 
     <>
       <Button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</Button>
       <Button type="button" className={btnPrimary} onClick={() => void save()} disabled={busy || !valid || !online}>
-        {busy ? 'Saving…' : !online ? 'Needs a connection' : 'Save exercise'}
+        {busy ? 'Saving…' : !online ? 'Needs a connection' : saveLabel}
       </Button>
     </>
   );

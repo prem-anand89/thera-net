@@ -5,6 +5,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { LoadingRows, segOption, segTrack } from '@/components/ui';
 import { HEP_TABS, type HepSearch, type HepTab } from './hepSearch';
 import { LibraryTab } from './LibraryTab';
+import { TemplatesTab } from './TemplatesTab';
 
 const LABELS: Record<HepTab, string> = { library: 'Library', templates: 'Templates', programs: 'Programs' };
 
@@ -28,7 +29,7 @@ export function HepPage() {
         ))}
       </div>
       {tab === 'library' && <LibraryTab />}
-      {tab === 'templates' && <p className="text-sm text-[var(--muted)]">Templates are coming in the next step.</p>}
+      {tab === 'templates' && <TemplatesTab />}
       {tab === 'programs' && <p className="text-sm text-[var(--muted)]">Programs are coming in the next step.</p>}
     </div>
   );

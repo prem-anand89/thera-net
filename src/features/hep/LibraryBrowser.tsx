@@ -43,6 +43,8 @@ export interface LibraryBrowserProps {
   onToggleFavorite?: (ex: Exercise) => void;
   /** What to show when the clinic has no exercises at all. */
   emptyState?: React.ReactNode;
+  /** Under "No matches" when something was typed (the picker offers "+ New exercise" here). */
+  renderNoMatches?: (query: string) => React.ReactNode;
 }
 
 function Thumb({ ex, url, size }: { ex: Exercise; url: string | undefined; size: number }) {
@@ -64,7 +66,7 @@ function Thumb({ ex, url, size }: { ex: Exercise; url: string | undefined; size:
   );
 }
 
-export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = false, onActivate, selected, disabledIds, onToggleFavorite, emptyState }: LibraryBrowserProps) {
+export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = false, onActivate, selected, disabledIds, onToggleFavorite, emptyState, renderNoMatches }: LibraryBrowserProps) {
   const [filter, setFilter] = useState<LibraryFilter>(EMPTY_LIBRARY_FILTER);
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [shown, setShown] = useState(PAGE);
@@ -226,6 +228,7 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = fa
                 {filterLibrary(live, { ...filter, region: 'All', phase: 'All' }, { usedIds, includeArchived: showArchived }).length} in other regions
               </button>
             )}
+            {filter.query.trim() && renderNoMatches?.(filter.query.trim())}
           </div>
         ) : (
           groups.map((g) => (
