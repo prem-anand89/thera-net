@@ -150,6 +150,8 @@ export interface Program {
   feedbackDefault: 'pain' | 'effort';
   sessionsPerDay: SessionsPerDay;
   firstOpenedAt: string | null;
+  /** Pain scores of 7 or more reported before this moment count as seen (set when any staff member opens the program). */
+  painReviewedThrough?: string | null;
   items: ProgramItem[];
   createdAt: string;
   updatedAt: string;

@@ -4,7 +4,10 @@ import { Navigate, useNavigate, useSearch } from '@tanstack/react-router';
 import { usePermissions } from '@/app/usePermissions';
 import { LoadingRows, segOption, segTrack } from '@/components/ui';
 import { HEP_TABS, type HepSearch, type HepTab } from './hepSearch';
+import { useState } from 'react';
 import { LibraryTab } from './LibraryTab';
+import { StarterSetSheet } from './StarterSetSheet';
+import { ProgramsTab } from './ProgramsTab';
 import { TemplatesTab } from './TemplatesTab';
 
 const LABELS: Record<HepTab, string> = { library: 'Library', templates: 'Templates', programs: 'Programs' };
@@ -14,6 +17,7 @@ export function HepPage() {
   const search = useSearch({ strict: false }) as HepSearch;
   const navigate = useNavigate();
   const tab: HepTab = search.tab ?? 'library';
+  const [starterOpen, setStarterOpen] = useState(false);
 
   if (role === 'unknown') return <LoadingRows rows={3} label="Loading" />;
   if (!canUseExercises) return <Navigate to="/workspace" replace />;
@@ -28,9 +32,10 @@ export function HepPage() {
           </button>
         ))}
       </div>
-      {tab === 'library' && <LibraryTab />}
+      {tab === 'library' && <LibraryTab onStarter={() => setStarterOpen(true)} />}
       {tab === 'templates' && <TemplatesTab />}
-      {tab === 'programs' && <p className="text-sm text-[var(--muted)]">Programs are coming in the next step.</p>}
+      {tab === 'programs' && <ProgramsTab />}
+      <StarterSetSheet open={starterOpen} onClose={() => setStarterOpen(false)} />
     </div>
   );
 }

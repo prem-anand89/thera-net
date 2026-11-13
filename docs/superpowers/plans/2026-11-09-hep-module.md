@@ -2604,7 +2604,17 @@ git commit -m "feat(hep): private R2 pictures: key rules, SigV4 signer, hep-medi
 
 ---
 
-### Task 6: The HEP area (`/hep`): Library, Edit exercise, Templates, Programs, and the menu entry
+### Task 6: The HEP area (`/hep`): Library, Edit exercise, Templates, Programs, and the menu entry (BUILT 2026-11-14)
+
+**Built as planned, with these differences (read before Tasks 7 and 8):**
+- Phones get a scrolling chip row of regions instead of a separate Filters sheet; equipment, type and search sit in a wrapping toolbar. The side list shows from 1000 px (`desktop:`).
+- `ExerciseDoseEditor` has no `showRange` prop yet (ranges are Slice 2). Its props: `value`, `onChange`, `programSessionsPerDay?`, `showProgress?`, `showOptional?`. Shared dose rules live in `src/domain/hepDose.ts` (`DoseValue`, `describeDose`, `withKind`, progress chips, `exerciseToDose`).
+- **Preview as patient** (Edit exercise) and the **face-blur** control are NOT built: both wait for the patient exercise card (Task 8) and a blur-area picker. A single photo is refused (the database wants 2 to 4 photos or one GIF).
+- `TemplatesTab` takes `onUse(template)` and `ProgramsTab` takes `onMessage(row)` and `onPrescribeNext(row)`: the buttons appear only when Task 7 passes them in. Pause, Resume, Extend, Mark completed and Duplicate already work.
+- Dates in the Programs list follow the app's `formatDateDM` ("09/11"), not the preview's "08 Nov".
+- The Library list is live from the local cache; a saved or archived exercise is written to the cache at once and the next sync replaces it.
+- Starter set (`src/domain/hepStarterSet.ts`, 29 exercises, text only, no pelvic floor) is a DRAFT: **an owner or physio must read every line before it ships** (amendment 74). The test checks the marker stays in the file.
+- Building blocks for Task 7: `src/features/hep/hepItems.ts` (copy an exercise into an item, sections, estimate), `programRows.ts` (the Programs row model and signals), `ExercisePicker`, `TemplateEditor`.
 
 Read amendments 13 to 27, 61 to 69, 72 to 74, 77 to 81 first; they are the spec for this task (this task was rewritten on 2026-11-13 to match them; the preview's Screens 1 to 4 show the layouts). Slice 1 scope: no ranges ("+ range" hidden), no patient-changed numbers.
 
