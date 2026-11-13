@@ -7,6 +7,7 @@ import {
   validateInsightsSearch,
 } from '@/features/reports/insightsTrendPeriod';
 import { parseSettingsSearch, type SettingsSearch } from '@/features/settings/sections';
+import { validateHepSearch } from '@/features/hep/hepSearch';
 import { RouterErrorFallback } from './ErrorBoundary';
 
 // Code-split every route except the default post-login landing page
@@ -15,6 +16,9 @@ import { RouterErrorFallback } from './ErrorBoundary';
 // import UI, settings) only loads when actually visited.
 const NewVisitPage = lazy(() =>
   import('@/features/visits/NewVisitPage').then((m) => ({ default: m.NewVisitPage }))
+);
+const HepPage = lazy(() =>
+  import('@/features/hep/HepPage').then((m) => ({ default: m.HepPage }))
 );
 const SetupPage = lazy(() =>
   import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage }))
@@ -535,6 +539,14 @@ const invoicesRedirectRoute = createRoute({
   },
 });
 
+// HEP (home exercise programs). Clinical staff only: HepPage sends front desk back to Workspace.
+const hepRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/hep',
+  validateSearch: validateHepSearch,
+  component: HepPage,
+});
+
 const moreRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/more',
@@ -613,6 +625,7 @@ const routeTree = rootRoute.addChildren([
   importVisitsRoute,
   importVisitsRedirectRoute,
   insightsRoute,
+  hepRoute,
   moreRoute,
   resetPasswordRoute,
   onboardingRoute,

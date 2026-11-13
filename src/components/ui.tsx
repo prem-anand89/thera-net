@@ -734,6 +734,7 @@ export function SheetDialog({
   footer,
   error,
   busy = false,
+  wide = false,
 }: {
   open: boolean;
   title: string;
@@ -743,6 +744,8 @@ export function SheetDialog({
   error?: string | null;
   /** While true, Escape and the backdrop don't close it (a save is in flight). */
   busy?: boolean;
+  /** A wider panel on large screens, for forms with two columns. */
+  wide?: boolean;
 }) {
   const panelRef = useDialogBehavior<HTMLDivElement>(open, onClose, () => !busy);
   const titleId = useId();
@@ -757,7 +760,7 @@ export function SheetDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="dialog-panel flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-[var(--surface)] sm:max-w-md sm:rounded-2xl"
+        className={`dialog-panel flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-[var(--surface)] ${wide ? 'sm:max-w-md desktop:max-w-4xl' : 'sm:max-w-md'} sm:rounded-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 px-5 pt-2.5 sm:pt-5">

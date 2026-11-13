@@ -1,4 +1,4 @@
-export type MainNavPath = '/workspace' | '/schedule' | '/ledger' | '/insights' | '/settings';
+export type MainNavPath = '/workspace' | '/schedule' | '/ledger' | '/insights' | '/hep' | '/settings';
 export type PhoneTabPath = '/workspace' | '/schedule' | '/ledger' | '/more';
 
 function under(pathname: string, prefix: string): boolean {
@@ -20,7 +20,7 @@ export function activePhoneTab(pathname: string): PhoneTabPath | null {
   if (under(pathname, '/workspace')) return '/workspace';
   if (under(pathname, '/schedule')) return '/schedule';
   if (under(pathname, '/ledger') || under(pathname, '/patients')) return '/ledger';
-  if (['/more', '/settings', '/setup', '/insights'].some((p) => under(pathname, p))) return '/more';
+  if (['/more', '/settings', '/setup', '/insights', '/hep'].some((p) => under(pathname, p))) return '/more';
   return null;
 }
 
@@ -30,6 +30,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/ledger', 'Ledger'],
   ['/patients', 'Patients'],
   ['/insights', 'Reports'],
+  ['/hep', 'HEP'],
   ['/settings', 'Settings'],
   ['/setup', 'Setup'],
   ['/visits/new', 'New visit'],

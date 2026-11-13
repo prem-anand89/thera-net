@@ -37,6 +37,7 @@ import {
   IconWorkspace,
   IconLedger,
   IconReports,
+  IconHep,
   IconCalendar,
   IconMore,
 } from '@/components/NavIcons';
@@ -64,6 +65,7 @@ export const NAV = [
   { to: '/schedule', label: 'Schedule', Icon: IconCalendar },
   { to: '/ledger', label: 'Ledger', Icon: IconLedger },
   { to: '/insights', label: 'Reports', Icon: IconReports },
+  { to: '/hep', label: 'HEP', Icon: IconHep },
 ] as const;
 
 /** Filter header nav items by user role / permissions. */
@@ -71,7 +73,8 @@ export function filterNavItems(role: string) {
   return NAV.filter(
     (item) =>
       (item.to !== '/schedule' || role !== 'unknown') &&
-      (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
+      (item.to !== '/insights' || role === 'admin' || role === 'front_desk') &&
+      (item.to !== '/hep' || role === 'admin' || role === 'therapist')
   );
 }
 

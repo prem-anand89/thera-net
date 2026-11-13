@@ -15,6 +15,8 @@ export interface Permissions {
   canViewPayouts: boolean;
   /** Clinical consultation notes — reception has no clinical-documentation need. */
   canViewClinicalNotes: boolean;
+  /** HEP (home exercise programs): clinical staff only, like clinical notes. Front desk never sees the module. Display-level; RLS and `is_hep_staff` are the real boundary. */
+  canUseExercises: boolean;
   /**
    * Issuing invoices / collecting payment at point of care. False for
    * everyone when the legacy `billingEnabled` flag was off (no longer read; billing is always on
@@ -90,6 +92,7 @@ export function usePermissions(): Permissions {
     // an admin on Lite/Solo doesn't get it either.
     canViewPayouts: scope.isAdmin && entitlements.can('revenueSplit'),
     canViewClinicalNotes: !scope.isFrontDesk,
+    canUseExercises: scope.role === 'admin' || scope.role === 'therapist',
     // Plan tier is the outermost gate (a Lite clinic can't bill no matter
     // what invoicingAccess says — see issue_invoice()'s own
     // precedence), then the two existing clinic-owned preferences.

@@ -139,6 +139,23 @@ describe('exercises', () => {
     expect(await hepService.toggleExerciseFavorite('ex-1')).toBe(true);
   });
 
+  it('lists the exercises prescribed since a date, once each, for "Used this week"', async () => {
+    tables.program_items = { data: [{ source_exercise_id: 'e1' }, { source_exercise_id: 'e2' }, { source_exercise_id: 'e1' }], error: null };
+    expect(await hepService.recentlyUsedExerciseIds('c-1', '2026-11-06')).toEqual(['e1', 'e2']);
+    const rec = seen.find((r) => r.table === 'program_items')!;
+    expect(rec.calls).toContainEqual(['eq', ['programs.clinic_id', 'c-1']]);
+    expect(rec.calls).toContainEqual(['gte', ['added_on', '2026-11-06']]);
+    delete tables.program_items;
+  });
+
+  it('counts the programs and templates that carry a copy of an exercise', async () => {
+    tables.program_items = { data: null, error: null, count: 3 } as never;
+    tables.exercise_template_items = { data: null, error: null, count: 1 } as never;
+    expect(await hepService.exerciseUsage('e1')).toEqual({ programs: 3, templates: 1 });
+    delete tables.program_items;
+    delete tables.exercise_template_items;
+  });
+
   it('lists the clinic\'s cached exercises A to Z without archived or deleted ones (works offline)', async () => {
     const ex = (id: string, title: string, over: Partial<Exercise> = {}) => ({ id, clinicId: 'c-1', title, active: true, deleted: false, updatedAt: '2026-11-13T00:00:00Z', ...over }) as Exercise;
     await db.exercises.clear();

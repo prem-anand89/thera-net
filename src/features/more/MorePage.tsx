@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { usePermissions } from '@/app/usePermissions';
-import { IconPatients, IconReports, IconSettings } from '@/components/NavIcons';
+import { IconHep, IconPatients, IconReports, IconSettings } from '@/components/NavIcons';
 import { IconChevronRight } from '@/components/StatIcons';
 
 /**
@@ -10,7 +10,7 @@ import { IconChevronRight } from '@/components/StatIcons';
  * listed: the Schedule tab already carries their badge and inbox.
  */
 export function MorePage() {
-  const { canEditSettings, isAdmin, role } = usePermissions();
+  const { canEditSettings, canUseExercises, isAdmin, role } = usePermissions();
   // Same gate as the desktop nav's Reports item in Shell.tsx.
   const showReports = isAdmin || role === 'front_desk';
 
@@ -20,13 +20,14 @@ export function MorePage() {
       <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
         <MoreItem to="/patients" label="Patients" icon={<IconPatients />} />
         {showReports && <MoreItem to="/insights" label="Reports" icon={<IconReports />} />}
+        {canUseExercises && <MoreItem to="/hep" label="HEP" icon={<IconHep />} />}
         {canEditSettings && <MoreItem to="/settings" label="Settings" icon={<IconSettings />} />}
       </ul>
     </div>
   );
 }
 
-function MoreItem({ to, label, icon }: { to: '/insights' | '/settings' | '/patients'; label: string; icon: ReactNode }) {
+function MoreItem({ to, label, icon }: { to: '/insights' | '/settings' | '/patients' | '/hep'; label: string; icon: ReactNode }) {
   return (
     <li>
       <Link

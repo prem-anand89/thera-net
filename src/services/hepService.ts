@@ -281,6 +281,31 @@ export const hepService = {
     return data === true;
   },
 
+  /** Exercises prescribed since a date (a program item's source), for "Used this week" in the Library and the picker. */
+  async recentlyUsedExerciseIds(clinicId: string, since: string): Promise<string[]> {
+    const supabase = requireOnline();
+    const { data, error } = await supabase
+      .from('program_items')
+      .select('source_exercise_id, programs!inner(clinic_id)')
+      .eq('programs.clinic_id', clinicId)
+      .gte('added_on', since)
+      .not('source_exercise_id', 'is', null);
+    if (error) fail(error);
+    return [...new Set(((data ?? []) as Row[]).map((r) => String(r.source_exercise_id)))];
+  },
+
+  /** How many programs and templates carry a copy of this exercise: an exercise that is used is archived, not deleted. */
+  async exerciseUsage(exerciseId: string): Promise<{ programs: number; templates: number }> {
+    const supabase = requireOnline();
+    const [p, t] = await Promise.all([
+      supabase.from('program_items').select('id', { count: 'exact', head: true }).eq('source_exercise_id', exerciseId),
+      supabase.from('exercise_template_items').select('id', { count: 'exact', head: true }).eq('source_exercise_id', exerciseId),
+    ]);
+    if (p.error) fail(p.error);
+    if (t.error) fail(t.error);
+    return { programs: p.count ?? 0, templates: t.count ?? 0 };
+  },
+
   // ---- Templates ---------------------------------------------------------------
 
   async listTemplates(clinicId: string): Promise<Array<ExerciseTemplate & { usedCount: number }>> {
