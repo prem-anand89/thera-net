@@ -847,6 +847,7 @@ One settings tab with two lists, **Services** and **Treatments** (the same words
   (`/setup`) as secondary (`btnSecondary`), reflecting that Workspace is where day-to-day clinic operations begin.
 - Completion sets `clinics.onboarding_completed_at`; Shell **blocks all in-app routes** except
   `/onboarding` (wizard only), `/reset-password`, and public `/f/*` / `/book/*` until then.
+  `create_clinic_with_admin` (migration `20261113100000`) also takes `p_walk_in_mrno_prefix`, `p_timezone`, `p_default_country_code`, `p_care_locations`, `p_complete_onboarding` and `p_charges_patients`, all with defaults (the old five-argument call still works); invalid region values keep the column defaults, and `p_complete_onboarding => true` stamps `onboarding_completed_at` at creation.
   `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
   seeds unchanged). Existing clinics are backfilled as already complete.
 - **Catalog draft persistence** — step 3 edits are stored in `localStorage` per clinic until finish
@@ -1737,6 +1738,7 @@ closed_weekdays              integer[] NOT NULL (default '{}') — 0 = Sunday;
                              weekly closed days (Settings → Online Booking)
 wards                        text[] (NULLABLE) — preset wards/units for inpatient admissions (e.g. ICU, HDU, Neuro, Ortho, General); configured in Settings → Places of service (migration 20261110010000_inpatient_wards_and_billing.sql)
 ip_billed_by_partner         boolean (NULLABLE, default false) — when true, partner hospital bills inpatients directly; TheraNet suppresses per-session collection and stay invoices, logging sessions and amounts for split tracking only
+charges_patients             boolean NOT NULL DEFAULT true — "Do your patients pay you?" (onboarding screen 2). false = the hospital bills the patients or the service is free: services are saved at 0 and the setup guide counts prices as done. Existing clinics read true (migration `20261113100000_one_screen_onboarding_rpc.sql`)
 onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
                              the post–create-clinic wizard; NULL ⇒ Shell keeps
                              redirecting to `/onboarding`
@@ -3793,6 +3795,7 @@ closed_weekdays              integer[] NOT NULL (default '{}') — 0 = Sunday;
                              weekly closed days (Settings → Online Booking)
 wards                        text[] (NULLABLE) — preset wards/units for inpatient admissions (e.g. ICU, HDU, Neuro, Ortho, General); configured in Settings → Places of service (migration 20261110010000_inpatient_wards_and_billing.sql)
 ip_billed_by_partner         boolean (NULLABLE, default false) — when true, partner hospital bills inpatients directly; TheraNet suppresses per-session collection and stay invoices, logging sessions and amounts for split tracking only
+charges_patients             boolean NOT NULL DEFAULT true — "Do your patients pay you?" (onboarding screen 2). false = the hospital bills the patients or the service is free: services are saved at 0 and the setup guide counts prices as done. Existing clinics read true (migration `20261113100000_one_screen_onboarding_rpc.sql`)
 onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
                              the post–create-clinic wizard; NULL ⇒ Shell keeps
                              redirecting to `/onboarding`

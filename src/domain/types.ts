@@ -185,6 +185,8 @@ export interface Clinic {
   ipBilledByPartner?: boolean | null;
   /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */
   onboardingCompletedAt?: string | null;
+  /** "Do your patients pay you?" from onboarding. False = the hospital bills them or the service is free (services at 0). Absent = true. */
+  chargesPatients?: boolean;
   updatedAt: string;
 }
 
