@@ -10,7 +10,7 @@ function deps(over: Partial<HepMediaDeps> = {}): HepMediaDeps {
     r2Ready: () => true,
     mintGet: vi.fn(async (keys: string[]) => Object.fromEntries(keys.map((k) => [k, `https://signed.example/${k}`]))),
     mintPut: vi.fn(async (key: string) => `https://put.example/${key}`),
-    hydrate: vi.fn(async (payload, prefix) => ({
+    hydrate: vi.fn(async (payload: { items: Array<{ mediaKeys?: string[]; [k: string]: unknown }> }, prefix: string) => ({
       ...payload,
       items: payload.items.map(({ mediaKeys, ...rest }) => ({ ...rest, mediaUrls: (mediaKeys ?? []).filter((k) => k.startsWith(prefix)).map((k) => `https://signed.example/${k}`) })),
     })),

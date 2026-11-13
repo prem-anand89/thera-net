@@ -2363,6 +2363,63 @@ $$;
 revoke all on function public.hep_link_status(uuid) from public, anon;
 grant execute on function public.hep_link_status(uuid) to authenticated;
 
+-- Pause, resume or complete a program without touching its exercises (update_program would soft-remove any item
+-- not listed in p_items). Reactivating counts toward the Lite active-program cap, like update_program.
+create or replace function public.set_program_status(p_program_id uuid, p_status text)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_prog public.programs;
+  v_active_count int;
+begin
+  if p_status is null or p_status not in ('active', 'paused', 'completed') then
+    raise exception 'Unknown status.';
+  end if;
+  select * into v_prog from public.programs where id = p_program_id for update;
+  if not found or not public.is_hep_staff(v_prog.clinic_id) then
+    raise exception 'Program not found.';
+  end if;
+  if p_status = 'active' and v_prog.status <> 'active' and not public.clinic_has_unlimited_hep(v_prog.clinic_id) then
+    select count(*) into v_active_count from public.programs
+     where clinic_id = v_prog.clinic_id and status = 'active' and id <> p_program_id;
+    if v_active_count >= (select l.active_programs from public.hep_tier_limits('lite') l) then
+      raise exception 'You have reached the free-plan limit of % active programs. Visit theranet.in to upgrade.',
+        (select l.active_programs from public.hep_tier_limits('lite') l);
+    end if;
+  end if;
+  update public.programs set status = p_status, updated_at = now() where id = p_program_id;
+end;
+$$;
+revoke all on function public.set_program_status(uuid, text) from public, anon;
+grant execute on function public.set_program_status(uuid, text) to authenticated;
+
+-- Extend a program by 1 to 90 days (Extend on an ended program). An ongoing program has no end to extend.
+create or replace function public.extend_program(p_program_id uuid, p_extra_days int)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare v_clinic uuid;
+begin
+  if p_extra_days is null or p_extra_days < 1 or p_extra_days > 90 then
+    raise exception 'Extend by 1 to 90 days.';
+  end if;
+  select clinic_id into v_clinic from public.programs where id = p_program_id;
+  if v_clinic is null or not public.is_hep_staff(v_clinic) then
+    raise exception 'Program not found.';
+  end if;
+  update public.programs
+     set duration_days = least(90, duration_days + p_extra_days), updated_at = now()
+   where id = p_program_id and duration_days is not null;
+end;
+$$;
+revoke all on function public.extend_program(uuid, int) from public, anon;
+grant execute on function public.extend_program(uuid, int) to authenticated;
+
 -- Shared pain review (amendment 28): set when any clinical staff member opens the program's Exercises view.
 create or replace function public.mark_pain_reviewed(p_program_id uuid)
 returns void
@@ -2499,844 +2556,51 @@ git commit -m "feat(hep): private R2 pictures: key rules, SigV4 signer, hep-medi
 
 ---
 
-### Task 3: Domain Helpers — PIN, Finished-Day Adherence, "Today's Target Sticks", Single-Slot Skip & Snapshots
+### Task 3: Domain rules: adherence, timers, ranges, change summary, search, estimate (BUILT 2026-11-13)
 
-**Files:**
-- Create: `src/domain/hep.ts`
-- Create: `src/domain/hep.test.ts`
-- Modify: `src/domain/onboarding.ts`
-- Modify: `src/domain/onboarding.test.ts`
+**Files (created, with tests next to them):** `src/domain/hep.ts`, `src/domain/hepTimers.ts`, `src/domain/doseRange.ts`, `src/domain/programChanges.ts`; modified `src/domain/onboarding.ts` (+ test): `/p/` and `/hep` are allowed during clinic onboarding.
 
-**Interfaces:**
-- Consumes: `TIER_LIMITS` from `@/domain/plans` (HEP caps)
-- Produces:
-  - Types: `Exercise`, `ExerciseTemplate`, `ExerciseTemplateItem`, `Program`, `ProgramItem`, `ProgramLog`, `SessionsScheduleEntry`
-  - `isFourDigitPin(value: string): boolean` (the PIN is never derived from a phone number)
-  - `sessionsPerDayOnDate(item: Pick<ProgramItem, 'sessionsPerDay' | 'sessionsSchedule'>, date: string): 1 | 2 | 3`
-  - `scheduledSessionsPerDayForTomorrow(item: Pick<ProgramItem, 'sessionsPerDay' | 'sessionsSchedule'>, today: string): 1 | 2 | 3`
-  - `nextSessionSlotToday(item: Pick<ProgramItem, 'id' | 'sessionsPerDay' | 'sessionsSchedule'>, logs: ProgramLog[], today: string): { nextSlot: 1 | 2 | 3 | null; completedCount: number; skippedCount: number; target: 1 | 2 | 3 }`
-  - `skippedSlotsToday(item: Pick<ProgramItem, 'id' | 'sessionsPerDay' | 'sessionsSchedule'>, logs: ProgramLog[], today: string): (1 | 2 | 3)[]` (returns skipped slot indices today so patient can undo skip or complete skipped exercise later in the same session)
-  - **Also new (amendments 61 to 81), tested in `src/domain/hep.test.ts`:** `HEP_BODY_ORDER`, `regionTree(exercises)`, `matchesExerciseSearch(exercise, query)` (other names, plurals, hyphens, one typo), `suggestedDoseType(phase)`, `estimateSessionMinutes(items, programSessionsPerDay, session)`, `sectionAdherence(items, logs, days)`, and `computeProgramAdherence` ignoring `optional` items.
-  - **New (amendments 41 to 45), each with its own small test file next to it:** `src/domain/hepTimers.ts` (`buildHoldPhases`, `buildTimedPhases`, `buildRestPhases`, constants `PT_READY = 5`, `PT_RELAX = 3`, `PT_BACK = 4`; tests: the phase counts in amendment 56 (30, 60, 3, 6), the first phase is `ready`, the last is `relax`, `back` never follows the last rep, `switch` appears once for each-side exercises, rest gives one phase), `src/domain/doseRange.ts` (`formatDose`, `isOutsideRange`; tests: `formatDose(10, 15) === '10–15'`, `formatDose(10, null) === '10'`, 12 within 10 to 15 returns null, 7 returns `'below'`, 18 `'above'`, endpoints inside), `src/domain/programChanges.ts` (`summarizeProgramChanges(before, after)`; tests: added, removed, changed dose, unchanged items omitted, empty when nothing changed)
-  - `computeProgramAdherence(opts: { startDate: string; today: string; items: ProgramItem[]; logs: ProgramLog[] }): { finishedDaysPercent: number | null; todayCompleted: number; todayTarget: number; missedYesterday: boolean }`
-  - `snapshotExerciseToTemplateItem(ex: Exercise, sortOrder: number): ExerciseTemplateItem`
-  - `snapshotTemplateItemToProgramItem(ti: ExerciseTemplateItem, today: string, sortOrder: number): Omit<ProgramItem, 'id' | 'programId'>`
-  - `applySessionsPerDayEdit(item: ProgramItem, newSessionsPerDay: 1 | 2 | 3, today: string): ProgramItem`
-  - `isHighPainAlert(painScore: number | null | undefined): boolean`
-  - Update `src/domain/onboarding.ts` (`isPathAllowedDuringClinicOnboarding` allows `/exercises` and `/p/`) and assert in `src/domain/onboarding.test.ts`.
+**What each holds**
+- `hep.ts`: the types (`Exercise`, `ExerciseTemplate(Item)`, `Program(Item)`, `ProgramLog`, `DoseType`, `DoseFields` shared by template and program items), `EXERCISE_PHASES` in session order (Mobility before Stretching), `suggestedDoseType`, the region lists and `HEP_BODY_ORDER`, `canonicalRegion`, `regionTree` (Pelvic floor group, clinic regions after, archived hidden), `matchesExerciseSearch` (other names, plurals, hyphens, joined words, one typo in words of 5+ letters), the times-a-day rules (`sessionsPerDayOnDate`, `applySessionsPerDayEdit`, `nextSessionSlotToday`, `skippedSlotsToday`), `computeProgramAdherence` (finished days only, optional exercises ignored, days after the program's last day not counted), `sectionAdherence`, `sectionSkipPattern` (a section with nothing done on 4+ of the last 5 finished days while at least half of the rest was done), `estimateItemSeconds` / `estimateSessionMinutes`, the snapshot functions (copies, never links; they carry equipment, kind, rest, captions and `optional`).
+- `hepTimers.ts`: `PT_READY = 5`, `PT_RELAX = 3`, `PT_BACK = 4`; `buildHoldPhases(reps, holdSeconds, eachSide)` (30 phases for 10 reps, 60 for each side), `buildTimedPhases(seconds, eachSide)` (3 or 6), `buildRestPhases(seconds)`, `TIMER_PHASE_CUES`, `totalPhaseSeconds`.
+- `doseRange.ts`: `formatDose`, `isOutsideRange`. `programChanges.ts`: `summarizeProgramChanges(before, after)`.
+- **Not built (dropped by the owner):** the queue helpers (`reorderQueueItem`, `deferQueueItemToEnd`).
+- Tests: 61 across `hep.test.ts`, `hepTimers.test.ts`, `doseRange.test.ts`, `programChanges.test.ts`, `onboarding.test.ts`.
 
-- [ ] **Step 1: Write the failing domain unit tests covering every rule in §3 and §10**
-
-```typescript
-// src/domain/hep.test.ts
-import { describe, it, expect } from 'vitest';
-import {
-  isFourDigitPin,
-  sessionsPerDayOnDate,
-  scheduledSessionsPerDayForTomorrow,
-  applySessionsPerDayEdit,
-  nextSessionSlotToday,
-  skippedSlotsToday,
-  computeProgramAdherence,
-  snapshotExerciseToTemplateItem,
-  snapshotTemplateItemToProgramItem,
-  isHighPainAlert,
-  type Exercise,
-  type ProgramItem,
-  type ProgramLog,
-} from './hep';
-
-describe('HEP Locked Domain Rules', () => {
-  it('accepts exactly four digits as a PIN and nothing else', () => {
-    expect(isFourDigitPin('3210')).toBe(true);
-    expect(isFourDigitPin('321')).toBe(false);
-    expect(isFourDigitPin('32100')).toBe(false);
-    expect(isFourDigitPin('32a0')).toBe(false);
-  });
-
-  it('snapshots copies so later library or template mutations never alter saved copies', () => {
-    const libraryRow: Exercise = {
-      id: 'ex-1',
-      clinicId: 'c-1',
-      title: 'Wall Slides',
-      bodyRegion: 'Shoulder',
-      phase: 'strengthening',
-      instructions: 'Slide arms up slowly',
-      mediaType: 'gif',
-      mediaKeys: ['clinics/c-1/exercises/ex-1/0'],
-      defaultSets: 3,
-      defaultReps: 10,
-      defaultHoldSeconds: 5,
-      defaultSessionsPerDay: 2,
-      side: 'both',
-      stopIf: 'Sharp pinching pain',
-      active: true,
-      deleted: false,
-      version: 1,
-      createdAt: '2026-11-01T00:00:00Z',
-      updatedAt: '2026-11-01T00:00:00Z',
-    };
-
-    const tmplItem = snapshotExerciseToTemplateItem(libraryRow, 0);
-    const progItem = snapshotTemplateItemToProgramItem(tmplItem, '2026-11-08', 0);
-
-    // Mutate library and template afterward
-    libraryRow.title = 'MUTATED LIBRARY TITLE';
-    libraryRow.mediaKeys.push('mutated-key');
-    tmplItem.title = 'MUTATED TEMPLATE TITLE';
-
-    expect(progItem.title).toBe('Wall Slides');
-    expect(progItem.mediaKeys).toEqual(['clinics/c-1/exercises/ex-1/0']);
-  });
-
-  it('keeps both sessionsPerDay column and today schedule at today target when edited, scheduling change for tomorrow', () => {
-    const item: ProgramItem = {
-      id: 'pi-1',
-      programId: 'p-1',
-      title: 'Quad Sets',
-      bodyRegion: 'Knee',
-      phase: 'strengthening',
-      instructions: '',
-      mediaType: 'none',
-      mediaKeys: [],
-      sets: 3,
-      reps: 10,
-      holdSeconds: null,
-      sessionsPerDay: 2,
-      sessionsSchedule: [{ from: '2026-11-08', sessionsPerDay: 2 }],
-      side: 'right',
-      stopIf: '',
-      specialInstructions: '',
-      sortOrder: 0,
-      addedOn: '2026-11-08',
-      removedOn: null,
-    };
-
-    const edited = applySessionsPerDayEdit(item, 3, '2026-11-10');
-    expect(edited.sessionsPerDay).toBe(2); // Column stays at today's number!
-    expect(sessionsPerDayOnDate(edited, '2026-11-10')).toBe(2); // Today sticks!
-    expect(sessionsPerDayOnDate(edited, '2026-11-11')).toBe(3); // Tomorrow uses 3!
-    expect(scheduledSessionsPerDayForTomorrow(edited, '2026-11-10')).toBe(3);
-  });
-
-  it('marks only the next single session slot as skipped so a 2x/day exercise skipped in the morning is still offered for session 2', () => {
-    const item: ProgramItem = {
-      id: 'pi-1',
-      programId: 'p-1',
-      title: 'Heel Slides',
-      bodyRegion: 'Knee',
-      phase: 'strengthening',
-      instructions: '',
-      mediaType: 'none',
-      mediaKeys: [],
-      sets: 3,
-      reps: 10,
-      holdSeconds: null,
-      sessionsPerDay: 2,
-      sessionsSchedule: [{ from: '2026-11-10', sessionsPerDay: 2 }],
-      side: 'left',
-      stopIf: '',
-      specialInstructions: '',
-      sortOrder: 0,
-      addedOn: '2026-11-10',
-      removedOn: null,
-    };
-
-    // Morning: slot 1 is skipped
-    const morningSkipLog: ProgramLog = {
-      id: 'l-skip-1',
-      programItemId: 'pi-1',
-      logDate: '2026-11-10',
-      sessionIndex: 1,
-      skipped: true,
-      completedAt: '2026-11-10T08:00:00Z',
-    };
-
-    const afterSlot1Skip = nextSessionSlotToday(item, [morningSkipLog], '2026-11-10');
-    expect(afterSlot1Skip.nextSlot).toBe(2); // Still offered for session 2 in the evening!
-    expect(afterSlot1Skip.completedCount).toBe(0);
-    expect(afterSlot1Skip.skippedCount).toBe(1);
-
-    // Evening: slot 2 is completed
-    const eveningDoneLog: ProgramLog = {
-      id: 'l-done-2',
-      programItemId: 'pi-1',
-      logDate: '2026-11-10',
-      sessionIndex: 2,
-      skipped: false,
-      completedAt: '2026-11-10T19:00:00Z',
-    };
-
-    const afterSlot2Done = nextSessionSlotToday(item, [morningSkipLog, eveningDoneLog], '2026-11-10');
-    expect(afterSlot2Done.nextSlot).toBeNull(); // All 2 slots accounted for today
-    expect(afterSlot2Done.completedCount).toBe(1);
-    expect(afterSlot2Done.skippedCount).toBe(1);
-    expect(skippedSlotsToday(item, [morningSkipLog, eveningDoneLog], '2026-11-10')).toEqual([1]);
-
-  });
-
-  it('excludes items added today from yesterday denominator and computes adherence on finished days only', () => {
-    const itemDay1: ProgramItem = {
-      id: 'pi-1',
-      programId: 'p-1',
-      title: 'Bridges',
-      bodyRegion: 'Lumbar',
-      phase: 'strengthening',
-      instructions: '',
-      mediaType: 'none',
-      mediaKeys: [],
-      sets: 3,
-      reps: 10,
-      holdSeconds: null,
-      sessionsPerDay: 2,
-      sessionsSchedule: [{ from: '2026-11-09', sessionsPerDay: 2 }],
-      side: 'none',
-      stopIf: '',
-      specialInstructions: '',
-      sortOrder: 0,
-      addedOn: '2026-11-09',
-      removedOn: null,
-    };
-
-    const itemAddedToday: ProgramItem = {
-      ...itemDay1,
-      id: 'pi-2',
-      title: 'Bird Dog',
-      sessionsPerDay: 1,
-      sessionsSchedule: [{ from: '2026-11-10', sessionsPerDay: 1 }],
-      addedOn: '2026-11-10',
-    };
-
-    const logs: ProgramLog[] = [
-      // Yesterday (2026-11-09): completed 1 of 2 sessions on itemDay1; second was skipped
-      { id: 'l1', programItemId: 'pi-1', logDate: '2026-11-09', sessionIndex: 1, skipped: false, completedAt: '2026-11-09T10:00:00Z' },
-      { id: 'l2', programItemId: 'pi-1', logDate: '2026-11-09', sessionIndex: 2, skipped: true, completedAt: '2026-11-09T18:00:00Z' },
-      // Today (2026-11-10): completed 1 session so far (must NOT move finishedDaysPercent)
-      { id: 'l3', programItemId: 'pi-1', logDate: '2026-11-10', sessionIndex: 1, skipped: false, completedAt: '2026-11-10T09:00:00Z' },
-    ];
-
-    const summary = computeProgramAdherence({
-      startDate: '2026-11-09',
-      today: '2026-11-10',
-      items: [itemDay1, itemAddedToday],
-      logs,
-    });
-
-    // Yesterday finished denominator = 2 (itemAddedToday was not on the program yesterday)
-    // Yesterday completed = 1 (skipped does not count) -> 50%
-    expect(summary.finishedDaysPercent).toBe(50);
-    // Today target = 2 (itemDay1) + 1 (itemAddedToday) = 3; completed today = 1
-    expect(summary.todayCompleted).toBe(1);
-    expect(summary.todayTarget).toBe(3);
-    expect(summary.missedYesterday).toBe(true);
-  });
-
-  it('flags pain at 7 or above', () => {
-    expect(isHighPainAlert(6)).toBe(false);
-    expect(isHighPainAlert(7)).toBe(true);
-    expect(isHighPainAlert(10)).toBe(true);
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npx vitest run src/domain/hep.test.ts --maxWorkers=2`
-Expected: FAIL with module not found.
-
-- [ ] **Step 3: Implement `src/domain/hep.ts` and update `src/domain/onboarding.ts`**
-
-Create `src/domain/hep.ts` implementing all interfaces and functions above, and update `isPathAllowedDuringClinicOnboarding` in `src/domain/onboarding.ts` to allow `/exercises` and `/p/` so an exercise-first signup opens `/exercises` without forcing the team or prices wizard first.
-
-```typescript
-// src/domain/hep.ts
-export type ExerciseMediaType = 'none' | 'gif' | 'stills';
-/** The part of a session an exercise belongs to. Programs list items in this order. */
-export const EXERCISE_PHASES = ['warm_up', 'mobility', 'stretching', 'activation', 'strengthening', 'balance', 'functional', 'cool_down', 'other'] as const;
-export type ExercisePhase = (typeof EXERCISE_PHASES)[number];
-export const EXERCISE_PHASE_LABELS: Record<ExercisePhase, string> = {
-  warm_up: 'Warm-up', stretching: 'Stretching', mobility: 'Mobility', activation: 'Activation',
-  strengthening: 'Strengthening', balance: 'Balance', functional: 'Functional', cool_down: 'Cool-down', other: 'Other',
-};
-export type ExerciseSide = 'none' | 'left' | 'right' | 'both';
-export type ProgramStatus = 'active' | 'paused' | 'completed';
-
-export interface Exercise {
-  id: string;
-  clinicId: string;
-  title: string;
-  bodyRegion: string;
-  phase: ExercisePhase;
-  /** Extra regions this exercise also appears under (the main one is `bodyRegion`). */
-  alsoRegions: string[];
-  /** What the patient needs, e.g. 'Theraband'. */
-  equipment: string[];
-  instructions: string;
-  mediaType: ExerciseMediaType;
-  mediaKeys: string[];
-  defaultSets: number;
-  defaultReps: number | null;
-  defaultHoldSeconds: number | null;
-  defaultSessionsPerDay: 1 | 2 | 3;
-  side: ExerciseSide;
-  stopIf: string;
-  active: boolean;
-  deleted: boolean;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ExerciseTemplateItem {
-  id?: string;
-  templateId?: string;
-  sourceExerciseId?: string | null;
-  title: string;
-  bodyRegion: string;
-  phase: ExercisePhase;
-  instructions: string;
-  mediaType: ExerciseMediaType;
-  mediaKeys: string[];
-  sets: number;
-  reps: number | null;
-  holdSeconds: number | null;
-  sessionsPerDay: 1 | 2 | 3;
-  side: ExerciseSide;
-  stopIf: string;
-  sortOrder: number;
-}
-
-export interface ExerciseTemplate {
-  id: string;
-  clinicId: string;
-  title: string;
-  items: ExerciseTemplateItem[];
-  deleted: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SessionsScheduleEntry {
-  from: string; // YYYY-MM-DD
-  sessionsPerDay: 1 | 2 | 3;
-}
-
-export interface ProgramItem {
-  id: string;
-  programId: string;
-  sourceExerciseId?: string | null;
-  title: string;
-  bodyRegion: string;
-  phase: ExercisePhase;
-  instructions: string;
-  mediaType: ExerciseMediaType;
-  mediaKeys: string[];
-  mediaUrls?: string[];
-  sets: number;
-  reps: number | null;
-  holdSeconds: number | null;
-  sessionsPerDay: 1 | 2 | 3;
-  sessionsSchedule: SessionsScheduleEntry[];
-  side: ExerciseSide;
-  stopIf: string;
-  specialInstructions: string;
-  sortOrder: number;
-  addedOn: string; // YYYY-MM-DD
-  removedOn: string | null;
-}
-
-export interface Program {
-  id: string;
-  clinicId: string;
-  patientId: string;
-  therapistId: string | null;
-  sourceTemplateId?: string | null;
-  title: string;
-  status: ProgramStatus;
-  startDate: string;
-  items: ProgramItem[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ProgramLog {
-  id: string;
-  programItemId: string;
-  logDate: string; // YYYY-MM-DD
-  sessionIndex: 1 | 2 | 3;
-  skipped: boolean;
-  completedAt: string;
-}
-
-export function isFourDigitPin(value: string): boolean {
-  return /^\d{4}$/.test(value);
-}
-
-export function isHighPainAlert(painScore: number | null | undefined): boolean {
-  return typeof painScore === 'number' && painScore >= 7;
-}
-
-export function snapshotExerciseToTemplateItem(
-  ex: Exercise,
-  sortOrder: number
-): ExerciseTemplateItem {
-  return {
-    sourceExerciseId: ex.id,
-    title: ex.title,
-    bodyRegion: ex.bodyRegion,
-    phase: ex.phase,
-    instructions: ex.instructions,
-    mediaType: ex.mediaType,
-    mediaKeys: [...ex.mediaKeys],
-    sets: ex.defaultSets,
-    reps: ex.defaultReps,
-    holdSeconds: ex.defaultHoldSeconds,
-    sessionsPerDay: ex.defaultSessionsPerDay,
-    side: ex.side,
-    stopIf: ex.stopIf,
-    sortOrder,
-  };
-}
-
-export function snapshotTemplateItemToProgramItem(
-  ti: ExerciseTemplateItem,
-  today: string,
-  sortOrder: number
-): Omit<ProgramItem, 'id' | 'programId'> {
-  return {
-    sourceExerciseId: ti.sourceExerciseId ?? null,
-    title: ti.title,
-    bodyRegion: ti.bodyRegion,
-    phase: ti.phase,
-    instructions: ti.instructions,
-    mediaType: ti.mediaType,
-    mediaKeys: [...ti.mediaKeys],
-    sets: ti.sets,
-    reps: ti.reps,
-    holdSeconds: ti.holdSeconds,
-    sessionsPerDay: ti.sessionsPerDay,
-    sessionsSchedule: [{ from: today, sessionsPerDay: ti.sessionsPerDay }],
-    side: ti.side,
-    stopIf: ti.stopIf,
-    specialInstructions: '',
-    sortOrder,
-    addedOn: today,
-    removedOn: null,
-  };
-}
-
-export function addDaysISO(dateStr: string, days: number): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d + days));
-  return dt.toISOString().slice(0, 10);
-}
-
-export function applySessionsPerDayEdit(
-  item: ProgramItem,
-  newSessionsPerDay: 1 | 2 | 3,
-  today: string
-): ProgramItem {
-  const currentTodayTarget = sessionsPerDayOnDate(item, today);
-  const tomorrow = addDaysISO(today, 1);
-  const baseSchedule =
-    item.sessionsSchedule.length > 0
-      ? item.sessionsSchedule.filter((s) => s.from !== tomorrow)
-      : [{ from: item.addedOn, sessionsPerDay: currentTodayTarget }];
-  const nextSchedule =
-    newSessionsPerDay !== currentTodayTarget
-      ? [...baseSchedule, { from: tomorrow, sessionsPerDay: newSessionsPerDay }]
-      : baseSchedule;
-  return {
-    ...item,
-    sessionsPerDay: currentTodayTarget,
-    sessionsSchedule: nextSchedule,
-  };
-}
-
-export function sessionsPerDayOnDate(
-  item: Pick<ProgramItem, 'sessionsPerDay' | 'sessionsSchedule'>,
-  date: string
-): 1 | 2 | 3 {
-  if (!item.sessionsSchedule || item.sessionsSchedule.length === 0) {
-    return item.sessionsPerDay;
-  }
-  const sorted = [...item.sessionsSchedule].sort((a, b) => a.from.localeCompare(b.from));
-  let active = sorted[0].sessionsPerDay;
-  for (const entry of sorted) {
-    if (entry.from <= date) {
-      active = entry.sessionsPerDay;
-    }
-  }
-  return active;
-}
-
-export function scheduledSessionsPerDayForTomorrow(
-  item: Pick<ProgramItem, 'sessionsPerDay' | 'sessionsSchedule'>,
-  today: string
-): 1 | 2 | 3 {
-  return sessionsPerDayOnDate(item, addDaysISO(today, 1));
-}
-
-export function skippedSlotsToday(
-  item: Pick<ProgramItem, 'id' | 'sessionsPerDay' | 'sessionsSchedule'>,
-  logs: ProgramLog[],
-  today: string
-): (1 | 2 | 3)[] {
-  const target = sessionsPerDayOnDate(item, today);
-  return logs
-    .filter(
-      (l) =>
-        l.programItemId === item.id &&
-        l.logDate === today &&
-        l.skipped &&
-        l.sessionIndex >= 1 &&
-        l.sessionIndex <= target
-    )
-    .map((l) => l.sessionIndex)
-    .sort((a, b) => a - b);
-}
-
-export function nextSessionSlotToday(
-  item: Pick<ProgramItem, 'id' | 'sessionsPerDay' | 'sessionsSchedule'>,
-  logs: ProgramLog[],
-  today: string
-): {
-  nextSlot: 1 | 2 | 3 | null;
-  completedCount: number;
-  skippedCount: number;
-  target: 1 | 2 | 3;
-} {
-  const target = sessionsPerDayOnDate(item, today);
-  const bySlot = new Map<number, ProgramLog>();
-  for (const log of logs) {
-    if (log.programItemId === item.id && log.logDate === today && log.sessionIndex <= target) {
-      bySlot.set(log.sessionIndex, log);
-    }
-  }
-
-  let completedCount = 0;
-  let skippedCount = 0;
-  let nextSlot: 1 | 2 | 3 | null = null;
-  for (let s = 1; s <= target; s++) {
-    const entry = bySlot.get(s);
-    if (!entry) {
-      if (nextSlot === null) nextSlot = s as 1 | 2 | 3;
-    } else if (entry.skipped) {
-      skippedCount += 1;
-    } else {
-      completedCount += 1;
-    }
-  }
-
-  return { nextSlot, completedCount, skippedCount, target };
-}
-
-export function isItemActiveOnDate(item: ProgramItem, date: string): boolean {
-  if (date < item.addedOn) return false;
-  if (item.removedOn && date >= item.removedOn) return false;
-  return true;
-}
-
-export function computeProgramAdherence(opts: {
-  startDate: string;
-  today: string;
-  items: ProgramItem[];
-  logs: ProgramLog[];
-}): {
-  finishedDaysPercent: number | null;
-  todayCompleted: number;
-  todayTarget: number;
-  missedYesterday: boolean;
-} {
-  const { startDate, today, items, logs } = opts;
-
-  // Deduplicate completed non-skipped logs by (programItemId, logDate, sessionIndex)
-  const completedKeys = new Set<string>();
-  for (const log of logs) {
-    if (!log.skipped) {
-      completedKeys.add(`${log.programItemId}:${log.logDate}:${log.sessionIndex}`);
-    }
-  }
-
-  let finishedExpected = 0;
-  let finishedCompleted = 0;
-  let cursor = startDate;
-  while (cursor < today) {
-    for (const item of items) {
-      if (!isItemActiveOnDate(item, cursor)) continue;
-      const target = sessionsPerDayOnDate(item, cursor);
-      finishedExpected += target;
-      for (let s = 1; s <= target; s++) {
-        if (completedKeys.has(`${item.id}:${cursor}:${s}`)) {
-          finishedCompleted += 1;
-        }
-      }
-    }
-    cursor = addDaysISO(cursor, 1);
-  }
-
-  let todayTarget = 0;
-  let todayCompleted = 0;
-  for (const item of items) {
-    if (!isItemActiveOnDate(item, today)) continue;
-    const target = sessionsPerDayOnDate(item, today);
-    todayTarget += target;
-    for (let s = 1; s <= target; s++) {
-      if (completedKeys.has(`${item.id}:${today}:${s}`)) {
-        todayCompleted += 1;
-      }
-    }
-  }
-
-  const yesterday = addDaysISO(today, -1);
-  let yesterdayExpected = 0;
-  let yesterdayCompleted = 0;
-  if (yesterday >= startDate) {
-    for (const item of items) {
-      if (!isItemActiveOnDate(item, yesterday)) continue;
-      const target = sessionsPerDayOnDate(item, yesterday);
-      yesterdayExpected += target;
-      for (let s = 1; s <= target; s++) {
-        if (completedKeys.has(`${item.id}:${yesterday}:${s}`)) {
-          yesterdayCompleted += 1;
-        }
-      }
-    }
-  }
-
-  return {
-    finishedDaysPercent:
-      finishedExpected > 0 ? Math.min(100, Math.round((finishedCompleted / finishedExpected) * 100)) : null,
-    todayCompleted,
-    todayTarget,
-    missedYesterday: yesterdayExpected > 0 && yesterdayCompleted < yesterdayExpected,
-  };
-}
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `npx vitest run src/domain/hep.test.ts src/domain/onboarding.test.ts --maxWorkers=2`
-Expected: PASS
-
-- [ ] **Step 5: Commit & Request Code Review**
-
-```bash
-git add src/domain/hep.ts src/domain/hep.test.ts src/domain/onboarding.ts src/domain/onboarding.test.ts
-git commit -m "feat(hep): domain adherence math, target-sticks schedule, and snapshot helpers"
-```
+- [x] Committed: "feat(hep): domain rules: adherence, timers, ranges, change summary, search and session estimate".
 
 ---
 
-### Task 4: Dexie Read-Only Exercise Cache & Online `hepService`
+### Task 4: Offline exercise cache and the services (BUILT 2026-11-13)
 
-**Files:**
-- Modify: `src/domain/types.ts`
-- Modify: `src/lib/db.ts`
-- Create: `src/services/hepService.ts`
-- Create: `src/services/hepService.test.ts`
+**Files:** modified `src/lib/db.ts` (Dexie `version(28)`: `exercises: 'id, clinicId, bodyRegion, [clinicId+updatedAt]'`; `'exercises'` added to `SyncedTable` and `ALL_SYNCED_TABLES`, NOT to `CLIENT_WRITABLE_TABLES`, so it is pull-only like `appointments`), `src/domain/syncCopy.ts` (label); created `src/services/hepService.ts`, `src/services/publicHepService.ts` and their tests. The tombstone coverage test passes because the migration creates `exercises_tombstone`.
 
-**Interfaces:**
-- Consumes: `db` from `@/lib/db`, `getSupabase` from `@/lib/supabase`, `syncEngine` from `@/sync/engine`
-- Produces:
-  - Dexie `version(28)` with `exercises: 'id, clinicId, bodyRegion, [clinicId+updatedAt]'` added to `SyncedTable` and `ALL_SYNCED_TABLES` (and NOT `CLIENT_WRITABLE_TABLES`). Note: `exercises` matches `SyncEngine.validateNormalizedRow` (guarantees `id` + `updatedAt` via `set_updated_at`) and `tombstoneCoverage.test.ts` (covered by `exercises_tombstone` from Task 1).
-  - Clinic-wide scope: exercises, templates, and programs ignore `DepartmentContext` (`OP` / `Home` / `IP`) so patients keep continuous home programs across care settings.
-  - `hepService.listCachedExercises(clinicId: string): Promise<Exercise[]>`
-  - `hepService.saveExercise(input: SaveExerciseInput): Promise<string>`
-  - `hepService.saveTemplate(input: SaveTemplateInput): Promise<string>`
-  - `hepService.listTemplates(clinicId: string): Promise<ExerciseTemplate[]>`
-  - Results of the public calls are `{ ok: boolean; reason?: 'wrong_pin' | 'locked' | 'unavailable' | 'not_in_program'; attemptsLeft?: number }` (never thrown); `createProgram` resolves `{ programId, token, pin | null }` for an existing patient only; also `resetPin(patientId)`, `revokeLink(patientId)`.
-  - `hepService.createProgram(input: CreateProgramInput): Promise<{ programId: string; token: string }>`
-  - `hepService.updateProgram(input: UpdateProgramInput): Promise<void>`
-  - `hepService.copyTemplateToProgram(input: CopyTemplateInput): Promise<{ programId: string; token: string }>`
-  - `hepService.saveProgramAsTemplate(programId: string, title: string): Promise<string>`
-  - `hepService.duplicateProgram(programId: string, newTitle?: string): Promise<{ programId: string; token: string }>`
-  - `hepService.duplicateTemplate(templateId: string, newTitle?: string): Promise<string>`
-  - `hepService.toggleExerciseFavorite(exerciseId: string): Promise<boolean>`
-  - `hepService.undoExerciseSkip(input: UndoSkipInput): Promise<void>`
-  - `hepService.listActiveClinicPrograms(clinicId: string): Promise<ActiveClinicProgramSummary[]>`
-  - `hepService.listPatientPrograms(patientId: string): Promise<{ programs: Program[]; logs: ProgramLog[]; token: string | null; hasPin: boolean; linkRevoked: boolean }>`
+**`hepService` (the clinic side).** Reads the library from the cache; every write is an online-only RPC and refuses offline with "HEP changes need a connection. Reconnect and try again.". The database's own messages (for example the free-plan limit with "theranet.in") are passed on unchanged.
+- `listCachedExercises(clinicId, { includeArchived })`; `saveExercise` (every field, thumbnail key, archive with `active: false`; asks the sync to refresh the cache), `toggleExerciseFavorite`.
+- `listTemplates` (items in order, `usedCount`), `saveTemplate` (with the note), `duplicateTemplate`, `saveProgramAsTemplate`.
+- `createProgram` (existing patient only; settings as `p_settings`; returns `{ programId, patientId, token, pin }`, the PIN once), `updateProgram` (the WHOLE item list), `copyTemplateToProgram`, `duplicateProgram`, `setProgramStatus` (new RPC `set_program_status`: pause, resume, complete without touching the exercises), `extendProgram` (new RPC `extend_program`, 1 to 90 days), `markPainReviewed`.
+- `resetPin` (shown once), `revokeLink`, `rotateToken`, `linkStatus` (the hand-over panel's poll).
+- `listClinicPrograms(clinicId, since)` and `listPatientPrograms(patientId, since)`: one query with the items, the logs and session checks since `since` (the clinic's day minus the window), patient and therapist names, then the link state read with **listed columns only** (staff cannot read `pin_hash`). `mapProgramRow` is pure and tested. Programs and templates are not cached offline in Slice 1.
+- `itemToJson` sends exactly the keys the database reads.
 
-- [ ] **Step 1: Write the failing `hepService.test.ts` unit tests**
+**`publicHepService` (the patient page).** Every call returns a value `{ ok: true, ... } | { ok: false, reason, attemptsLeft? }`; only a network or server failure throws (the page treats that as offline). `clinicBrand(token)`, `getPublicHep({ token, pin | device, programId, reason })` (through `hep-media`; a 429 body is read back as `busy`), `rememberDevice`, `submitExerciseLog`, `undoExerciseLog`, `submitSessionFeedback`. Reasons: `wrong_pin | locked | unavailable | pin_needed | busy | not_in_program | invalid | too_old`.
 
-```typescript
-// src/services/hepService.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { hepService } from './hepService';
+**Database additions this task needed** (in the Task 1 migration): `set_program_status`, `extend_program`.
 
-const mockRpc = vi.fn();
-vi.mock('@/lib/supabase', () => ({
-  getSupabase: () => ({ rpc: mockRpc }),
-}));
-
-vi.mock('@/sync/engine', () => ({
-  syncEngine: { schedule: vi.fn() },
-}));
-
-describe('hepService', () => {
-  beforeEach(() => {
-    mockRpc.mockReset();
-  });
-
-  it('returns the one-time PIN from create_program and never sends a patient name or phone to it', async () => {
-    mockRpc.mockResolvedValueOnce({ data: { programId: 'pr-1', patientId: 'pt-1', token: 'tok-1', pin: '4821' }, error: null });
-
-    const res = await hepService.createProgram({
-      clinicId: 'c-1',
-      patientId: 'pt-1',
-      therapistId: null,
-      title: 'Shoulder Rehab',
-      items: [],
-    });
-
-    expect(res).toMatchObject({ token: 'tok-1', pin: '4821' });
-    const args = mockRpc.mock.calls[0][1];
-    expect(args).not.toHaveProperty('p_patient_name');
-    expect(args).not.toHaveProperty('p_patient_phone');
-  });
-
-  it('treats a locked or wrong-PIN result as a value, not an exception', async () => {
-    mockRpc.mockResolvedValueOnce({ data: { ok: false, reason: 'wrong_pin', attemptsLeft: 3 }, error: null });
-    const res = await hepService.getPublicHep('tok-1', '0000');
-    expect(res).toEqual({ ok: false, reason: 'wrong_pin', attemptsLeft: 3 });
-  });
-
-  it('surfaces free-plan limit error from create_program when Lite clinic hits 6th active program', async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { message: 'You have reached the free-plan limit of 5 active programs. Visit theranet.in to upgrade.' },
-    });
-
-    await expect(
-      hepService.createProgram({
-        clinicId: 'c-1',
-        patientId: 'pt-1',
-        therapistId: null,
-        title: '6th Program',
-        items: [],
-      })
-    ).rejects.toThrow(/free-plan limit of 5 active programs.*theranet\.in/i);
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npx vitest run src/services/hepService.test.ts --maxWorkers=2`
-Expected: FAIL with module not found.
-
-- [ ] **Step 3: Add `exercises` to Dexie `version(28)` (`ALL_SYNCED_TABLES` only) and implement `src/services/hepService.ts`**
-
-1. In `src/lib/db.ts`, add `'exercises'` to `SyncedTable` and `ALL_SYNCED_TABLES` (leave `CLIENT_WRITABLE_TABLES` unchanged so `exercises` is read-only synced like `appointments`), and add:
-   ```typescript
-   this.version(28).stores({
-     exercises: 'id, clinicId, bodyRegion, [clinicId+updatedAt]',
-   });
-   ```
-2. Implement `src/services/hepService.ts` wrapping the online RPCs, checking `navigator.onLine`, and scheduling `syncEngine.schedule(0)` after `save_exercise`.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npx vitest run src/services/hepService.test.ts --maxWorkers=2`
-Expected: PASS
-
-- [ ] **Step 5: Commit & Request Code Review**
-
-```bash
-git add src/domain/types.ts src/lib/db.ts src/services/hepService.ts src/services/hepService.test.ts
-git commit -m "feat(hep): Dexie v28 read-only exercises cache and online hepService"
-```
+- [ ] Commit: "feat(hep): offline exercise cache and the HEP services".
 
 ---
 
-### Task 5: WhatsApp Share Helper (Link + Generic PIN Prompt, Zero PIN Digits / PII)
+### Task 5: WhatsApp messages (BUILT 2026-11-13)
 
-**Files:**
-- Create: `src/features/hep/hepSharing.ts`
-- Create: `src/features/hep/hepSharing.test.ts`
+**Files:** `src/features/hep/hepSharing.ts`, `src/features/hep/hepSharing.test.ts` (10 tests). Uses the app's existing `buildWhatsAppSendUrl` (country-code aware, from `pdfShare.ts`).
 
-**Interfaces:**
-- Consumes: `normalizePhoneForWaMe` from `@/lib/pdfShare` (already handles country-code-aware WhatsApp normalization across India/UAE/SG/UK/US)
-- Produces:
-  - `buildHepPortalUrl(token: string, origin?: string): string`
-  - `buildHepWhatsAppShareUrl(opts: { token: string; clinicName: string; phone?: string | null; origin?: string }): string`
+- `buildHepPortalUrl(token, origin?)` -> `{origin}/p/{token}`.
+- `buildHepShareMessage({ token, clinicName, origin? })`: first line "<clinic name>: here is your home exercise program.", the link, "Use your 4-digit PIN to unlock.", "Share this link only with the patient or the person helping them." No PIN, no patient name, no health detail, no consent wording. `buildHepWhatsAppShareUrl` opens the patient's own chat (or a contact picker when there is no number).
+- The "Message patient" presets: `HEP_MESSAGE_KINDS` (reminder, how are you feeling, check-in, program ended, "Here is your exercise program again."), `buildHepPatientMessage`, `buildHepPatientMessageUrl`. Each is the clinic name, the preset text and the link, editable before sending; sending goes through the existing `whatsappSend` path (Task 7) and is logged with `message_log.kind = 'hep_reminder'`.
+- The PIN is never an input to any of these.
 
-- [ ] **Step 1: Write the failing WhatsApp share test pinning §7 & §10 (no PIN digits or patient PII in message)**
-
-```typescript
-// src/features/hep/hepSharing.test.ts
-import { describe, it, expect } from 'vitest';
-import { buildHepWhatsAppShareUrl } from './hepSharing';
-
-describe('buildHepWhatsAppShareUrl', () => {
-  it('includes dynamic origin link, clinic name, and generic PIN prompt, and strictly excludes PIN digits and patient PII', () => {
-    const url = buildHepWhatsAppShareUrl({
-      origin: 'https://thera-net-three.vercel.app',
-      clinicName: 'Beyond Mechanics',
-      phone: '+91 98765 43210',
-      token: 'tok-xyz-987',
-    });
-
-    expect(url).toContain('https://wa.me/919876543210?text=');
-    const body = decodeURIComponent(url.split('?text=')[1]);
-    expect(body).toContain('Beyond Mechanics');
-    expect(body).toContain('https://thera-net-three.vercel.app/p/tok-xyz-987');
-    expect(body).toContain('Use your 4-digit clinic PIN to unlock.');
-    expect(body).toContain('Share this link only with the patient or the person helping them.');
-    expect(body).not.toMatch(/3210/);
-    expect(body).not.toContain('last 4 digits');
-    expect(body).not.toContain('app.theranet.in');
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npx vitest run src/features/hep/hepSharing.test.ts --maxWorkers=2`
-Expected: FAIL with module not found.
-
-- [ ] **Step 3: Implement `src/features/hep/hepSharing.ts`**
-
-```typescript
-// src/features/hep/hepSharing.ts
-import { normalizePhoneForWaMe } from '@/lib/pdfShare';
-
-export function buildHepPortalUrl(token: string, origin = window.location.origin): string {
-  return `${origin.replace(/\/+$/, '')}/p/${encodeURIComponent(token)}`;
-}
-
-export function buildHepWhatsAppShareUrl(opts: {
-  token: string;
-  clinicName: string;
-  phone?: string | null;
-  origin?: string;
-}): string {
-  const link = buildHepPortalUrl(opts.token, opts.origin);
-  const text = [
-    `Here is your home exercise program from ${opts.clinicName}:`,
-    link,
-    'Use your 4-digit clinic PIN to unlock.',
-    'Share this link only with the patient or the person helping them.',
-  ].join('\n\n');
-
-  const waPhone = opts.phone ? normalizePhoneForWaMe(opts.phone) : '';
-  return waPhone
-    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`
-    : `https://wa.me/?text=${encodeURIComponent(text)}`;
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npx vitest run src/features/hep/hepSharing.test.ts --maxWorkers=2`
-Expected: PASS
-
-- [ ] **Step 5: Commit & Request Code Review**
-
-```bash
-git add src/features/hep/hepSharing.ts src/features/hep/hepSharing.test.ts
-git commit -m "feat(hep): WhatsApp wa.me link builder with zero PIN exposure"
-```
+- [ ] Commit: "feat(hep): WhatsApp messages for the HEP link".
 
 ---
 

@@ -1801,6 +1801,63 @@ $$;
 revoke all on function public.hep_link_status(uuid) from public, anon;
 grant execute on function public.hep_link_status(uuid) to authenticated;
 
+-- Pause, resume or complete a program without touching its exercises (update_program would soft-remove any item
+-- not listed in p_items). Reactivating counts toward the Lite active-program cap, like update_program.
+create or replace function public.set_program_status(p_program_id uuid, p_status text)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_prog public.programs;
+  v_active_count int;
+begin
+  if p_status is null or p_status not in ('active', 'paused', 'completed') then
+    raise exception 'Unknown status.';
+  end if;
+  select * into v_prog from public.programs where id = p_program_id for update;
+  if not found or not public.is_hep_staff(v_prog.clinic_id) then
+    raise exception 'Program not found.';
+  end if;
+  if p_status = 'active' and v_prog.status <> 'active' and not public.clinic_has_unlimited_hep(v_prog.clinic_id) then
+    select count(*) into v_active_count from public.programs
+     where clinic_id = v_prog.clinic_id and status = 'active' and id <> p_program_id;
+    if v_active_count >= (select l.active_programs from public.hep_tier_limits('lite') l) then
+      raise exception 'You have reached the free-plan limit of % active programs. Visit theranet.in to upgrade.',
+        (select l.active_programs from public.hep_tier_limits('lite') l);
+    end if;
+  end if;
+  update public.programs set status = p_status, updated_at = now() where id = p_program_id;
+end;
+$$;
+revoke all on function public.set_program_status(uuid, text) from public, anon;
+grant execute on function public.set_program_status(uuid, text) to authenticated;
+
+-- Extend a program by 1 to 90 days (Extend on an ended program). An ongoing program has no end to extend.
+create or replace function public.extend_program(p_program_id uuid, p_extra_days int)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare v_clinic uuid;
+begin
+  if p_extra_days is null or p_extra_days < 1 or p_extra_days > 90 then
+    raise exception 'Extend by 1 to 90 days.';
+  end if;
+  select clinic_id into v_clinic from public.programs where id = p_program_id;
+  if v_clinic is null or not public.is_hep_staff(v_clinic) then
+    raise exception 'Program not found.';
+  end if;
+  update public.programs
+     set duration_days = least(90, duration_days + p_extra_days), updated_at = now()
+   where id = p_program_id and duration_days is not null;
+end;
+$$;
+revoke all on function public.extend_program(uuid, int) from public, anon;
+grant execute on function public.extend_program(uuid, int) to authenticated;
+
 -- Shared pain review (amendment 28): set when any clinical staff member opens the program's Exercises view.
 create or replace function public.mark_pain_reviewed(p_program_id uuid)
 returns void
