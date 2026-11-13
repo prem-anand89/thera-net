@@ -15,6 +15,7 @@ const setManualDone = vi.fn().mockResolvedValue(undefined);
 const signals: SetupSignals = {
   clinicProfileSet: true,
   servicesPriced: true,
+  hasTherapist: true,
   teamInvited: true,
   therapistsLinked: true,
   visitLogged: true,
@@ -26,6 +27,8 @@ vi.mock('./useSetupProgress', () => ({
   useSetupProgress: () => ({
     ...summarizeSetup(buildSetupSteps(false, true), signals, new Set()),
     nudgeVisible: false,
+    canHide: true,
+    hide: vi.fn(),
     setManualDone,
   }),
 }));
@@ -41,7 +44,7 @@ afterEach(() => {
 describe('SetupPage', () => {
   it('shows progress and marks the first unfinished step as next', () => {
     render(<SetupPage />);
-    expect(screen.getByText(/5 of 8 done/)).toBeInTheDocument();
+    expect(screen.getByText(/6 of 9 done/)).toBeInTheDocument();
     expect(screen.getByText('Next: Wait for Synced before invoicing')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Essentials' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Your first week' })).toBeInTheDocument();

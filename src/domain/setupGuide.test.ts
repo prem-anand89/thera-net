@@ -4,6 +4,7 @@ import {
   therapistSignals,
   completedStepsKey,
   isSetupNudgeVisible,
+  servicesPricedSignal,
   lastBackupMetaKey,
   parseCompletedSteps,
   setupDismissedKey,
@@ -14,6 +15,7 @@ import {
 const none: SetupSignals = {
   clinicProfileSet: false,
   servicesPriced: false,
+  hasTherapist: false,
   teamInvited: false,
   therapistsLinked: false,
   visitLogged: false,
@@ -25,6 +27,7 @@ const none: SetupSignals = {
 const established: SetupSignals = {
   clinicProfileSet: true,
   servicesPriced: true,
+  hasTherapist: true,
   teamInvited: true,
   therapistsLinked: true,
   visitLogged: true,
@@ -53,6 +56,7 @@ describe('summarizeSetup', () => {
   it('keeps the step ids stored completion depends on, with refined labels and links', () => {
     expect(steps.map((s) => s.id)).toEqual([
       'clinic-profile',
+      'add-therapist',
       'price-services',
       'invite-team',
       'link-therapist',
@@ -92,14 +96,14 @@ describe('summarizeSetup', () => {
   it('starts a fresh clinic at 0 with the profile as next', () => {
     const p = summarizeSetup(steps, none, new Set());
     expect(p.done).toBe(0);
-    expect(p.total).toBe(8);
+    expect(p.total).toBe(9);
     expect(p.next?.id).toBe('clinic-profile');
     expect(p.steps.filter((s) => s.status === 'next')).toHaveLength(1);
   });
 
   it('counts auto steps from signals and manual steps from stored ticks', () => {
     const p = summarizeSetup(steps, established, new Set(['wait-synced']));
-    expect(p.done).toBe(7);
+    expect(p.done).toBe(8);
     expect(p.next?.id).toBe('clinical-notes');
     const all = summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes']));
     expect(all.allDone).toBe(true);
@@ -205,5 +209,60 @@ describe('the clinic profile step without invoicing', () => {
     const team = [{ userId: 'u1' }, { userId: null }];
     expect(therapistSignals(team, 'u1', true)).toEqual({ therapistsLinked: true, unlinkedTherapistCount: 0 });
     expect(therapistSignals(team, 'u1', false)).toEqual({ therapistsLinked: false, unlinkedTherapistCount: 1 });
+  });
+});
+
+describe('servicesPricedSignal', () => {
+  it('is false when every service is 0 and true when one is priced', () => {
+    expect(servicesPricedSignal([{ basePricePaise: 0, active: true }], { chargesPatients: true })).toBe(false);
+    expect(servicesPricedSignal([], {})).toBe(false);
+    expect(servicesPricedSignal([{ basePricePaise: 0 }, { basePricePaise: 50000, active: true }], {})).toBe(true);
+    expect(servicesPricedSignal([{ basePricePaise: 50000, active: false }], {})).toBe(false);
+  });
+  it('is true at 0 when the clinic does not charge patients', () => {
+    expect(servicesPricedSignal([{ basePricePaise: 0, active: true }], { chargesPatients: false })).toBe(true);
+    expect(servicesPricedSignal([], { chargesPatients: false })).toBe(true);
+  });
+});
+
+describe('add-therapist step and a clinic with nothing yet', () => {
+  const steps = buildSetupSteps(false, true);
+  const profileOnly: SetupSignals = { ...none, clinicProfileSet: true };
+
+  it('is the first essential step when there is no therapist, and done once there is one', () => {
+    const essentials = steps.filter((s) => s.group === 'essentials').map((s) => s.id);
+    expect(essentials.indexOf('add-therapist')).toBeLessThan(essentials.indexOf('price-services'));
+    const t = steps.find((s) => s.id === 'add-therapist')!;
+    expect(t.title).toBe('Add your first therapist');
+    expect(t.link).toEqual({ kind: 'settings', tab: 'team', teamView: 'members' });
+    expect(t.auto?.({ ...none, hasTherapist: true })).toBe(true);
+    expect(t.auto?.(none)).toBe(false);
+  });
+
+  it('does not crash on an empty clinic and points at add-therapist', () => {
+    const p = summarizeSetup(steps, profileOnly, new Set());
+    expect(p.next?.id).toBe('add-therapist');
+  });
+
+  it('shows the nudge when there is no therapist', () => {
+    const s = { ...established, hasTherapist: false };
+    expect(isSetupNudgeVisible(s, summarizeSetup(steps, s, new Set()), false)).toBe(true);
+  });
+
+  it('shows the nudge when no service is priced', () => {
+    const s = { ...established, servicesPriced: false };
+    expect(isSetupNudgeVisible(s, summarizeSetup(steps, s, new Set()), false)).toBe(true);
+  });
+});
+
+describe('set-password step', () => {
+  it('shows only when asked for, is optional and never counts toward the essentials', () => {
+    expect(buildSetupSteps(false, true).some((s) => s.id === 'set-password')).toBe(false);
+    const steps = buildSetupSteps(false, true, false, true);
+    const step = steps.find((s) => s.id === 'set-password')!;
+    expect(step.group).toBe('optional');
+    expect(step.why).toContain('My account');
+    expect(summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes'])).allDone).toBe(true);
+    expect(summarizeSetup(steps, none, new Set()).total).toBe(9);
   });
 });

@@ -4,6 +4,7 @@ import { repos } from '@/services';
 import { useEntitlements } from '@/app/useEntitlements';
 import { useSession } from '@/app/useSession';
 import { atSeatCap } from '@/domain/seatCap';
+import { hasPasswordIdentity } from '@/domain/onboarding';
 import {
   buildSetupSteps,
   completedStepsKey,
@@ -11,6 +12,7 @@ import {
   lastBackupMetaKey,
   parseCompletedSteps,
   setupDismissedKey,
+  servicesPricedSignal,
   therapistSignals,
   summarizeSetup,
   type SetupProgress,
@@ -20,6 +22,10 @@ import {
 export interface SetupState extends SetupProgress {
   /** Whether the pinned bar on Workspace/Settings/account menu shows. */
   nudgeVisible: boolean;
+  /** True once a visit has been logged: only then can the bar be hidden. */
+  canHide: boolean;
+  /** Hide the pinned bar on this device (the same flag the old checklist's dismissal wrote). */
+  hide: () => Promise<void>;
   /** Tick or untick a manual step. */
   setManualDone: (stepId: string, done: boolean) => Promise<void>;
 }
@@ -68,7 +74,8 @@ export function useSetupProgress(clinicId: string): SetupState | undefined {
   const { therapistsLinked, unlinkedTherapistCount } = therapistSignals(therapists, session?.user?.id, seatLimited || loginsFull);
   const signals: SetupSignals = {
     clinicProfileSet: Boolean(clinic?.address?.trim()),
-    servicesPriced: catalog.length > 0,
+    servicesPriced: servicesPricedSignal(catalog, clinic),
+    hasTherapist: therapists.some((t) => t.active !== false),
     // A clinic_members row exists from the moment an invite is issued, so more
     // than one seat means someone besides the creating admin is on the team.
     teamInvited: (entitlements.seatsUsed ?? 0) > 1,
@@ -78,13 +85,22 @@ export function useSetupProgress(clinicId: string): SetupState | undefined {
     unlinkedTherapistCount,
     catalogEmpty: catalog.length === 0,
   };
-  const steps = buildSetupSteps(seatLimited, entitlements.can('invoicing'), loginsFull);
+  const steps = buildSetupSteps(
+    seatLimited,
+    entitlements.can('invoicing'),
+    loginsFull,
+    !hasPasswordIdentity(session?.user?.identities)
+  );
   const completed = parseCompletedSteps(metaRows.completed);
   const progress = summarizeSetup(steps, signals, completed);
 
   return {
     ...progress,
     nudgeVisible: isSetupNudgeVisible(signals, progress, metaRows.dismissed),
+    canHide: hasVisits,
+    hide: async () => {
+      await db.meta.put({ key: setupDismissedKey(clinicId), value: '1' });
+    },
     setManualDone: async (stepId, done) => {
       const next = new Set(completed);
       if (done) next.add(stepId);

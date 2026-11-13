@@ -24,7 +24,10 @@ export function lastBackupMetaKey(clinicId: string): string {
 /** Facts about the clinic that a live query can confirm. */
 export interface SetupSignals {
   clinicProfileSet: boolean;
+  /** An active service has a price above 0, or the clinic said it does not charge patients (see `servicesPricedSignal`). */
   servicesPriced: boolean;
+  /** At least one active therapist exists (visits are credited to a therapist). */
+  hasTherapist: boolean;
   teamInvited: boolean;
   therapistsLinked: boolean;
   visitLogged: boolean;
@@ -60,7 +63,20 @@ export interface SetupStep {
   auto?: (signals: SetupSignals) => boolean;
 }
 
-export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean, loginsFull = false): SetupStep[] {
+/**
+ * "Price your services" is done when an active service costs more than 0, or the clinic chose "We don't charge
+ * patients" (`chargesPatients === false`: its services are named at 0 on purpose). An empty catalog is never done.
+ */
+export function servicesPricedSignal(
+  catalog: readonly { basePricePaise: number; active?: boolean }[],
+  clinic: { chargesPatients?: boolean | null } | null | undefined
+): boolean {
+  if (clinic?.chargesPatients === false) return true;
+  return catalog.some((c) => c.active !== false && c.basePricePaise > 0);
+}
+
+/** `showSetPassword`: the signed-in user has no password identity, so an optional "Set a password" step is listed. */
+export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean, loginsFull = false, showSetPassword = false): SetupStep[] {
   return [
     {
       id: 'clinic-profile',
@@ -72,6 +88,15 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean, login
       link: { kind: 'settings', tab: 'general' },
       action: 'Open clinic profile',
       auto: (s) => s.clinicProfileSet,
+    },
+    {
+      id: 'add-therapist',
+      group: 'essentials',
+      title: 'Add your first therapist',
+      why: 'Visits are credited to a therapist.',
+      link: { kind: 'settings', tab: 'team', teamView: 'members' },
+      action: 'Add therapist',
+      auto: (s) => s.hasTherapist,
     },
     {
       id: 'price-services',
@@ -163,6 +188,16 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean, login
       title: 'Turn on notifications',
       why: 'Open My account in the menu, then Notifications, to get push alerts on this device.',
     },
+    ...(showSetPassword
+      ? [
+          {
+            id: 'set-password',
+            group: 'optional' as const,
+            title: 'Set a password',
+            why: 'Open My account in the menu, then Set a password, to sign in with your email as well.',
+          },
+        ]
+      : []),
   ];
 }
 
@@ -223,7 +258,7 @@ export function summarizeSetup(
 /**
  * Whether the pinned setup bar (Workspace, Settings, account menu) shows.
  * Only while the clinic still lacks the basics: a profile address, a priced
- * catalog, or a linked login for every therapist. Established clinics that
+ * catalog, a therapist, or a linked login for every therapist. Established clinics that
  * never ticked the manual first-week steps don't get a nudge back; the full
  * list stays reachable at /setup. A clinic that dismissed the old checklist
  * stays dismissed.
@@ -234,7 +269,13 @@ export function isSetupNudgeVisible(
   dismissed: boolean
 ): boolean {
   if (dismissed || progress.allDone) return false;
-  return !signals.clinicProfileSet || signals.catalogEmpty || signals.unlinkedTherapistCount > 0;
+  return (
+    !signals.clinicProfileSet ||
+    signals.catalogEmpty ||
+    !signals.servicesPriced ||
+    !signals.hasTherapist ||
+    signals.unlinkedTherapistCount > 0
+  );
 }
 
 export function parseCompletedSteps(raw: string | undefined): Set<string> {
