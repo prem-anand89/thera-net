@@ -12,8 +12,11 @@
 
 ## Decisions (binding)
 
-1. Screen 1 **Your practice**: **Practice or clinic name** (required, blank, placeholder "e.g. Apex Physio"), the derived code line "Bills and patient IDs start with {CODE} · Edit", **Your name** (required, pre-filled from the account's `full_name`/`name` metadata), checkbox **I treat patients myself** (ticked), **Where do you see patients?** with **At the clinic** (ticked) and **Home visits** (unticked). Button **Next: your services**. No address, phone, email, logo or team.
-1b. Screen 2 **Your services** (same route, client state; **Back** returns to screen 1 with everything kept): the existing `ServiceCatalogTemplateEditor` showing `STARTER_CATALOG_TEMPLATE` with **prices blank** (no example amounts), the dashed "+ Add a service" row, and the hint "Price at least one service to start logging visits. Unpriced ones aren't added; you can add more in Settings." Button **Start using Thera.Net** is disabled until at least one included row has a price **above 0** (₹0 does not count; the old "We don't charge patients" shortcut is not offered here). Duplicate-name check as today. Only rows with a price above 0 are saved.
+1. Screen 1 **Your practice**: **Practice or clinic name** (required, blank, placeholder "e.g. Apex Physio"), the derived code line "Bills and patient IDs start with {CODE} · Edit", **Your name** (required, pre-filled from the account's `full_name`/`name` metadata), checkbox **I treat patients myself** (ticked), **Where do you see patients?** with **At a clinic or hospital** (ticked; stored value stays `clinic`) and **Home visits** (unticked). Button **Next: your services**. No address, phone, email, logo or team.
+1b. Screen 2 **Your services** (same route, client state; **Back** returns to screen 1 with everything kept) opens with **Do your patients pay you?** — (●) **Yes, I charge patients** (default) / ( ) **No: the hospital bills them, or my service is free**.
+   - **Yes:** the existing `ServiceCatalogTemplateEditor` showing `STARTER_CATALOG_TEMPLATE` with **prices blank** (no example amounts), the dashed "+ Add a service" row, and the hint "Price at least one service to start logging visits. Unpriced ones aren't added; you can add more in Settings." Button **Start using Thera.Net** is disabled until at least one included row has a price **above 0** (₹0 does not count; the old "We don't charge patients" shortcut is not offered here). Duplicate-name check as today. Only rows with a price above 0 are saved.
+   - **No:** the same list **without price boxes**, hint "Name the services you give. No prices needed." Start is enabled when at least one row is ticked and named. Ticked rows are saved at price 0, and the answer is stored on the clinic as `clinics.charges_patients = false` (Task 1), so the setup guide treats `price-services` as done and the later no-payments plan can hide money screens. Switching back to Yes keeps the names and shows blank price boxes.
+   - Students / a free tier are **out of scope** (owner will plan separately).
 2. The clinic code is `clinicCode(name)` until the user edits it; edits go through `cleanClinicCode` and must be 2–6 characters. If the signed-in user already has another clinic with the same code, show "Your other clinic {name} also uses {CODE}." (warning only, never blocks).
 3. Time zone comes from the browser; `UTC`, `Etc/*` or an unknown zone sends `null` and the database default applies. Country code comes only from a small sure table keyed by time zone; anything else sends `null`. Currency and tax regime are **not** set (they are stored-only today).
 4. Services saved = the rows from screen 2 that are included and priced above 0 (owner decision 2026-11-13, replaces the earlier ₹0 seeding).
@@ -26,7 +29,7 @@
 9c. Schedule with no active therapist shows "No therapists yet" with a button to Settings → Team instead of an empty grid.
 9. Setup bar: a **Hide** button appears once a visit has been logged; hiding writes the existing `setupDismissedKey` flag. `/setup` stays reachable from the account menu.
 10. One-login plans (Lite, Solo: `maxMembers <= 1`): Settings → Team shows a locked row "Invite a colleague with their own login · Available on Clinic and Clinic+" with the existing upgrade link (`upgradeMailto`); "Add a colleague without a login" stays as today.
-11. Out of scope (later, separate): Google-first sign-in and email codes; deleting the old wizard; currency/tax auto-detect.
+11. Out of scope (later, separate): the **no-payments mode** that hides money screens when `charges_patients = false` (own plan, uses the column added here); Google-first sign-in and email codes; deleting the old wizard; currency/tax auto-detect.
 
 ## Global Constraints
 
@@ -55,7 +58,8 @@
 - Modify: `FEATURES_AND_SCHEMA.md` (the clinic onboarding wizard section and every `onboarding_completed_at` schema line)
 
 **Interfaces:**
-- Produces: RPC `create_clinic_with_admin(p_name text, p_email text default null, p_phone text default null, p_address text default null, p_invoice_prefix text default 'INV', p_walk_in_mrno_prefix text default null, p_timezone text default null, p_default_country_code text default null, p_care_locations text[] default null, p_complete_onboarding boolean default false) returns clinics`.
+- Produces: RPC `create_clinic_with_admin(p_name text, p_email text default null, p_phone text default null, p_address text default null, p_invoice_prefix text default 'INV', p_walk_in_mrno_prefix text default null, p_timezone text default null, p_default_country_code text default null, p_care_locations text[] default null, p_complete_onboarding boolean default false, p_charges_patients boolean default true) returns clinics`.
+- Produces: column `clinics.charges_patients boolean not null default true` ("Do your patients pay you?"; existing clinics read true). Domain: `Clinic.chargesPatients?: boolean` (absent = true).
 
 - [ ] **Step 1: Write the migration.** Start from the body in `20261002200458_rename_bm_hv_to_clinic_partner.sql` (no-return reasons, referring sources, treatments seeds unchanged). `drop function if exists public.create_clinic_with_admin(text, text, text, text, text);` then create the new signature above. Rules inside:
   - `p_timezone` used only when `exists (select 1 from pg_timezone_names where name = p_timezone)`; otherwise the column default.
@@ -63,13 +67,14 @@
   - `p_care_locations` used only when non-empty and `<@ array['clinic','home','ward']`; otherwise the column default.
   - `walk_in_mrno_prefix = nullif(p_walk_in_mrno_prefix, '')` when given.
   - `onboarding_completed_at = case when p_complete_onboarding then now() end`.
-  - Re-grant `execute` to `authenticated` exactly as the previous migration did (copy its grant lines; if it had none, add `grant execute on function public.create_clinic_with_admin(text,text,text,text,text,text,text,text,text[],boolean) to authenticated;`).
+  - `alter table public.clinics add column if not exists charges_patients boolean not null default true;` before the function; the insert sets `charges_patients = coalesce(p_charges_patients, true)`.
+  - Re-grant `execute` to `authenticated` exactly as the previous migration did (copy its grant lines; if it had none, add `grant execute on function public.create_clinic_with_admin(text,text,text,text,text,text,text,text,text[],boolean,boolean) to authenticated;`).
 - [ ] **Step 2: Write the check script** at the bottom of the migration as a comment block (Claude runs it live after the user applies, inside `begin; … rollback;`): call with five named args (old client) → returns a row with `onboarding_completed_at is null`; call with all args incl. `p_timezone => 'Mars/Base'` → default zone kept; `p_default_country_code => '91'` → default kept; `p_care_locations => '{}'` → default kept; `p_complete_onboarding => true` → timestamp set.
-- [ ] **Step 3: Update `FEATURES_AND_SCHEMA.md`**: new RPC parameters, and that new clinics are marked complete at creation.
+- [ ] **Step 3: Update `FEATURES_AND_SCHEMA.md`**: new RPC parameters, the `charges_patients` column (both clinics schema copies), and that new clinics are marked complete at creation. Add `chargesPatients?: boolean` to `Clinic` in `src/domain/types.ts`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/20261113100000_one_screen_onboarding_rpc.sql FEATURES_AND_SCHEMA.md
+git add supabase/migrations/20261113100000_one_screen_onboarding_rpc.sql FEATURES_AND_SCHEMA.md src/domain/types.ts
 git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, care locations and completes onboarding"
 ```
 
@@ -85,10 +90,11 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
   - `countryCodeForTimezone(tz: string | null): string | null` — table: `Asia/Kolkata → '+91'`, `Asia/Dubai → '+971'`, `Asia/Singapore → '+65'`, `Asia/Kathmandu → '+977'`, `Asia/Colombo → '+94'`, `Asia/Dhaka → '+880'`, `Europe/London → '+44'`, `Australia/Sydney → '+61'`, `Australia/Melbourne → '+61'`; anything else `null`.
   - `isValidClinicCode(code: string): boolean` — `cleanClinicCode(code) === code && code.length >= 2 && code.length <= CLINIC_CODE_MAX`.
   - `createBlankStarterCatalogDrafts(): CatalogTemplateDraft[]` — `createStarterCatalogDrafts()` with every `basePricePaise` set to `null` (blank box).
+  - `servicesReadyToStart(drafts: CatalogTemplateDraft[], chargesPatients: boolean): boolean` — `chargesPatients ? hasPositivePricedDraft(drafts) : drafts.some(d => d.enabled && d.name.trim() !== '')`.
   - `hasPositivePricedDraft(drafts: CatalogTemplateDraft[]): boolean` — true when an `enabled` draft has `basePricePaise > 0`.
-  - `catalogItemsFromDrafts(clinicId: UUID, drafts: CatalogTemplateDraft[], now: string): CatalogItem[]` — one item per `enabled` draft with `basePricePaise > 0`, `id: d.key`, `category: d.group.trim()`, `name: d.name.trim()`, `sessionCount: Math.max(1, d.sessionCount)`, `active: true`, `updatedAt: now` (same mapping as `OnboardingPage.finishOnboarding`).
+  - `catalogItemsFromDrafts(clinicId: UUID, drafts: CatalogTemplateDraft[], now: string, chargesPatients: boolean): CatalogItem[]` — charges: one item per `enabled` draft with `basePricePaise > 0`; no charge: one item per `enabled`, named draft with `basePricePaise: 0`; `id: d.key`, `category: d.group.trim()`, `name: d.name.trim()`, `sessionCount: Math.max(1, d.sessionCount)`, `active: true`, `updatedAt: now` (same mapping as `OnboardingPage.finishOnboarding`).
 
-- [ ] **Step 1: Write failing tests**: `browserTimezone` returns `null` when `Intl` reports `'UTC'` and `'Etc/GMT+5'`, and `'Asia/Kolkata'` when it reports `'Asia/Calcutta'` (mock `Intl.DateTimeFormat`); `countryCodeForTimezone('Asia/Dubai') === '+971'`, `('America/New_York') === null`, `(null) === null`; `isValidClinicCode('DP')` true, `('D')` false, `('dp')` false, `('ABCDEFG')` false, `('A-B')` false; `createBlankStarterCatalogDrafts()` has the template's length and every price `null`; `hasPositivePricedDraft` is false for all-blank, false when the only price is 0, false when the only priced row is disabled, true for one enabled row at 80000; `catalogItemsFromDrafts` drops blank, 0 and disabled rows and keeps a 5-session package at 350000.
+- [ ] **Step 1: Write failing tests**: `browserTimezone` returns `null` when `Intl` reports `'UTC'` and `'Etc/GMT+5'`, and `'Asia/Kolkata'` when it reports `'Asia/Calcutta'` (mock `Intl.DateTimeFormat`); `countryCodeForTimezone('Asia/Dubai') === '+971'`, `('America/New_York') === null`, `(null) === null`; `isValidClinicCode('DP')` true, `('D')` false, `('dp')` false, `('ABCDEFG')` false, `('A-B')` false; `createBlankStarterCatalogDrafts()` has the template's length and every price `null`; `hasPositivePricedDraft` is false for all-blank, false when the only price is 0, false when the only priced row is disabled, true for one enabled row at 80000; `catalogItemsFromDrafts(..., true)` drops blank, 0 and disabled rows and keeps a 5-session package at 350000; `catalogItemsFromDrafts(..., false)` keeps every enabled named row at 0 and drops disabled and blank-name rows; `servicesReadyToStart(blankDrafts, false)` is true and `servicesReadyToStart(blankDrafts, true)` is false.
 - [ ] **Step 2: Run** `npx vitest run src/domain/clinicRegion.test.ts src/domain/clinicCode.test.ts src/domain/onboardingCatalogTemplates.test.ts` → FAIL.
 - [ ] **Step 3: Implement** the four functions with the signatures above.
 - [ ] **Step 4: Run** the same command → PASS.
@@ -102,15 +108,18 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
 - Test: `src/features/settings/CreateClinicForm.test.tsx` (create or replace)
 
 **Interfaces:**
-- Consumes: Task 1 RPC; Task 2 `browserTimezone`, `countryCodeForTimezone`, `isValidClinicCode`, `createBlankStarterCatalogDrafts`, `hasPositivePricedDraft`, `catalogItemsFromDrafts`, `firstDuplicateName` (as used in `OnboardingPage`), `clinicCode`, `cleanClinicCode`.
+- Consumes: Task 1 RPC; Task 2 `browserTimezone`, `countryCodeForTimezone`, `isValidClinicCode`, `createBlankStarterCatalogDrafts`, `hasPositivePricedDraft`, `catalogItemsFromDrafts`, `servicesReadyToStart`, `firstDuplicateName` (as used in `OnboardingPage`), `clinicCode`, `cleanClinicCode`.
 - Produces: unchanged props `{ onSuccess: () => void; variant?: 'page' | 'dialog' }`.
 
 - [ ] **Step 1: Write failing tests** (mock `getSupabase`, `repos`, `catalogService`, `setActiveClinic`, router `useNavigate`):
-  - `screen 1 renders only the four fields and Next` — queries by label: "Practice or clinic name", "Your name", "I treat patients myself" (checked), "At the clinic" (checked), "Home visits" (not checked); no "Address"/"Phone"/"Email" labels.
+  - `screen 1 renders only the four fields and Next` — queries by label: "Practice or clinic name", "Your name", "I treat patients myself" (checked), "At a clinic or hospital" (checked), "Home visits" (not checked); no "Address"/"Phone"/"Email" labels.
   - `shows the derived code line` — typing "Apex Physio" shows "Bills and patient IDs start with AP".
   - `blocks Next with a one-letter code` — Edit → type "A" → Next disabled and the hint "2 to 6 letters or numbers" shows.
   - `Next shows the services screen with blank prices` — every price box empty; Start disabled; hint "Price at least one service to start logging visits."
   - `Start stays disabled with only ₹0 prices` — type 0 in one row → still disabled.
+  - `No path: no price boxes and Start enabled` — choose "No: the hospital bills them, or my service is free" → no price inputs; Start enabled.
+  - `No path saves services at 0 and stores the answer` — Start → `rpc` called with `p_charges_patients: false`; `catalogService.addServices` items all `basePricePaise: 0`. Yes path sends `p_charges_patients: true`.
+  - `switching No → Yes keeps names, prices blank`.
   - `Back keeps screen 1 values` — Next → Back → practice name and ticks unchanged.
   - `nothing is created before Start` — Next alone → `rpc` not called.
   - `duplicate service names block Start` with the existing message.
@@ -133,10 +142,10 @@ git commit -m "feat(onboarding): create_clinic_with_admin takes code, region, ca
 - Test: `src/domain/setupGuide.test.ts`, `src/features/setup/SetupProgressBar.test.tsx` (create if missing)
 
 **Interfaces:**
-- Produces: `SetupSignals.servicesPriced` now means "an active item with `basePricePaise > 0`"; new `SetupSignals.hasTherapist: boolean` (any active therapist); new step id `'add-therapist'`; `SetupState.canHide: boolean` (true when `visitLogged`); `SetupState.hide(): Promise<void>` (writes `db.meta` `setupDismissedKey(clinicId)` = `'1'`).
+- Produces: `SetupSignals.servicesPriced` now means "an active item with `basePricePaise > 0`, or `clinic.chargesPatients === false`"; new `SetupSignals.hasTherapist: boolean` (any active therapist); new step id `'add-therapist'`; `SetupState.canHide: boolean` (true when `visitLogged`); `SetupState.hide(): Promise<void>` (writes `db.meta` `setupDismissedKey(clinicId)` = `'1'`).
 
 - [ ] **Step 1: Write failing tests**:
-  - `servicesPriced is false when every service is ₹0` and true when one is 50000.
+  - `servicesPriced is false when every service is ₹0` and true when one is 50000, and true at ₹0 when `chargesPatients === false`.
   - `add-therapist is the first essential step when there is no therapist` and is absent (or done) when `hasTherapist`.
   - `nudge shows when there is no therapist` and `when no service is priced`.
   - `empty clinic does not crash` — no therapists, empty catalog → steps build, `next.id === 'add-therapist'`.
