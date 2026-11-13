@@ -121,6 +121,18 @@ function matchPattern(message: string): string | undefined {
   return MESSAGE_PATTERNS.find(([pattern]) => pattern.test(message))?.[1];
 }
 
+const NETWORK_MESSAGE = /failed to fetch|load failed|networkerror|network request failed|network unreachable|retryable/i;
+
+/**
+ * Same as {@link toFriendlyMessage} for sign-in, sign-up and password-reset errors. A dropped connection there must not
+ * say "your changes are saved on this device": nothing has been saved, the person simply has to try again.
+ */
+export function authErrorMessage(e: unknown): string {
+  const text = e instanceof Error ? `${e.name} ${e.message}` : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : '';
+  if (NETWORK_MESSAGE.test(text)) return "Can't reach the server. Check your connection and try again.";
+  return toFriendlyMessage(e);
+}
+
 /** Translate any thrown value from a catch block into a message safe to show a clinic user. */
 export function toFriendlyMessage(e: unknown): string {
   if (!hasSupabaseConfig || isNetworkError(e)) return OFFLINE_MESSAGE;

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
-import { toFriendlyMessage } from '@/lib/errors';
+import { authErrorMessage } from '@/lib/errors';
 import { UnsyncedNotice } from '@/app/UnsyncedNotice';
 import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
 
@@ -91,7 +91,7 @@ export function LoginPage() {
     const { error } = await getSupabase()!.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) {
-      let message = error.message;
+      let message = authErrorMessage(error);
       if (error.message.includes('Invalid login credentials')) {
         message = 'Incorrect email or password.';
       } else if (error.message.includes('Email not confirmed')) {
@@ -120,7 +120,7 @@ export function LoginPage() {
     const { error } = await getSupabase()!.auth.signUp({ email, password });
     setBusy(false);
     if (error) {
-      setError(toFriendlyMessage(error));
+      setError(authErrorMessage(error));
     } else {
       setSignupSuccess(true);
       setPassword('');
@@ -175,7 +175,7 @@ export function LoginPage() {
     setBusy(false);
     if (error) {
       console.error('Resend confirmation error:', error);
-      setError(toFriendlyMessage(error));
+      setError(authErrorMessage(error));
     } else {
       setConfirmationResent(true);
     }

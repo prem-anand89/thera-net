@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./env', () => ({ hasSupabaseConfig: true }));
 
-const { toFriendlyMessage } = await import('./errors');
+const { toFriendlyMessage, authErrorMessage } = await import('./errors');
 
 function postgrestError(message: string, code: string) {
   return { message, code, details: null, hint: null } as never;
@@ -136,5 +136,18 @@ describe('toFriendlyMessage when Supabase is not configured', () => {
     expect(toFriendlyMessageUnconfigured(new Error('anything'))).toBe(
       "You're offline (or not connected to the server). Check your connection and try again."
     );
+  });
+});
+
+describe('authErrorMessage', () => {
+  it('a dropped connection on sign-up does not claim anything was saved on the device', () => {
+    const e = Object.assign(new Error('Load failed'), { name: 'AuthRetryableFetchError' });
+    const msg = authErrorMessage(e);
+    expect(msg).toBe("Can't reach the server. Check your connection and try again.");
+    expect(msg).not.toMatch(/saved on this device/);
+  });
+
+  it('other auth errors keep their own text', () => {
+    expect(authErrorMessage(new Error('User already registered'))).toBe('User already registered');
   });
 });

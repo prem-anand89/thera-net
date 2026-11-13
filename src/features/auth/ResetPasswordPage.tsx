@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
-import { toFriendlyMessage } from '@/lib/errors';
+import { authErrorMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
 
 /**
@@ -66,7 +66,7 @@ export function ResetPasswordPage() {
       data: { require_password_setup: false },
     });
     if (error) {
-      setError(toFriendlyMessage(error));
+      setError(authErrorMessage(error));
       setBusy(false);
       return;
     }
