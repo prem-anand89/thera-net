@@ -1,0 +1,823 @@
+<title>HEP Redesign Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an app-like stage with container queries, so "Phone width" and a real phone show the same mobile layout. Colours are TheraNet's own tokens. */
+:root {
+  --paper:#f5f5f4; --surface:#ffffff; --ink:#262626; --muted:#5a6064; --border:#e2e2e1;
+  --teal:#2c5f63; --teal-strong:#244d50; --teal-light:#e4edec; --teal-mist:#f1f6f5;
+  --rust:#a6552f; --rust-light:#f3e4dd; --moss:#5b7a52; --moss-light:#eaf0e7;
+  --amber:#80591a; --amber-light:#f6ecd8; --slate:#55636e; --slate-light:#e9edf0;
+  --sky:#2f6690; --sky-light:#e3eef6; --plum:#6a4c86; --plum-light:#eee8f4;
+  --photo-a:#ecebe8; --photo-b:#dcdad5; --figure:#4a4a48; --on-accent:#ffffff;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.06);
+  --scrim:rgba(20,24,26,.45);
+  --font-display:'Inter',system-ui,-apple-system,sans-serif;
+  --font-sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper:#16191a; --surface:#1f2324; --ink:#ecebe8; --muted:#a9b0b2; --border:#33393b;
+  --teal:#7fb5b0; --teal-strong:#a4d0cb; --teal-light:#23393a; --teal-mist:#1c2a2b;
+  --rust:#e09a76; --rust-light:#3a2820; --moss:#9dbb92; --moss-light:#25301f;
+  --amber:#dcb46a; --amber-light:#362b17; --slate:#a9b6c0; --slate-light:#283035;
+  --sky:#8cbbe0; --sky-light:#1d2c3a; --plum:#c1a5dc; --plum-light:#2c2436;
+  --photo-a:#2a2e2f; --photo-b:#353a3b; --figure:#cfd2d2; --on-accent:#10201f;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3); --scrim:rgba(0,0,0,.6); color-scheme:dark } }
+:root[data-theme="dark"] {
+  --paper:#16191a; --surface:#1f2324; --ink:#ecebe8; --muted:#a9b0b2; --border:#33393b;
+  --teal:#7fb5b0; --teal-strong:#a4d0cb; --teal-light:#23393a; --teal-mist:#1c2a2b;
+  --rust:#e09a76; --rust-light:#3a2820; --moss:#9dbb92; --moss-light:#25301f;
+  --amber:#dcb46a; --amber-light:#362b17; --slate:#a9b6c0; --slate-light:#283035;
+  --sky:#8cbbe0; --sky-light:#1d2c3a; --plum:#c1a5dc; --plum-light:#2c2436;
+  --photo-a:#2a2e2f; --photo-b:#353a3b; --figure:#cfd2d2; --on-accent:#10201f;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3); --scrim:rgba(0,0,0,.6); color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto;display:grid;gap:14px}
+
+.top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.top h1{font-size:19px;font-weight:600}
+.top p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:6px 11px;border-radius:6px;font-size:13px;font-weight:500;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--teal);color:var(--on-accent)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.note{background:var(--teal-mist);border:1px solid var(--teal-light);border-radius:10px;padding:10px 14px;font-size:13px}
+.note b{font-family:var(--font-display);font-weight:600}
+
+.stage{container-type:inline-size;margin:0 auto;width:100%;transition:max-width .25s}
+.stage.phone{max-width:390px}
+.app{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;min-width:0;position:relative}
+.app-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.app-head h2{font-size:16px;font-weight:600;margin-right:auto}
+
+.btn{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:500}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:var(--on-accent)}
+.btn.ghost{border-color:transparent;background:none;color:var(--teal)}
+.btn.small{padding:4px 9px;font-size:12px}
+.input{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:7px 10px;font-size:13px;min-width:0;width:100%}
+.search{flex:1 1 200px;max-width:340px}
+.chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:4px 10px;font-size:12.5px;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+.chip .n{color:var(--muted);font-variant-numeric:tabular-nums;font-size:11.5px}
+.chip[aria-pressed="true"]{background:var(--teal-light);border-color:var(--teal);color:var(--teal-strong);font-weight:500}
+.chip[aria-pressed="true"] .n{color:var(--teal-strong)}
+.chip:disabled{opacity:.45;cursor:default}
+.lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;font-family:var(--font-display)}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.dot{width:8px;height:8px;border-radius:999px;display:inline-block;flex:none}
+.type{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;white-space:nowrap}
+
+/* Library */
+.lib{display:grid;grid-template-columns:1fr;min-height:520px}
+@container (min-width:760px){ .lib{grid-template-columns:200px 1fr} }
+.rail{border-right:1px solid var(--border);padding:14px 10px;display:none;gap:14px;align-content:start}
+@container (min-width:760px){ .rail{display:grid} .chiprow{display:none!important} }
+.rail-group{display:grid;gap:1px}
+.rail-group .lbl{padding:0 8px 4px}
+.rail button{display:flex;justify-content:space-between;align-items:center;gap:8px;border:0;background:none;text-align:left;padding:5px 8px;border-radius:6px;font-size:13px}
+.rail button>span:first-child{display:inline-flex;align-items:center;gap:6px}
+.rail button .n{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.rail button[aria-pressed="true"]{background:var(--teal-light);color:var(--teal-strong);font-weight:500}
+.results{padding:12px 16px 16px;display:grid;gap:12px;align-content:start;min-width:0}
+.res-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.res-bar .count{margin-right:auto;color:var(--muted);font-size:13px}
+.chiprow{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chiprow::-webkit-scrollbar{display:none}
+.active-filters{display:flex;flex-wrap:wrap;gap:6px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr));gap:12px}
+@container (max-width:420px){ .grid{grid-template-columns:1fr 1fr;gap:10px} }
+.card{position:relative;border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;display:grid;grid-template-rows:auto 1fr;text-align:left}
+.card:hover{border-color:var(--muted)}
+.card.chosen{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal)}
+.card.inprog{opacity:.6}
+.hit{all:unset;cursor:pointer;display:grid;grid-template-rows:auto 1fr}
+.hit:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.media{aspect-ratio:4/3;max-width:100%;width:100%;display:block;position:relative;overflow:hidden}
+.media svg{width:100%;height:100%;display:block}
+.tile{width:100%;height:100%;display:grid;place-items:center;align-content:center;gap:4px;padding:10px;text-align:center}
+.tile .glyph{font-family:var(--font-display);font-size:30px;font-weight:700;opacity:.55;line-height:1}
+.tile .reg{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600}
+.card-body{padding:8px 10px 10px;display:grid;gap:3px;align-content:start}
+.card-title{font-family:var(--font-display);font-weight:600;font-size:13.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.5em}
+.card-meta{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-dose{font-size:12px;font-variant-numeric:tabular-nums}
+.star{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:999px;border:0;background:var(--surface);box-shadow:var(--shadow);font-size:15px;line-height:28px;color:var(--muted);padding:0}
+.star[aria-pressed="true"]{color:var(--amber)}
+.tick{position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:999px;background:var(--teal);color:var(--on-accent);display:grid;place-items:center;font-size:14px;font-weight:700}
+.badge{position:absolute;bottom:6px;left:6px;background:var(--surface);border-radius:999px;padding:1px 8px;font-size:10.5px;font-weight:600;color:var(--teal-strong)}
+
+/* List view = a real table: every column earns its width */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-family:var(--font-display);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--paper);white-space:nowrap}
+.tbl th button{all:unset;cursor:pointer}
+.tbl th button:focus-visible{outline:2px solid var(--teal)}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr{cursor:pointer}
+.tbl tbody tr:hover{background:var(--teal-mist)}
+.tbl .thumb{width:56px;aspect-ratio:4/3;border-radius:6px;overflow:hidden}
+.tbl .nm{font-family:var(--font-display);font-weight:600}
+.tbl .aka{font-size:11.5px;color:var(--muted)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.tbl .star{position:static;box-shadow:none;background:none}
+.tbl .eq{color:var(--muted);max-width:160px}
+.mlist{display:none;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.mrow{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border)}
+.mrow:last-child{border-bottom:0}
+.mrow .thumb{width:64px;aspect-ratio:4/3;border-radius:6px;overflow:hidden}
+.mrow .star{position:static;box-shadow:none;background:none}
+.mrow .nm{font-family:var(--font-display);font-weight:600;font-size:13.5px}
+@container (max-width:620px){ .tbl-wrap{display:none} .mlist{display:grid} }
+
+/* Picker */
+.picker{display:grid;grid-template-columns:1fr;min-height:560px}
+@container (min-width:760px){ .picker{grid-template-columns:1fr 260px} .strip{display:none!important} }
+.basket{border-left:1px solid var(--border);padding:14px;display:none;gap:10px;align-content:start;background:var(--paper)}
+@container (min-width:760px){ .basket{display:grid} }
+.basket ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.basket li{display:grid;grid-template-columns:40px 1fr auto;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12.5px}
+.basket li .thumb{width:40px;aspect-ratio:4/3;border-radius:4px;overflow:hidden}
+.basket li .x{border:0;background:none;color:var(--muted);font-size:14px;padding:2px 4px}
+.basket li .nm{font-weight:500;line-height:1.2;min-width:0}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 16px;overflow-x:auto}
+.tabs button{border:0;background:none;padding:10px 12px;font-size:13.5px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--teal-strong);border-bottom-color:var(--teal)}
+.tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:12px}
+.tcard{border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:8px;background:var(--surface)}
+.tcard h3{font-size:14px}
+.tcard .thumbs{display:flex;gap:4px}
+.tcard .thumbs span{width:44px;aspect-ratio:4/3;border-radius:4px;overflow:hidden}
+.tcard .row2{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.strip{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface)}
+.strip .chips{display:flex;gap:6px;overflow-x:auto;flex:1;scrollbar-width:none}
+.strip .chips::-webkit-scrollbar{display:none}
+.strip .chip{background:var(--teal-light);border-color:var(--teal);color:var(--teal-strong)}
+.empty{display:grid;justify-items:center;text-align:center;gap:10px;padding:48px 16px;color:var(--muted)}
+.empty h3{font-size:16px;color:var(--ink)}
+.empty p{max-width:42ch;margin:0}
+.cap{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.meter{height:6px;border-radius:999px;background:var(--border);overflow:hidden}
+.meter span{display:block;height:100%;background:var(--amber)}
+
+/* Exercise form: collapsible sections */
+.form-wrap{display:grid;grid-template-columns:1fr}
+@container (min-width:760px){ .form-wrap{grid-template-columns:minmax(0,1fr) 340px} .preview-btn{display:none!important} }
+.form{padding:14px 18px 18px;display:grid;gap:10px;min-width:0;align-content:start}
+.fsec{border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.fsec.open{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal-light)}
+.fsec-h{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;width:100%;border:0;background:none;text-align:left;padding:12px 14px}
+.fsec-h .st{width:22px;height:22px;border-radius:999px;display:grid;place-items:center;font-size:12px;font-weight:700;border:1.5px solid var(--border);color:var(--muted)}
+.fsec-h .st.ok{background:var(--moss);border-color:var(--moss);color:var(--on-accent)}
+.fsec-h h3{font-size:14.5px;font-weight:600}
+.fsec-h .sum{font-size:12.5px;color:var(--muted);display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fsec-h .edit{font-size:12.5px;color:var(--teal);font-weight:500}
+.fsec-b{padding:2px 14px 14px 46px;display:grid;gap:14px}
+@container (max-width:460px){ .fsec-b{padding-left:14px} }
+.fsec-foot{display:flex;justify-content:flex-end;gap:8px}
+.f{display:grid;gap:6px;min-width:0}
+.f>label,.f>.flabel{font-size:13px;font-weight:500}
+.f .hint{font-size:11.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@container (max-width:460px){ .two{grid-template-columns:1fr} }
+textarea.input{resize:vertical;min-height:84px;line-height:1.45}
+.photos{display:flex;gap:8px;flex-wrap:wrap}
+.photo-slot{width:96px;aspect-ratio:4/3;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.photo-add{width:96px;aspect-ratio:4/3;border-radius:8px;border:1.5px dashed var(--border);background:none;color:var(--teal);font-size:12.5px;font-weight:500}
+.other-in{width:72px;padding:3px 8px;border-radius:999px}
+.segs{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.segs button{border:0;border-right:1px solid var(--border);background:var(--surface);padding:6px 11px;font-size:13px}
+.segs button:last-child{border-right:0}
+.segs button[aria-pressed="true"]{background:var(--teal-light);color:var(--teal-strong);font-weight:600}
+.type-hint{font-size:12px;color:var(--muted);background:var(--paper);border-radius:8px;padding:6px 10px}
+.form-foot{position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--border);background:var(--surface);z-index:2}
+.discard{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--amber-light);color:var(--amber);border-radius:8px;padding:8px 12px;font-size:13px;margin-right:auto}
+.discard b{color:var(--ink);font-weight:600}
+.side{border-left:1px solid var(--border);background:var(--paper);padding:16px;display:none;align-content:start;justify-items:center;gap:8px}
+@container (min-width:760px){ .side{display:grid} }
+.side .lbl{justify-self:start}
+.sticky-side{position:sticky;top:12px;display:grid;gap:8px;justify-items:center}
+
+/* Program sheet */
+.psheet{display:grid;grid-template-columns:1fr}
+@container (min-width:760px){ .psheet{grid-template-columns:minmax(0,1fr) 300px} .psum-m{display:none!important} }
+.pmain{padding:14px 16px;display:grid;gap:12px;align-content:start;min-width:0}
+.pside{border-left:1px solid var(--border);background:var(--paper);padding:14px;display:none;gap:14px;align-content:start}
+@container (min-width:760px){ .pside{display:grid} }
+.psum-m{border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.psum-m .t{font-weight:600;font-family:var(--font-display)}
+.psum-m .s{font-size:12.5px;color:var(--muted);grid-column:1}
+.psec-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0}
+.psec-h h3{font-size:13.5px;display:inline-flex;gap:6px;align-items:center}
+.psec-h .c{font-weight:400;color:var(--muted)}
+.prow{border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.prow-h{display:grid;grid-template-columns:18px 52px 1fr auto;gap:10px;align-items:center;padding:7px 8px}
+.prow-h .grip{color:var(--muted);font-size:12px;cursor:grab;text-align:center}
+.prow-h .thumb{width:52px;aspect-ratio:4/3;border-radius:6px;overflow:hidden}
+.prow-h .open{all:unset;cursor:pointer;min-width:0}
+.prow-h .nm{font-weight:600;font-size:13.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow-h .ds{font-size:12px;color:var(--muted);display:block}
+.prow-h .acts{display:flex;gap:2px}
+.prow-h .acts button{border:0;background:none;color:var(--muted);padding:4px 6px;font-size:13px;border-radius:6px}
+.prow-b{border-top:1px solid var(--border);padding:12px;display:grid;gap:12px}
+.kv{display:grid;gap:4px}
+.kv .k{font-size:12px;color:var(--muted)}
+.estimate{font-size:12.5px;color:var(--muted)}
+.pblock{display:grid;gap:8px}
+.pblock.main{border-block:1px solid var(--border);padding-block:10px}
+.dropzone{border:1.5px dashed var(--border);background:none;border-radius:10px;padding:10px 12px;text-align:left;color:var(--teal);font-weight:500;font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.dropzone span{color:var(--muted);font-weight:400}
+.dropzone:hover{border-color:var(--teal);background:var(--teal-mist)}
+.prow .pop{position:absolute;z-index:5;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:6px;display:grid;gap:2px}
+
+/* Programs list */
+.htrack{display:flex;gap:2px}
+.htrack i{width:8px;height:14px;border-radius:2px;background:var(--border);display:block}
+.htrack i.f{background:var(--moss)} .htrack i.p{background:var(--amber)} .htrack i.t{outline:1.5px solid var(--ink);outline-offset:1px}
+.sig{border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.sig.red{background:var(--rust-light);color:var(--rust)} .sig.amber{background:var(--amber-light);color:var(--amber)} .sig.blue{background:var(--sky-light);color:var(--sky)}
+
+/* Types explainer */
+.doc{padding:18px;display:grid;gap:18px;max-width:900px}
+.doc h3{font-size:15px}
+.doc p{margin:0;max-width:70ch}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.box{border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:grid;gap:8px;align-content:start}
+.box ul{margin:0;padding-left:18px;display:grid;gap:3px}
+.src{font-size:12px;color:var(--muted)}
+.src a{color:var(--teal)}
+
+/* Phone + patient screens */
+.phone{width:300px;max-width:100%;border:8px solid var(--ink);border-radius:30px;background:var(--surface);overflow:hidden;position:relative;height:580px;display:flex;flex-direction:column}
+.phone.big{width:360px;height:680px}
+.p-scroll{flex:1;overflow-y:auto;min-height:0;position:relative}
+.p-ribbon{background:var(--amber-light);color:var(--amber);font-size:11.5px;font-weight:600;text-align:center;padding:5px 8px;flex:none}
+.p-top{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12.5px;flex:none}
+.p-top .sp{margin-left:auto;display:flex;gap:4px}
+.p-top button{border:0;background:none;padding:4px 6px;color:var(--teal);font-weight:500}
+.p-pic{aspect-ratio:4/3;position:relative;background:var(--photo-a)}
+.p-pic .tile .glyph{font-size:44px}
+.p-body{padding:12px 14px 16px;display:grid;gap:10px}
+.p-title{font-family:var(--font-display);font-weight:700;font-size:19px;line-height:1.2}
+.p-dose{font-size:14px;font-weight:500}
+.p-start{width:100%;border:0;border-radius:10px;background:var(--teal);color:var(--on-accent);padding:11px;font-weight:600;font-size:15px}
+.p-steps{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px}
+.p-stop{background:var(--rust-light);color:var(--rust);border-radius:8px;padding:8px 10px;font-size:13px}
+.p-note{background:var(--teal-mist);border-radius:8px;padding:8px 10px;font-size:13px}
+.p-bottom{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:10px;border-top:1px solid var(--border);flex:none;background:var(--surface)}
+.p-bottom button{border-radius:10px;padding:11px 14px;font-weight:600;font-size:14px;border:1px solid var(--border);background:var(--surface)}
+.p-bottom .done{background:var(--moss);border-color:var(--moss);color:var(--on-accent)}
+.timer-band{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:10px 14px;background:var(--teal-mist);border-bottom:1px solid var(--teal-light)}
+.ring{width:64px;height:64px;position:relative;display:grid;place-items:center}
+.ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.ring .num{font-family:var(--font-display);font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
+.timer-band .ph{font-family:var(--font-display);font-weight:700;font-size:17px}
+.timer-band .sub2{font-size:12.5px;color:var(--muted)}
+.overlay-timer{position:absolute;inset:0;background:var(--scrim);display:grid;place-items:center;align-content:center;gap:6px;color:#fff}
+.overlay-timer .ring{width:120px;height:120px}
+.overlay-timer .ring .num{font-size:40px;color:#fff}
+.overlay-timer .ph{font-family:var(--font-display);font-weight:700;font-size:20px}
+.finished{background:var(--moss-light);color:var(--moss);padding:9px 12px;font-size:13.5px;font-weight:500;border-top:1px solid var(--border);flex:none}
+.finished b{color:var(--ink)}
+.toast{position:absolute;left:10px;right:10px;bottom:76px;background:var(--ink);color:var(--surface);border-radius:10px;padding:9px 12px;font-size:13px;z-index:4}
+.p-head{padding:12px 14px;border-bottom:1px solid var(--border);display:grid;gap:3px}
+.p-head .cl{font-family:var(--font-display);font-weight:700;font-size:16px}
+.p-head .meta{font-size:12.5px;color:var(--muted)}
+.p-sess{display:flex;gap:6px;padding:10px 14px 4px}
+.p-sec{padding:8px 14px 0}
+.p-sec .lbl{display:flex;justify-content:space-between;padding:6px 0}
+.p-row{display:grid;grid-template-columns:30px 52px 1fr 14px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.p-row .circ{width:28px;height:28px;border-radius:999px;border:2px solid var(--border);display:grid;place-items:center;font-size:14px;color:var(--on-accent);background:none;padding:0}
+.p-row .circ.on{background:var(--moss);border-color:var(--moss)}
+.p-row .th{width:52px;aspect-ratio:4/3;border-radius:6px;overflow:hidden;cursor:pointer}
+.p-row .nm{font-weight:600;font-size:14px;line-height:1.25}
+.p-row .ds{font-size:12.5px;color:var(--muted)}
+.p-row .chev{color:var(--muted);font-size:18px;cursor:pointer}
+.p-sticky{position:sticky;bottom:0;padding:10px 14px;background:linear-gradient(to top,var(--surface) 70%,transparent)}
+.signin{padding:28px 18px;display:grid;gap:12px;text-align:center}
+.signin .pin{display:flex;justify-content:center;gap:8px}
+.signin .pin span{width:44px;height:52px;border:1.5px solid var(--border);border-radius:10px;display:grid;place-items:center;font-size:22px;font-weight:600}
+.tip{background:var(--sky-light);color:var(--sky);border-radius:8px;padding:8px 10px;font-size:12.5px;text-align:left}
+.compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;justify-items:center;padding:20px 12px}
+.compare figure{margin:0;display:grid;gap:8px;justify-items:center}
+.compare figcaption{font-size:13px;color:var(--muted);text-align:center;max-width:300px}
+.compare figcaption b{color:var(--ink);font-family:var(--font-display)}
+.sheet-preview{position:absolute;inset:0;background:var(--scrim);display:grid;place-items:center;z-index:6;padding:10px;overflow:auto}
+.sheet-preview .close{position:absolute;top:10px;right:10px}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>HEP redesign mockup · v3</h1>
+      <p>Clickable. Sample exercises from the starter set. Nothing here is saved.</p>
+    </div>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Screen" id="screens"></div>
+      <div class="seg" role="group" aria-label="Width">
+        <button type="button" data-width="full" aria-pressed="true">Desktop</button>
+        <button type="button" data-width="phone" aria-pressed="false">Phone width</button>
+      </div>
+    </div>
+  </div>
+  <div class="note" id="note"></div>
+  <div class="stage" id="stage"><div id="view"></div></div>
+</div>
+
+<script>
+(function(){
+/* Types, proposed: what the exercise trains. Warm-up and Cool-down move to the program (a place in the session). */
+const TYPES={mobility:'Mobility',stretching:'Stretching',activation:'Activation',strengthening:'Strengthening',balance:'Balance',functional:'Functional'};
+const TYPE_HINT={mobility:'Active or assisted range of motion. Default dosage: repetitions.',stretching:'Sustained end-range hold. Default dosage: holds, 3 × 30 s.',activation:'Isometric or low-load motor control. Default dosage: repetitions with hold.',strengthening:'Resisted or loaded exercise. Default dosage: repetitions.',balance:'Static or dynamic postural control. Default dosage: timed.',functional:'Task-specific training, for example sit to stand or stairs. Default dosage: repetitions.'};
+const TYPE_TONE={mobility:'sky',stretching:'plum',activation:'amber',strengthening:'rust',balance:'moss',functional:'teal'};
+const SECTIONS=['warm_up','mobility','stretching','activation','strengthening','balance','functional','cool_down'];
+const POSITIONS=['Standing','Sitting','Supine','Prone','Side-lying','Quadruped','Kneeling'];
+const SEC_LABEL={warm_up:'Warm-up',cool_down:'Cool-down',...TYPES};
+const REGIONS=['Neck','Shoulder','Elbow / Wrist / Hand','Spine / Back','Core','Hip','Knee','Ankle / Foot','Pelvic floor','Whole body'];
+const TINT={'Neck':'plum','Shoulder':'sky','Elbow / Wrist / Hand':'amber','Spine / Back':'teal','Core':'moss','Hip':'rust','Knee':'sky','Ankle / Foot':'moss','Whole body':'slate','Pelvic floor':'plum'};
+const EQUIP=['None','Theraband / resistance band','Dumbbell','Ankle weight','Swiss ball','Foam roller','Towel','Chair','Wall','Step','Stick / wand','Pulley','Balance board','Mat'];
+const SHORT_EQ={'Theraband / resistance band':'Band','Stick / wand':'Stick'};
+const RAW=[
+ ['Chin Tucks','Neck','activation',[],'2 × 10 · hold 5 s','sit',41,true,[]],
+ ['Upper Trapezius Stretch','Neck','stretching',[],'3 × 30 s hold · each side',null,12,false,[]],
+ ['Pendulum Swings','Shoulder','mobility',['Chair'],'2 × 30 s · each side','lean',33,false,[]],
+ ['Wall Slides','Shoulder','mobility',['Wall'],'3 × 10','stand',28,true,['Wall angels']],
+ ['Scapular Squeeze','Shoulder','activation',[],'2 × 10 · hold 5 s','stand',36,false,['Shoulder blade squeeze']],
+ ['Band External Rotation','Shoulder','strengthening',['Theraband / resistance band'],'3 × 12 · each side','stand',30,true,[]],
+ ['Cross-body Stretch','Shoulder','stretching',[],'3 × 30 s hold · each side',null,9,false,[]],
+ ['Wrist Flexor Stretch','Elbow / Wrist / Hand','stretching',[],'3 × 30 s hold · each side',null,7,false,[]],
+ ['Cat–Camel','Spine / Back','mobility',['Mat'],'2 × 10','kneel',25,false,[]],
+ ['Pelvic Tilt','Spine / Back','mobility',['Mat'],'2 × 10','lie',22,false,[]],
+ ['Knee-to-chest Stretch','Spine / Back','stretching',['Mat'],'3 × 20 s hold · each side','lie',18,false,[]],
+ ['Bird Dog','Spine / Back','strengthening',['Mat'],'2 × 8 · hold 5 s · each side','kneel',27,true,[]],
+ ['Dead Bug','Core','strengthening',['Mat'],'2 × 10 · each side','lie',15,false,[]],
+ ['Plank','Core','strengthening',['Mat'],'2 × 30 s',null,11,false,[]],
+ ['Glute Bridge','Hip','strengthening',['Mat'],'3 × 12 · hold 5 s','lie',39,true,['Bridging']],
+ ['Clamshells','Hip','strengthening',['Mat','Theraband / resistance band'],'3 × 12 · each side','lie',31,false,['Clams']],
+ ['Straight Leg Raise','Hip','strengthening',['Mat'],'3 × 10 · each side','lie',44,true,['SLR']],
+ ['Hip Flexor Stretch','Hip','stretching',['Mat'],'3 × 30 s hold · each side','kneel',14,false,[]],
+ ['Quad Sets','Knee','activation',['Towel'],'3 × 12 · hold 10 s','sit',48,true,['Isometric quads']],
+ ['Heel Slides','Knee','mobility',['Mat'],'2 × 10 · each side','lie',35,false,[]],
+ ['Hamstring Stretch','Knee','stretching',['Towel'],'3 × 30 s hold · each side',null,20,false,[]],
+ ['Mini Squats','Knee','strengthening',['Wall'],'3 × 10','stand',29,false,[]],
+ ['Sit to Stand','Knee','functional',['Chair'],'3 × 8','sit',37,true,['STS']],
+ ['Ankle Pumps','Ankle / Foot','mobility',[],'2 × 20','sit',46,false,[]],
+ ['Calf Stretch','Ankle / Foot','stretching',['Wall'],'3 × 30 s hold · each side','stand',24,false,[]],
+ ['Heel Raises','Ankle / Foot','strengthening',['Chair'],'3 × 12','stand',26,false,['Calf raises']],
+ ['Single-leg Stand','Ankle / Foot','balance',['Chair'],'3 × 30 s · each side',null,16,false,[]],
+ ['Pelvic Floor Contractions','Pelvic floor','activation',[],'3 × 10 · hold 5 s','sit',10,false,['Kegels']],
+];
+const POS_BY_POSE={stand:['Standing'],sit:['Sitting'],lie:['Supine'],kneel:['Quadruped'],lean:['Standing']};
+const POS_OVERRIDE={0:['Sitting','Standing'],1:['Sitting'],4:['Sitting','Standing'],6:['Standing'],7:['Sitting','Standing'],13:['Prone'],15:['Side-lying'],17:['Kneeling'],20:['Supine'],26:['Standing'],27:['Sitting','Supine']};
+const EX=RAW.map((r,i)=>({id:i,t:r[0],r:r[1],ph:r[2],eq:r[3],dose:r[4],pose:r[5],uses:r[6],fav:r[7],aka:r[8],added:(i*7)%RAW.length,pos:POS_OVERRIDE[i]||POS_BY_POSE[r[5]]||['Standing']}));
+const TEMPLATES=[
+ {t:'Knee replacement · week 1',r:'Knee',ids:[23,18,19,16,22],used:14},
+ {t:'Low back pain · starter',r:'Spine / Back',ids:[9,8,10,11],used:22},
+ {t:'Frozen shoulder · stage 1',r:'Shoulder',ids:[2,3,4,6],used:9},
+ {t:'Ankle sprain · return to walking',r:'Ankle / Foot',ids:[23,24,25,26],used:6},
+ {t:'Neck posture',r:'Neck',ids:[0,1,4],used:11},
+ {t:'Hip strength · general',r:'Hip',ids:[14,15,16,17],used:8},
+];
+
+const SCREENS=[['library','Library'],['types','Type and position'],['form','Exercise form'],['picker','Picker'],['program','Program sheet'],['programs','Programs list'],['patient','Patient preview'],['wording','Wording']];
+const S={view:'library',width:'full',layout:'grid',sort:'used',tsort:null,q:'',region:null,phase:null,equip:null,pos:null,favOnly:false,
+  chosen:[],pickTab:'exercises',tplRegion:null,emptyLib:false,pickPreview:false,
+  formMode:'new',form:null,formOpen:'details',formDirty:false,confirmDiscard:false,formPreviewOpen:false,otherOpen:null,
+  prog:{items:[{id:23,sec:'warm_up'},{id:18,sec:'activation'},{id:19,sec:'mobility'},{id:16,sec:'strengthening'},{id:14,sec:'strengthening'}],open:null,menu:null,addTo:null,times:2,len:28,start:'Today',checkin:14,editSettings:false},
+  pat:{screen:'list',idx:18,done:{},timerPos:'under',timer:null,finished:false,toast:null,session:'Morning'}};
+const BLANK={title:'',region:null,phase:null,photo:false,steps:'',stopIf:'',mode:null,sets:null,reps:null,hold:null,secs:null,rest:null,side:null,times:null,pos:[],eq:[],also:[],names:[]};
+const FILLED={title:'Straight Leg Raise',region:'Hip',phase:'strengthening',photo:true,steps:'Lie on your back with one knee bent and the other leg straight\nTighten the thigh of the straight leg and lift it to the height of the other knee\nLower slowly',stopIf:'Sharp or increasing pain',mode:'reps',sets:3,reps:10,hold:null,secs:null,rest:30,side:'each',times:1,pos:['Supine'],eq:['Mat'],also:['Knee'],names:['SLR']};
+const fresh=o=>({...o,pos:[...o.pos],eq:[...o.eq],also:[...o.also],names:[...o.names]});
+S.form=fresh(BLANK);
+
+const $=(s,el=document)=>el.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function load(){try{const o=JSON.parse(localStorage.getItem('hep-mock3')||'{}');if(o.view&&SCREENS.some(s=>s[0]===o.view))S.view=o.view;if(o.width)S.width=o.width;if(o.layout)S.layout=o.layout;}catch(e){}}
+function save(){try{localStorage.setItem('hep-mock3',JSON.stringify({view:S.view,width:S.width,layout:S.layout}))}catch(e){}}
+
+function pose(kind){
+  const f='var(--figure)';const L=(a,b,c,d)=>`<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="${f}" stroke-width="5" stroke-linecap="round"/>`;
+  const H=(x,y)=>`<circle cx="${x}" cy="${y}" r="9" fill="${f}"/>`;
+  let fig='';
+  if(kind==='stand') fig=H(80,30)+L(80,40,80,80)+L(80,50,62,72)+L(80,50,98,72)+L(80,80,70,112)+L(80,80,90,112);
+  else if(kind==='sit') fig=H(70,34)+L(70,44,70,80)+L(70,54,88,70)+L(70,80,100,80)+L(100,80,100,112)+`<rect x="56" y="80" width="50" height="5" rx="2" fill="${f}" opacity=".4"/>`;
+  else if(kind==='lie') fig=H(36,92)+L(46,94,96,94)+L(96,94,114,74)+L(114,74,130,94)+L(60,94,60,108)+`<rect x="20" y="104" width="122" height="5" rx="2" fill="${f}" opacity=".35"/>`;
+  else if(kind==='kneel') fig=H(46,58)+L(56,62,104,64)+L(62,63,62,96)+L(104,64,104,96)+L(104,96,124,96)+`<rect x="30" y="98" width="110" height="5" rx="2" fill="${f}" opacity=".35"/>`;
+  else if(kind==='lean') fig=H(56,46)+L(64,52,104,62)+L(70,54,60,90)+L(104,62,98,112)+L(104,62,112,112)+`<rect x="34" y="88" width="34" height="5" rx="2" fill="${f}" opacity=".4"/>`;
+  return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="120" fill="var(--photo-b)"/><rect width="160" height="70" fill="var(--photo-a)"/>${fig}</svg>`;
+}
+function tile(ex){const c=TINT[ex.r]||'slate';const g=ex.r.split(/[ /]/)[0];
+  return `<div class="tile" style="background:var(--${c}-light);color:var(--${c})"><div class="glyph">${esc(g.slice(0,2))}</div><div class="reg">${esc(ex.r)}</div></div>`;}
+const media=ex=>ex.pose?pose(ex.pose):tile(ex);
+const eqText=ex=>ex.eq.map(e=>SHORT_EQ[e]||e).join(', ');
+const typeTag=ph=>ph?`<span class="type"><span class="dot" style="background:var(--${TYPE_TONE[ph]||'slate'})"></span>${esc(SEC_LABEL[ph])}</span>`:'';
+
+/* Filtering */
+function filtered(ignore){
+  const q=S.q.trim().toLowerCase();
+  let list=EX.filter(e=>(!q||(e.t+' '+e.aka.join(' ')).toLowerCase().includes(q))&&(ignore==='region'||!S.region||e.r===S.region)&&(ignore==='phase'||!S.phase||e.ph===S.phase)&&(ignore==='equip'||!S.equip||e.eq.includes(S.equip))&&(ignore==='pos'||!S.pos||e.pos.includes(S.pos))&&(!S.favOnly||e.fav));
+  const k=S.tsort||S.sort;
+  if(k==='used')list.sort((a,b)=>b.uses-a.uses);else if(k==='az')list.sort((a,b)=>a.t.localeCompare(b.t));else if(k==='new')list.sort((a,b)=>b.added-a.added);
+  else if(k==='region')list.sort((a,b)=>REGIONS.indexOf(a.r)-REGIONS.indexOf(b.r)||a.t.localeCompare(b.t));
+  else if(k==='type')list.sort((a,b)=>SECTIONS.indexOf(a.ph)-SECTIONS.indexOf(b.ph)||a.t.localeCompare(b.t));
+  return list;
+}
+const countBy=(key,val)=>filtered(key).filter(e=>key==='region'?e.r===val:key==='phase'?e.ph===val:key==='pos'?e.pos.includes(val):e.eq.includes(val)).length;
+function rail(){
+  const g=(label,key,vals,name,dot)=>`<div class="rail-group"><div class="lbl">${label}</div>
+    <button type="button" data-f="${key}" data-v="" aria-pressed="${!S[key]}"><span>All</span><span class="n">${filtered(key).length}</span></button>
+    ${vals.map(v=>{const n=countBy(key,v);return n||S[key]===v?`<button type="button" data-f="${key}" data-v="${esc(v)}" aria-pressed="${S[key]===v}"><span>${dot?`<span class="dot" style="background:var(--${TYPE_TONE[v]})"></span>`:''}${esc(name?name(v):v)}</span><span class="n">${n}</span></button>`:''}).join('')}</div>`;
+  return `<aside class="rail" aria-label="Filters">
+    <button type="button" data-fav aria-pressed="${S.favOnly}"><span>★ Favourites</span><span class="n">${EX.filter(e=>e.fav).length}</span></button>
+    ${g('Body region','region',REGIONS)}${g('Type','phase',Object.keys(TYPES),v=>TYPES[v],true)}${g('Position','pos',POSITIONS)}${g('Equipment','equip',EQUIP.filter(e=>e!=='None'),v=>SHORT_EQ[v]||v)}</aside>`;
+}
+function chipRow(){
+  return `<div class="chiprow" role="group" aria-label="Body region">
+    <button type="button" class="chip" data-fav aria-pressed="${S.favOnly}">★</button>
+    <button type="button" class="chip" data-f="region" data-v="" aria-pressed="${!S.region}">All <span class="n">${filtered('region').length}</span></button>
+    ${REGIONS.map(r=>{const n=countBy('region',r);return n?`<button type="button" class="chip" data-f="region" data-v="${esc(r)}" aria-pressed="${S.region===r}">${esc(r)} <span class="n">${n}</span></button>`:''}).join('')}</div>
+    <div class="chiprow" role="group" aria-label="Type">
+    ${Object.keys(TYPES).map(p=>{const n=countBy('phase',p);return n?`<button type="button" class="chip" data-f="phase" data-v="${p}" aria-pressed="${S.phase===p}"><span class="dot" style="background:var(--${TYPE_TONE[p]})"></span>${TYPES[p]} <span class="n">${n}</span></button>`:''}).join('')}</div>
+    <div class="chiprow" role="group" aria-label="Position">
+    ${POSITIONS.map(p=>{const n=countBy('pos',p);return n?`<button type="button" class="chip" data-f="pos" data-v="${p}" aria-pressed="${S.pos===p}">${p} <span class="n">${n}</span></button>`:''}).join('')}</div>`;
+}
+const sortSel=()=>`<select id="sort" class="input" style="width:auto" aria-label="Sort"><option value="used"${S.sort==='used'?' selected':''}>Most used</option><option value="az"${S.sort==='az'?' selected':''}>A–Z</option><option value="new"${S.sort==='new'?' selected':''}>Recently added</option></select>`;
+function activeFilters(){
+  const a=[];if(S.region)a.push(['region',S.region]);if(S.phase)a.push(['phase',TYPES[S.phase]]);if(S.pos)a.push(['pos',S.pos]);if(S.equip)a.push(['equip',SHORT_EQ[S.equip]||S.equip]);
+  if(!a.length)return '';
+  return `<div class="active-filters">${a.map(([k,v])=>`<button type="button" class="chip" aria-pressed="true" data-f="${k}" data-v="">${esc(v)} ✕</button>`).join('')}<button type="button" class="btn ghost small" data-clear>Clear all</button></div>`;
+}
+const starBtn=e=>`<button type="button" class="star" data-star="${e.id}" aria-pressed="${e.fav}" aria-label="Favourite ${esc(e.t)}">${e.fav?'★':'☆'}</button>`;
+function gridCards(list,pick){
+  const inProg=new Set(S.prog.items.map(i=>i.id));
+  return `<div class="grid">${list.map(e=>{const ch=pick&&S.chosen.includes(e.id);const already=pick&&inProg.has(e.id);return `<div class="card${ch?' chosen':''}${already?' inprog':''}">
+    <button type="button" class="hit" ${already?'disabled':''} ${pick?`data-pick="${e.id}" aria-pressed="${ch}" aria-label="${ch?'Remove':'Add'} ${esc(e.t)}"`:`data-open="${e.id}" aria-label="Open ${esc(e.t)}"`}>
+    <div class="media">${media(e)}${ch?'<span class="tick">✓</span>':''}${already?'<span class="badge">In program</span>':''}</div>
+    <div class="card-body"><div class="card-title">${esc(e.t)}</div>${typeTag(e.ph)}<div class="card-meta">${esc([e.r,e.pos.join(' / '),eqText(e)].filter(Boolean).join(' · '))}</div><div class="card-dose">${esc(e.dose)}</div></div></button>
+    ${starBtn(e)}</div>`}).join('')}</div>`;
+}
+function table(list){
+  const th=(k,l,cls='')=>`<th class="${cls}"><button type="button" data-tsort="${k}">${l}${(S.tsort||S.sort)===k?' ↓':''}</button></th>`;
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th><span class="lbl" style="font-size:0">Picture</span></th>${th('az','Exercise')}${th('region','Region')}${th('type','Type')}<th>Position</th><th>Equipment</th><th>Default dosage</th>${th('used','Used','num')}<th><span style="font-size:0">Favourite</span>★</th></tr></thead><tbody>
+  ${list.map(e=>`<tr data-open="${e.id}"><td><div class="thumb">${media(e)}</div></td><td><div class="nm">${esc(e.t)}</div>${e.aka.length?`<div class="aka">also ${esc(e.aka.join(', '))}</div>`:''}</td><td>${esc(e.r)}</td><td>${typeTag(e.ph)}</td><td class="eq">${esc(e.pos.join(', '))}</td><td class="eq">${esc(eqText(e)||'—')}</td><td style="white-space:nowrap">${esc(e.dose)}</td><td class="num">${e.uses}×</td><td>${starBtn(e)}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="mlist">${list.map(e=>`<div class="mrow"><div class="thumb">${media(e)}</div><div style="min-width:0"><div class="nm">${esc(e.t)}</div><div class="card-meta">${esc(e.r)} · ${esc(SEC_LABEL[e.ph])} · ${esc(e.pos.join(', '))}${e.eq.length?' · '+esc(eqText(e)):''}</div><div class="card-dose">${esc(e.dose)} · <span class="card-meta">used ${e.uses}×</span></div></div>${starBtn(e)}</div>`).join('')}</div>`;
+}
+
+/* Library */
+function viewLibrary(){
+  const list=filtered();
+  const body=!list.length?`<div class="empty"><h3>No exercises match</h3><p>Try another body region, or clear the filters.</p><button type="button" class="btn" data-clear>Clear filters</button></div>`:S.layout==='list'?table(list):gridCards(list,false);
+  return `<div class="app"><div class="app-head"><h2>Library</h2>
+    <input id="q" class="input search" type="search" placeholder="Search ${EX.length} exercises, or a name like SLR" value="${esc(S.q)}" aria-label="Search exercises">
+    <button type="button" class="btn">Starter library</button><button type="button" class="btn primary" data-newex>+ New exercise</button></div>
+    <div class="lib">${rail()}<div class="results">${chipRow()}${activeFilters()}
+    <div class="res-bar"><span class="count">${list.length} exercises</span>${sortSel()}
+    <div class="segs" role="group" aria-label="View"><button type="button" data-layout="grid" aria-pressed="${S.layout==='grid'}">Grid</button><button type="button" data-layout="list" aria-pressed="${S.layout==='list'}">Table</button></div></div>
+    ${body}</div></div></div>`;
+}
+
+/* Type and position (decided) */
+function viewTypes(){
+  return `<div class="app"><div class="app-head"><h2>Type and position</h2></div><div class="doc">
+  <div class="box"><span class="lbl">Type: what the exercise trains</span>
+    <p>Six types, each with a colour. The patient's checklist uses the same names.</p>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Type</th><th>Definition</th></tr></thead><tbody>
+    ${Object.keys(TYPES).map(k=>`<tr style="cursor:default"><td>${typeTag(k)}</td><td>${esc(TYPE_HINT[k])}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="src">Warm-up and Cool-down are no longer types. They are optional parts of the program; see the Program sheet. “Other” stays available for anything outside the six.</p></div>
+  <div class="box"><span class="lbl">Position: new</span>
+    <p>The starting position. An exercise can have more than one (Chin Tucks: Sitting or Standing). It's a filter in the Library and the picker, a column in the table and a line on each card. Patients don't see it.</p>
+    <div class="pills">${POSITIONS.map(p=>`<span class="chip">${p}</span>`).join('')}</div>
+    <p class="src">Needs a new column on exercises (a list of positions). The starter library comes with positions already filled in.</p></div>
+  <div class="box"><span class="lbl">How other apps filter</span>
+    <ul><li>Body region first, then equipment, in all of them.</li><li>Aim or movement type: Rehab Guru, VALD, Embodia.</li><li>Position: Embodia, VALD.</li><li>Difficulty: Physitrack, Rehab Guru (we cover this with progressions).</li></ul>
+  <p class="src">Sources: <a href="https://www.physitrack.com/academy/find-exercises" target="_blank" rel="noopener">Physitrack</a> · <a href="https://www.rehabguru.com/service" target="_blank" rel="noopener">Rehab Guru</a> · <a href="https://support.vald.com/hc/en-au/articles/22610461971865" target="_blank" rel="noopener">VALD</a> · <a href="https://alinkeracademy.embodiaapp.com/courses/269-home-exercise-programs-hep-on-embodia-embodia-team/course_materials/4043/preview" target="_blank" rel="noopener">Embodia</a></p></div>
+  </div></div>`;
+}
+
+/* Exercise form: pills, and sections that fold into a summary once set */
+const DOSE_CHIPS={sets:[1,2,3],reps:[5,8,10,12,15],hold:[5,10,30],secs:[15,30,45,60],rest:[0,15,30,60]};
+const FREQ=['1× daily','2× daily','3× daily'];
+function doseText(f){
+  if(!f.mode)return '';
+  const p=[];if(f.sets)p.push(`${f.sets} × `+(f.mode==='timed'?`${f.secs||'?'} s`:`${f.reps||'?'}`));
+  if(f.mode==='hold'&&f.hold)p.push(`hold ${f.hold} s`);if(f.side==='each')p.push('each side');if(f.side==='left')p.push('left');if(f.side==='right')p.push('right');
+  if(f.rest!=null)p.push(`rest ${f.rest} s`);if(f.times)p.push(FREQ[f.times-1]);
+  return p.join(' · ');
+}
+const SECS=[
+ {k:'details',t:'Exercise details',done:f=>!!(f.title&&f.region&&f.phase),sum:f=>[f.title,f.region,f.phase&&TYPES[f.phase]].filter(Boolean).join(' · ')},
+ {k:'how',t:'Media and instructions',done:f=>!!(f.steps.trim()),sum:f=>`${f.photo?'1 photo':'No media'} · ${f.steps.split('\n').filter(Boolean).length} steps${f.stopIf?' · precautions set':''}`},
+ {k:'dose',t:'Default dosage',done:f=>!!(f.mode&&f.sets&&(f.mode==='timed'?f.secs:f.reps)&&f.side&&f.times),sum:doseText},
+ {k:'class',t:'Classification',done:f=>f.pos.length>0,sum:f=>[...f.pos,...f.eq.map(e=>SHORT_EQ[e]||e),...f.also.map(a=>'+ '+a),...f.names.map(n=>'“'+n+'”')].join(' · ')},
+];
+function pillRow(key,opts,label,o={}){const f=S.form;const val=f[key];
+  return `<div class="f"><span class="flabel">${label}${o.opt?' <span class="hint">optional</span>':''}</span><div class="pills" role="group" aria-label="${esc(label)}">${opts.map(([v,l,extra])=>{const on=o.multi?val.includes(v):val===v;return `<button type="button" class="chip" data-pill="${key}" data-v="${esc(v)}"${o.multi?' data-multi':''}${o.num?' data-num':''} aria-pressed="${on}">${extra||''}${esc(l)}</button>`}).join('')}${o.other?otherPill(key,opts):''}</div>${o.hint?`<div class="type-hint">${esc(o.hint)}</div>`:''}</div>`;}
+function otherPill(key,opts){const f=S.form;const isOther=f[key]!=null&&!opts.some(([v])=>v===f[key]);
+  return S.otherOpen===key||isOther?`<input class="input other-in" id="other-${key}" type="number" min="0" inputmode="numeric" data-other="${key}" value="${isOther?f[key]:''}" aria-label="${key} other">`:`<button type="button" class="chip" data-otheropen="${key}" aria-pressed="false">Other</button>`;}
+function secBody(k){const f=S.form;
+  if(k==='details')return `<div class="f"><label for="f-title">Exercise name</label><input id="f-title" class="input" data-text="title" value="${esc(f.title)}" maxlength="80" placeholder="For example Straight Leg Raise"></div>
+    ${pillRow('region',REGIONS.map(r=>[r,r]),'Body region')}
+    ${pillRow('phase',Object.keys(TYPES).map(k=>[k,TYPES[k],`<span class="dot" style="background:var(--${TYPE_TONE[k]})"></span>`]),'Type',{hint:f.phase?TYPE_HINT[f.phase]:'Sets the default dosage and the section the patient sees it under.'})}`;
+  if(k==='how')return `<div class="f"><span class="flabel">Photos or GIF</span><div class="photos">${f.photo?`<div class="photo-slot">${pose('lie')}</div>`:''}<button type="button" class="photo-add" data-photo>${f.photo?'Remove photo':'+ Add photo'}</button><button type="button" class="photo-add">+ Add GIF</button></div><span class="hint">Up to 4 photos or one GIF. Faces can be blurred.</span></div>
+    <div class="f"><label for="f-steps">Instructions</label><textarea id="f-steps" class="input" data-text="steps" placeholder="One step per line">${esc(f.steps)}</textarea><span class="hint">One step per line. Shown to the patient as numbered steps.</span></div>
+    <div class="f"><label for="f-stop">Precautions</label><input id="f-stop" class="input" data-text="stopIf" value="${esc(f.stopIf)}" placeholder="For example sharp or increasing pain"><span class="hint">Shown to the patient as “Stop if: …”.</span></div>`;
+  if(k==='dose')return `${pillRow('mode',[['reps','Repetitions'],['hold','Repetitions with hold'],['timed','Timed']],'Dosage type')}
+    <div class="two">${pillRow('sets',DOSE_CHIPS.sets.map(n=>[n,String(n)]),'Sets',{num:1,other:1})}
+    ${f.mode==='timed'?pillRow('secs',DOSE_CHIPS.secs.map(n=>[n,n+' s']),'Duration',{num:1,other:1}):pillRow('reps',DOSE_CHIPS.reps.map(n=>[n,String(n)]),'Repetitions',{num:1,other:1})}
+    ${f.mode==='hold'?pillRow('hold',DOSE_CHIPS.hold.map(n=>[n,n+' s']),'Hold',{num:1,other:1}):''}
+    ${pillRow('rest',DOSE_CHIPS.rest.map(n=>[n,n?n+' s':'None']),'Rest between sets',{num:1,other:1})}
+    ${pillRow('side',[['none','Not applicable'],['each','Each side'],['left','Left'],['right','Right']],'Side')}
+    ${pillRow('times',[[1,FREQ[0]],[2,FREQ[1]],[3,FREQ[2]]],'Frequency',{num:1})}</div>`;
+  return `${pillRow('pos',POSITIONS.map(p=>[p,p]),'Position',{multi:1})}
+    ${pillRow('eq',EQUIP.filter(e=>e!=='None').map(e=>[e,SHORT_EQ[e]||e]),'Equipment',{multi:1,opt:1})}
+    ${pillRow('also',REGIONS.filter(r=>r!==f.region).map(r=>[r,r]),'Additional body regions',{multi:1,opt:1})}
+    <div class="f"><label for="f-name">Alternative names <span class="hint">optional</span></label><div class="pills">${f.names.map(n=>`<button type="button" class="chip" aria-pressed="true" data-rmname="${esc(n)}" aria-label="Remove ${esc(n)}">${esc(n)} ✕</button>`).join('')}<input id="f-name" class="input" style="width:180px" placeholder="Type a name, then Enter"></div><span class="hint">Used for search only, for example SLR. Not shown to patients.</span></div>`;
+}
+function formExercise(){const f=S.form;
+  return {t:f.title||'Exercise name',r:f.region||'Whole body',ph:f.phase,pose:f.photo?'lie':null,dose:doseText({...f,times:null,rest:null})||'Dosage appears here',steps:f.steps.split('\n').filter(Boolean),stopIf:f.stopIf,mode:f.mode,reps:f.reps,hold:f.hold};}
+function viewForm(){const f=S.form;const ex=formExercise();
+  const secs=SECS.map((s,i)=>{const open=S.formOpen===s.k;const done=s.done(f);const next=SECS.slice(i+1).find(x=>!x.done(f));
+    return `<section class="fsec${open?' open':''}"><button type="button" class="fsec-h" data-sec="${s.k}" aria-expanded="${open}"><span class="st${done?' ok':''}">${done?'✓':i+1}</span>
+      <span style="min-width:0"><h3>${s.t}</h3>${!open?`<span class="sum">${esc(s.sum(f)||'Not set')}</span>`:''}</span>
+      <span class="edit">${open?'':done?'Edit':'Open'}</span></button>
+      ${open?`<div class="fsec-b">${secBody(s.k)}<div class="fsec-foot">${next?`<button type="button" class="btn primary small" data-sec="${next.k}">Next: ${next.t} ›</button>`:`<button type="button" class="btn small" data-sec="">Done</button>`}</div></div>`:''}</section>`;}).join('');
+  return `<div class="app"><div class="app-head"><h2>${S.formMode==='new'?'New exercise':'Edit exercise'}</h2>
+    <div class="segs" role="group" aria-label="Mockup state"><button type="button" data-fmode="new" aria-pressed="${S.formMode==='new'}">New</button><button type="button" data-fmode="edit" aria-pressed="${S.formMode==='edit'}">Editing an existing one</button></div>
+    <button type="button" class="btn preview-btn" data-formpreview>Preview</button></div>
+  <div class="form-wrap"><div class="form">${secs}</div>
+  <aside class="side" aria-label="Patient preview"><div class="sticky-side"><span class="lbl">Patient view</span>${phoneExercise(ex,{preview:true,static:true})}</div></aside></div>
+  <div class="form-foot">${S.confirmDiscard?`<div class="discard"><b>Discard unsaved changes?</b><button type="button" class="btn small" data-keep>Keep editing</button><button type="button" class="btn small" data-discard>Discard</button></div>`:''}
+    <button type="button" class="btn" data-cancel>Cancel</button>${S.formMode==='edit'?'<button type="button" class="btn">Create progression</button>':''}<button type="button" class="btn primary">Save</button></div>
+  ${S.formPreviewOpen?`<div class="sheet-preview"><button type="button" class="btn close" data-closeformpreview>Close preview</button>${phoneExercise(ex,{preview:true,static:true})}</div>`:''}</div>`;
+}
+
+/* Picker */
+function viewPicker(){
+  const chosen=S.chosen.map(id=>EX[id]);
+  let body;
+  if(S.pickTab==='templates'){
+    const regs=[...new Set(TEMPLATES.map(t=>t.r))];const list=TEMPLATES.filter(t=>!S.tplRegion||t.r===S.tplRegion);
+    body=`<div class="chiprow" style="display:flex"><button type="button" class="chip" data-tplr="" aria-pressed="${!S.tplRegion}">All</button>${regs.map(r=>`<button type="button" class="chip" data-tplr="${esc(r)}" aria-pressed="${S.tplRegion===r}">${esc(r)}</button>`).join('')}</div>
+    <div class="tcards">${list.map((t,i)=>`<div class="tcard"><h3>${esc(t.t)}</h3><div class="thumbs">${t.ids.slice(0,5).map(id=>`<span>${media(EX[id])}</span>`).join('')}</div><div class="card-meta" style="white-space:normal">${t.ids.map(id=>esc(EX[id].t)).join(' · ')}</div>
+      <div class="row2"><span class="card-meta">${t.ids.length} exercises · used ${t.used}×</span><button type="button" class="btn small primary" data-addtpl="${TEMPLATES.indexOf(t)}">Add all ${t.ids.length}</button></div></div>`).join('')}</div>`;
+  }else if(S.pickTab==='earlier'){
+    body=`<div class="tcards"><div class="tcard"><h3>Right knee, week 1</h3><div class="card-meta">14 Oct – 10 Nov · 82% habit · ended</div><div class="thumbs">${[23,18,19,22].map(id=>`<span>${media(EX[id])}</span>`).join('')}</div><div class="row2"><span class="card-meta">4 exercises, with the doses used last time</span><button type="button" class="btn small primary" data-addtpl="0">Add all 4</button></div></div></div>`;
+  }else if(S.emptyLib){
+    body=`<div class="empty"><h3>Your Library is empty</h3><p>Add the 28 starter exercises to get going. A physio should check them before you send them to patients.</p><button type="button" class="btn primary" data-unempty>Add the starter set</button><button type="button" class="btn ghost" data-newex>Or write your own exercise</button></div>`;
+  }else{
+    const list=filtered();
+    body=`${chipRow()}${activeFilters()}<div class="res-bar"><span class="count">${list.length} exercises · tap to add</span>${sortSel()}</div>${gridCards(list,true)}`;
+  }
+  const mins=Math.round(chosen.length*2.5);
+  return `<div class="app"><div class="app-head"><h2>${S.prog.addTo==='warm_up'?'Add to the warm-up':S.prog.addTo==='cool_down'?'Add to the cool-down':'Add to Ravi Kumar\'s program'}</h2>
+    <input id="q" class="input search" type="search" placeholder="Search exercises" value="${esc(S.q)}" aria-label="Search exercises">
+    <button type="button" class="btn small" data-toggle-empty>${S.emptyLib?'Show full library':'Show empty library'}</button></div>
+    <div class="tabs" role="tablist">${[['exercises','Exercises'],['templates','Templates'],['earlier','Ravi\'s earlier programs']].map(([k,l])=>`<button type="button" role="tab" data-ptab="${k}" aria-selected="${S.pickTab===k}">${l}</button>`).join('')}</div>
+    <div class="picker"><div style="display:grid;grid-template-rows:1fr auto;min-width:0"><div class="results" style="padding-top:14px">${body}</div>
+    <div class="strip"><div class="chips">${chosen.length?chosen.map(e=>`<button type="button" class="chip" data-pick="${e.id}" aria-label="Remove ${esc(e.t)}">${esc(e.t)} ✕</button>`).join(''):'<span class="card-meta">Tap exercises to add them</span>'}</div><button type="button" class="btn primary" data-goto="program">Add ${chosen.length}</button></div></div>
+    <aside class="basket" aria-label="Adding"><div class="lbl">Adding · ${chosen.length}</div>
+      <div class="card-meta" style="white-space:normal">Already in the program: ${S.prog.items.length} (shown faded)</div>
+      ${chosen.length?`<ol>${chosen.map(e=>`<li><span class="thumb">${media(e)}</span><span class="nm">${esc(e.t)}<br><span class="card-meta">${esc(e.dose)}</span></span><button type="button" class="x" data-pick="${e.id}" aria-label="Remove ${esc(e.t)}">✕</button></li>`).join('')}</ol>`:'<p class="card-meta" style="white-space:normal">Tap exercises, or add a whole template.</p>'}
+      ${chosen.length?`<span class="estimate">About ${mins} more minutes a session</span>`:''}
+      <button type="button" class="btn primary" data-goto="program">Add ${chosen.length} to the program</button></aside></div></div>`;
+}
+
+/* Program sheet: Warm-up and Cool-down are optional blocks at the top and bottom */
+function progRow(it){const P=S.prog;const e=EX[it.id];const open=P.open===it.i;const menu=P.menu===it.i;
+  const moves=it.sec==='warm_up'||it.sec==='cool_down'?[['main','Move to main exercises']]:[['warm_up','Move to warm-up'],['cool_down','Move to cool-down']];
+  return `<div class="prow"><div class="prow-h"><span class="grip" aria-hidden="true" title="Drag to reorder or move between blocks">⋮⋮</span><span class="thumb">${media(e)}</span>
+    <button type="button" class="open" data-prow="${it.i}" aria-expanded="${open}"><span class="nm">${esc(e.t)}</span><span class="ds">${esc(e.dose)}</span></button>
+    <span class="acts" style="position:relative"><button type="button" data-pmenu="${it.i}" aria-expanded="${menu}" aria-label="More for ${esc(e.t)}">⋯</button><button type="button" aria-label="Remove ${esc(e.t)}" style="color:var(--rust)">✕</button>
+    ${menu?`<span class="pop" style="right:0;left:auto;top:calc(100% + 4px);width:200px">${moves.map(([v,l])=>`<button type="button" class="btn ghost small" style="text-align:left" data-pmove="${it.i}" data-v="${v}">${l}</button>`).join('')}<button type="button" class="btn ghost small" style="text-align:left">Move up</button><button type="button" class="btn ghost small" style="text-align:left">Move down</button></span>`:''}</span></div>
+    ${open?`<div class="prow-b">
+      <div class="two"><div class="f"><span class="flabel">Sets</span><div class="pills">${[1,2,3].map(n=>`<button type="button" class="chip" aria-pressed="${n===3}">${n}</button>`).join('')}<button type="button" class="chip">Other</button></div></div>
+      <div class="f"><span class="flabel">Repetitions</span><div class="pills">${[5,8,10,12,15].map(n=>`<button type="button" class="chip" aria-pressed="${n===10}">${n}</button>`).join('')}<button type="button" class="chip">Other</button></div></div></div>
+      <div class="f"><label for="pn-${it.i}">Note to patient <span class="hint">optional, any language</span></label><textarea id="pn-${it.i}" class="input" rows="2" placeholder="For example: keep the toes pointing up"></textarea></div></div>`:''}</div>`;
+}
+function block(sec,title,hint){const P=S.prog;const rows=P.items.map((it,i)=>({...it,i})).filter(it=>it.sec===sec);
+  return `<div class="pblock"><div class="psec-h"><h3>${title} <span class="c">· optional</span></h3></div>
+    ${rows.length?`<div style="display:grid;gap:6px">${rows.map(progRow).join('')}</div>`:''}
+    <button type="button" class="dropzone" data-addto="${sec}">${rows.length?`+ Add to ${title.toLowerCase()}`:`+ Add a ${title.toLowerCase()}`} <span>${hint}</span></button></div>`;
+}
+function viewProgram(){const P=S.prog;
+  const main=P.items.map((it,i)=>({...it,i})).filter(it=>it.sec!=='warm_up'&&it.sec!=='cool_down');
+  const byType=Object.keys(TYPES).map(s=>({s,rows:main.filter(it=>it.sec===s)})).filter(g=>g.rows.length);
+  const mins=Math.round(P.items.length*2.5);
+  const settings=`<div class="kv"><span class="k">Patient</span><b>Ravi Kumar</b><span class="card-meta">62 · Right TKR</span></div>
+    <div class="f"><label for="pname">Program name</label><input id="pname" class="input" value="Right knee, week 2"><span class="hint">Shown to the patient.</span></div>
+    <div class="f"><span class="flabel">Frequency</span><div class="pills">${[1,2,3].map(n=>`<button type="button" class="chip" data-ptimes="${n}" aria-pressed="${P.times===n}">${FREQ[n-1]}</button>`).join('')}</div></div>
+    <div class="f"><span class="flabel">Duration</span><div class="pills">${[[7,'1 week'],[14,'2 weeks'],[28,'4 weeks'],[42,'6 weeks']].map(([d,l])=>`<button type="button" class="chip" data-plen="${d}" aria-pressed="${P.len===d}">${l}</button>`).join('')}</div></div>
+    <div class="f"><span class="flabel">Start date</span><div class="pills">${['Today','Tomorrow'].map(s=>`<button type="button" class="chip" data-pstart="${s}" aria-pressed="${P.start===s}">${s}</button>`).join('')}</div></div>
+    <div class="f"><span class="flabel">Review in</span><div class="pills">${[[7,'1 week'],[14,'2 weeks'],[0,'No review']].map(([d,l])=>`<button type="button" class="chip" data-pcheck="${d}" aria-pressed="${P.checkin===d}">${l}</button>`).join('')}</div></div>
+    <div class="f"><label for="pby">Prescribed by</label><select id="pby" class="input"><option>Dr. Anjali Menon</option></select></div>
+    <details><summary class="card-meta" style="cursor:pointer">More settings: session feedback, completion target, custom PIN</summary></details>`;
+  const summary=`Ravi Kumar · ${FREQ[P.times-1]} · ${P.len/7} weeks · starts ${P.start.toLowerCase()} · ${P.checkin?`review in ${P.checkin/7} week${P.checkin>7?'s':''}`:'no review'}`;
+  return `<div class="app"><div class="app-head"><h2>New home program</h2><span class="card-meta">Free plan · 3 of 5 active programs</span></div>
+  <div class="psheet"><div class="pmain">
+    <div class="psum-m"><span class="t">Right knee, week 2</span><button type="button" class="btn ghost small" data-psettings>${P.editSettings?'Done':'Edit'}</button><span class="s">${esc(summary)}</span>${P.editSettings?`<div style="grid-column:1/-1;display:grid;gap:12px;padding-top:10px">${settings}</div>`:''}</div>
+    <div class="res-bar"><span class="count">${P.items.length} exercises · about ${mins} min per session</span><button type="button" class="btn" data-addto="main">+ Add exercises</button></div>
+    ${block('warm_up','Warm-up','Done first, before the main exercises')}
+    <div class="pblock main"><div class="psec-h"><h3>Main exercises <span class="c">· ${main.length}</span></h3><span style="flex:1"></span><span class="card-meta">Grouped by type</span></div>
+    ${byType.map(g=>`<div style="display:grid;gap:6px"><div class="psec-h" style="padding:2px 0"><span class="type">${typeTag(g.s)}</span><span style="flex:1"></span><label class="card-meta" style="display:flex;gap:6px;align-items:center"><input type="checkbox"> Optional</label></div>${g.rows.map(progRow).join('')}</div>`).join('')}</div>
+    ${block('cool_down','Cool-down','Done last, after the main exercises')}
+  </div>
+  <aside class="pside" aria-label="Program settings">${settings}
+    <div style="display:grid;gap:8px;border-top:1px solid var(--border);padding-top:12px"><button type="button" class="btn" data-goto="patient">Preview as patient</button><button type="button" class="btn primary">Save and share</button></div></aside></div>
+  <div class="form-foot"><button type="button" class="btn">Cancel</button><button type="button" class="btn" data-goto="patient">Preview as patient</button><button type="button" class="btn primary">Save and share</button></div></div>`;
+}
+
+/* Programs list */
+function strip(seed,len=14){let h='';for(let i=0;i<len;i++){const v=(seed*31+i*17)%10;h+=`<i class="${i===len-1?'t ':''}${v<6?'f':v<8?'p':''}"></i>`}return `<span class="htrack" aria-label="Last 14 days">${h}</span>`;}
+function viewPrograms(){
+  const rows=[['Ravi Kumar','Right knee, week 2','2 of 2','86%',3,[['red','Pain 7/10 yesterday']],'Today'],['Meena Iyer','Low back, starter','0 of 1','41%',7,[['amber','No activity for 3 days']],'3 days ago'],['Arjun Rao','Shoulder stage 1','1 of 2','72%',5,[['blue','Review due']],'Yesterday'],['Fatima Sheikh','Ankle sprain, week 3','1 of 1','93%',2,[],'Today'],['Kiran Das','Neck posture','—','Not enough data',9,[['blue','Link not opened']],'—']];
+  return `<div class="app"><div class="app-head"><h2>Programs</h2><input class="input search" type="search" placeholder="Search patient or program" aria-label="Search programs"></div>
+  <div class="results"><div class="chiprow" style="display:flex">${[['Needs attention',3],['Active',12],['Ending this week',2],['Recently ended',4],['Archived',31]].map(([l,n],i)=>`<button type="button" class="chip" aria-pressed="${i===0}">${l} <span class="n">${n}</span></button>`).join('')}<span style="flex:1"></span><div class="segs"><button type="button" aria-pressed="true">My patients</button><button type="button" aria-pressed="false">All therapists</button></div></div>
+  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Patient</th><th>Program</th><th>Today</th><th>Adherence, last 14 days</th><th>Alerts</th><th>Last active</th><th></th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td class="nm">${r[0]}</td><td>${r[1]}</td><td style="white-space:nowrap">${r[2]} sessions</td><td>${strip(r[4])}<div class="aka">${r[3]}</div></td><td>${r[5].map(([t,l])=>`<span class="sig ${t}">${l}</span>`).join(' ')||'<span class="aka">—</span>'}</td><td class="aka">${r[6]}</td><td><button type="button" class="btn small">${r[5][0]&&r[5][0][0]==='red'?'Call':r[5][0]&&r[5][0][0]==='amber'?'Message':'Open'}</button></td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="mlist">${rows.map(r=>`<div class="mrow" style="grid-template-columns:1fr auto"><div><div class="nm">${r[0]}</div><div class="card-meta">${r[1]} · today ${r[2]}</div><div style="display:flex;gap:6px;align-items:center;margin-top:4px">${strip(r[4])}${r[5].map(([t,l])=>`<span class="sig ${t}">${l}</span>`).join('')}</div></div><span class="chev" aria-hidden="true">›</span></div>`).join('')}</div>
+  <p class="card-meta" style="white-space:normal">Each square is one day: green completed, amber partial, grey missed. The outlined square is today.</p></div></div>`;
+}
+
+/* Wording */
+const WORDING=[
+ ['Exercise form','Basics','Exercise details'],['Exercise form','Name','Exercise name'],['Exercise form','How to do it (section)','Media and instructions'],['Exercise form','Pictures','Photos or GIF'],['Exercise form','Steps','Instructions'],['Exercise form','Stop if','Precautions (the patient still sees “Stop if:”)'],
+ ['Exercise form','Default dose','Default dosage'],['Exercise form','How it\'s done','Dosage type'],['Exercise form','Reps · Reps with a hold','Repetitions · Repetitions with hold'],['Exercise form','Hold each rep','Hold'],['Exercise form','Time','Duration'],['Exercise form','No side','Not applicable'],['Exercise form','Times a day: Once / Twice','Frequency: 1× daily / 2× daily'],
+ ['Exercise form','Find it later','Classification'],['Exercise form','Also show under','Additional body regions'],['Exercise form','Other names','Alternative names'],['Exercise form','Duplicate (progression)','Create progression'],
+ ['Types','Stretch · Strength (v2 mockup)','Stretching · Strengthening'],
+ ['Library','Starter set','Starter library'],
+ ['Program sheet','Times a day','Frequency'],['Program sheet','Length','Duration'],['Program sheet','Start','Start date'],['Program sheet','Check in','Review in'],['Program sheet','A note for this patient (optional, any language)','Note to patient (optional, any language)'],['Program sheet','Advanced','More settings'],['Program sheet','After each session, ask about: Pain first / Effort first','Session feedback: Pain first / Effort first'],['Program sheet','Counts as completed at','Completion target'],['Program sheet','Set my own 4-digit PIN','Custom PIN'],['Program sheet','Start from (Template / Earlier program / The Library)','Moved into the picker as tabs'],['Program sheet','Save, then hand-over panel','Save and share'],
+ ['Programs list','Habit','Adherence'],['Programs list','Signals','Alerts'],['Programs list','Too early','Not enough data'],['Programs list','Mine / Everyone','My patients / All therapists'],['Programs list','Ended · Past','Recently ended · Archived'],['Programs list','Prescribe next · Prescribe again','Next program · Prescribe again'],
+ ['Patient chart','Habit · Streak','Adherence · Streak'],['Patient chart','Needs your attention','Alerts'],['Hand-over','Hand over (panel title)','Share with patient'],['Hand-over','Show PIN on screen','Show PIN'],
+];
+function viewWording(){
+  return `<div class="app"><div class="app-head"><h2>Wording changes</h2><span class="card-meta">Therapist screens only. Patient screens keep plain language.</span></div><div class="results">
+  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Where</th><th>Now</th><th>Proposed</th></tr></thead><tbody>
+  ${WORDING.map(([w,a,b])=>`<tr style="cursor:default"><td class="aka" style="white-space:nowrap">${esc(w)}</td><td style="color:var(--muted)">${esc(a)}</td><td><b style="font-weight:600">${esc(b)}</b></td></tr>`).join('')}
+  </tbody></table></div>
+  <p class="card-meta" style="white-space:normal">Unchanged on purpose: patient-page words (“How to do it”, “Stop if”, “Lost your PIN?”), and clinical terms therapists already use (Sets, Rest, Mobility, Activation).</p></div></div>`;
+}
+
+/* Patient phone screens (as in v1) */
+function phoneChecklist(items,preview){
+  const P=S.pat;const groups={};items.forEach(it=>{(groups[it.sec]=groups[it.sec]||[]).push(EX[it.id])});
+  const all=items.map(it=>EX[it.id]);const done=all.filter(e=>P.done[e.id]).length;const next=all.find(e=>!P.done[e.id]);
+  return `<div class="phone big">${preview?'<div class="p-ribbon">Preview · what the patient sees · nothing is saved</div>':''}
+   <div class="p-scroll"><div class="p-head"><span class="cl">Sunrise Physio</span><span class="meta">Day 3 of 28 · Today: ${done} of ${all.length} done</span></div>
+   <div class="p-sess" role="group" aria-label="Session">${['Morning','Evening'].map(s=>`<button type="button" class="chip" data-sess="${s}" aria-pressed="${P.session===s}">${s} ${s===P.session?done:0}/${all.length}</button>`).join('')}</div>
+   ${SECTIONS.filter(s=>groups[s]).map(s=>`<div class="p-sec"><div class="lbl"><span>${SEC_LABEL[s]}</span><span>${groups[s].filter(e=>P.done[e.id]).length} of ${groups[s].length}</span></div>
+     ${groups[s].map(e=>`<div class="p-row"><button type="button" class="circ${P.done[e.id]?' on':''}" data-ptick="${e.id}" aria-label="${P.done[e.id]?'Undo':'Mark'} ${esc(e.t)}${P.done[e.id]?'':' as done'}">${P.done[e.id]?'✓':''}</button>
+       <span class="th" data-popen="${e.id}">${media(e)}</span><span data-popen="${e.id}" style="min-width:0;cursor:pointer"><div class="nm">${esc(e.t)}</div><div class="ds">${esc(e.dose)}</div></span><span class="chev" data-popen="${e.id}" aria-hidden="true">›</span></div>`).join('')}</div>`).join('')}
+   <div style="height:12px"></div>
+   <div class="p-sticky">${next?`<button type="button" class="p-start" data-popen="${next.id}">▶ ${done?'Continue':'Start'}: ${esc(next.t)}</button>`:`<div class="finished" style="border-radius:10px;text-align:center"><b>${P.session} done ✓</b></div>`}</div></div>
+   ${P.toast?`<div class="toast">${esc(P.toast)}</div>`:''}</div>`;
+}
+function ringSvg(frac,big){const r=big?54:28,c=2*Math.PI*r,sz=big?120:64;
+  return `<svg viewBox="0 0 ${sz} ${sz}" aria-hidden="true"><circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${big?'rgba(255,255,255,.25)':'var(--teal-light)'}" stroke-width="${big?8:6}"/><circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${big?'#fff':'var(--teal)'}" stroke-width="${big?8:6}" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c*(1-frac)}"/></svg>`;}
+function phoneExercise(ex,o){
+  const P=S.pat;const T=o.static?null:P.timer;const over=P.timerPos==='over';
+  const startLabel=ex.mode==='timed'?'Start timer':ex.mode==='hold'?`Start ${ex.reps||10} holds`:ex.mode==='reps'?'Rest 30 s':'Start';
+  const band=T&&!over?`<div class="timer-band" role="timer"><div class="ring">${ringSvg(T.left/T.len)}<span class="num">${Math.ceil(T.left)}</span></div><div><div class="ph">${T.phase}</div><div class="sub2">Rep ${T.rep} of ${T.reps}</div></div><button type="button" class="btn small" data-tstop>Stop</button></div>`:'';
+  const overlay=T&&over?`<div class="overlay-timer" role="timer"><div class="ring">${ringSvg(T.left/T.len,true)}<span class="num">${Math.ceil(T.left)}</span></div><div class="ph">${T.phase}</div><div>Rep ${T.rep} of ${T.reps}</div><button type="button" class="btn small" data-tstop>Stop</button></div>`:'';
+  return `<div class="phone${o.big?' big':''}">${o.preview?'<div class="p-ribbon">Preview · what the patient sees</div>':''}
+   <div class="p-top"><button type="button" data-plist>‹ List</button><span>${o.pos||'2 of 5'}</span><span class="sp"><button type="button" aria-label="Previous">‹</button><button type="button" aria-label="Next">›</button><button type="button" aria-label="Sound: beeps">🔔</button></span></div>
+   <div class="p-scroll"><div class="p-pic">${media(ex)}${overlay}</div>${band}
+   <div class="p-body"><div class="p-title">${esc(ex.t)}</div><div class="p-dose">${esc(ex.dose)}</div>
+   ${T?'':`<button type="button" class="p-start" ${o.static?'':'data-tstart'}>${esc(startLabel)}</button>`}
+   <div><div class="lbl" style="margin-bottom:4px">How to do it</div><ol class="p-steps">${(ex.steps||[]).map(s=>`<li>${esc(s)}</li>`).join('')||'<li class="card-meta">Steps appear here</li>'}</ol></div>
+   ${o.note?`<div class="p-note"><b>From your therapist:</b> ${esc(o.note)}</div>`:''}
+   ${ex.stopIf?`<div class="p-stop"><b>⚠ Stop if:</b> ${esc(ex.stopIf)}</div>`:''}</div></div>
+   ${P.finished&&!o.static?`<div class="finished"><b>All holds done.</b> Tap ✓ Done when you're ready.</div>`:''}
+   <div class="p-bottom"><button type="button">Skip</button><button type="button" class="done" ${o.static?'':'data-pdone'}>✓ Done · Next ›</button></div>
+   ${P.toast&&!o.static?`<div class="toast">${esc(P.toast)}</div>`:''}</div>`;
+}
+function patientEx(id){const e=EX[id];
+  return {t:e.t,r:e.r,ph:e.ph,pose:e.pose,dose:e.dose,mode:/hold \d/.test(e.dose)?'hold':/ s/.test(e.dose)?'timed':'reps',reps:parseInt((e.dose.match(/× (\d+)/)||[])[1]||10),hold:parseInt((e.dose.match(/hold (\d+)/)||[])[1]||5),
+   steps:e.id===18?['Sit or lie with your leg straight and a rolled towel under the knee','Press the back of the knee down into the towel by tightening the thigh','Hold, then relax']:['Get into the starting position','Move slowly and with control','Return to the start'],stopIf:'Sharp or increasing pain'};}
+function viewPatient(){const P=S.pat;const items=S.prog.items;const order=items.map(i=>i.id);
+  const main=P.screen==='list'?phoneChecklist(items,true):phoneExercise(patientEx(P.idx),{preview:true,big:true,pos:`${order.indexOf(P.idx)+1} of ${order.length}`,note:'Keep the toes pointing up.'});
+  return `<div class="app"><div class="app-head"><h2>Preview as patient · Ravi Kumar</h2>
+    <div class="segs" role="group" aria-label="Timer placement"><button type="button" data-tpos="under" aria-pressed="${P.timerPos==='under'}">Timer under picture</button><button type="button" data-tpos="over" aria-pressed="${P.timerPos==='over'}">Timer over picture (today)</button></div>
+    <button type="button" class="btn small" data-preset>Reset</button></div>
+    <div class="compare"><figure>${main}<figcaption><b>${P.screen==='list'?'Checklist':'Exercise screen'}</b><br>${P.screen==='list'?'Ankle Pumps sits in Warm-up because the program sheet moved it there.':'Tap Start, let the timer run out, then see the "done" prompt.'}</figcaption></figure>
+    <figure><div class="phone">${signin()}</div><figcaption><b>Sign-in on an iPhone</b><br>The Safari tip appears only on iPhones.</figcaption></figure></div></div>`;
+}
+function signin(){return `<div class="p-scroll"><div class="signin"><div class="p-title" style="font-size:17px">Sunrise Physio</div><div class="card-meta" style="white-space:normal">Your Home Exercise Program</div>
+  <div style="font-weight:500">Your 4-digit PIN</div><div class="pin"><span>•</span><span>•</span><span></span><span></span></div>
+  <label style="display:flex;gap:8px;justify-content:center;font-size:13.5px"><input type="checkbox" checked> Remember this phone for 30 days</label>
+  <div class="tip">On iPhone, open this link in Safari so it remembers you. Links opened inside WhatsApp may forget.</div>
+  <div class="card-meta" style="white-space:normal">Lost your PIN? Ask your clinic for a new one.</div></div></div>`;}
+
+const NOTES={
+ library:`<b>Library</b>. New <b>Position</b> filter (side panel on desktop, a third chip row on phones), a Position column in the table, and position on each card. Types use the full names.`,
+ types:`<b>Type and position</b>. The decision: six types with the names therapists use, no Breathing type, Warm-up and Cool-down handled in the program, and the new Position field.`,
+ form:`<b>Exercise form</b>. Professional wording: Exercise details, Media and instructions, Default dosage, Classification (Position, Equipment, Additional body regions, Alternative names). Pills throughout. Finished sections fold into a summary with ✓. Try “Editing an existing one”.`,
+ picker:`<b>Picker</b>. Unchanged from v2. Opened from “+ Add a warm-up”, whatever you add goes into the Warm-up block.`,
+ program:`<b>Program sheet</b>. Warm-up and Cool-down are optional blocks at the top and bottom. Main exercises sit between them, grouped by type. Use “+ Add a warm-up” to pick exercises straight into that block, or ⋯ on any row and choose “Move to warm-up” or “Move to cool-down”. In the real app you can also drag rows between blocks.`,
+ programs:`<b>Programs list</b>. Professional wording: Adherence, Alerts, Recently ended, Archived, My patients / All therapists.`,
+ patient:`<b>Patient preview</b>. The patient sees Warm-up first, then the type sections, then Cool-down, using the same names as the therapist.`,
+ wording:`<b>Wording</b>. Every therapist-facing label I propose to change, with where it appears. Patient screens keep plain language on purpose.`};
+
+let timerId=null;
+function render(){
+  $('#screens').innerHTML=SCREENS.map(([k,l])=>`<button type="button" data-view="${k}" aria-pressed="${S.view===k}">${l}</button>`).join('');
+  document.querySelectorAll('[data-width]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.width===S.width));
+  $('#stage').classList.toggle('phone',S.width==='phone');
+  $('#note').innerHTML=NOTES[S.view];
+  const ae=document.activeElement;const focusId=ae&&ae.id;let pos=null;try{pos=ae.selectionStart}catch(e){}
+  const V={library:viewLibrary,types:viewTypes,form:viewForm,picker:viewPicker,program:viewProgram,programs:viewPrograms,patient:viewPatient,wording:viewWording}[S.view];
+  $('#view').innerHTML=V();
+  if(focusId){const el=document.getElementById(focusId);if(el){el.focus();try{if(pos!=null)el.setSelectionRange(pos,pos)}catch(e){}}}
+  save();
+}
+function toast(msg){S.pat.toast=msg;render();setTimeout(()=>{S.pat.toast=null;render()},1800);}
+function startTimer(){
+  const ex=patientEx(S.pat.idx);const reps=Math.min(ex.reps,4);const hold=Math.min(ex.hold,5);
+  const phases=[];for(let i=1;i<=reps;i++){phases.push({phase:'Hold',len:hold,rep:i,reps});if(i<reps)phases.push({phase:'Relax',len:2,rep:i,reps});}
+  let k=0,end=performance.now()+phases[0].len*1000;S.pat.finished=false;S.pat.timer={...phases[0],left:phases[0].len};
+  clearInterval(timerId);timerId=setInterval(()=>{const now=performance.now();let left=(end-now)/1000;
+    if(left<=0){k++;if(k>=phases.length){clearInterval(timerId);S.pat.timer=null;S.pat.finished=true;render();return;}end+=phases[k].len*1000;left=(end-now)/1000;}
+    S.pat.timer={...phases[k],left:Math.max(0,left)};render();},250);
+  render();
+}
+function stopTimer(){clearInterval(timerId);S.pat.timer=null;render();}
+function setForm(mode){S.formMode=mode;S.form=fresh(mode==='new'?BLANK:FILLED);S.formOpen=mode==='new'?'details':null;S.formDirty=false;S.confirmDiscard=false;S.otherOpen=null;}
+function dirty(){S.formDirty=true;}
+
+document.addEventListener('click',ev=>{
+  const t=ev.target.closest('button,[data-popen],tr[data-open]');if(!t||t.disabled)return;const d=t.dataset;
+  if(d.view){S.view=d.view;S.q='';stopTimer();return render();}
+  if(d.width){S.width=d.width;return render();}
+  if(d.goto){if(d.goto==='program'&&S.chosen.length){const to=S.prog.addTo;S.chosen.forEach(id=>S.prog.items.push({id,sec:to==='warm_up'||to==='cool_down'?to:EX[id].ph}));S.chosen=[];S.prog.addTo=null;}S.view=d.goto;S.q='';return render();}
+  if(d.addto){S.prog.addTo=d.addto;S.pickTab='exercises';S.view='picker';S.q='';return render();}
+  if(d.pmenu!==undefined){S.prog.menu=S.prog.menu===+d.pmenu?null:+d.pmenu;return render();}
+  if(d.pmove!==undefined){const it=S.prog.items[+d.pmove];it.sec=d.v==='main'?EX[it.id].ph:d.v;S.prog.menu=null;return render();}
+  if('newex' in d){setForm('new');S.view='form';return render();}
+  if(d.f!==undefined){S[d.f]=d.v&&S[d.f]!==d.v?d.v:null;return render();}
+  if('fav' in d){S.favOnly=!S.favOnly;return render();}
+  if('clear' in d){S.region=S.phase=S.equip=S.pos=null;S.favOnly=false;S.q='';return render();}
+  if(d.layout){S.layout=d.layout;S.tsort=null;return render();}
+  if(d.tsort){S.tsort=d.tsort;return render();}
+  if(d.star){ev.stopPropagation();const e=EX[+d.star];e.fav=!e.fav;return render();}
+  if(d.open!==undefined){const e=EX[+d.open];setForm('edit');Object.assign(S.form,{title:e.t,region:e.r,phase:e.ph,eq:[...e.eq],names:[...e.aka],photo:!!e.pose});S.view='form';return render();}
+  if(d.pick!==undefined){const id=+d.pick;S.chosen=S.chosen.includes(id)?S.chosen.filter(x=>x!==id):[...S.chosen,id];return render();}
+  if(d.ptab){S.pickTab=d.ptab;return render();}
+  if(d.tplr!==undefined){S.tplRegion=d.tplr||null;return render();}
+  if(d.addtpl!==undefined){const inP=new Set(S.prog.items.map(i=>i.id));TEMPLATES[+d.addtpl].ids.forEach(id=>{if(!inP.has(id)&&!S.chosen.includes(id))S.chosen.push(id)});S.pickTab='exercises';return render();}
+  if('toggleEmpty' in d){S.emptyLib=!S.emptyLib;S.pickTab='exercises';return render();}
+  if('unempty' in d){S.emptyLib=false;return render();}
+  if('formpreview' in d){S.formPreviewOpen=true;return render();}
+  if('closeformpreview' in d){S.formPreviewOpen=false;return render();}
+  if(d.fmode){setForm(d.fmode);return render();}
+  if(d.sec!==undefined){S.formOpen=S.formOpen===d.sec?null:(d.sec||null);S.otherOpen=null;return render();}
+  if(d.pill){const k=d.pill;let v=d.v;if('num' in d)v=+v;
+    if('multi' in d){S.form[k]=S.form[k].includes(v)?S.form[k].filter(x=>x!==v):[...S.form[k],v];}
+    else{S.form[k]=v;if(k==='phase'&&!S.form.mode){S.form.mode={stretching:'hold',activation:'hold',balance:'timed'}[v]||'reps';}}
+    if(S.otherOpen===k)S.otherOpen=null;dirty();return render();}
+  if(d.otheropen){S.otherOpen=d.otheropen;render();const i=document.getElementById('other-'+d.otheropen);if(i)i.focus();return;}
+  if('photo' in d){S.form.photo=!S.form.photo;dirty();return render();}
+  if(d.rmname){S.form.names=S.form.names.filter(n=>n!==d.rmname);dirty();return render();}
+  if('cancel' in d){if(S.formDirty)S.confirmDiscard=true;else S.view='library';return render();}
+  if('keep' in d){S.confirmDiscard=false;return render();}
+  if('discard' in d){setForm(S.formMode);S.view='library';return render();}
+  if(d.prow!==undefined){S.prog.open=S.prog.open===+d.prow?null:+d.prow;return render();}
+  if(d.psec!==undefined){S.prog.items[+d.psec].sec=d.v;return render();}
+  if(d.ptimes){S.prog.times=+d.ptimes;return render();}
+  if(d.plen){S.prog.len=+d.plen;return render();}
+  if(d.pstart){S.prog.start=d.pstart;return render();}
+  if(d.pcheck!==undefined){S.prog.checkin=+d.pcheck;return render();}
+  if('psettings' in d){S.prog.editSettings=!S.prog.editSettings;return render();}
+  if(d.sess){S.pat.session=d.sess;return render();}
+  if(d.ptick){const id=+d.ptick;S.pat.done[id]=!S.pat.done[id];return render();}
+  if(d.popen!==undefined){S.pat.idx=+d.popen;S.pat.screen='ex';S.pat.finished=false;stopTimer();return;}
+  if('plist' in d){if(S.view==='patient'){S.pat.screen='list';S.pat.finished=false;stopTimer();}return;}
+  if('tstart' in d)return startTimer();
+  if('tstop' in d)return stopTimer();
+  if('pdone' in d){S.pat.done[S.pat.idx]=true;S.pat.finished=false;stopTimer();const nx=S.prog.items.map(i=>i.id).find(i=>!S.pat.done[i]);if(nx!==undefined)S.pat.idx=nx;else S.pat.screen='list';return toast('Preview: marked done, nothing saved');}
+  if(d.tpos){S.pat.timerPos=d.tpos;return render();}
+  if('preset' in d){S.pat.done={};S.pat.screen='list';S.pat.finished=false;stopTimer();return;}
+});
+document.addEventListener('input',ev=>{const t=ev.target;
+  if(t.id==='q'){S.q=t.value;return render();}
+  if(t.dataset.text){S.form[t.dataset.text]=t.value;dirty();return render();}
+  if(t.dataset.other){const v=parseInt(t.value);S.form[t.dataset.other]=isNaN(v)?null:v;dirty();return render();}
+});
+document.addEventListener('change',ev=>{if(ev.target.id==='sort'){S.sort=ev.target.value;S.tsort=null;render();}});
+document.addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'&&ev.target.id==='f-name'&&ev.target.value.trim()){ev.preventDefault();S.form.names=[...S.form.names,ev.target.value.trim()];ev.target.value='';dirty();render();}
+});
+load();setForm('new');render();
+})();
+</script>
+
