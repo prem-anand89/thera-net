@@ -334,7 +334,7 @@ export function Shell() {
   // unauthenticated (no session at all, not even a recovery one). Must
   // render before the `!session` check below would otherwise bounce an
   // anonymous patient to LoginPage.
-  if (pathname.startsWith('/f/') || pathname.startsWith('/book/')) {
+  if (pathname.startsWith('/f/') || pathname.startsWith('/book/') || pathname.startsWith('/p/')) {
     return (
       <Suspense fallback={<AppLoading />}>
         <Outlet />

@@ -2761,7 +2761,9 @@ git commit -m "feat(hep): Home program tab, program sheet, hand-over and visit e
 
 ---
 
-### Task 8: Public Patient Page, Slice 1 (`/p/$token`): Sign in and Exercises (cards, timers, end-of-session check)
+### Task 8: Public Patient Page, Slice 1 (`/p/$token`): Sign in and Exercises (cards, timers, end-of-session check) (BUILT 2026-11-14)
+
+**Built differently from the list below:** `HepExerciseCard` was never built (amendment 82 replaced it): `HepChecklist` + `HepExerciseScreen`. Extra files: `hepSession.ts` (session/row rules), `hepSound.ts`, `hepStorage.ts` (device token, opened exercises, check-handled; PIN never stored), `HepReminder.tsx`, `hepTestData.ts`. Picture tiles in the list are lazy `<img>`; full pictures load on the exercise screen. The Pain|Effort card opens by itself only after session 1 (amendment 75). Failed taps are taken back with a message (no offline queue; Slice 2). Not built: Preview as patient (reuse `HepExerciseScreen` with `readOnly`), Home tab, ranges, Do later, banner. Tests: 57 in `src/features/publicHep`.
 
 Read amendments 39 to 41 and 51 to 60 first. Slice 1 has **no Home tab**: after sign-in the page is the Exercises view of the current program (with a small program switcher when there are several active programs). Home, ranges, patient-changed numbers, the offline queue, Do later, the check-in and the end-of-program screen are Task 10 (Slice 2).
 

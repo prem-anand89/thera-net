@@ -107,6 +107,11 @@ const FeedbackFormPage = lazy(() =>
     default: m.FeedbackFormPage,
   }))
 );
+const PublicHepPage = lazy(() =>
+  import('@/features/publicHep/PublicHepPage').then((m) => ({
+    default: m.PublicHepPage,
+  })),
+);
 const BookingFormPage = lazy(() =>
   import('@/features/publicBooking/BookingFormPage').then((m) => ({
     default: m.BookingFormPage,
@@ -595,6 +600,13 @@ const bookingFormRoute = createRoute({
   component: BookingFormPage,
 });
 
+// Public, unauthenticated home-exercise page (link + PIN) — see Shell.tsx's early bypass.
+const publicHepRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$token',
+  component: PublicHepPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
@@ -632,6 +644,7 @@ const routeTree = rootRoute.addChildren([
   onboardingProfileRoute,
   feedbackFormRoute,
   bookingFormRoute,
+  publicHepRoute,
 ]);
 
 export const router = createRouter({ 
