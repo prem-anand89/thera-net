@@ -19,15 +19,21 @@ vi.mock('@/services/hepService', async (orig) => ({
 vi.mock('@/services/hepMediaService', () => ({
   hepMediaService: { mintUploadUrls: (...a: unknown[]) => mintUploadUrls(...a), putBlob: (...a: unknown[]) => putBlob(...a), mintViewUrls: async () => ({}) },
 }));
+const compress = vi.fn(async (f: File) => new Blob([f.name], { type: f.type }));
 vi.mock('@/lib/imageCompression', () => ({
-  compressImageForUpload: async (f: File) => new Blob([f.name], { type: f.type }),
+  compressImageForUpload: (f: File) => compress(f),
   createThumbnailBlob: async () => new Blob(['thumb'], { type: 'image/webp' }),
+}));
+vi.mock('./PhotoEditor', () => ({
+  PhotoEditor: ({ open, onDone }: { open: boolean; onDone: (b: Blob, changed: boolean) => void }) =>
+    open ? <button type="button" onClick={() => onDone(new Blob(['adjusted'], { type: 'image/webp' }), true)}>finish adjusting</button> : null,
 }));
 
 beforeEach(() => {
   saveExercise.mockReset().mockResolvedValue('ex-new');
   exerciseUsage.mockReset().mockResolvedValue({ programs: 0, templates: 0 });
   mintUploadUrls.mockReset();
+  compress.mockClear();
   putBlob.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
   URL.createObjectURL = vi.fn(() => 'blob:preview');
@@ -168,6 +174,41 @@ describe('ExerciseForm', () => {
     expect(onSaved).toHaveBeenCalledWith('server-id', expect.objectContaining({ id: 'server-id', clinicId: 'c1', title: 'Bird dog', bodyRegion: 'Core', active: true, isFavorite: false }));
     expect((await db.exercises.get('server-id'))?.title).toBe('Bird dog');
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('an adjusted photo is uploaded as it is (not shrunk a second time) and a new key is used', async () => {
+    const user = userEvent.setup();
+    mintUploadUrls.mockImplementation(async (_c: string, id: string, slots: Array<number | 'thumb'>) =>
+      slots.map((s) => ({ slot: s, key: `clinics/c1/exercises/${id}/${s}-abcdefgh`, url: `https://r2.test/${s}`, headers: {} })));
+    renderForm();
+    await user.type(screen.getByLabelText('Name'), 'Bird dog');
+    await user.selectOptions(screen.getByLabelText('Body region'), 'Core');
+    const input = screen.getByLabelText('Choose photos or a GIF', { selector: 'input' });
+    await user.upload(input, [new File(['a'], 'start.jpg', { type: 'image/jpeg' }), new File(['b'], 'end.jpg', { type: 'image/jpeg' })]);
+    await user.click(screen.getAllByRole('button', { name: 'Adjust or blur' })[0]);
+    await user.click(await screen.findByRole('button', { name: 'finish adjusting' }));
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalled());
+    expect(compress.mock.calls.map((c) => c[0].name)).toEqual(['end.jpg']); // only the one that was not adjusted
+    expect(putBlob).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows the upload progress on the Save button while pictures go up', async () => {
+    const user = userEvent.setup();
+    mintUploadUrls.mockImplementation(async (_c: string, id: string, slots: Array<number | 'thumb'>) =>
+      slots.map((s) => ({ slot: s, key: `clinics/c1/exercises/${id}/${s}-abcdefgh`, url: `https://r2.test/${s}`, headers: {} })));
+    const release: Array<() => void> = [];
+    putBlob.mockImplementation(() => new Promise<void>((resolve) => { release.push(resolve); }));
+    renderForm();
+    await user.type(screen.getByLabelText('Name'), 'Bird dog');
+    await user.selectOptions(screen.getByLabelText('Body region'), 'Core');
+    await user.upload(screen.getByLabelText('Choose photos or a GIF', { selector: 'input' }), [new File(['a'], 'start.jpg', { type: 'image/jpeg' }), new File(['b'], 'end.jpg', { type: 'image/jpeg' })]);
+    await user.click(saveButton());
+    expect(await screen.findByRole('button', { name: 'Uploading 1 of 3…' })).toBeDisabled();
+    release[0]();
+    expect(await screen.findByRole('button', { name: 'Uploading 2 of 3…' })).toBeInTheDocument();
+    release[1](); release[2]();
+    await waitFor(() => expect(saveExercise).toHaveBeenCalled());
   });
 
   it('a GIF is one picture and cannot be mixed with photos', async () => {

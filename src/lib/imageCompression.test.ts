@@ -6,7 +6,9 @@ import {
   createThumbnailBlob,
   HEP_GIF_TOO_LARGE_MESSAGE,
   MAX_HEP_GIF_BYTES,
+  renderEditedPhoto,
 } from './imageCompression';
+import { NO_EDIT } from '@/domain/hepPhoto';
 
 function fakeCtx(width: number, height: number) {
   const calls: Array<[string, ...unknown[]]> = [];
@@ -35,7 +37,7 @@ function stubBrowser(bitmap: { width: number; height: number }, canWebp = true) 
       return {
         get width() { return rec.width; }, set width(v: number) { rec.width = v; },
         get height() { return rec.height; }, set height(v: number) { rec.height = v; },
-        getContext: () => ({ drawImage: (...a: unknown[]) => rec.drawn.push(a), canvas: rec, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {} }),
+        getContext: () => ({ drawImage: (...a: unknown[]) => rec.drawn.push(a), canvas: rec, filter: 'none', save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, translate() {}, rotate() {} }),
         toBlob: (cb: (b: Blob | null) => void, type: string) => {
           rec.requestedTypes.push(type);
           cb(new Blob(['x'], { type: type === 'image/webp' && !canWebp ? 'image/png' : type }));
@@ -111,5 +113,44 @@ describe('applySoftFaceBlur', () => {
       expect(() => applySoftFaceBlur(ctx, box)).not.toThrow();
       expect(calls).toEqual([]);
     }
+  });
+});
+
+describe('renderEditedPhoto', () => {
+  it('with no edits scales to 1280 and saves WebP, like a plain upload', async () => {
+    const { made, closed } = stubBrowser({ width: 4000, height: 3000 });
+    const out = await renderEditedPhoto(new Blob(['x']), NO_EDIT);
+    expect([made[0].width, made[0].height]).toEqual([1280, 960]);
+    expect(made[0].drawn[0].slice(1)).toEqual([0, 0, 4000, 3000, 0, 0, 1280, 960]);
+    expect(out.type).toBe('image/webp');
+    expect(closed).toHaveBeenCalled();
+  });
+
+  it('crops to the chosen shape and zoom before scaling', async () => {
+    const { made } = stubBrowser({ width: 4000, height: 3000 });
+    await renderEditedPhoto(new Blob(['x']), { ...NO_EDIT, shape: 'square', zoom: 2 });
+    expect(made[0].drawn[0].slice(1)).toEqual([1250, 750, 1500, 1500, 0, 0, 1280, 1280]);
+  });
+
+  it('a quarter turn swaps the picture\'s sides before cropping (a 4000x3000 photo becomes 3000x4000)', async () => {
+    const { made } = stubBrowser({ width: 4000, height: 3000 });
+    await renderEditedPhoto(new Blob(['x']), { ...NO_EDIT, rotation: 90 });
+    expect([made[0].width, made[0].height]).toEqual([3000, 4000]); // the turned copy
+    expect([made[1].width, made[1].height]).toEqual([960, 1280]); // the saved picture
+  });
+
+  it('blurs each box with a filter scaled to the picture, and nothing else', async () => {
+    const filters: string[] = [];
+    const { made } = stubBrowser({ width: 1000, height: 1000 });
+    const original = (globalThis as unknown as { document: { createElement: () => { getContext: () => { filter: string } } } }).document.createElement;
+    (globalThis as unknown as { document: { createElement: () => unknown } }).document.createElement = () => {
+      const el = original() as { getContext: () => { filter: string; drawImage: (...a: unknown[]) => void } };
+      const real = el.getContext;
+      el.getContext = () => { const c = real(); Object.defineProperty(c, 'filter', { set: (v: string) => filters.push(v), get: () => 'none' }); return c; };
+      return el;
+    };
+    await renderEditedPhoto(new Blob(['x']), { ...NO_EDIT, blur: [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, { x: 0.5, y: 0.5, w: 0.3, h: 0.3 }] });
+    expect(filters.filter((f) => f.startsWith('blur'))).toEqual(['blur(11px)', 'blur(11px)']);
+    expect(made.length).toBeGreaterThan(0);
   });
 });

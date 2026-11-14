@@ -2,8 +2,10 @@
 // made outside the app), make a small thumbnail for lists, and optionally blur a face. Uses the same
 // createImageBitmap + <canvas> approach as resizeImage.ts. No secrets here; uploads go through hep-media's signed URLs.
 
+import { MAX_HEP_GIF_BYTES, boxInCrop, cropRect, normBoxToPixels, outputSize, rotatedSize, type PhotoEdit } from '@/domain/hepPhoto';
+
 /** A GIF is made outside the app and only passes through: at most 1 MB (amendment 76). */
-export const MAX_HEP_GIF_BYTES = 1024 * 1024;
+export { MAX_HEP_GIF_BYTES };
 export const HEP_GIF_TOO_LARGE_MESSAGE = 'That GIF is over 1 MB. Make it shorter or smaller, or use photos.';
 export const HEP_MAX_DIMENSION = 1280;
 export const HEP_THUMB_SIZE = 160;
@@ -97,6 +99,47 @@ export async function createThumbnailBlob(source: Blob, size = HEP_THUMB_SIZE, q
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas not supported');
     ctx.drawImage(bitmap, 0, 0, width, height);
+    return await encodeSmall(canvas, quality);
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * Renders the photo as the editor shows it: turned, cropped to the chosen shape and zoom, scaled so the longest side is
+ * at most `maxDimension`, with each blur box softened (a face stays unrecognisable), saved as WebP (JPEG where the browser
+ * cannot write WebP). The numbers come from domain/hepPhoto, the same ones the editor's preview uses.
+ */
+export async function renderEditedPhoto(source: Blob, edit: PhotoEdit, maxDimension = HEP_MAX_DIMENSION, quality = 0.82): Promise<Blob> {
+  const bitmap = await createImageBitmap(source);
+  try {
+    let image: CanvasImageSource = bitmap;
+    let w = bitmap.width;
+    let h = bitmap.height;
+    if (edit.rotation !== 0) {
+      const turned = rotatedSize(bitmap.width, bitmap.height, edit.rotation);
+      const tmp = document.createElement('canvas');
+      tmp.width = turned.w;
+      tmp.height = turned.h;
+      const tctx = tmp.getContext('2d');
+      if (!tctx) throw new Error('Canvas not supported');
+      tctx.translate(turned.w / 2, turned.h / 2);
+      tctx.rotate((edit.rotation * Math.PI) / 180);
+      tctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2);
+      image = tmp;
+      w = turned.w;
+      h = turned.h;
+    }
+    const { sx, sy, sw, sh } = cropRect(w, h, edit);
+    const { width, height } = outputSize(sw, sh, maxDimension);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported');
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
+    const blurPx = Math.max(8, Math.round(Math.max(width, height) / 90));
+    for (const box of edit.blur) applySoftFaceBlur(ctx, normBoxToPixels(boxInCrop(box, w, h, { sx, sy, sw, sh }), width, height), blurPx);
     return await encodeSmall(canvas, quality);
   } finally {
     bitmap.close();

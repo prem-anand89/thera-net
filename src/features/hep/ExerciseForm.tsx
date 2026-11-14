@@ -3,7 +3,7 @@
 // bucket through signed links and the form saves their keys. Archive replaces Delete once the exercise has been used.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
-import { ErrorNote, Field, SheetDialog, btnPrimary, btnSecondary, filterChip, inputCls, pillSmDanger } from '@/components/ui';
+import { Field, SheetDialog, btnPrimary, btnSecondary, filterChip, inputCls, pillSmDanger } from '@/components/ui';
 import {
   EXERCISE_PHASES,
   EXERCISE_PHASE_LABELS,
@@ -20,6 +20,7 @@ import { describeDose, doseToExerciseFields, exerciseToDose, isDoseValid, withKi
 import { similarExercise } from '@/domain/hepLibrary';
 import { db } from '@/lib/db';
 import { compressImageForUpload, createThumbnailBlob } from '@/lib/imageCompression';
+import { MAX_PICTURES, PictureField, type Picture } from './PictureField';
 import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService } from '@/services/hepService';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
@@ -27,16 +28,6 @@ import { exerciseToSaveInput } from './exerciseSaveInput';
 import { useOnline } from './useHepData';
 
 const STOP_IF_SUGGESTIONS = ['Sharp pain', 'Pain that gets worse', 'Dizziness', 'Numbness or tingling', 'Chest pain or breathlessness'];
-const MAX_PICTURES = 4;
-
-interface Picture {
-  /** A saved picture's key; null for a new one. */
-  key: string | null;
-  file: File | null;
-  preview: string | null;
-  caption: string;
-  isGif: boolean;
-}
 
 const blankDose = (): DoseValue => ({ kind: 'reps', sets: 3, reps: 10, holdSeconds: null, durationSeconds: null, restSeconds: 30, side: 'none', sessionsPerDay: 1 });
 
@@ -75,10 +66,10 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const [pictures, setPictures] = useState<Picture[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [usage, setUsage] = useState<{ programs: number; templates: number } | null>(null);
   const [duplicated, setDuplicated] = useState(false);
   const kindTouched = useRef(false);
-  const previews = useRef<string[]>([]);
 
   // Load the exercise (or a blank form) each time the sheet opens.
   useEffect(() => {
@@ -113,8 +104,6 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, exercise?.id]);
 
-  useEffect(() => () => { previews.current.forEach((u) => URL.revokeObjectURL(u)); }, []);
-
   const regionOptions = useMemo(() => {
     const custom = allExercises.map((e) => canonicalRegion(e.bodyRegion)).filter((r) => r && !(HEP_REGIONS as readonly string[]).includes(r));
     return [...HEP_REGIONS, ...new Set(custom)] as string[];
@@ -133,23 +122,6 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     if (!kindTouched.current) setDose((d) => withKind(d, suggestedDoseType(next)));
   }
 
-  function addFiles(list: FileList | null) {
-    if (!list) return;
-    const incoming = [...list];
-    const next = [...pictures];
-    for (const file of incoming) {
-      const gif = file.type === 'image/gif';
-      if (gif && (next.length > 0 || incoming.length > 1)) { setError('A GIF is a single picture. Remove the others first, or use photos.'); return; }
-      if (!gif && next.some((p) => p.isGif)) { setError('This exercise already has a GIF. Remove it to add photos.'); return; }
-      if (next.length >= MAX_PICTURES) { setError(`Up to ${MAX_PICTURES} photos for one exercise.`); return; }
-      const preview = URL.createObjectURL(file);
-      previews.current.push(preview);
-      next.push({ key: null, file, preview, caption: '', isGif: gif });
-    }
-    setError(null);
-    setPictures(next);
-  }
-
   function addOtherName() {
     const n = otherNameDraft.trim();
     if (n && otherNames.length < 6 && !otherNames.some((o) => o.toLowerCase() === n.toLowerCase())) setOtherNames([...otherNames, n]);
@@ -161,19 +133,28 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     setBusy(true);
     setError(null);
     try {
-      // Pictures: compress the new ones, get signed links (the server picks the keys), send them, keep the keys in order.
+      // Pictures: shrink the new ones (the editor already did for adjusted ones), get signed links (the server picks the
+      // keys), send them in parallel, and keep the keys in order.
       let keys = pictures.map((p) => p.key);
       let thumbKey = exercise?.thumbKey ?? null;
       const fresh = pictures.map((p, i) => ({ p, i })).filter(({ p }) => p.file);
-      if (fresh.length > 0) {
-        const blobs = new Map<number, Blob>();
-        for (const { p, i } of fresh) blobs.set(i, await compressImageForUpload(p.file as File));
-        // The list thumbnail follows the first picture: made again only when that one is new.
-        const firstBlob = blobs.get(0) ?? null;
-        const slots: Array<number | 'thumb'> = [...fresh.map(({ i }) => i), ...(firstBlob ? (['thumb'] as const) : [])];
+      const blobs = new Map<number, Blob>();
+      for (const { p, i } of fresh) blobs.set(i, p.ready ? (p.file as File) : await compressImageForUpload(p.file as File));
+      // The list thumbnail follows the first picture: made again when that one is new, or when a saved one was moved to the front.
+      let firstBlob = blobs.get(0) ?? null;
+      const front = pictures[0];
+      if (!firstBlob && front?.key && front.preview && front.key !== exercise?.mediaKeys[0]) {
+        try { firstBlob = await (await fetch(front.preview)).blob(); } catch { /* keep the old thumbnail */ }
+      }
+      const slots: Array<number | 'thumb'> = [...fresh.map(({ i }) => i), ...(firstBlob ? (['thumb'] as const) : [])];
+      if (slots.length > 0) {
+        setProgress({ done: 0, total: slots.length });
         const minted = await hepMediaService.mintUploadUrls(clinicId, id, slots);
         const thumbBlob = firstBlob ? await createThumbnailBlob(firstBlob) : null;
-        await Promise.all(minted.map((m) => hepMediaService.putBlob(m, m.slot === 'thumb' ? (thumbBlob as Blob) : (blobs.get(m.slot as number) as Blob))));
+        await Promise.all(minted.map(async (m) => {
+          await hepMediaService.putBlob(m, m.slot === 'thumb' ? (thumbBlob as Blob) : (blobs.get(m.slot as number) as Blob));
+          setProgress((cur) => (cur ? { ...cur, done: cur.done + 1 } : cur));
+        }));
         keys = [...keys];
         for (const m of minted) { if (m.slot === 'thumb') thumbKey = m.key; else keys[m.slot as number] = m.key; }
       }
@@ -206,6 +187,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       setError(e instanceof Error ? e.message : 'Could not save the exercise.');
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -251,7 +233,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     <>
       <Button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</Button>
       <Button type="button" className={btnPrimary} onClick={() => void save()} disabled={busy || !valid || !online}>
-        {busy ? 'Saving…' : !online ? 'Needs a connection' : saveLabel}
+        {busy ? (progress ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'Saving…') : !online ? 'Needs a connection' : saveLabel}
       </Button>
     </>
   );
@@ -307,33 +289,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
           <section aria-labelledby="ex-how" className="space-y-3">
             <h3 id="ex-how" className="font-display text-sm font-semibold text-[var(--ink)]">How to do it</h3>
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <label className={`${btnSecondary} inline-flex cursor-pointer items-center`}>
-                  Take photos
-                  <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
-                </label>
-                <label className={`${btnSecondary} inline-flex cursor-pointer items-center`}>
-                  Choose photos or a GIF
-                  <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
-                </label>
-              </div>
-              <p className="text-hint text-[var(--muted)]">2 to 4 photos (start and end position), or one GIF up to 1 MB. Do not include a patient&apos;s face.</p>
-              {!picturesOk && <ErrorNote message={hasGif ? 'A GIF is a single picture.' : 'Add at least 2 photos (start and end position), or use one GIF.'} />}
-              {pictures.length > 0 && (
-                <ul className="grid gap-2 tab:grid-cols-2">
-                  {pictures.map((p, i) => (
-                    <li key={p.key ?? p.preview ?? i} className="space-y-1 rounded-xl border border-[var(--border)] p-2">
-                      <div className="flex items-start gap-2">
-                        {p.preview ? <img src={p.preview} alt="" className="h-16 w-16 rounded-lg object-cover" /> : <span className="flex h-16 w-16 items-center justify-center rounded-lg bg-[var(--paper)] text-xs text-[var(--muted)]">Picture {i + 1}</span>}
-                        <input className={inputCls} aria-label={`Caption for picture ${i + 1}`} placeholder={i === 0 ? 'Start position' : 'Caption (optional)'} maxLength={60} value={p.caption} onChange={(e) => setPictures(pictures.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x)))} />
-                      </div>
-                      <Button type="button" className="text-xs text-[var(--rust)]" onClick={() => setPictures(pictures.filter((_, j) => j !== i))}>Remove picture {i + 1}</Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <PictureField pictures={pictures} setPictures={setPictures} onProblem={setError} disabled={busy} />
             <Field label="Steps" hint="One step per line. The patient sees them as a numbered list.">
               <textarea className={inputCls} rows={5} value={steps} onChange={(e) => setSteps(e.target.value)} placeholder={'Stand with your back to the wall\nSlide your arms up slowly'} />
             </Field>
