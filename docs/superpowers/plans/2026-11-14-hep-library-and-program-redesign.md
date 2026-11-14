@@ -20,6 +20,19 @@
 6. Professional wording on therapist screens (table in Global Constraints). Patient screens keep plain language.
 7. Earlier approval ("go ahead with all", 2026-11-14) covers: Preview as patient, Library redesign, picker refinements, timer moved under the picture, sticky Start/Continue, › on checklist rows, timer-finished prompt, iOS Safari tip, `/p/*` noindex header, unsaved-changes guards, Lite cap meter, starter set in the picker's empty state, Templates region filter and clickable cards.
 
+## Review amendments (Argon review, 2026-11-15)
+
+From `docs/superpowers/plans/2026-11-14-hep-redesign-review-handoff.md`. Each one was checked against the code. Accepted items are written into their tasks below and marked **[R#]**.
+- R1 accepted: Programs list "Call" needs the patient's phone (`PROGRAM_SELECT` selects only `patients(name)`); with no phone, the action falls back to "Open". → Task 8
+- R2 accepted: template "Add all" in the picker must keep `templateId` (usage count, `sourceTemplateId`, `fromTemplate` on hand-over) and suggest the title. → Tasks 6, 7
+- R3 accepted: keep Archive / Delete / Restore in the exercise form; Position is not required to save; Create progression unfolds Exercise details and Default dosage. (The cited "THERA_NET.md Rule 3" doesn't exist; the existing layout already follows the principle.) → Task 5
+- R4 rejected: `HomeProgramNoteLine` already opens the current program in edit mode (commit 06a61fb).
+- R5 accepted: use counts come from a grouped-count RPC, not by pulling every `program_items` row (PostgREST caps responses at 1,000 rows). → Tasks 3, 6
+- R6 accepted, restated: `tableTypography.test.ts` checks cell font sizes (primary values not at 12px or smaller), not imports; new and changed tables use `th` / `td` / `cellSub` from `ui.tsx` and must pass that test. → Tasks 6, 8
+- R7 accepted: with no patient chosen yet, the phone-width settings card starts expanded so the patient search is visible. → Task 7
+- R8 accepted: an empty program shows quick starts ("Add exercises", "Start from a template", "Repeat an earlier program"), and the picker takes `initialTab`. → Tasks 6, 7
+- R9 accepted: on the patient checklist, a section's "All done" / "Skip ›" show only when it has 2 or more open exercises. → Task 4
+
 ## Global Constraints
 
 - CLAUDE.md applies: every `<button>` has an explicit `type`; money via `formatAmount`/`currencySymbol` (no ₹); no new India-only assumptions.
@@ -157,7 +170,8 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
 2. `drop function if exists public.save_exercise(uuid, uuid, text, text, text, text[], text[], text, text, text[], smallint, smallint, smallint, smallint, text, text, boolean, text, smallint, smallint, text[], boolean, text[], text);`
 3. `create or replace function public.save_exercise(...)` — **the body of the current definition in `20261113200000_hep_module.sql` lines 425–532, unchanged**, plus a final parameter `p_positions text[] default '{}'::text[]`, written in both the insert and the update as `positions = coalesce(p_positions, '{}'::text[])`.
 4. `grant execute on function public.save_exercise(<the 25-type signature>) to authenticated;` and `revoke … from anon, public` matching the original's grants.
-- Contract test (reads the new file): contains the drop of the 24-arg signature, `p_positions text[]`, the check constraint listing all seven positions, and the grant with the 25-arg signature.
+5. **[R5]** `create or replace function public.exercise_use_counts(p_clinic_id uuid) returns table (exercise_id uuid, uses int)`, `language sql stable security definer set search_path = pg_catalog, public`, guarded by `public.is_hep_staff(p_clinic_id)` (return no rows otherwise): `select pi.source_exercise_id, count(*)::int from public.program_items pi join public.programs p on p.id = pi.program_id where p.clinic_id = p_clinic_id and pi.source_exercise_id is not null group by 1`. Grant execute to authenticated only.
+- Contract test (reads the new file): contains the drop of the 24-arg signature, `p_positions text[]`, the check constraint listing all seven positions, the grant with the 25-arg signature, and `exercise_use_counts` with the `is_hep_staff` guard.
 
 - [ ] **Step 1: Failing tests** — contract test; `hepService.test.ts`: `saveExercise({...input, positions: ['Supine']})` calls `rpc('save_exercise', expect.objectContaining({ p_positions: ['Supine'] }))`, and omitting positions sends `[]`.
 - [ ] **Step 2: Run** them — FAIL.
@@ -182,7 +196,7 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
 **Interfaces:**
 - `HepExerciseScreenProps.framed?: boolean` — `absolute inset-0` instead of `fixed` for the screen and its bottom bar, so it fits inside a phone frame.
 - Timer: while running, a band directly **below** the picture shows the ring, phase word, "Rep n of N" and Stop; the picture stays visible and swipeable. When a timer sequence ends naturally, show a bar above the bottom buttons: "All {N} holds done. Tap ✓ Done when you're ready." (for timed: "Time's up. Tap ✓ Done when you're ready."), cleared on Done, Skip, Undo or leaving the screen.
-- Checklist: the Start/Continue button is `sticky bottom-0`; each row shows a `›` (aria-hidden) at the end.
+- Checklist: the Start/Continue button is `sticky bottom-0`; each row shows a `›` (aria-hidden) at the end. **[R9]** A section header shows "All done" and "Skip ›" only when the section has 2 or more open exercises (test: a one-exercise section has neither button).
 - Sign-in: when `/iPhone|iPad|iPod/.test(navigator.userAgent)`, under "Remember this phone" show "On iPhone, open this link in Safari so it remembers you. Links opened inside WhatsApp may forget."
 - `patientPreview.ts`: `export function toPreviewItems(items: HepItemInput[], opts: { today: string; sessionsPerDay: SessionsPerDay; mediaUrls: Record<string, string> }): PublicHepItem[]` — ids `preview-${index}`, `mediaUrls` from `mediaKeys` mapped through `opts.mediaUrls` (missing keys dropped), `sessionsSchedule: [{ from: today, sessionsPerDay }]`, `addedOn: today`, `sortOrder` = index after `orderBySection`.
 - `PatientPreview.tsx`:
@@ -216,6 +230,7 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
 - Choosing a type when the dosage is untouched applies `suggestedDoseType` (existing behaviour; keep).
 - Unsaved-changes guard: Cancel / ✕ / Esc on a changed form shows `ConfirmDialog` "Discard unsaved changes?" (confirm "Discard", cancel "Keep editing").
 - Footer: Cancel · Create progression (existing exercise only; the existing duplicate action) · Save.
+- **[R3]** Keep the existing quiet Archive / Delete / Restore bar for existing exercises, at the bottom of the form body below Classification, never in the footer. Position is **not** required to save (Classification's ✓ needs it; `valid` does not). Create progression opens Exercise details and Default dosage, so the copied name and dosage are in view. Tests: Archive/Delete still shown for an existing exercise; Save is enabled for a legacy exercise with no positions; after Create progression, both sections are expanded.
 - `ExerciseDoseEditor` copy per Global Constraints ("Dosage type", "Repetitions", "Repetitions with hold", "Hold", "Duration", "Side: Not applicable", "Frequency: 1× daily / 2× daily / 3× daily"). It is shared with the program sheet and template editor, so the copy changes there too.
 - Save sends `positions`.
 
@@ -231,7 +246,7 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
 
 **Files:**
 - Modify: `src/features/hep/LibraryBrowser.tsx`, `src/features/hep/LibraryTab.tsx`, `src/features/hep/ExercisePicker.tsx`, `src/features/hep/StarterSetSheet.tsx` (title "Starter library"), `src/features/hep/HepPage.tsx` (button label)
-- Modify: `src/services/hepService.ts` (`exerciseUseCounts(clinicId): Promise<Record<string, number>>` — count of `program_items` per `source_exercise_id` for the clinic, online only)
+- Modify: `src/services/hepService.ts` (`exerciseUseCounts(clinicId): Promise<Record<string, number>>` — **[R5]** calls `rpc('exercise_use_counts', { p_clinic_id })`; on any error returns `{}`; online only)
 - Modify: `src/features/hep/useHepData.ts` (`useExerciseUseCounts(): Record<string, number>`, `{}` offline)
 - Test: `LibraryBrowser.test.tsx`, `LibraryTab.test.tsx`, `ExercisePicker.test.tsx`, `hepService.test.ts`
 
@@ -246,7 +261,8 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
   - Side panel (desktop): "Adding · n", the chosen rows with ✕, "About n more minutes per session", primary "Add n". Phone: bottom strip of chosen chips with ✕ and "Add n".
   - Empty Library: "Your Library is empty" + "Add the starter library" (opens `StarterSetSheet`) + "Or create your own exercise".
   - Title: "Add exercises", or "Add to the warm-up" / "Add to the cool-down" when opened for a block.
-- **Interface change:** `ExercisePickerProps` becomes `{ open; onClose; onAdd: (items: HepItemInput[]) => void; disabledIds?: ReadonlySet<string>; patientId?: string; patientName?: string; target?: ItemBlock }`. The picker converts with `exerciseToItem`, the template-item converter in `hepItems.ts`, and program items as-is, then applies `intoBlock(items, target ?? 'main')`.
+- **Interface change:** `ExercisePickerProps` becomes `{ open; onClose; onAdd: (items: HepItemInput[], meta?: { templateId?: string; suggestedTitle?: string }) => void; disabledIds?: ReadonlySet<string>; patientId?: string; patientName?: string; target?: ItemBlock; initialTab?: 'exercises' | 'templates' | 'earlier' }`. The picker converts with `exerciseToItem`, the template-item converter in `hepItems.ts`, and program items as-is, then applies `intoBlock(items, target ?? 'main')`. **[R2]** Template "Add all" passes `{ templateId, suggestedTitle: template.title }`; earlier-program "Add all" passes `{ suggestedTitle: program.title }`. **[R8]** `initialTab` picks the opening tab.
+- **[R6]** The Library table uses `th` / `td` / `cellSub` from `src/components/ui.tsx`; `src/components/tableTypography.test.ts` must pass. The browser's root gets `@container` (Tailwind v4) so grid/table/rows switch on the container's width, also inside the picker.
 
 - [ ] **Step 1: Failing tests** — position filter chip narrows results and shows counts; table view renders the Position and Used columns and sorts by Type; view choice persists across remount; picker: an exercise in `disabledIds` shows "In program" and is not added by "Add all"; Templates tab "Add all" calls `onAdd` with that template's items minus disabled ones; `target: 'warm_up'` makes every added item `phase: 'warm_up'`; empty Library shows "Add the starter library"; `exerciseUseCounts` counts per id.
 - [ ] **Step 2: Run** — FAIL.
@@ -272,6 +288,9 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
 - Program sheet layout: `SheetDialog wide="xl"`. Desktop: items editor left; right panel with Patient (search/browse/new as today), Program name, Frequency, Duration, Start date, Review in, Prescribed by, "More settings" (session feedback, completion target, custom PIN), then "Preview as patient" and the primary save. Below desktop: settings collapse into one summary card ("Ravi Kumar · 2× daily · 4 weeks · starts today · review in 7 days" + Edit).
 - Header line: "Free plan · n of 5 active programs" when the clinic is on Lite (use the existing cap source; omit when unlimited).
 - The "Start from" section is removed; templates and earlier programs are reached from the picker tabs. Entry points that pass a template or an earlier program into the sheet keep working.
+- **[R2]** `onAdd(items, meta)`: when `meta.templateId` is set, the sheet stores it as `templateId` (so `sourceTemplateId` and `fromTemplate` work as today); when `meta.suggestedTitle` is set and the program name is still blank, it fills the name. Test: adding a template from the picker, then saving, calls `createProgram` with `sourceTemplateId` and the template's title.
+- **[R7]** On the phone-width layout, the settings card starts expanded when the sheet needs a patient and none is chosen. Test: opened from "Use for a patient" at narrow width, the patient search is visible.
+- **[R8]** With no exercises, the editor shows three quick starts: "Add exercises" (picker, Exercises tab), "Start from a template" (Templates tab) and, when the patient has an earlier program, "Repeat an earlier program" (earlier-programs tab). Test: "Start from a template" opens the picker on the Templates tab.
 - "+ Add exercises" / block buttons open `ExercisePicker` with `target`, `patientId`, `patientName`, and `disabledIds` from current items.
 - Footer: Cancel · Preview as patient (`ProgramPreviewDialog`) · "Save and share" (new) / "Save changes" (edit).
 - Template editor: uses `ProgramItemsEditor`, gets "Preview as patient", and the unsaved-changes guard ("Discard unsaved changes?").
@@ -288,13 +307,15 @@ Patient screens are **not** renamed ("How to do it", "Stop if", "Lost your PIN?"
 **Model:** Sonnet.
 
 **Files:**
-- Modify: `src/features/hep/programRows.ts` (bucket `'ending'`; `ProgramRow.days: DayCell[]`), `src/features/hep/ProgramsTab.tsx`, `src/features/hep/HomeProgramTab.tsx`, `src/features/hep/HandOverPanel.tsx`, any other file still showing an old label from the Global Constraints table
+- Modify: `src/services/hepService.ts` (`PROGRAM_SELECT`, bundle `patientPhone`), `src/features/hep/programRows.ts` (bucket `'ending'`; `ProgramRow.days: DayCell[]`; `ProgramRow.patientPhone`), `src/features/hep/ProgramsTab.tsx`, `src/features/hep/HomeProgramTab.tsx`, `src/features/hep/HandOverPanel.tsx`, any other file still showing an old label from the Global Constraints table
 - Test: `programRows.test.ts`, `ProgramsTab.test.tsx`, `HomeProgramTab.test.tsx`, `HandOverPanel.test.tsx`
 
 **Behaviour (decided):**
 - `ProgramBucket = 'attention' | 'active' | 'ending' | 'ended' | 'past'`; `'ending'` = active (not paused) with an end date from today through today + 6; such programs are in both Active and Ending this week. Filter labels: Needs attention · Active · Ending this week · Recently ended · Archived.
 - Owner toggle labels: My patients · All therapists.
 - Table: Patient · Program · Today ("n of m sessions") · "Adherence, last 14 days" (14 coloured squares from `dayStrip` — completed / partial / missed / not due, today outlined — plus "86%" or "Not enough data" under it) · Alerts · Last active · action. The row's primary action follows its first alert: red → "Call" (`tel:` via the patient's phone, built with the clinic country code helpers), amber → "Message", otherwise "Open". Phone layout shows the same strip.
+- **[R1]** `PROGRAM_SELECT` in `src/services/hepService.ts` becomes `'*, patients(name, phone), therapists(name), program_items(*, program_logs(*)), program_session_feedback(*)'`; the program bundle carries `patientPhone: string | null`, and `ProgramRow` (in `programRows.ts`) gets `patientPhone`. With a red alert but no phone, the action is "Open". Test both cases.
+- **[R6]** The Programs table keeps using `th` / `td` / `cellSub` from `ui.tsx`; the strip's percentage line is secondary (muted) text, so `tableTypography.test.ts` passes.
 - Chart (HomeProgramTab): "Habit" → "Adherence", "Too early" → "Not enough data", "Needs your attention" → "Alerts".
 - Hand-over: title "Share with patient", button "Show PIN".
 - Sweep: `grep -rn` every "Now" string from the copy table in `src/features/hep` and fix leftovers (patient-facing files excluded).
