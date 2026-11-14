@@ -153,7 +153,7 @@ describe('ProgramsTab', () => {
     await screen.findByText('Ended Person');
     expect(screen.getByText(/^(Met|Not met)/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Prescribe next' }));
-    expect(onPrescribeNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9' }));
+    expect(onPrescribeNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9' }), expect.objectContaining({ patientName: 'Ended Person' }));
     await user.click(screen.getByRole('button', { name: /^Actions for Ended Person/ }));
     await user.click(screen.getByRole('button', { name: 'Extend' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '14 days' }));
@@ -170,7 +170,7 @@ describe('ProgramsTab', () => {
     unmount();
     renderTab({ onMessage });
     await user.click((await screen.findAllByRole('button', { name: 'Message' }))[0]);
-    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }));
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), expect.objectContaining({ patientName: 'Asha Pillai' }));
   });
 
   it('Pause, Resume and Mark completed (after asking) change the status without touching the exercises', async () => {

@@ -15,13 +15,15 @@ type TemplateRow = ExerciseTemplate & { usedCount: number };
 export interface TemplatesTabProps {
   /** "Use for a patient": opens the program sheet (wired by the patient chart work). Hidden when absent. */
   onUse?: (template: ExerciseTemplate) => void;
+  /** Change this number to load the list again (a template was used, so its count changed). */
+  reloadKey?: number;
 }
 
 export function sectionLine(items: ExerciseTemplate['items']): string {
   return groupItemsByPhase(items.map(templateItemToInput)).map((s) => `${EXERCISE_PHASE_LABELS[s.phase]} ${s.rows.length}`).join(' · ');
 }
 
-export function TemplatesTab({ onUse }: TemplatesTabProps) {
+export function TemplatesTab({ onUse, reloadKey = 0 }: TemplatesTabProps) {
   const clinic = useClinic();
   const online = useOnline();
   const [rows, setRows] = useState<TemplateRow[] | null>(null);
@@ -40,7 +42,7 @@ export function TemplatesTab({ onUse }: TemplatesTabProps) {
     }
   }, [clinic.id]);
 
-  useEffect(() => { if (online) void load(); }, [online, load]);
+  useEffect(() => { if (online) void load(); }, [online, load, reloadKey]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

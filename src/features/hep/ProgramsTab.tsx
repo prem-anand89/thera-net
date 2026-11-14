@@ -31,9 +31,11 @@ const EXTEND_CHOICES = [7, 14, 30];
 
 export interface ProgramsTabProps {
   /** "Message" on an active program: the Message patient presets. Hidden when absent. */
-  onMessage?: (row: ProgramRow) => void;
-  /** "Prescribe next" (ended) and "Prescribe again" (past): the program sheet for the same patient. Hidden when absent. */
-  onPrescribeNext?: (row: ProgramRow) => void;
+  onMessage?: (row: ProgramRow, bundle: ProgramBundle) => void;
+  /** "Prescribe next" (ended) and "Prescribe again" (past): the program sheet for the same patient, starting from this program. Hidden when absent. */
+  onPrescribeNext?: (row: ProgramRow, bundle: ProgramBundle) => void;
+  /** Change this number to load the list again (after a program was saved elsewhere). */
+  reloadKey?: number;
 }
 
 function Signals({ row }: { row: ProgramRow }) {
@@ -49,7 +51,7 @@ const todayLabel = (r: ProgramRow) => (r.todayTarget > 0 ? `${r.todayCompleted} 
 const habitLabel = (r: ProgramRow) => (r.habitPercent == null ? 'Too early' : `${r.habitPercent}% · ${r.finishedDays} ${r.finishedDays === 1 ? 'day' : 'days'} finished`);
 const programLine = (r: ProgramRow) => `${r.exerciseCount} ${r.exerciseCount === 1 ? 'exercise' : 'exercises'} · ${r.dayLabel}`;
 
-export function ProgramsTab({ onMessage, onPrescribeNext }: ProgramsTabProps) {
+export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: ProgramsTabProps) {
   const clinic = useClinic();
   const online = useOnline();
   const scope = useWorkspaceScope();
@@ -76,8 +78,9 @@ export function ProgramsTab({ onMessage, onPrescribeNext }: ProgramsTabProps) {
       setBundles((cur) => cur ?? []);
     }
   }, [clinic]);
-  useEffect(() => { if (online) void load(); }, [online, load]);
+  useEffect(() => { if (online) void load(); }, [online, load, reloadKey]);
 
+  const bundleOf = useCallback((id: string) => (bundles ?? []).find((b) => b.program.id === id) as ProgramBundle, [bundles]);
   const allRows = useMemo(() => (bundles ?? []).map((b) => buildProgramRow(b, { today, windowStart })), [bundles, today, windowStart]);
   const ownedRows = useMemo(() => (showOwner === 'mine' ? allRows.filter((r) => r.therapistId != null && r.therapistId === scope.myTherapistId) : allRows), [allRows, showOwner, scope.myTherapistId]);
   const counts = useMemo(() => countBuckets(ownedRows), [ownedRows]);
@@ -97,7 +100,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext }: ProgramsTabProps) {
           {r.status === 'paused' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(r.id, 'active')); }}>Resume</button>}
           {r.status !== 'completed' && r.durationDays != null && <button type="button" className={menuItem} onClick={() => { close(); setExtending(r); }}>Extend</button>}
           {r.status !== 'completed' && <button type="button" className={menuItem} onClick={() => { close(); setCompleting(r); }}>Mark completed</button>}
-          {r.status === 'completed' && onPrescribeNext && <button type="button" className={menuItem} onClick={() => { close(); onPrescribeNext(r); }}>Prescribe again</button>}
+          {r.status === 'completed' && onPrescribeNext && <button type="button" className={menuItem} onClick={() => { close(); onPrescribeNext(r, bundleOf(r.id)); }}>Prescribe again</button>}
           {r.status === 'completed' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.duplicateProgram(r.id)); }}>Duplicate</button>}
         </>
       )}
@@ -106,8 +109,8 @@ export function ProgramsTab({ onMessage, onPrescribeNext }: ProgramsTabProps) {
 
   const primary = (r: ProgramRow) => {
     if (r.status === 'completed') return null;
-    if (r.ended) return onPrescribeNext ? <Button type="button" className={pillSmPrimary} onClick={() => onPrescribeNext(r)}>Prescribe next</Button> : null;
-    return onMessage ? <Button type="button" className={pillSmAccent} onClick={() => onMessage(r)}>Message</Button> : null;
+    if (r.ended) return onPrescribeNext ? <Button type="button" className={pillSmPrimary} onClick={() => onPrescribeNext(r, bundleOf(r.id))}>Prescribe next</Button> : null;
+    return onMessage ? <Button type="button" className={pillSmAccent} onClick={() => onMessage(r, bundleOf(r.id))}>Message</Button> : null;
   };
 
   if (!online && bundles === null) return <p className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted)]">Programs need a connection. Reconnect to see them.</p>;

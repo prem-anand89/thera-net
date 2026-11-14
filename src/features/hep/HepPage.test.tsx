@@ -17,6 +17,8 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/app/usePermissions', () => ({ usePermissions: () => perms }));
 vi.mock('./LibraryTab', () => ({ LibraryTab: () => <div>library tab</div> }));
 vi.mock('./StarterSetSheet', () => ({ StarterSetSheet: () => null }));
+vi.mock('./ProgramSheet', () => ({ ProgramSheet: () => null }));
+vi.mock('./MessagePatientSheet', () => ({ MessagePatientSheet: () => null }));
 afterEach(() => { cleanup(); navigate.mockReset(); search = {}; perms = { canUseExercises: true, role: 'therapist' }; });
 
 describe('HepPage', () => {
