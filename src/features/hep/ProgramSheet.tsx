@@ -13,6 +13,7 @@ import { describeDose } from '@/domain/hepDose';
 import { repos } from '@/services';
 import { HEP_NEEDS_CONNECTION, hepService, type HepItemInput, type ProgramBundle, type ProgramCreated } from '@/services/hepService';
 import type { Patient } from '@/domain/types';
+import { AddPatientSheet } from '@/features/patients/AddPatientSheet';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
 import { ExercisePicker } from './ExercisePicker';
 import { HandOverPanel } from './HandOverPanel';
@@ -66,6 +67,7 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
   const [earlier, setEarlier] = useState<ProgramBundle[]>([]);
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<Patient[]>([]);
+  const [addingPatient, setAddingPatient] = useState(false);
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [closedSections, setClosedSections] = useState<ReadonlySet<string>>(new Set());
   const [picking, setPicking] = useState(false);
@@ -102,10 +104,15 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, online, patient?.id, patientId]);
 
+  // Browse: with nothing typed, the most recently added patients; typing narrows it down.
   useEffect(() => {
-    if (!open || patientId || query.trim().length < 2) { setMatches([]); return; }
+    if (!open || patientId) { setMatches([]); return; }
     let live = true;
-    void repos.patients.search(clinic.id, query.trim(), 8).then((list) => { if (live) setMatches(list.filter((p) => !p.deletedAt)); });
+    const q = query.trim();
+    const load = q.length === 0
+      ? repos.patients.list(clinic.id).then((list) => list.filter((p) => !p.deletedAt).sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')).slice(0, 8))
+      : repos.patients.search(clinic.id, q, 8).then((list) => list.filter((p) => !p.deletedAt));
+    void load.then((list) => { if (live) setMatches(list); }).catch(() => { if (live) setMatches([]); });
     return () => { live = false; };
   }, [open, patientId, query, clinic.id]);
 
@@ -197,10 +204,12 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
                 )}
               </Field>
               {!patient && matches.length > 0 && (
-                <ul className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+                <ul aria-label={query.trim() ? 'Matching patients' : 'Recent patients'} className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
                   {matches.map((p) => <li key={p.id}><button type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-[var(--paper)]" onClick={() => { setPatient(p); setQuery(''); }}>{p.name} <span className="text-[var(--muted)]">{p.mrno}</span></button></li>)}
                 </ul>
               )}
+              {!patient && query.trim().length > 0 && matches.length === 0 && <p className="text-sm text-[var(--muted)]">No patient matches “{query.trim()}”.</p>}
+              {!patient && <Button type="button" className={btnSecondary} onClick={() => setAddingPatient(true)}>+ New patient</Button>}
             </section>
           )}
 
@@ -384,6 +393,7 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
         onAdd={(list) => setItems([...draft.items, ...list.map((e) => ({ ...exerciseToItem(e), sessionsPerDay: draft.sessionsPerDay }))])}
       />
       <ConfirmDialog open={confirmDiscard} title="Discard changes?" message="What you changed in this program will not be saved." confirmLabel="Discard" destructive onConfirm={() => { setConfirmDiscard(false); onClose(); }} onCancel={() => setConfirmDiscard(false)} />
+      <AddPatientSheet open={addingPatient} onClose={() => setAddingPatient(false)} initialName={query.trim()} onCreated={(p) => { setPatient(p); setQuery(''); setAddingPatient(false); }} onUseExisting={(p) => { setPatient(p); setQuery(''); setAddingPatient(false); }} />
       {handOver && (
         <HandOverPanel
           open

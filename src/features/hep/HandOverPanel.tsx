@@ -146,11 +146,13 @@ export function HandOverPanel(p: HandOverPanelProps) {
       </SheetDialog>
 
       {showPin && pin && (
-        <div role="dialog" aria-modal="true" aria-label="Your PIN" className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-6 bg-[var(--surface)] p-6 text-center">
-          <p className="font-display text-xl font-semibold text-[var(--ink)]">{clinic.name}</p>
-          <p className="text-lg text-[var(--muted)]">Your PIN</p>
-          <p className="font-num font-semibold tracking-[0.2em] text-[var(--ink)]" style={{ fontSize: '96px', lineHeight: 1 }}>{pin}</p>
-          <Button type="button" className={btnPrimary} onClick={() => setShowPin(false)}>Done</Button>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
+          <div role="dialog" aria-modal="true" aria-label="Your PIN" className="w-full max-w-sm space-y-3 rounded-2xl bg-[var(--surface)] p-6 text-center shadow-xl">
+            <p className="font-display text-lg font-semibold text-[var(--ink)]">{clinic.name}</p>
+            <p className="text-sm text-[var(--muted)]">Your PIN</p>
+            <p className="font-num font-semibold tracking-[0.2em] text-[var(--ink)]" style={{ fontSize: '56px', lineHeight: 1.1 }}>{pin}</p>
+            <Button type="button" className={btnPrimary} onClick={() => setShowPin(false)}>Done</Button>
+          </div>
         </div>
       )}
       <PrintSheet open={printing} onClose={() => setPrinting(false)} clinicName={clinic.name} patientName={p.patientName} programTitle={p.programTitle} link={link} pin={pin} items={p.items} />

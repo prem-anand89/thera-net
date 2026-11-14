@@ -48,13 +48,13 @@ describe('HandOverPanel', () => {
     expect(screen.getByText('The WhatsApp message never contains the PIN.')).toBeInTheDocument();
   });
 
-  it('Show PIN on screen opens a full-screen overlay with the clinic name and a very large PIN, and Done closes it', async () => {
+  it('Show PIN on screen opens a centred card with the clinic name and a large PIN, and Done closes it', async () => {
     const user = userEvent.setup();
     renderPanel();
     await user.click(screen.getByRole('button', { name: 'Show PIN on screen' }));
     const overlay = screen.getByRole('dialog', { name: 'Your PIN' });
     expect(within(overlay).getByText('Sunrise Physio')).toBeInTheDocument();
-    expect(within(overlay).getByText('4821')).toHaveStyle({ fontSize: '96px' });
+    expect(within(overlay).getByText('4821')).toHaveStyle({ fontSize: '56px' });
     await user.click(within(overlay).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog', { name: 'Your PIN' })).toBeNull();
   });

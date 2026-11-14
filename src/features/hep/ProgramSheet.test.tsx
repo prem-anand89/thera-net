@@ -22,7 +22,7 @@ vi.mock('@/services/hepService', async (orig) => ({
 const patients = [{ id: 'pt1', name: 'Ravi Kumar', mrno: 'M-001', phone: '+91 98765 43210', deletedAt: null }, { id: 'pt2', name: 'Asha Pillai', mrno: 'M-002', phone: null, deletedAt: null }];
 vi.mock('@/services', () => ({
   repos: {
-    patients: { get: async (id: string) => patients.find((p) => p.id === id), search: async (_c: string, q: string) => patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) },
+    patients: { list: async () => patients, get: async (id: string) => patients.find((p) => p.id === id), search: async (_c: string, q: string) => patients.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) },
     therapists: { list: async () => [{ id: 't1', name: 'Meera Rao', active: true }, { id: 't2', name: 'Kiran Das', active: true }] },
   },
 }));
@@ -94,6 +94,13 @@ describe('ProgramSheet: opening and cancelling', () => {
 });
 
 describe('ProgramSheet: a new program from a template', () => {
+  it('lists recent patients before anything is typed, and offers a new patient', async () => {
+    renderSheet({ startFrom: { template } });
+    expect(await screen.findByRole('button', { name: /Asha Pillai/ })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Recent patients' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ New patient' })).toBeInTheDocument();
+  });
+
   it('asks who it is for, then saves a copy of the template rows section by section and shows the hand-over with the PIN', async () => {
     const user = userEvent.setup();
     const { onSaved } = renderSheet({ startFrom: { template } });

@@ -44,9 +44,9 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds }: ExercisePi
 
   return (
     <>
-      <SheetDialog open={open && newName === null} wide title="Add exercises" onClose={onClose} footer={footer}>
+      <SheetDialog open={open && newName === null} wide="xl" title="Add exercises" onClose={onClose} footer={footer}>
         {!exercises ? <LoadingRows rows={4} label="Loading the Library" /> : (
-          <div className="grid gap-4 desktop:grid-cols-[1fr_15rem]">
+          <div className="grid gap-4 desktop:grid-cols-[1fr_14rem]">
             <LibraryBrowser
               clinicId={clinic.id}
               exercises={exercises}

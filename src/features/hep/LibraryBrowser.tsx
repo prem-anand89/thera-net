@@ -186,8 +186,8 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = fa
         {selected && <span aria-hidden="true" className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs ${tick(ex) ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)]'}`}>{tick(ex) ? '✓' : ''}</span>}
         <Thumb ex={ex} url={ex.thumbKey ? thumbs[ex.thumbKey] : undefined} size={52} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-[var(--ink)]">{ex.title}{!ex.active && <span className="ml-2 rounded bg-[var(--paper)] px-1.5 text-xs font-medium text-[var(--muted)]">Archived</span>}</span>
-          <span className="block truncate text-xs text-[var(--muted)]">{doseSummary(ex)}</span>
+          <span className="block line-clamp-2 text-sm font-semibold leading-snug text-[var(--ink)]">{ex.title}{!ex.active && <span className="ml-2 rounded bg-[var(--paper)] px-1.5 text-xs font-medium text-[var(--muted)]">Archived</span>}</span>
+          <span className="block line-clamp-2 text-xs text-[var(--muted)]">{doseSummary(ex)}</span>
           {disabledIds?.has(ex.id) && <span className="block text-xs text-[var(--muted)]">Already in the program</span>}
         </span>
       </button>
@@ -206,8 +206,8 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = fa
           {withPicture ? <Thumb ex={ex} url={url} size={96} /> : (
             <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl bg-[var(--paper)] p-2 text-center"><span className="text-sm font-semibold text-[var(--ink)]">{ex.title}</span></span>
           )}
-          {withPicture && <span className="mt-1 block truncate text-xs text-[var(--ink)]">{ex.title}</span>}
-          <span className="block truncate text-xs text-[var(--muted)]">{doseSummary(ex)}</span>
+          {withPicture && <span className="mt-1 block line-clamp-2 text-xs font-medium text-[var(--ink)]">{ex.title}</span>}
+          <span className="block line-clamp-2 text-xs text-[var(--muted)]">{doseSummary(ex)}</span>
         </button>
       </li>
     );
@@ -238,8 +238,8 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = fa
                 <div key={t.phase} className="space-y-1.5">
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{EXERCISE_PHASE_LABELS[t.phase]}</h4>
                   {view === 'grid'
-                    ? <ul className="grid grid-cols-3 gap-2 tab:grid-cols-4 desktop:grid-cols-5">{t.exercises.map(tile)}</ul>
-                    : <ul className="grid gap-1.5 desktop:grid-cols-2">{t.exercises.map(row)}</ul>}
+                    ? <ul className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">{t.exercises.map(tile)}</ul>
+                    : <ul className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-1.5">{t.exercises.map(row)}</ul>}
                 </div>
               ))}
             </section>

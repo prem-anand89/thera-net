@@ -207,12 +207,20 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
               <p className="text-xs text-[var(--muted)]" aria-label="Pain and effort, last 7 days">Last 7 days · Pain {trend.map((t) => t.pain ?? '–').join(' ')} · Effort {trend.map((t) => t.effort ?? '–').join(' ')}</p>
             )}
 
-            <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Last 14 days">
-              {strip.map((c) => (
-                <button key={c.date} type="button" aria-label={`${c.date}: ${CELL_WORD[c.state]}`} aria-pressed={c.date === day} onClick={() => setDay(c.date)} className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg text-xs font-medium ${CELL_CLASS[c.state]} ${c.date === day ? 'ring-2 ring-[var(--ink)]' : ''}`}>
-                  {Number(c.date.slice(8))}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold text-[var(--ink)]">Last 14 days <span className="font-normal text-[var(--muted)]">· tap a day to see what was done</span></p>
+              <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Last 14 days">
+                {strip.map((c) => {
+                  const d = new Date(`${c.date}T00:00:00Z`);
+                  return (
+                    <button key={c.date} type="button" title={d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} aria-label={`${c.date}: ${CELL_WORD[c.state]}`} aria-pressed={c.date === day} onClick={() => setDay(c.date)} className={`flex h-12 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-xs font-medium leading-tight ${CELL_CLASS[c.state]} ${c.date === day ? 'ring-2 ring-[var(--ink)]' : ''}`}>
+                      <span className="text-[10px] uppercase opacity-80">{d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>
+                      <span className="text-sm">{d.getUTCDate()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-[var(--muted)]">Green: everything done · Amber: partly done · Red: missed · Grey: nothing due that day (before the program started or after it ended).</p>
             </div>
 
             <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
