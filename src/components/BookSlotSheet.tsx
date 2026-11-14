@@ -329,15 +329,15 @@ export function BookSlotSheet({
       .filter((a) => a.patientId === patientId && a.status !== 'cancelled' && a.status !== 'no_show' && a.scheduledAt < new Date().toISOString())
       .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
 
-    if (lastAppt) {
+    // Only a booking with no time yet is filled in from the patient's history. A time picked on the calendar (or by
+    // hand) is a deliberate choice: it, and the length and therapist it was picked with, stay as they are.
+    if (lastAppt && !selectedTime) {
       if (lastAppt.therapistId && !therapistTouched && !lockTherapist) {
         setTherapistId(lastAppt.therapistId);
       }
-      const pastLength = appointmentMinutes(lastAppt, slotMinutes);
-      setLengthMinutes(pastLength);
-      setSelectedTime(null);
+      setLengthMinutes(appointmentMinutes(lastAppt, slotMinutes));
     }
-  }, [isOpen, patientId, rescheduleAppointment, appointments, therapistTouched, lockTherapist, slotMinutes]);
+  }, [isOpen, patientId, rescheduleAppointment, appointments, therapistTouched, lockTherapist, slotMinutes, selectedTime]);
 
   if (!isOpen) return null;
 
@@ -423,6 +423,39 @@ export function BookSlotSheet({
     setTherapistTouched(true);
     setSelectedTime(found.time);
   }
+
+  /**
+   * Whether the time picked so far can still be booked once the date, therapist or length above it changes. Changing
+   * one of those used to wipe the time even when it was still free, so the person had to find it again; now it goes
+   * only when it no longer works (closed day, past, clashes, or outside what that therapist can be booked for).
+   */
+  function timeStillWorks(time: string | null, next: { date?: string; therapistId?: string; length?: number }): boolean {
+    if (!time) return false;
+    const date = next.date ?? selectedDate;
+    const who = next.therapistId ?? therapistId;
+    const length = next.length ?? lengthMinutes;
+    if (isClosedDay(date, closedWeekdays, deptClosedDates).closed) return false;
+    if (localDateTime(date, time).getTime() < Date.now()) return false;
+    if (
+      who &&
+      isTherapistSlotOccupied(appointments, who, date, time, length, {
+        fallbackMinutes: slotMinutes,
+        ignoreAppointmentId: rescheduleAppointment?.id,
+      })
+    ) {
+      return false;
+    }
+    const row = (deptTherapists ?? []).find((t) => t.id === who);
+    const window = bookableWindow({
+      clinicHours: clinicHoursIn,
+      bufferHours,
+      working: workingIntervals(row?.workingHours, date, clinicHoursIn),
+    });
+    return generateScheduleSlots(stepMinutes, window.startHour, window.endHour).some((slot) => slot.time === time);
+  }
+  const keepTimeIf = (next: { date?: string; therapistId?: string; length?: number }) => {
+    if (!timeStillWorks(selectedTime, next)) setSelectedTime(null);
+  };
 
   const isClosedDate = (date: string) => isClosedDay(date, closedWeekdays, deptClosedDates).closed;
   const workingOn = (date: string) => workingIntervals(therapistRow?.workingHours, date, clinicHoursIn);
@@ -828,7 +861,7 @@ export function BookSlotSheet({
                     type="button"
                     role="radio"
                     aria-checked={therapistId === therapist.id}
-                    onClick={() => { setTherapistId(therapist.id); setTherapistTouched(true); setSelectedTime(null); }}
+                    onClick={() => { setTherapistId(therapist.id); setTherapistTouched(true); keepTimeIf({ therapistId: therapist.id }); }}
                     className={chip(therapistId === therapist.id)}
                   >
                     <span aria-hidden className="h-2.5 w-2.5 rounded-full ring-2 ring-white/70" style={{ background: colorOf(therapist.id) }} />
@@ -849,7 +882,7 @@ export function BookSlotSheet({
                   type="button"
                   role="radio"
                   aria-checked={lengthMinutes === minutes}
-                  onClick={() => { setLengthMinutes(minutes); setSelectedTime(null); }}
+                  onClick={() => { setLengthMinutes(minutes); keepTimeIf({ length: minutes }); }}
                   className={`min-h-9 min-w-14 rounded-lg border px-2.5 text-xs font-medium ${lengthMinutes === minutes ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
                     }`}
                 >
@@ -878,7 +911,7 @@ export function BookSlotSheet({
                     role="radio"
                     aria-checked={on}
                     aria-label={`${index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : displayDate(date)}${dayClosed ? ', closed' : ''}`}
-                    onClick={() => { setSelectedDate(date); setSelectedTime(null); }}
+                    onClick={() => { setSelectedDate(date); keepTimeIf({ date }); }}
                     className={`flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border text-center leading-none sm:w-auto sm:flex-1 ${on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : dayClosed ? 'border-[var(--border)] bg-[var(--slate-light)] text-[var(--muted)]' : 'border-[var(--border)] text-[var(--ink)] hover:border-[var(--teal)]/50'
                       }`}
                   >
@@ -891,7 +924,7 @@ export function BookSlotSheet({
               })}
             </div>
             {(showLater || !quickDates.includes(selectedDate)) && (
-              <input type="date" aria-label="Date" className={`${inputCls} mt-3`} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setSelectedTime(null); }} />
+              <input type="date" aria-label="Date" className={`${inputCls} mt-3`} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); keepTimeIf({ date: event.target.value }); }} />
             )}
           </section>
 

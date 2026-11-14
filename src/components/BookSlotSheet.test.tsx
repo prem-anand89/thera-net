@@ -594,4 +594,54 @@ describe('BookSlotSheet', () => {
     ]);
     expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ sessions: 4, appointmentId: 'series-1' }));
   });
+
+  describe('keeps the time you picked', () => {
+    const selected = (label: string) => expect(slot(label)).toHaveAttribute('aria-pressed', 'true');
+    const lengthRadio = (name: string) => within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name });
+    const history = [appointment({ id: 'past', patientId: 'p1', therapistId: 't1', durationMinutes: 45, scheduledAt: localDateTime('2026-09-20', '10:00').toISOString(), status: 'confirmed' })];
+
+    it('a time opened from the calendar stays selected after choosing a patient who has been seen before', () => {
+      render(<BookSlotSheet isOpen onClose={() => { }} appointments={history} prefilledDate="2026-10-01" prefilledTime="10:30" prefilledTherapistId="t1" />);
+      selected('10:30 AM');
+      fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
+      selected('10:30 AM');
+    });
+
+    it('a patient with history still gets their usual length and therapist when no time was picked yet', () => {
+      render(<BookSlotSheet isOpen onClose={() => { }} appointments={history} prefilledDate="2026-10-01" />);
+      fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
+      expect(lengthRadio('45m')).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('changing the length keeps the time while it is still free', () => {
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" prefilledTime="09:00" prefilledTherapistId="t1" />);
+      fireEvent.click(lengthRadio('45m'));
+      selected('9:00 AM');
+    });
+
+    it('changing the length clears the time only when the longer visit would clash', () => {
+      const busy = [appointment({ id: 'next', therapistId: 't1', scheduledAt: localDateTime('2026-10-01', '09:30').toISOString(), durationMinutes: 30 })];
+      render(<BookSlotSheet isOpen onClose={() => { }} appointments={busy} prefilledDate="2026-10-01" prefilledTime="09:00" prefilledTherapistId="t1" />);
+      selected('9:00 AM');
+      fireEvent.click(lengthRadio('45m'));
+      expect(slot('9:00 AM')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('changing the date keeps the time when it is free that day too', () => {
+      render(<BookSlotSheet isOpen onClose={() => { }} prefilledDate="2026-10-01" prefilledTime="10:00" prefilledTherapistId="t1" />);
+      fireEvent.click(screen.getByRole('radio', { name: /2 Oct/ }));
+      selected('10:00 AM');
+    });
+
+    it('changing the therapist keeps the time when that therapist is free then, and clears it when they are not', () => {
+      const busy = [appointment({ id: 'ravi', therapistId: 't2', scheduledAt: localDateTime('2026-10-01', '10:00').toISOString(), durationMinutes: 30 })];
+      render(<BookSlotSheet isOpen onClose={() => { }} appointments={busy} prefilledDate="2026-10-01" prefilledTime="09:30" prefilledTherapistId="t1" />);
+      fireEvent.click(screen.getByRole('radio', { name: 'Dr Ravi' }));
+      selected('9:30 AM');
+      fireEvent.click(screen.getByRole('radio', { name: 'Dr Asha' }));
+      fireEvent.click(slot('10:00 AM'));
+      fireEvent.click(screen.getByRole('radio', { name: 'Dr Ravi' }));
+      expect(slot('10:00 AM')).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
 });
