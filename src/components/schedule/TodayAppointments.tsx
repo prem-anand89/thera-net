@@ -160,7 +160,9 @@ export function TodayAppointments({
     return (
       <li
         key={a.id}
-        className={`flex flex-col gap-1.5 border-l-4 py-2.5 px-3 tab:px-4 ${gridCols} hover:bg-[var(--teal-light)] transition-colors`}
+        // Phone: patient on the left, the action pill on the same line (it wraps below only when it cannot fit, e.g.
+        // Undo + Complete on a 320px screen), so a row is two lines tall instead of three.
+        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:px-4 ${gridCols} hover:bg-[var(--teal-light)] transition-colors`}
         style={{ borderLeftColor: color, background: fill.background }}
       >
         {/* Col 1: Time & duration */}
@@ -175,7 +177,7 @@ export function TodayAppointments({
         {/* Col 2: Patient */}
         <button
           type="button"
-          className="min-w-0 text-left cursor-pointer focus:outline-none"
+          className="min-w-0 flex-1 basis-36 text-left cursor-pointer focus:outline-none tab:flex-none tab:basis-auto"
           onClick={() => onSelect(a)}
         >
           <div className="flex items-center gap-1.5">
@@ -260,7 +262,7 @@ export function TodayAppointments({
 
         {/* Col 6: Action */}
         {end && (
-          <div className={`tab:flex tab:justify-end ${showEndOnMobile ? 'mt-2 tab:mt-0 flex justify-end' : 'hidden tab:flex'}`}>
+          <div className={`tab:flex tab:justify-end ${showEndOnMobile ? 'ml-auto flex shrink-0 justify-end tab:ml-0' : 'hidden tab:flex'}`}>
             {end}
           </div>
         )}

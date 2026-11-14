@@ -145,7 +145,8 @@ export function AccountMenu({
         onClick={() => setOpen((o) => !o)}
       >
         <Avatar name={name} photoUrl={photoUrl} size="sm" />
-        <div className="flex flex-col text-left max-w-[4.75rem] desktop:max-w-[9rem]">
+        {/* Phone: the avatar alone. The name and role are the first thing in the dropdown, and the clinic pill needs the room. */}
+        <div className="hidden flex-col text-left max-w-[4.75rem] sm:flex desktop:max-w-[9rem]">
           {/* Mobile & iPad portrait: first name (or initials if too long) */}
           <span className="truncate text-xs font-semibold leading-tight text-[var(--ink)] desktop:hidden">
             {mobileDisplayName(name)}

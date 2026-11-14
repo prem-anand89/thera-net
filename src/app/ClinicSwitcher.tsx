@@ -75,7 +75,7 @@ export function ClinicSwitcher({
   // logo/initials + clinic first word on desktop & iPad landscape (`desktop:`).
   const pill = hasMenu
     ? 'flex min-h-8 min-w-0 max-w-full items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--paper)] px-1.5 py-0.5 desktop:gap-2 desktop:px-2 desktop:py-1 transition-colors'
-    : 'flex min-h-8 min-w-0 max-w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 desktop:px-2 desktop:py-1';
+    : 'flex min-h-8 min-w-0 max-w-full shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 sm:shrink desktop:px-2 desktop:py-1';
 
   if (!hasMenu) {
     return (
@@ -86,7 +86,8 @@ export function ClinicSwitcher({
   }
 
   return (
-    <div className="relative min-w-0">
+    // Phone: never squeezed below logo + caret (a squeezed pill spilled over its neighbours); from sm: the name may truncate.
+    <div className="relative shrink-0 sm:min-w-0 sm:shrink">
       <button
         ref={triggerRef}
         type="button"

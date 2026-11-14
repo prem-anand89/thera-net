@@ -445,7 +445,7 @@ export function Shell() {
                 4. The account trigger's name shows from desktop: only; the
                    dropdown repeats it anyway. */}
             <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 tab:gap-4">
-              <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
+              <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg max-[380px]:hidden">
                 <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
               </Link>
               {shouldShowDesktopNav(pathname) && (
@@ -477,7 +477,7 @@ export function Shell() {
                   ))}
                 </nav>
               )}
-              <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2 tab:gap-3">
+              <div className="ml-auto flex min-w-0 max-w-full items-center gap-1 min-[400px]:gap-1.5 sm:gap-2 tab:gap-3">
                 <ClinicSwitcher
                   clinic={clinic}
                   clinics={clinics ?? []}
