@@ -15,6 +15,8 @@ import { useClinic } from '@/app/clinicContext';
 import { PatientAddressLine } from './PatientAddressLine';
 import { PatientInvoicesList } from './PatientInvoicesList';
 import { PatientViewTabs, type PatientView } from './PatientViewTabs';
+import { HomeProgramTab } from '@/features/hep/HomeProgramTab';
+import { useHomeProgramDot } from '@/features/hep/useHomeProgramDot';
 import { invoicesForPatient } from '@/domain/patientInvoices';
 import { remindToPay } from '@/features/invoices/remindToPay';
 import { useVisitDetails } from '@/features/visits/visitDetails';
@@ -77,13 +79,13 @@ const NOTE_STATUS_PILL: Record<
  */
 export function PatientProfilePage() {
   const clinic = useClinic();
-  const { canBill, canCollectPayment, canViewClinicalNotes, canPrintNotes, isAdmin, invoicingOnPlan, invoiceRoleOk } =
+  const { canBill, canCollectPayment, canViewClinicalNotes, canPrintNotes, canUseExercises, isAdmin, invoicingOnPlan, invoiceRoleOk } =
     usePermissions();
   const { myTherapistId, isClinicWideView } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const { from: backTo, view: viewParam } = useSearch({ strict: false }) as {
     from?: PatientProfileBackTarget;
-    view?: 'invoices';
+    view?: 'invoices' | 'home-program';
   };
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
@@ -184,7 +186,8 @@ export function PatientProfilePage() {
   // In IP, if the hospital partner bills, the clinic does not bill stays or show invoice tabs.
   const ipCanBill = department !== 'ward' || canBillInpatientStay(clinic);
   const showInvoicesTab = invoicingOnPlan && invoiceRoleOk && ipCanBill;
-  const activeView: PatientView = showInvoicesTab && viewParam === 'invoices' ? 'invoices' : 'visits';
+  const activeView: PatientView = canUseExercises && viewParam === 'home-program' ? 'home-program' : showInvoicesTab && viewParam === 'invoices' ? 'invoices' : 'visits';
+  const homeProgramDot = useHomeProgramDot(patientId, canUseExercises);
   const supersededInvoiceIds = useMemo(
     () => new Set((invoices ?? []).map((i) => i.supersedesInvoiceId).filter((id): id is string => Boolean(id))),
     [invoices]
@@ -218,7 +221,7 @@ export function PatientProfilePage() {
       params: { patientId },
       search: {
         ...(backTo ? { from: backTo } : {}),
-        ...(next === 'invoices' ? { view: 'invoices' as const } : {}),
+        ...(next === 'invoices' ? { view: 'invoices' as const } : next === 'home-program' ? { view: 'home-program' as const } : {}),
       },
       replace: true,
     });
@@ -890,15 +893,20 @@ export function PatientProfilePage() {
             </section>
           )}
 
-          {showInvoicesTab && (
+          {(showInvoicesTab || canUseExercises) && (
             <PatientViewTabs
               active={activeView}
               visitCount={visitRows.length}
               invoiceCount={activeInvoiceCount}
+              showInvoices={showInvoicesTab}
+              showHomeProgram={canUseExercises}
+              homeProgramDot={homeProgramDot}
               onChange={setView}
             />
           )}
-          {activeView === 'invoices' ? (
+          {activeView === 'home-program' ? (
+            <HomeProgramTab patientId={patientId} />
+          ) : activeView === 'invoices' ? (
             <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
               <PatientInvoicesList
                 invoices={patientInvoices}

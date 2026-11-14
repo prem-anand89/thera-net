@@ -238,12 +238,12 @@ const patientProfileRoute = createRoute({
   // Where "← Back" should return to — set by whichever screen linked here
   // (Patients list, Workspace, Ledger) so it doesn't always land on one
   // fixed page regardless of where the visitor came from.
-  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget; view?: 'invoices' } => ({
+  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget; view?: 'invoices' | 'home-program' } => ({
     ...(PATIENT_PROFILE_BACK_TARGETS.includes(search.from as PatientProfileBackTarget)
       ? { from: search.from as PatientProfileBackTarget }
       : {}),
-    // 'invoices' opens the Invoices tab; anything else is the Visits tab.
-    ...(search.view === 'invoices' ? { view: 'invoices' as const } : {}),
+    // 'invoices' opens the Invoices tab, 'home-program' the Home program tab (clinical staff); anything else is the Visits tab.
+    ...(search.view === 'invoices' ? { view: 'invoices' as const } : search.view === 'home-program' ? { view: 'home-program' as const } : {}),
   }),
   component: PatientProfilePage,
 });
