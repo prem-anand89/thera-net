@@ -269,6 +269,17 @@ const visits: VisitRepo = {
     if (visit.invoiceId)
       throw new Error('This visit is on an issued invoice and cannot be deleted.');
     await putWithOutbox('visits', { ...visit, deleted: true });
+    // The money recorded against a deleted visit goes with it: payments have no "deleted" flag, so a row left behind
+    // would keep counting in the Daybook and the collected totals. The server does the same when the visit's delete
+    // arrives (`visits_remove_payments`), and its tombstones clear the other devices; this clears this one at once.
+    const gone = (await db.payments.where('visitId').equals(id).toArray()).map((p) => p.id);
+    if (gone.length) {
+      const ids = new Set(gone);
+      await db.transaction('rw', db.payments, db.outbox, async () => {
+        await db.payments.bulkDelete(gone);
+        await db.outbox.where('table').equals('payments').and((e) => ids.has(e.rowId)).delete();
+      });
+    }
   },
   async markUninvoiced(ids: UUID[]) {
     // The server released these rows inside void_invoice(); mirror it locally

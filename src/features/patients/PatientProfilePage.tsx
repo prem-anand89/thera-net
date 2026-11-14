@@ -1,5 +1,5 @@
 import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
-import { askConfirm } from '@/lib/notify';
+import { confirmAndDeleteVisit } from '@/features/visits/confirmDeleteVisit';
 import { useMemo, useState, useCallback } from 'react';
 import { BackLink } from '@/components/BackLink';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
@@ -462,16 +462,7 @@ export function PatientProfilePage() {
   );
 
   const handleVisitDelete = useCallback(async (visitId: string) => {
-    const ok = await askConfirm({ title: 'Delete this visit?', message: 'It is removed from the records.', confirmLabel: 'Delete visit', destructive: true });
-    if (!ok) return;
-    try {
-      const visit = await repos.visits.get(visitId);
-      if (visit && !visit.invoiceId) {
-        await repos.visits.softDelete(visitId);
-      }
-    } catch (e) {
-      console.error('Failed to delete visit:', e);
-    }
+    await confirmAndDeleteVisit(visitId);
   }, []);
 
   const toggleVisitSelection = useCallback((visitId: string) => {
