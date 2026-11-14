@@ -951,7 +951,7 @@ export function WorkspacePage() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3.5 sm:space-y-5">
       {visitLogged && <InstallAppBanner />}
       <FirstRunCards clinicId={clinic.id} isAdmin={canEditSettings} />
       <AppointmentDetailsPanel
@@ -1202,7 +1202,7 @@ export function WorkspacePage() {
               deptTherapists.length > 1 ? (
                 <select
                   aria-label="Filter by therapist"
-                  className={chipSelect}
+                  className={`${chipSelect} max-sm:!min-h-8 max-sm:!rounded-lg max-sm:!py-0.5 max-sm:!pl-2.5`}
                   style={chipSelectChevron}
                   value={workspaceMineOnly ? '' : scopedTherapistSelectId}
                   onChange={(e) => {
@@ -1225,7 +1225,7 @@ export function WorkspacePage() {
             <span className="text-xs text-[var(--muted)]">Showing</span>
             <select
               aria-label="Filter by therapist"
-              className={chipSelect}
+              className={`${chipSelect} max-sm:!min-h-8 max-sm:!rounded-lg max-sm:!py-0.5 max-sm:!pl-2.5`}
               style={chipSelectChevron}
               value={scopedTherapistSelectId}
               onChange={(e) => setSelectedTherapistId(e.target.value)}

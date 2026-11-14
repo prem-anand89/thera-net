@@ -15,7 +15,7 @@ export const inputCls =
  *  `<select>` can't take an SVG child, so the arrow has to be a
  *  background-image, applied via `style`, not a class). */
 export const chipSelect =
-  'min-h-9 shrink-0 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none';
+  'min-h-9 shrink-0 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] focus:outline-none focus-visible:border-[var(--teal)]';
 export const chipSelectChevron = {
   backgroundImage:
     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
@@ -151,8 +151,8 @@ export function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-      <div className={`mb-3 flex justify-between gap-2 ${subtitle ? 'items-start' : 'items-center'}`}>
+    <section id={id} className="scroll-mt-24 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+      <div className={`mb-2.5 flex justify-between sm:mb-3 gap-2 ${subtitle ? 'items-start' : 'items-center'}`}>
         <div>
           <div className="flex items-center gap-2">
             <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>

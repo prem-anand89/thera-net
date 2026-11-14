@@ -322,17 +322,20 @@ export function PatientsList() {
   }
 
   const selectCls =
-    'h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20';
+    'h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1.5 pl-3 pr-8 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:outline-none focus-visible:border-[var(--teal)] focus-visible:ring-2 focus-visible:ring-[var(--teal)]/20';
+
+  const periodSelectCls = `${selectCls} w-full min-w-0 truncate sm:w-auto`;
 
   return (
     <div className="space-y-4">
       {/* Redesigned toolbar anchored on FY + Month dropdowns (no duplicating preset strip).
           Desktop collapses onto one row; phones/narrow screens wrap period selectors above Search + Scope + Add. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Phones: year and month share one row (two equal columns) instead of one row each. */}
+        <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <select
             aria-label="Fiscal year"
-            className={selectCls}
+            className={periodSelectCls}
             style={chipSelectChevron}
             value={month === 'all' ? 'all' : month === 'custom' ? 'custom' : String(fyStartYear)}
             onChange={(e) => {
@@ -362,7 +365,7 @@ export function PatientsList() {
           {month !== 'custom' && month !== 'all' && (
             <select
               aria-label="Period within fiscal year"
-              className={selectCls}
+              className={periodSelectCls}
               style={chipSelectChevron}
               value={month}
               onChange={(e) => setMonth(e.target.value)}
@@ -392,7 +395,7 @@ export function PatientsList() {
           {hasActiveFilters && (
             <button
               type="button"
-              className="text-xs font-medium text-[var(--teal)] hover:underline"
+              className="col-span-2 justify-self-start text-xs font-medium text-[var(--teal)] hover:underline sm:col-auto"
               onClick={() => {
                 setFyStartYear(currentFy.startYear);
                 setMonth(defaultMonth);
@@ -452,7 +455,7 @@ export function PatientsList() {
           {isClinicWideView && seenByOptions.length > 1 && (
             <select
               aria-label="Seen by"
-              className={selectCls}
+              className={`${selectCls} min-w-0 flex-1 truncate sm:flex-none`}
               style={chipSelectChevron}
               value={seenBy}
               onChange={(e) => {
