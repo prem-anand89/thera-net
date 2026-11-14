@@ -6,7 +6,7 @@ import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
 import { appointmentMinutes, assignLanes, blockGeometry, PLACE_STEP_MINUTES, lengthLabel, generateScheduleSlots, minutesLabel, minutesOfDay, withinWorking, type ClosedDayInfo, type Interval } from '@/domain/schedule';
 import { CLOSED_HATCH_STYLE, appointmentFill } from './scheduleColors';
 import { patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
-import { BlockFlagBadges } from './BlockFlagBadges';
+import { BlockFlagBadges, showsFlagDots } from './BlockFlagBadges';
 import { HomeGlyph } from './LocationBadge';
 import { WideBlock } from './WideBlock';
 import { RequestGhostBlock, type RequestGhost } from './RequestGhostBlock';
@@ -405,7 +405,7 @@ export function DayColumn({
               )
             ) : !minimalBlocks ? (
               <>
-                {density !== 'compact' && <BlockFlagBadges flags={flags} />}
+                {density !== 'compact' && showsFlagDots(appointment) && <BlockFlagBadges flags={flags} />}
                 {compact ? (
                   <span className="block truncate">
                     {style.mark && <span aria-hidden>{style.mark} </span>}

@@ -494,6 +494,19 @@ describe('dashboardService.duesSummary', () => {
   });
 });
 
+describe('dashboardService.patientIdsWithDues', () => {
+  it('lists only patients with money still owed, by the same rule as the Dues tile', async () => {
+    const fake = makeFakeRepos();
+    fake.visits.set('v1', baseVisit('v1', { patientId: 'p-owes', actualBillPaise: rs(600) }));
+    fake.visits.set('v2', baseVisit('v2', { patientId: 'p-paid', actualBillPaise: rs(500) }));
+    fake.payments.set('pay-2', { id: 'pay-2', clinicId: 'clinic-1', visitId: 'v2', amountPaise: rs(500), method: 'upi', receivedDate: '2026-06-01', notes: null, updatedAt: '' });
+    fake.visits.set('v3', baseVisit('v3', { patientId: 'p-deleted', actualBillPaise: rs(900), deleted: true }));
+    const svc = createDashboardService(fake.repos);
+    expect([...(await svc.patientIdsWithDues('clinic-1'))]).toEqual(['p-owes']);
+    expect((await svc.duesSummary('clinic-1')).patientCount).toBe(1);
+  });
+});
+
 describe('dashboardService money stays with the primary on an assisted visit', () => {
   it('a visit\'s bill is counted exactly once across the assistant and the primary', async () => {
     const fake = makeFakeRepos();

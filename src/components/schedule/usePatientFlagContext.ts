@@ -9,22 +9,22 @@ import type { Appointment } from '@/domain/types';
 /**
  * Everything `patientFlags` / `appointmentReason` need, loaded once per
  * screen from the local (Dexie) store: visits (new patient, last condition),
- * open packages, outstanding invoices (balance due, matched by patient ID),
+ * open packages, patients with money still owed (balance due, the same per-visit rule as the Workspace Dues tile),
  * booking-request notes, and no-shows from the appointments already on
  * screen. Returns undefined until loaded, so flags simply appear.
  */
 export function usePatientFlagContext(clinicId: string, appointments: Appointment[]): PatientFlagContext | undefined {
   const { department } = useDepartment();
   const data = useLiveQuery(async () => {
-    const [allVisits, patients, packages, outstanding, requests] = await Promise.all([
+    const [allVisits, patients, packages, patientIdsWithDues, requests] = await Promise.all([
       repos.visits.list({ clinicId }),
       repos.patients.list(clinicId),
       dashboardService.openPackages(clinicId, department),
-      dashboardService.outstandingInvoices(clinicId, department),
+      dashboardService.patientIdsWithDues(clinicId, department),
       repos.appointmentRequests.listByClinic(clinicId),
     ]);
     const visits = allVisits.filter((v) => inDepartment(department, v));
-    return { visits, patients, packages, outstanding, requests };
+    return { visits, patients, packages, patientIdsWithDues, requests };
   }, [clinicId, department]);
 
   const noShows = useMemo(() => countNoShows(appointments), [appointments]);
@@ -43,12 +43,7 @@ export function usePatientFlagContext(clinicId: string, appointments: Appointmen
       const condition = patient.primaryCondition?.trim() || latestCondition.get(patient.id);
       if (condition) conditionByPatient.set(patient.id, condition);
     }
-    const idByMrno = new Map(data.patients.map((p) => [p.mrno, p.id]));
-    const balanceDue = new Set<string>();
-    for (const row of data.outstanding.rows) {
-      const id = idByMrno.get(row.mrno);
-      if (id) balanceDue.add(id);
-    }
+    const balanceDue = data.patientIdsWithDues;
     const packages = new Map<string, { logged: number; total: number }>();
     for (const pkg of data.packages) {
       if (!packages.has(pkg.patientId)) packages.set(pkg.patientId, { logged: pkg.sessionsLogged, total: pkg.packageTotal });

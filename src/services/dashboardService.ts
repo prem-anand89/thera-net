@@ -342,6 +342,37 @@ function lastNMonths(n: number, from = new Date()): FyMonth[] {
 export function createDashboardService(repos: Repos) {
   const reportService = createReportService(repos);
 
+  async function dueVisits(
+    clinicId: UUID,
+    therapistId?: UUID,
+    department?: Department
+  ): Promise<{ patientId: UUID; duePaise: Paise }[]> {
+    const [visits, invoicePayments, payments] = await Promise.all([
+      repos.visits.list({ clinicId, therapistId }),
+      repos.invoicePayments.list(clinicId),
+      repos.payments.list(clinicId),
+    ]);
+    const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+    const paidByVisitId = new Map<UUID, Paise>();
+    for (const p of payments) {
+      paidByVisitId.set(p.visitId, (paidByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    const out: { patientId: UUID; duePaise: Paise }[] = [];
+    for (const v of department ? inDepartmentList(department, visits) : visits) {
+      if (v.deleted) continue;
+      const collected = paidByVisitId.get(v.id) ?? 0;
+      const state = computeVisitPaymentState(
+        v.actualBillPaise,
+        v.invoiceId,
+        collected,
+        v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+      );
+      if (!hasDue(state)) continue;
+      out.push({ patientId: v.patientId, duePaise: visitDuePaise(state, v.actualBillPaise, collected) });
+    }
+    return out;
+  }
+
   return {
     /** Either a rolling window of `months` calendar months (default 6), or
      *  an explicit list of months (e.g. a fiscal year via monthsOfFiscalYear,
@@ -464,35 +495,20 @@ export function createDashboardService(repos: Repos) {
      * or one therapist's own visits when `therapistId` is given.
      */
     async duesSummary(clinicId: UUID, therapistId?: UUID, department?: Department): Promise<DuesSummary> {
-      const [visits, invoicePayments, payments] = await Promise.all([
-        repos.visits.list({ clinicId, therapistId }),
-        repos.invoicePayments.list(clinicId),
-        repos.payments.list(clinicId),
-      ]);
-      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
-      const paidByVisitId = new Map<UUID, Paise>();
-      for (const p of payments) {
-        paidByVisitId.set(p.visitId, (paidByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
-      }
-      let totalPaise = 0;
-      let visitCount = 0;
-      const patients = new Set<UUID>();
-      const candidateVisits = department ? inDepartmentList(department, visits) : visits;
-      for (const v of candidateVisits) {
-        if (v.deleted) continue;
-        const collected = paidByVisitId.get(v.id) ?? 0;
-        const state = computeVisitPaymentState(
-          v.actualBillPaise,
-          v.invoiceId,
-          collected,
-          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
-        );
-        if (!hasDue(state)) continue;
-        totalPaise += visitDuePaise(state, v.actualBillPaise, collected);
-        visitCount += 1;
-        patients.add(v.patientId);
-      }
-      return { totalPaise, visitCount, patientCount: patients.size };
+      const due = await dueVisits(clinicId, therapistId, department);
+      return {
+        totalPaise: due.reduce((sum, d) => sum + d.duePaise, 0),
+        visitCount: due.length,
+        patientCount: new Set(due.map((d) => d.patientId)).size,
+      };
+    },
+
+    /**
+     * Patients who still owe something, by the same per-visit rule as `duesSummary` (so it always agrees with the
+     * Workspace Dues tile and the Ledger's Not collected filter) — what the calendar's "Balance due" dot uses.
+     */
+    async patientIdsWithDues(clinicId: UUID, department?: Department): Promise<Set<UUID>> {
+      return new Set((await dueVisits(clinicId, undefined, department)).map((d) => d.patientId));
     },
 
     async outstandingInvoices(clinicId: UUID, department?: Department): Promise<OutstandingSummary> {

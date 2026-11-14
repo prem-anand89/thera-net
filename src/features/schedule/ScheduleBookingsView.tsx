@@ -61,6 +61,7 @@ import { PendingRequestsBar } from '@/components/schedule/PendingRequestsBar';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
+import { FlagLegend } from '@/components/schedule/BlockFlagBadges';
 import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { appointmentsOutsideHours } from './hoursConflicts';
 import {
@@ -1426,6 +1427,7 @@ export function ScheduleBookingsView({
                 workingFor={(therapistId) => workingFor(therapistId, date)}
               />
             )}
+            {flagContext && <FlagLegend />}
           </div>
         </div>
       )}
