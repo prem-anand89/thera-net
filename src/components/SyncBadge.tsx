@@ -4,7 +4,12 @@ import { db, type OutboxEntry } from '@/lib/db';
 import { syncStatus, isPermanentFailure } from '@/sync/status';
 import { syncEngine, NETWORK_UNREACHABLE } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
-import { formatLastSynced, isSyncStale, syncFailureHeadline, syncRecordLabel } from '@/domain/syncCopy';
+import {
+  formatLastSynced,
+  isSyncStale,
+  syncFailureHeadline,
+  syncRecordLabel,
+} from '@/domain/syncCopy';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { isMrnoCollision } from '@/domain/walkInMrno';
@@ -61,8 +66,13 @@ export function SyncBadge() {
   const [discarding, setDiscarding] = useState<OutboxEntry | null>(null);
   const failed = useLiveQuery(() => db.outbox.filter((e) => !!e.error).toArray(), []) ?? [];
   const now = useMinuteClock();
-  const neverSynced = status.online && !status.syncing && status.lastSuccessAt === undefined && now - APP_STARTED_AT > NEVER_SYNCED_AFTER_MS;
-  const stale = status.online && !status.error && (isSyncStale(status.lastSuccessAt, now) || neverSynced);
+  const neverSynced =
+    status.online &&
+    !status.syncing &&
+    status.lastSuccessAt === undefined &&
+    now - APP_STARTED_AT > NEVER_SYNCED_AFTER_MS;
+  const stale =
+    status.online && !status.error && (isSyncStale(status.lastSuccessAt, now) || neverSynced);
   const cantReach = status.error === NETWORK_UNREACHABLE;
   const lastSynced = formatLastSynced(status.lastSuccessAt, now);
 
@@ -100,7 +110,16 @@ export function SyncBadge() {
   // (offline, syncing, pending, failed) is the badge's whole reason to
   // exist, so it stays expanded everywhere, phone included, rather than
   // making someone tap a dot to discover their changes aren't syncing.
-  const quiet = status.online && !status.syncing && failed.length === 0 && pending === 0 && !status.error && !stale;
+  const quiet =
+    status.online &&
+    !status.syncing &&
+    failed.length === 0 &&
+    pending === 0 &&
+    !status.error &&
+    !stale;
+  // Whenever the badge has something to say (including a routine "Syncing…") it widens; on a phone the header
+  // then hides its bell and logo (see `data-sync-expanded` in Shell) and brings them back once it is a dot again.
+  const expanded = !quiet;
 
   return (
     <div className="relative">
@@ -109,7 +128,8 @@ export function SyncBadge() {
         onClick={() => setOpen((o) => !o)}
         title={status.error ? `${status.error}. ${lastSynced}` : lastSynced}
         aria-label={`Sync: ${label}`}
-        className={`flex min-h-11 items-center gap-2 rounded-full text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'min-w-11 justify-center px-2' : 'border border-[var(--border)] bg-[var(--surface)] px-3 py-1'}`}
+        data-sync-expanded={expanded}
+        className={`flex min-h-11 items-center gap-2 rounded-full text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'min-w-9 justify-center px-1.5' : 'z-10 border border-[var(--border)] bg-[var(--surface)] px-3 py-1 max-sm:absolute max-sm:right-0 max-sm:top-1/2 max-sm:max-w-[10rem] max-sm:-translate-y-1/2 max-sm:gap-1.5 max-sm:px-2.5'}`}
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
         {/* Quiet: text shows tab:-and-up only, same room-sharing as the
@@ -120,7 +140,7 @@ export function SyncBadge() {
         {/* Quiet (synced): just the green dot at every width — the label is in
             the tooltip / aria-label. Anything else expands with text so it's
             impossible to miss. */}
-        <span className={quiet ? 'sr-only' : 'inline'}>{label}</span>
+        <span className={quiet ? 'sr-only' : 'truncate'}>{label}</span>
       </button>
 
       {open && (
@@ -218,11 +238,12 @@ function DiscardChangeDialog({ entry, onClose }: { entry: OutboxEntry; onClose: 
           {permanent ? `Dismiss this ${label}?` : `Discard this ${label}?`}
         </h2>
         <p className="text-sm text-[var(--muted)]">
-          {entry.table === 'patients' && isMrnoCollision({ code: entry.errorCode, message: entry.error })
+          {entry.table === 'patients' &&
+          isMrnoCollision({ code: entry.errorCode, message: entry.error })
             ? "This patient's ID is already used by another record, so it has not synced. Edit the patient's ID and it will sync. Dismissing keeps the patient on this device only."
             : permanent
-            ? 'The server rejected this change, so this device was restored to the server\'s version of the record. Dismissing just clears the notice — it does not change any data.'
-            : 'This device will stop trying to save this change. Your local copy stays as it is, but other devices will not receive it unless you edit that record again.'}
+              ? "The server rejected this change, so this device was restored to the server's version of the record. Dismissing just clears the notice — it does not change any data."
+              : 'This device will stop trying to save this change. Your local copy stays as it is, but other devices will not receive it unless you edit that record again.'}
         </p>
         <div className="flex justify-end gap-2">
           <button type="button" className={btnSecondary} onClick={onClose}>

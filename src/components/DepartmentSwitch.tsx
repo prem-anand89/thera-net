@@ -42,7 +42,16 @@ export function DepartmentSwitch() {
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  if (!canSwitch) return null;
+  // One place only: OP needs no mention (it is the default); any other place shows as a plain badge, so staff
+  // still see where they work. The switch itself appears only when there is a choice (2+ places).
+  if (!canSwitch) {
+    if (department === 'clinic') return null;
+    return (
+      <span className="flex shrink-0 items-center" title={DEPARTMENT_NAMES[department]}>
+        <DepartmentPill department={department} />
+      </span>
+    );
+  }
 
   function toggleMenu() {
     if (!open) {

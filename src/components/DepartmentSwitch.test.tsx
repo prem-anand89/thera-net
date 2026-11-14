@@ -27,6 +27,17 @@ describe('DepartmentSwitch', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('shows a plain badge (no switch) when the only place is not OP', () => {
+    const homeOnly = { id: 'c4', careLocations: ['home'] } as unknown as Clinic;
+    render(
+      <DepartmentProvider clinic={homeOnly} userId="u1" role="admin" departments={null}>
+        <DepartmentSwitch />
+      </DepartmentProvider>
+    );
+    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('renders segmented toggle for desktop when clinic has 2 places', () => {
     render(
       <DepartmentProvider clinic={twoPlaceClinic} userId="u1" role="admin" departments={null}>

@@ -444,8 +444,9 @@ export function Shell() {
                    expands with text at every width when there is.
                 4. The account trigger's name shows from desktop: only; the
                    dropdown repeats it anyway. */}
-            <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 tab:gap-4">
-              <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg max-[380px]:hidden">
+            <div className="group/hdr mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 tab:gap-4">
+              {/* The logo shows on every phone that has the room; it steps aside only below 340px. */}
+              <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg max-[340px]:hidden">
                 <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
               </Link>
               {shouldShowDesktopNav(pathname) && (
@@ -486,7 +487,12 @@ export function Shell() {
                 />
                 <DepartmentSwitch />
                 <div className="flex shrink-0 items-center gap-1 tab:gap-2">
-                  {(role === 'admin' || role === 'front_desk') && (
+                  {/* Phones: the bell and the sync badge share one fixed-width slot. While the badge has a message it
+                      overlays the bell (which goes invisible but keeps its space), so the clinic, department and
+                      account items never move. */}
+                  <div className="relative flex shrink-0 items-center justify-end max-sm:w-[5.5rem]">
+                  <span className="flex items-center max-sm:group-has-[[data-sync-expanded=true]]/hdr:invisible">
+                    {(role === 'admin' || role === 'front_desk') && (
                     <NotificationBell
                       clinicId={clinic.id}
                       userId={session?.user?.id}
@@ -503,7 +509,9 @@ export function Shell() {
                       therapistId={myTherapistId}
                     />
                   )}
+                  </span>
                   <SyncBadge />
+                  </div>
                   <AccountMenu
                     displayName={displayName}
                     fallbackName={fallbackName}
@@ -522,7 +530,7 @@ export function Shell() {
           <UpdateBanner />
           <SyncStatusBanners />
           <main
-            className={`mx-auto max-w-7xl px-[max(1rem,env(safe-area-inset-left))] py-6 ${shouldShowPhoneBottomNav(pathname)
+            className={`mx-auto max-w-7xl px-[max(1rem,env(safe-area-inset-left))] pb-6 pt-3 sm:pt-6 ${shouldShowPhoneBottomNav(pathname)
               ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
               : 'pb-6'
               }`}
@@ -535,7 +543,7 @@ export function Shell() {
           </main>
           {shouldShowPhoneBottomNav(pathname) && (
             <nav
-              className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
+              className="no-print fixed inset-x-0 bottom-0 z-10 flex transform-gpu items-end [backface-visibility:hidden] [will-change:transform] border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
               aria-label="Main"
             >
               <PhoneTab
