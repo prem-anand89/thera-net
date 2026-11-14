@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_HEP_PHOTO_BYTES, NO_EDIT, boxFromDrag, boxInCrop, pointOnPicture, rotateBox90, rotateEdit, cropRect, formatBytes, isEdited, normBoxToPixels, outputSize, panCentre, rotatedSize, validatePictureFile } from './hepPhoto';
+import { DEFAULT_BLUR_STRENGTH, MAX_HEP_PHOTO_BYTES, NO_EDIT, blurLook, boxFromDrag, boxInCrop, pointOnPicture, rotateBox90, rotateEdit, cropRect, formatBytes, isEdited, normBoxToPixels, outputSize, panCentre, rotatedSize, validatePictureFile } from './hepPhoto';
 
 const file = (name: string, type: string, size: number) => ({ name, type, size });
 
@@ -109,5 +109,22 @@ describe('blur boxes follow the picture', () => {
     const back = pointOnPicture(inCrop.x, inCrop.y, 4000, 3000, crop);
     expect(back.x).toBeCloseTo(0.5); expect(back.y).toBeCloseTo(0.5);
     expect(boxInCrop({ x: 0, y: 0, w: 0.1, h: 0.1 }, 4000, 3000, crop).x).toBeLessThan(0); // cut off by the crop
+  });
+});
+
+describe('blur strength', () => {
+  it('is light and partly see-through by default, and scales with the picture so preview and saved match', () => {
+    expect(NO_EDIT.blurStrength).toBe(DEFAULT_BLUR_STRENGTH);
+    const preview = blurLook(DEFAULT_BLUR_STRENGTH, 480);
+    const saved = blurLook(DEFAULT_BLUR_STRENGTH, 1280);
+    expect(preview.opacity).toBeLessThan(1);
+    expect(preview.radius / 480).toBeCloseTo(saved.radius / 1280, 2);
+  });
+
+  it('gets stronger and fully opaque at the top of the scale, and clamps out-of-range values', () => {
+    expect(blurLook(5, 1000).radius).toBeGreaterThan(blurLook(1, 1000).radius * 4);
+    expect(blurLook(5, 1000).opacity).toBe(1);
+    expect(blurLook(9, 1000)).toEqual(blurLook(5, 1000));
+    expect(blurLook(0, 1000)).toEqual(blurLook(1, 1000));
   });
 });

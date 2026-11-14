@@ -20,7 +20,7 @@ import { itemProgress, itemProgressLine } from './itemProgress';
 import { MessagePatientSheet } from './MessagePatientSheet';
 import { PrintSheet } from './PrintSheet';
 import { ProgramSheet } from './ProgramSheet';
-import { buildProgramRow } from './programRows';
+import { EXTEND_DAYS, buildProgramRow } from './programRows';
 import { clinicToday, useOnline } from './useHepData';
 
 const WINDOW_DAYS = 30;
@@ -296,7 +296,7 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
       <ConfirmDialog open={confirmStop} title="Stop sharing?" message="The patient's link stops working at once. You can start sharing again later with a new link." confirmLabel="Stop sharing" destructive onConfirm={() => { setConfirmStop(false); void act(() => hepService.revokeLink(patientId)); }} onCancel={() => setConfirmStop(false)} />
       <SheetDialog open={extending} title="Extend this program" onClose={() => setExtending(false)} footer={<Button type="button" className={btnSecondary} onClick={() => setExtending(false)}>Cancel</Button>}>
         <p className="mb-3 text-sm text-[var(--muted)]">Keep “{prog?.title}” going. Add:</p>
-        <div className="flex flex-wrap gap-2">{[7, 14, 28].map((n) => <Button key={n} type="button" className={btnPrimary} onClick={() => { setExtending(false); if (prog) void act(() => hepService.extendProgram(prog.id, n)); }}>{n} days</Button>)}</div>
+        <div className="flex flex-wrap gap-2">{EXTEND_DAYS.map((n) => <Button key={n} type="button" className={btnPrimary} onClick={() => { setExtending(false); if (prog) void act(() => hepService.extendProgram(prog.id, n)); }}>{n} days</Button>)}</div>
       </SheetDialog>
       <SheetDialog open={templateName !== null} title="Save as template" onClose={() => setTemplateName(null)} footer={<><Button type="button" className={btnSecondary} onClick={() => setTemplateName(null)}>Cancel</Button><Button type="button" className={btnPrimary} onClick={() => { const name = (templateName ?? '').trim(); setTemplateName(null); if (prog && name) void act(() => hepService.saveProgramAsTemplate(prog.id, name)); }}>Save</Button></>}>
         <label className="block text-sm text-[var(--ink)]">Template name (staff only)<input className={`${inputCls} mt-1`} value={templateName ?? ''} maxLength={80} onChange={(e) => setTemplateName(e.target.value)} /></label>

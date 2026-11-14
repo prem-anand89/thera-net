@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { Button } from '@/components/Button';
 import { btnSecondary } from '@/components/ui';
 import { addDaysISO } from '@/domain/hep';
-import { hepService } from '@/services/hepService';
+import { hepService, type ProgramBundle } from '@/services/hepService';
 import { ProgramSheet } from './ProgramSheet';
 import { buildProgramRow, type ProgramRow } from './programRows';
 import { clinicToday, useOnline } from './useHepData';
@@ -18,6 +18,7 @@ export function HomeProgramNoteLine({ patientId, startDate }: { patientId: strin
   const { canUseExercises } = usePermissions();
   const online = useOnline();
   const [row, setRow] = useState<ProgramRow | null>(null);
+  const [current, setCurrent] = useState<ProgramBundle | null>(null);
   const [open, setOpen] = useState(false);
   const [reload, setReload] = useState(0);
 
@@ -27,8 +28,13 @@ export function HomeProgramNoteLine({ patientId, startDate }: { patientId: strin
     const today = clinicToday(clinic);
     const windowStart = addDaysISO(today, -14);
     hepService.listPatientPrograms(patientId, windowStart)
-      .then((list) => { const cur = list.find((b) => b.program.status !== 'completed'); if (live) setRow(cur ? buildProgramRow(cur, { today, windowStart }) : null); })
-      .catch(() => { if (live) setRow(null); });
+      .then((list) => {
+        const cur = list.find((b) => b.program.status !== 'completed') ?? null;
+        if (!live) return;
+        setCurrent(cur);
+        setRow(cur ? buildProgramRow(cur, { today, windowStart }) : null);
+      })
+      .catch(() => { if (live) { setRow(null); setCurrent(null); } });
     return () => { live = false; };
   }, [patientId, canUseExercises, online, clinic, reload]);
 
@@ -39,8 +45,10 @@ export function HomeProgramNoteLine({ patientId, startDate }: { patientId: strin
         {row ? <>Digital program: {row.title}, {row.dayLabel.toLowerCase()}{row.habitPercent != null ? `, ${row.habitPercent}%` : ''}</> : 'No digital program yet.'}
       </span>
       {row && <Link to="/patients/$patientId" params={{ patientId }} search={{ view: 'home-program' }} className="text-[var(--teal)] hover:underline">Open Home program</Link>}
-      <Button type="button" className={btnSecondary} disabled={!online} onClick={() => setOpen(true)}>Home program</Button>
-      <ProgramSheet open={open} mode="new" patientId={patientId} startDate={startDate ?? undefined} onClose={() => setOpen(false)} onSaved={() => setReload((n) => n + 1)} />
+      <Button type="button" className={btnSecondary} disabled={!online} onClick={() => setOpen(true)}>{current ? 'Edit home program' : 'Home program'}</Button>
+      {current
+        ? <ProgramSheet open={open} mode="edit" bundle={current} onClose={() => setOpen(false)} onSaved={() => setReload((n) => n + 1)} />
+        : <ProgramSheet open={open} mode="new" patientId={patientId} startDate={startDate ?? undefined} onClose={() => setOpen(false)} onSaved={() => setReload((n) => n + 1)} />}
     </div>
   );
 }

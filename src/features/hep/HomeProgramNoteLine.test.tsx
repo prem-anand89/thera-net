@@ -42,13 +42,23 @@ describe('HomeProgramNoteLine', () => {
     expect(screen.queryByRole('link', { name: 'Open Home program' })).toBeNull();
   });
 
-  it('the Home program button opens the sheet for this patient starting on the visit date, and closing it changes nothing', async () => {
+  it('with no current program, Home program opens a new program for this patient starting on the visit date, and closing it changes nothing', async () => {
+    listPatientPrograms.mockResolvedValue([]);
     const user = userEvent.setup();
     renderLine('2026-11-10');
-    await user.click(await screen.findByRole('button', { name: 'Home program' }));
+    await screen.findByText('No digital program yet.');
+    await user.click(screen.getByRole('button', { name: 'Home program' }));
     expect(screen.getByRole('dialog', { name: 'program sheet' })).toHaveTextContent('new pt1 starts 2026-11-10');
     await user.click(screen.getByRole('button', { name: 'close sheet' }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('with a current program, the button edits it (where the progress chips are)', async () => {
+    const user = userEvent.setup();
+    renderLine('2026-11-10');
+    await screen.findByText(/Digital program: Right knee/);
+    await user.click(screen.getByRole('button', { name: 'Edit home program' }));
+    expect(screen.getByRole('dialog', { name: 'program sheet' })).toHaveTextContent(/^edit/);
   });
 
   it('is not there at all for front desk', () => {

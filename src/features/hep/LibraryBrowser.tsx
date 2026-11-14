@@ -2,7 +2,7 @@
 // type, List | Grid), the active-filter chips, and the results grouped by region then type. Used by the Library tab and
 // by the exercise picker, so both look and filter the same way. It shows what the filters leave; the parent decides
 // what a tap does (open the form, or tick the exercise).
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChipCount, chipSelect, chipSelectChevron, filterChip, inputCls, segOption, segTrack } from '@/components/ui';
 import {
   EXERCISE_PHASES,
@@ -69,6 +69,16 @@ function Thumb({ ex, url, size }: { ex: Exercise; url: string | undefined; size:
 export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = false, onActivate, selected, disabledIds, onToggleFavorite, emptyState, renderNoMatches }: LibraryBrowserProps) {
   const [filter, setFilter] = useState<LibraryFilter>(EMPTY_LIBRARY_FILTER);
   const [view, setView] = useState<'list' | 'grid'>('list');
+  const equipmentMenu = useRef<HTMLDetailsElement>(null);
+  // A <details> menu does not close by itself when you click elsewhere.
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      const menu = equipmentMenu.current;
+      if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, []);
   const [shown, setShown] = useState(PAGE);
   const [hideEmpty, setHideEmpty] = useState(false);
 
@@ -147,7 +157,7 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, showArchived = fa
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       <input type="search" aria-label="Search exercises" placeholder="Search exercises" className={`${inputCls} min-w-40 flex-1`} value={filter.query} onChange={(e) => set({ query: e.target.value })} />
-      <details className="relative">
+      <details ref={equipmentMenu} className="relative" onKeyDown={(e) => { if (e.key === 'Escape' && equipmentMenu.current) equipmentMenu.current.open = false; }}>
         <summary className={`${chipSelect} flex cursor-pointer list-none items-center`} style={chipSelectChevron}>Equipment{filter.equipment.length ? ` (${filter.equipment.length})` : ''}</summary>
         <div className="absolute right-0 z-10 mt-1 max-h-64 w-64 space-y-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
           {['None', ...equipmentNames].map((name) => (

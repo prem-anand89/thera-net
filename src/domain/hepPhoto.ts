@@ -55,9 +55,28 @@ export interface PhotoEdit {
   cy: number;
   rotation: 0 | 90 | 180 | 270;
   blur: NormBox[];
+  /** How strong the blur is, 1 (light, partly see-through) to 5 (strong, fully hidden). */
+  blurStrength: number;
 }
 
-export const NO_EDIT: PhotoEdit = { shape: 'original', zoom: 1, cx: 0.5, cy: 0.5, rotation: 0, blur: [] };
+export const BLUR_STRENGTH_MIN = 1;
+export const BLUR_STRENGTH_MAX = 5;
+/** Light by default: enough to make a face unrecognisable in a small exercise picture without a heavy grey patch. */
+export const DEFAULT_BLUR_STRENGTH = 2;
+export const BLUR_STRENGTH_LABELS = ['Very light', 'Light', 'Medium', 'Strong', 'Very strong'] as const;
+
+/**
+ * The blur radius (in pixels) and how opaque the blurred patch is, for a strength and a picture's longest side.
+ * Both the preview and the saved picture use this, so what is shown is what is saved at any size.
+ */
+export function blurLook(strength: number, longSide: number): { radius: number; opacity: number } {
+  const s = Math.min(BLUR_STRENGTH_MAX, Math.max(BLUR_STRENGTH_MIN, Math.round(strength)));
+  const fraction = [0.004, 0.007, 0.011, 0.016, 0.024][s - 1];
+  const opacity = [0.6, 0.75, 0.9, 1, 1][s - 1];
+  return { radius: Math.max(1, Math.round(longSide * fraction)), opacity };
+}
+
+export const NO_EDIT: PhotoEdit = { shape: 'original', zoom: 1, cx: 0.5, cy: 0.5, rotation: 0, blur: [], blurStrength: DEFAULT_BLUR_STRENGTH };
 
 export function rotatedSize(w: number, h: number, rotation: PhotoEdit['rotation']): { w: number; h: number } {
   return rotation === 90 || rotation === 270 ? { w: h, h: w } : { w, h };

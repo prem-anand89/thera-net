@@ -217,7 +217,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
   function duplicate() {
     setId(crypto.randomUUID());
-    setTitle((t) => `${t} (copy)`);
+    setTitle((t) => `${t} (progression)`);
     // The copy keeps the same pictures; it is a new exercise from here on.
     setError(null);
     setUsage(null);

@@ -96,7 +96,8 @@ describe('HandOverPanel', () => {
     const user = userEvent.setup();
     renderPanel({ pin: null });
     expect(screen.getByText(/already has a PIN/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show PIN on screen' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Show PIN on screen' })).toBeNull();
+    expect(screen.getByText(/uses the PIN they already have/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reset PIN…' }));
     expect(resetPin).not.toHaveBeenCalled();
     await user.click(within(screen.getByRole('dialog', { name: 'Reset the PIN?' })).getByRole('button', { name: 'Reset PIN' }));

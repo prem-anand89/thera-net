@@ -2,7 +2,7 @@
 // made outside the app), make a small thumbnail for lists, and optionally blur a face. Uses the same
 // createImageBitmap + <canvas> approach as resizeImage.ts. No secrets here; uploads go through hep-media's signed URLs.
 
-import { MAX_HEP_GIF_BYTES, boxInCrop, cropRect, normBoxToPixels, outputSize, rotatedSize, type PhotoEdit } from '@/domain/hepPhoto';
+import { DEFAULT_BLUR_STRENGTH, MAX_HEP_GIF_BYTES, blurLook, boxInCrop, cropRect, normBoxToPixels, outputSize, rotatedSize, type PhotoEdit } from '@/domain/hepPhoto';
 
 /** A GIF is made outside the app and only passes through: at most 1 MB (amendment 76). */
 export { MAX_HEP_GIF_BYTES };
@@ -22,7 +22,7 @@ export interface BlurBox {
  * Blurs a rectangle of the canvas in place, kept inside the canvas. A zero-area or fully outside box does nothing.
  * The default 8 px keeps a face unrecognisable without a blocky look.
  */
-export function applySoftFaceBlur(ctx: CanvasRenderingContext2D, box: BlurBox, blurPx = 8): void {
+export function applySoftFaceBlur(ctx: CanvasRenderingContext2D, box: BlurBox, blurPx = 8, opacity = 1): void {
   const canvasW = ctx.canvas.width;
   const canvasH = ctx.canvas.height;
   const x = Math.max(0, Math.min(canvasW, box.x));
@@ -37,6 +37,7 @@ export function applySoftFaceBlur(ctx: CanvasRenderingContext2D, box: BlurBox, b
   ctx.rect(x, y, width, height);
   ctx.clip();
   ctx.filter = `blur(${Math.max(1, blurPx)}px)`;
+  ctx.globalAlpha = Math.min(1, Math.max(0, opacity));
   ctx.drawImage(ctx.canvas, 0, 0);
   ctx.restore();
 }
@@ -138,8 +139,8 @@ export async function renderEditedPhoto(source: Blob, edit: PhotoEdit, maxDimens
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas not supported');
     ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
-    const blurPx = Math.max(8, Math.round(Math.max(width, height) / 90));
-    for (const box of edit.blur) applySoftFaceBlur(ctx, normBoxToPixels(boxInCrop(box, w, h, { sx, sy, sw, sh }), width, height), blurPx);
+    const look = blurLook(edit.blurStrength ?? DEFAULT_BLUR_STRENGTH, Math.max(width, height));
+    for (const box of edit.blur) applySoftFaceBlur(ctx, normBoxToPixels(boxInCrop(box, w, h, { sx, sy, sw, sh }), width, height), look.radius, look.opacity);
     return await encodeSmall(canvas, quality);
   } finally {
     bitmap.close();

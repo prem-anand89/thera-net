@@ -139,7 +139,7 @@ describe('renderEditedPhoto', () => {
     expect([made[1].width, made[1].height]).toEqual([960, 1280]); // the saved picture
   });
 
-  it('blurs each box with a filter scaled to the picture, and nothing else', async () => {
+  it('blurs each box with a filter scaled to the picture (light by default), and nothing else', async () => {
     const filters: string[] = [];
     const { made } = stubBrowser({ width: 1000, height: 1000 });
     const original = (globalThis as unknown as { document: { createElement: () => { getContext: () => { filter: string } } } }).document.createElement;
@@ -150,7 +150,7 @@ describe('renderEditedPhoto', () => {
       return el;
     };
     await renderEditedPhoto(new Blob(['x']), { ...NO_EDIT, blur: [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, { x: 0.5, y: 0.5, w: 0.3, h: 0.3 }] });
-    expect(filters.filter((f) => f.startsWith('blur'))).toEqual(['blur(11px)', 'blur(11px)']);
+    expect(filters.filter((f) => f.startsWith('blur'))).toEqual(['blur(7px)', 'blur(7px)']);
     expect(made.length).toBeGreaterThan(0);
   });
 });

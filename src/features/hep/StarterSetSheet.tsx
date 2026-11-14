@@ -21,6 +21,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
   const exercises = useExercises(clinic.id);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { if (open) { setTicked(new Set()); setError(null); setBusy(false); } }, [open]);
@@ -48,6 +49,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
     const chosen = STARTER_EXERCISES.filter((s) => ticked.has(s.title) && offered(s));
     setBusy(true);
     setError(null);
+    setProgress({ done: 0, total: chosen.length });
     let added = 0;
     try {
       for (const s of chosen) {
@@ -55,6 +57,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
         const id = await hepService.saveExercise(input);
         await db.exercises.put(exerciseFromSaveInput(input, id)).catch(() => {});
         added += 1;
+        setProgress({ done: added, total: chosen.length });
       }
       onClose();
     } catch (e) {
@@ -78,7 +81,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
         <>
           <Button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</Button>
           <Button type="button" className={btnPrimary} onClick={() => void add()} disabled={busy || count === 0 || !online}>
-            {busy ? 'Adding…' : !online ? 'Needs a connection' : count === 0 ? 'Add exercises' : `Add ${count} ${count === 1 ? 'exercise' : 'exercises'}`}
+            {busy ? `Adding ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : !online ? 'Needs a connection' : count === 0 ? 'Add exercises' : `Add ${count} ${count === 1 ? 'exercise' : 'exercises'}`}
           </Button>
         </>
       }

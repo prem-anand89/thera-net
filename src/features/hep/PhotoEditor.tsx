@@ -5,10 +5,29 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { SheetDialog, btnPrimary, btnSecondary, filterChip, segOption, segTrack } from '@/components/ui';
 import {
-  MAX_ZOOM, MIN_ZOOM, NO_EDIT, PHOTO_SHAPES, boxFromDrag, boxInCrop, cropRect, isEdited, normBoxToPixels, panCentre, pointOnPicture, rotateEdit, rotatedSize,
+  BLUR_STRENGTH_LABELS, BLUR_STRENGTH_MAX, BLUR_STRENGTH_MIN, DEFAULT_BLUR_STRENGTH, MAX_ZOOM, MIN_ZOOM, NO_EDIT, blurLook, PHOTO_SHAPES, boxFromDrag, boxInCrop, cropRect, isEdited, normBoxToPixels, panCentre, pointOnPicture, rotateEdit, rotatedSize,
   type NormBox, type PhotoEdit,
 } from '@/domain/hepPhoto';
 import { applySoftFaceBlur, renderEditedPhoto } from '@/lib/imageCompression';
+
+const STRENGTH_KEY = 'hep-blur-strength';
+
+/** The blur strength this therapist used last on this device (light by default). */
+function savedStrength(): number {
+  try {
+    const n = Number(localStorage.getItem(STRENGTH_KEY));
+    return n >= BLUR_STRENGTH_MIN && n <= BLUR_STRENGTH_MAX ? n : DEFAULT_BLUR_STRENGTH;
+  } catch {
+    return DEFAULT_BLUR_STRENGTH;
+  }
+}
+function rememberStrength(n: number) {
+  try {
+    localStorage.setItem(STRENGTH_KEY, String(n));
+  } catch {
+    /* storage blocked */
+  }
+}
 
 const PREVIEW_MAX = 1600; // the preview works from a smaller copy so dragging stays smooth
 const VIEW_WIDTH = 480;
@@ -27,6 +46,7 @@ interface Loaded { preview: HTMLCanvasElement | null; width: number; height: num
 
 export function PhotoEditor({ open, source, name, onCancel, onDone }: PhotoEditorProps) {
   const [edit, setEdit] = useState<PhotoEdit>(NO_EDIT);
+  const strengthId = useId();
   const [mode, setMode] = useState<'move' | 'blur'>('move');
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +60,7 @@ export function PhotoEditor({ open, source, name, onCancel, onDone }: PhotoEdito
   useEffect(() => {
     if (!open || !source) return;
     let live = true;
-    setEdit(NO_EDIT); setMode('move'); setError(null); setDraft(null); setBusy(false); setLoaded(null);
+    setEdit({ ...NO_EDIT, blurStrength: savedStrength() }); setMode('move'); setError(null); setDraft(null); setBusy(false); setLoaded(null);
     (async () => {
       try {
         const bitmap = await createImageBitmap(source);
@@ -82,7 +102,8 @@ export function PhotoEditor({ open, source, name, onCancel, onDone }: PhotoEdito
     }
     canvas.width = VIEW_WIDTH; canvas.height = viewHeight;
     ctx.drawImage(image, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, VIEW_WIDTH, viewHeight);
-    for (const b of edit.blur) applySoftFaceBlur(ctx, normBoxToPixels(boxInCrop(b, turned.w, turned.h, crop), VIEW_WIDTH, viewHeight), Math.max(6, Math.round(VIEW_WIDTH / 40)));
+    const look = blurLook(edit.blurStrength, Math.max(VIEW_WIDTH, viewHeight));
+    for (const b of edit.blur) applySoftFaceBlur(ctx, normBoxToPixels(boxInCrop(b, turned.w, turned.h, crop), VIEW_WIDTH, viewHeight), look.radius, look.opacity);
   }, [loaded, edit, turned, crop, viewHeight]);
 
   const rel = (e: React.PointerEvent) => {
@@ -183,8 +204,18 @@ export function PhotoEditor({ open, source, name, onCancel, onDone }: PhotoEdito
           </div>
           <Button type="button" className={filterChip(false)} onClick={() => setEdit((cur) => rotateEdit(cur))}>↻ Turn</Button>
           {edit.blur.length > 0 && <Button type="button" className={filterChip(false)} onClick={() => setEdit((cur) => ({ ...cur, blur: cur.blur.slice(0, -1) }))}>Undo last blur</Button>}
-          {isEdited(edit) && <Button type="button" className={filterChip(false)} onClick={() => setEdit(NO_EDIT)}>Reset</Button>}
+          {isEdited(edit) && <Button type="button" className={filterChip(false)} onClick={() => setEdit((cur) => ({ ...NO_EDIT, blurStrength: cur.blurStrength }))}>Reset</Button>}
         </div>
+        {(mode === 'blur' || edit.blur.length > 0) && (
+          <div className="space-y-1.5">
+            <label htmlFor={strengthId} className="text-label font-medium text-[var(--muted)]">Blur strength: {BLUR_STRENGTH_LABELS[edit.blurStrength - 1]}</label>
+            <input
+              id={strengthId} type="range" min={BLUR_STRENGTH_MIN} max={BLUR_STRENGTH_MAX} step={1} value={edit.blurStrength} className="w-full"
+              onChange={(e) => { const n = Number(e.target.value); rememberStrength(n); setEdit((cur) => ({ ...cur, blurStrength: n })); }}
+            />
+            <p className="text-hint text-[var(--muted)]">Light keeps the picture natural; use Strong if the face can still be recognised.</p>
+          </div>
+        )}
         {edit.blur.length > 0 && <p className="text-hint text-[var(--muted)]">{edit.blur.length} {edit.blur.length === 1 ? 'area' : 'areas'} blurred. The blur is part of the saved picture and cannot be undone later.</p>}
       </div>
     </SheetDialog>

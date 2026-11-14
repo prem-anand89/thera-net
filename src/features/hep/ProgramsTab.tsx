@@ -12,7 +12,7 @@ import {
 } from '@/components/ui';
 import { addDaysISO } from '@/domain/hep';
 import { hepService, type ProgramBundle } from '@/services/hepService';
-import { buildProgramRow, countBuckets, filterRows, matchesProgramSearch, sortRows, type ProgramBucket, type ProgramRow, type SignalTone } from './programRows';
+import { EXTEND_DAYS, buildProgramRow, countBuckets, filterRows, matchesProgramSearch, sortRows, type ProgramBucket, type ProgramRow, type SignalTone } from './programRows';
 import { clinicToday, useOnline } from './useHepData';
 
 const TAB_MEDIA_QUERY = '(min-width: 46.5rem)';
@@ -27,7 +27,6 @@ const TONE_CLASS: Record<SignalTone, string> = {
   green: 'bg-[var(--moss-light,var(--teal-light))] text-[var(--moss,var(--teal-strong))]',
   grey: 'bg-[var(--paper)] text-[var(--muted)]',
 };
-const EXTEND_CHOICES = [7, 14, 30];
 
 export interface ProgramsTabProps {
   /** "Message" on an active program: the Message patient presets. Hidden when absent. */
@@ -206,7 +205,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
       >
         <p className="mb-3 text-sm text-[var(--muted)]">Keep “{extending?.title}” going for {extending?.patientName}. Add:</p>
         <div className="flex flex-wrap gap-2">
-          {EXTEND_CHOICES.map((n) => (
+          {EXTEND_DAYS.map((n) => (
             <Button key={n} type="button" className={btnPrimary} disabled={busy} onClick={() => { const r = extending; setExtending(null); if (r) void act(() => hepService.extendProgram(r.id, n)); }}>{n} days</Button>
           ))}
         </div>

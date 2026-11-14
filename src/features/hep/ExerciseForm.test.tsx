@@ -236,8 +236,8 @@ describe('ExerciseForm', () => {
     renderForm({ exercise: saved() });
     await user.click(screen.getByRole('button', { name: 'Duplicate…' }));
     expect(screen.getByRole('heading', { name: 'New exercise' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Name')).toHaveValue('Wall Slides (copy)');
+    expect(screen.getByLabelText('Name')).toHaveValue('Wall Slides (progression)');
     await user.click(saveButton());
-    expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ title: 'Wall Slides (copy)', id: expect.not.stringMatching(/^e1$/) }));
+    expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ title: 'Wall Slides (progression)', id: expect.not.stringMatching(/^e1$/) }));
   });
 });

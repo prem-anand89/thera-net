@@ -115,7 +115,9 @@ export function HandOverPanel(p: HandOverPanelProps) {
             </li>
             <li className="space-y-1.5">
               <p className="text-sm font-medium text-[var(--ink)]">2. Show the PIN to the patient</p>
-              <Button type="button" className={btnSecondary} disabled={!pin} onClick={() => setShowPin(true)}>Show PIN on screen</Button>
+              {pin
+                ? <Button type="button" className={btnSecondary} onClick={() => setShowPin(true)}>Show PIN on screen</Button>
+                : <p className="text-sm text-[var(--muted)]">The patient uses the PIN they already have. If they have forgotten it, use Reset PIN above.</p>}
             </li>
             <li className="space-y-1">
               <p className="text-sm font-medium text-[var(--ink)]">3. The patient opens the link, enters the PIN and keeps “Remember this phone” ticked</p>

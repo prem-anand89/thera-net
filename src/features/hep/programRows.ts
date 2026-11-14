@@ -178,3 +178,6 @@ export function matchesProgramSearch(r: Pick<ProgramRow, 'patientName' | 'title'
   const q = query.trim().toLowerCase();
   return !q || `${r.patientName} ${r.title}`.toLowerCase().includes(q);
 }
+
+/** How much longer a program can be extended by, in days (one list for the Programs tab and the patient chart). */
+export const EXTEND_DAYS = [7, 14, 28] as const;
