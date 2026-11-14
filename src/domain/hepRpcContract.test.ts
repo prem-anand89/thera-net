@@ -86,4 +86,13 @@ describe('HEP Locked Database Migration Contract', () => {
     expect(sql).toContain('A revoked link never comes back to life');
     expect(sql).toContain('This patient has no exercise link yet.');
   });
+
+  it('every HEP table that uses the shared set_updated_at trigger has the audit columns it writes', () => {
+    const base = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261113200000_hep_module.sql'), 'utf8');
+    const fix = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261114100000_hep_exercises_audit_columns.sql'), 'utf8');
+    const usesTrigger = [...base.matchAll(/create trigger \w+ before (?:insert or update|update|insert) on public\.(\w+)\s+for each row execute function public\.set_updated_at\(\)/g)].map((m) => m[1]);
+    expect(usesTrigger).toEqual(['exercises']);
+    expect(fix).toContain('add column if not exists created_by uuid references auth.users (id)');
+    expect(fix).toContain('add column if not exists updated_by uuid references auth.users (id)');
+  });
 });
