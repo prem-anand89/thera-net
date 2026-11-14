@@ -15,6 +15,7 @@ import { BodyChart } from '@/components/BodyChart';
 import { Pill, MultiToggle } from '@/components/ui';
 import { repos, consultationNoteService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
+import { HomeProgramNoteLine } from '@/features/hep/HomeProgramNoteLine';
 import {
   RED_FLAG_ITEMS,
   YELLOW_FLAG_ITEMS,
@@ -3713,8 +3714,9 @@ export function NoteEditorPage() {
                     + Add exercise
                   </button>
                 </div>
-                <p className="empty-note" style={{ marginTop: 0 }}>
-                  Manual entry only — the exercise library browser isn't built yet.
+                <HomeProgramNoteLine patientId={patientId} startDate={linkedVisit?.visitDate ?? null} />
+                <p className="empty-note" style={{ marginTop: 8 }}>
+                  The rows below stay in this note. Use Home program above to give the patient a digital program they open on their phone.
                 </p>
                 {payload.hep.exercises.map((ex, i) => (
                   <div

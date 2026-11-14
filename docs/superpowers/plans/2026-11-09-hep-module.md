@@ -2691,7 +2691,16 @@ git commit -m "feat(hep): HEP area with Library, Edit exercise, Templates and Pr
 
 ---
 
-### Task 7: The patient chart's Home program tab, the program sheet, hand-over, and the visit / note entry
+### Task 7: The patient chart's Home program tab, the program sheet, hand-over, and the visit / note entry (BUILT 2026-11-14)
+
+**Built as planned, with these differences (read before Tasks 8 and 9):**
+- **Preview as patient** (program sheet) is NOT built: it waits for `HepExerciseCard` from Task 8.
+- **No patient message or "Updated by your therapist" banner yet.** The database has no `change_summary`, `patient_note` or `last_changed_at` columns in Slice 1, so the program sheet shows the therapist a "What changes with this save" box (from `summarizeProgramChanges`) and nothing is sent to the patient. The message field and banner come with Slice 2.
+- **Message patient** (`MessagePatientSheet`: five presets, editable, wa.me) is built but the send is NOT logged to `message_log` (kind `hep_reminder` exists in the database); logging is left for later.
+- Rows reorder with up and down arrows inside a section (no drag). Template choice in the sheet lists used templates first, then A to Z (no region matching). Slice 2 items are absent as planned: ranges, "Did less / Did more", check-ins, outcomes (a completed program just reads "Completed").
+- The sheet keeps a program's rows as copies; "Same as last time", "A template", "An earlier program" and "The Library" are the four starting points; an edit can switch to "Start a separate program".
+- `HomeProgramNoteLine` (`src/features/hep/`) is the doorway inside both note screens (consultation Section 8 and the session note under Plan): a read-only "Digital program: <name>, day N, X%" line, **Open Home program** (to `?view=home-program`) and a **Home program** button that opens the sheet starting on the visit's date. It reads and writes nothing in the note.
+- Building blocks for Task 8 and 9: `programDraft.ts` (sheet rules), `homeProgram.ts` (day strip, streak, day timeline, trends), `itemProgress.ts`, `HandOverPanel`, `PrintSheet`, `useHomeProgramDot`.
 
 Read amendments 28 to 38, 45, 50, 53, 59, 64 to 73, 75, 77, 80, 81 first (rewritten 2026-11-13; the preview's Screen 5 shows the layout).
 

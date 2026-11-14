@@ -46,6 +46,8 @@ export interface SessionNoteEditor {
   update: <K extends keyof SessionNotePayload>(key: K, value: SessionNotePayload[K]) => void;
   status: 'draft' | 'completed';
   readOnly: boolean;
+  /** The date of the visit this note documents, for starting a home program on that day. */
+  visitDate: string | null;
   busy: boolean;
   error: string | null;
   setError: (e: string | null) => void;
@@ -297,6 +299,8 @@ export function useSessionNoteEditor({
     update,
     status,
     readOnly: status === 'completed',
+    /** The date of the visit this note documents (for starting a home program on that day). */
+    visitDate: linkedVisit?.visitDate ?? null,
     busy,
     error,
     setError,
