@@ -1,5 +1,5 @@
 -- One-time cleanup for the same bug: payments still recorded against visits that were already deleted.
--- Apply AFTER 20261114100000_visit_delete_removes_payments.sql. Each removed row is kept in audit_log (old_data) by
+-- Apply AFTER 20261114110000_visit_delete_removes_payments.sql. Each removed row is kept in audit_log (old_data) by
 -- payments_audit, and payments_tombstone makes every device drop its copy on the next sync.
 --
 -- Before applying, list what it will remove (on 14 Nov 2026 this was 8 rows of ₹1,500 UPI in two clinics):
