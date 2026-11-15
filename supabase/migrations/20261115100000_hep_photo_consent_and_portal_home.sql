@@ -153,6 +153,13 @@ begin
        set picture_consent_by = auth.uid(),
            picture_consent_at = now()
      where id = v_id and clinic_id = p_clinic_id;
+  elsif not v_has_media then
+    -- No pictures left: nothing for a consent to cover, so a stale one cannot linger for later pictures.
+    update public.exercises
+       set picture_consent_by = null,
+           picture_consent_at = null
+     where id = v_id and clinic_id = p_clinic_id
+       and (picture_consent_by is not null or picture_consent_at is not null);
   end if;
 
   return v_id;
@@ -339,7 +346,9 @@ begin
   end if;
   v_patient_id := v.patient_id;
 
-  select p.clinic_id, nullif(split_part(btrim(coalesce(p.name, '')), ' ', 1), ''), c.booking_slug
+  -- The booking slug only while online booking is on, so the page never offers a booking page that refuses.
+  select p.clinic_id, nullif(split_part(btrim(coalesce(p.name, '')), ' ', 1), ''),
+         case when c.online_booking_enabled then c.booking_slug end
     into v_clinic_id, v_first, v_slug
     from public.patients p
     join public.clinics c on c.id = p.clinic_id
@@ -349,7 +358,7 @@ begin
   -- Next visit: this patient's earliest booking still to come.
   select jsonb_build_object(
            'at', a.scheduled_at,
-           'therapistName', nullif(btrim(coalesce(t.name, '')), ''),
+           'therapistName', nullif(split_part(btrim(coalesce(t.name, '')), ' ', 1), ''),
            'location', a.location
          )
     into v_next

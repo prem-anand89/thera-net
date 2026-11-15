@@ -62,6 +62,7 @@ export interface PublicHepHome {
   /** The clinic's public booking slug for "Book a visit"; null when online booking is off. */
   bookingSlug: string | null;
   /** The earliest confirmed or rescheduled booking still to come. */
+  /** therapistName is the first name only, like the page's prescribedBy. */
   nextVisit: { at: string; therapistName: string | null; location: 'clinic' | 'home' | 'ward' } | null;
   /** The newest open package (sessions left, not past its last valid day). */
   package: { name: string | null; done: number; total: number; expiresOn: string | null } | null;

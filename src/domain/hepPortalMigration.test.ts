@@ -58,6 +58,8 @@ describe('HEP photo consent and portal home migration contract', () => {
     expect(fnS).toContain('(not v_exists');
     expect(fnS).toContain("v_old_keys @> coalesce(p_media_keys, '{}'::text[])");
     expect(fnS).toContain('if v_new_pictures and not coalesce(p_picture_consent, false) then');
+    // No pictures left: the consent is cleared.
+    expect(fnS).toMatch(/elsif not v_has_media then\s+[\s\S]*?set picture_consent_by = null,\s+picture_consent_at = null/);
     expect(fnS).not.toContain('coalesce(p_active, true)\n     and v_old_consent_at is null');
     expect(fnS).not.toMatch(/and coalesce\(p_active, true\)\s+and v_old_consent_at is null/);
     expect(s).toContain(`grant execute on function public.save_exercise(${SIG_27}) to authenticated;`);
@@ -92,6 +94,10 @@ describe('HEP photo consent and portal home migration contract', () => {
     expect(fn).toContain("return jsonb_build_object('ok', false, 'reason', v.outcome, 'attemptsLeft', v.attempts_left);");
     for (const key of ["'firstName'", "'nextVisit'", "'package'", "'programs'", "'bookingSlug'", "'expiresOn'", "'itemCount'"]) expect(fn).toContain(key);
     expect(fn).toContain("a.status in ('confirmed', 'rescheduled')");
+    // Booking only while online booking is on; the therapist by first name, like get_public_hep's prescribedBy.
+    expect(fn).toContain('case when c.online_booking_enabled then c.booking_slug end');
+    expect(fn).not.toMatch(/,\s*c\.booking_slug\s*\n\s*into/);
+    expect(fn).toContain("'therapistName', nullif(split_part(btrim(coalesce(t.name, '')), ' ', 1), '')");
     expect(s).toContain('revoke all on function public.get_public_hep_home(text, text, text) from public;');
     expect(s).toContain('grant execute on function public.get_public_hep_home(text, text, text) to anon, authenticated;');
   });
