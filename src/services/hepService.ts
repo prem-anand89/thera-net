@@ -187,6 +187,8 @@ export interface SessionFeedback {
 export interface ProgramBundle {
   program: Program;
   patientName: string;
+  /** As stored; null when the patient has none. */
+  patientPhone: string | null;
   therapistName: string | null;
   logs: ProgramLog[];
   sessionFeedback: SessionFeedback[];
@@ -211,6 +213,7 @@ export function mapProgramRow(row: Row, access?: Row | null): ProgramBundle {
   return {
     program,
     patientName: String(patient?.name ?? ''),
+    patientPhone: patient?.phone ? String(patient.phone) : null,
     therapistName: therapist?.name ? String(therapist.name) : null,
     logs,
     sessionFeedback: rows<Row>(program_session_feedback).map((f) => ({
@@ -224,7 +227,7 @@ export function mapProgramRow(row: Row, access?: Row | null): ProgramBundle {
   };
 }
 
-const PROGRAM_SELECT = '*, patients(name), therapists(name), program_items(*, program_logs(*)), program_session_feedback(*)';
+const PROGRAM_SELECT = '*, patients(name, phone), therapists(name), program_items(*, program_logs(*)), program_session_feedback(*)';
 // Never `*`: pin_hash is not readable by staff (see the migration), so the columns are listed.
 const ACCESS_COLUMNS = 'patient_id, token, link_revoked_at, open_count, last_opened_at';
 

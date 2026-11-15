@@ -15,7 +15,7 @@ const program = (over: Partial<Program> = {}): Program => ({
 const log = (itemId: string, logDate: string, over: Partial<ProgramLog> = {}): ProgramLog => ({ id: `${itemId}${logDate}`, programItemId: itemId, logDate, sessionIndex: 1 as SessionsPerDay, skipped: false, completedAt: `${logDate}T08:00:00Z`, ...over });
 const fb = (over: Partial<SessionFeedback> = {}): SessionFeedback => ({ id: 'f1', programId: 'p1', logDate: TODAY, sessionIndex: 1, painScore: 8, effortScore: null, painItemIds: ['a'], hardItemIds: [], createdAt: '2026-11-13T09:00:00Z', ...over });
 const bundle = (over: Partial<ProgramBundle> = {}, p: Partial<Program> = {}): ProgramBundle => ({
-  program: program(p), patientName: 'Ravi Kumar', therapistName: 'Meera Rao', logs: [], sessionFeedback: [], access: { token: 't', linkRevoked: false, openCount: 2, lastOpenedAt: null }, ...over,
+  program: program(p), patientName: 'Ravi Kumar', therapistName: 'Meera Rao', logs: [], sessionFeedback: [], access: { token: 't', linkRevoked: false, openCount: 2, lastOpenedAt: null }, patientPhone: null, ...over,
 });
 const row = (b: ProgramBundle, today = TODAY) => buildProgramRow(b, { today, windowStart: '2026-10-31' });
 const doneEveryDay = (days: string[]) => days.flatMap((d) => [log('a', d), log('b', d)]);
@@ -115,7 +115,7 @@ describe('list helpers', () => {
     row(bundle({}, { id: 'p4', status: 'completed', title: 'Old' })),
   ];
   it('counts and filters: Needs attention, Active, Ended, Past', () => {
-    expect(countBuckets(rows)).toEqual({ attention: 2, active: 3, ended: 0, past: 1 });
+    expect(countBuckets(rows)).toMatchObject({ attention: 2, active: 3, ended: 0, past: 1 });
     expect(filterRows(rows, 'attention').map((r) => r.title)).toEqual(['Knee week 1', 'Shoulder']);
     expect(filterRows(rows, 'past').map((r) => r.title)).toEqual(['Old']);
   });
@@ -131,5 +131,33 @@ describe('list helpers', () => {
     expect(lastActiveLabel(null, TODAY)).toBe('—');
     expect(lastActiveLabel('2026-11-12', TODAY)).toBe('Yesterday');
     expect(lastActiveLabel('2026-11-09', TODAY)).toBe('4 days ago');
+  });
+});
+
+describe('ending this week, strip and phone', () => {
+  it('an active program whose last day is today..today+6 is Ending (and still Active); later, paused or ended is not', () => {
+    const ending = row(bundle()); // last day 2026-11-15
+    expect(ending.ending).toBe(true);
+    expect(ending.bucket).toBe('active');
+    expect(row(bundle({}, { durationDays: 14 })).ending).toBe(false);
+    expect(row(bundle({}, { startDate: '2026-11-07', durationDays: 7 })).ending).toBe(true); // last day is today
+    expect(row(bundle({}, { startDate: '2026-11-13', durationDays: 7 })).ending).toBe(true); // today + 6
+    expect(row(bundle({}, { startDate: '2026-11-13', durationDays: 8 })).ending).toBe(false);
+    expect(row(bundle({}, { status: 'paused' })).ending).toBe(false);
+    expect(row(bundle({}, { startDate: '2026-11-01', durationDays: 7 })).ending).toBe(false);
+    expect(row(bundle({}, { durationDays: null })).ending).toBe(false);
+  });
+
+  it('countBuckets and filterRows know "ending"', () => {
+    const rows = [row(bundle()), row(bundle({}, { durationDays: 30 }))];
+    expect(countBuckets(rows)).toMatchObject({ active: 2, ending: 1 });
+    expect(filterRows(rows, 'ending')).toHaveLength(1);
+  });
+
+  it('carries 14 day cells and the patient phone', () => {
+    const r = row(bundle({ patientPhone: '+91 98765 43210' }));
+    expect(r.days).toHaveLength(14);
+    expect(r.days.at(-1)?.date).toBe(TODAY);
+    expect(r.patientPhone).toBe('+91 98765 43210');
   });
 });

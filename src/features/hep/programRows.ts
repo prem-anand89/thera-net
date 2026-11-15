@@ -1,10 +1,12 @@
 // One row model for the Programs list: the table and the phone cards are both drawn from this, so they can never
 // disagree (amendment 66). Pure functions: the clock (today) and the data window are passed in.
 import { EXERCISE_PHASE_LABELS, addDaysISO, computeProgramAdherence, sectionSkipPattern, type ProgramStatus, type SkipReason } from '@/domain/hep';
+import { dayStrip, type DayCell } from './homeProgram';
+import { splitPhone } from '@/domain/countryCodes';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { ProgramBundle } from '@/services/hepService';
 
-export type ProgramBucket = 'attention' | 'active' | 'ended' | 'past';
+export type ProgramBucket = 'attention' | 'active' | 'ending' | 'ended' | 'past';
 export type SignalTone = 'red' | 'amber' | 'blue' | 'grey' | 'green';
 
 export interface ProgramSignal {
@@ -19,6 +21,8 @@ export interface ProgramRow {
   id: string;
   patientId: string;
   patientName: string;
+  /** As stored; null when the patient has none. */
+  patientPhone: string | null;
   title: string;
   therapistId: string | null;
   therapistName: string | null;
@@ -32,7 +36,7 @@ export interface ProgramRow {
   durationDays: number | null;
   todayCompleted: number;
   todayTarget: number;
-  /** null until the first day has finished ("Too early"). */
+  /** null until the first day has finished ("Not enough data"). */
   habitPercent: number | null;
   finishedDays: number;
   lastActive: string | null;
@@ -40,6 +44,10 @@ export interface ProgramRow {
   signals: ProgramSignal[];
   needsAttention: boolean;
   /** Where it is listed besides Needs attention: Active, Ended or Past. */
+  /** Running (not paused, not past its last day) with its last day from today through today + 6. Also listed under Active. */
+  ending: boolean;
+  /** The last 14 days, oldest first, for the adherence strip. */
+  days: DayCell[];
   bucket: Exclude<ProgramBucket, 'attention'>;
 }
 
@@ -130,6 +138,7 @@ export function buildProgramRow(bundle: ProgramBundle, opts: { today: string; wi
     id: program.id,
     patientId: program.patientId,
     patientName: bundle.patientName,
+    patientPhone: bundle.patientPhone,
     title: program.title,
     therapistId: program.therapistId,
     therapistName: bundle.therapistName,
@@ -147,23 +156,28 @@ export function buildProgramRow(bundle: ProgramBundle, opts: { today: string; wi
     lastActiveLabel: lastActiveLabel(lastActive, today),
     signals,
     needsAttention: program.status !== 'completed' && signals.some((s) => s.attention),
+    ending: live && lastDay != null && lastDay <= addDaysISO(today, 6),
+    days: dayStrip(program, program.items, logs, today),
     bucket: program.status === 'completed' ? 'past' : ended ? 'ended' : 'active',
   };
 }
 
-export interface ProgramFilterCounts { attention: number; active: number; ended: number; past: number }
+export interface ProgramFilterCounts { attention: number; active: number; ending: number; ended: number; past: number }
 
 export function countBuckets(rows: ProgramRow[]): ProgramFilterCounts {
   return {
     attention: rows.filter((r) => r.needsAttention).length,
     active: rows.filter((r) => r.bucket === 'active').length,
+    ending: rows.filter((r) => r.ending).length,
     ended: rows.filter((r) => r.bucket === 'ended').length,
     past: rows.filter((r) => r.bucket === 'past').length,
   };
 }
 
 export function filterRows(rows: ProgramRow[], bucket: ProgramBucket): ProgramRow[] {
-  return bucket === 'attention' ? rows.filter((r) => r.needsAttention) : rows.filter((r) => r.bucket === bucket);
+  if (bucket === 'attention') return rows.filter((r) => r.needsAttention);
+  if (bucket === 'ending') return rows.filter((r) => r.ending);
+  return rows.filter((r) => r.bucket === bucket);
 }
 
 const SIGNAL_RANK: Record<SignalTone, number> = { red: 0, amber: 1, blue: 2, green: 3, grey: 4 };
@@ -181,3 +195,11 @@ export function matchesProgramSearch(r: Pick<ProgramRow, 'patientName' | 'title'
 
 /** How much longer a program can be extended by, in days (one list for the Programs tab and the patient chart). */
 export const EXTEND_DAYS = [7, 14, 28] as const;
+
+/** A `tel:` link for a stored phone, built through the clinic's country code (never assumes +91). Null when there is no number. */
+export function telHref(phone: string | null | undefined, countryCode: string): string | null {
+  if (!phone?.trim()) return null;
+  const { code, national } = splitPhone(phone, countryCode);
+  const digits = `${code}${national}`.replace(/[^\d+]/g, '');
+  return /\d/.test(digits) ? `tel:${digits}` : null;
+}

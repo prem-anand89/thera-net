@@ -84,7 +84,7 @@ export function HandOverPanel(p: HandOverPanelProps) {
 
   return (
     <>
-      <SheetDialog open={p.open} title={`Hand over to ${p.patientName}`} onClose={p.onClose} error={error} footer={<Button type="button" className={btnPrimary} onClick={p.onClose}>{tried || openedAt ? 'Done' : 'Skip for now'}</Button>}>
+      <SheetDialog open={p.open} title="Share with patient" onClose={p.onClose} error={error} footer={<Button type="button" className={btnPrimary} onClick={p.onClose}>{tried || openedAt ? 'Done' : 'Skip for now'}</Button>}>
         <div className="space-y-4">
           <section aria-label="PIN details" className="rounded-2xl bg-[var(--paper)] p-4 text-center">
             {pin ? (
@@ -116,7 +116,7 @@ export function HandOverPanel(p: HandOverPanelProps) {
             <li className="space-y-1.5">
               <p className="text-sm font-medium text-[var(--ink)]">2. Show the PIN to the patient</p>
               {pin
-                ? <Button type="button" className={btnSecondary} onClick={() => setShowPin(true)}>Show PIN on screen</Button>
+                ? <Button type="button" className={btnSecondary} onClick={() => setShowPin(true)}>Show PIN</Button>
                 : <p className="text-sm text-[var(--muted)]">The patient uses the PIN they already have. If they have forgotten it, use Reset PIN above.</p>}
             </li>
             <li className="space-y-1">

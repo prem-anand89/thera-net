@@ -46,7 +46,7 @@ const program = (over: Partial<Program> = {}): Program => ({
 });
 const fb = (over: Partial<SessionFeedback> = {}): SessionFeedback => ({ id: 'f', programId: 'p1', logDate: day(-1), sessionIndex: 1, painScore: 8, effortScore: 6, painItemIds: ['sq'], hardItemIds: ['sq', 'mr'], createdAt: new Date().toISOString(), ...over });
 const bothSessions = (d: string) => ['sq', 'mr'].flatMap((id) => [log(id, d, 1), log(id, d, 2)]);
-const bundle = (p: Partial<Program> = {}, over: Partial<ProgramBundle> = {}): ProgramBundle => ({
+const bundle = (p: Partial<Program> = {}, over: Partial<ProgramBundle> = {}): ProgramBundle => ({ patientPhone: null,
   program: program(p), patientName: 'Ravi Kumar', therapistName: 'Meera Rao', logs: [...bothSessions(day(-4)), ...bothSessions(day(-3)), ...bothSessions(day(-2)), ...bothSessions(day(-1)), log('sq', TODAY, 1), log('mr', TODAY, 1)],
   sessionFeedback: [], access: { token: 'tok123', linkRevoked: false, openCount: 4, lastOpenedAt: `${TODAY}T07:00:00Z` }, ...over,
 });
@@ -81,10 +81,17 @@ describe('HomeProgramTab: header and progress', () => {
     expect(within(progress).getByText('Opened 4×')).toBeInTheDocument();
   });
 
-  it('says "Too early" before the first day has finished', async () => {
+  it('labels the tile Adherence', async () => {
+    renderTab();
+    const progress = await screen.findByRole('region', { name: 'Progress' });
+    expect(within(progress).getByText('Adherence')).toBeInTheDocument();
+    expect(within(progress).queryByText('Habit')).toBeNull();
+  });
+
+  it('says "Not enough data" before the first day has finished', async () => {
     listPatientPrograms.mockResolvedValue([bundle({ startDate: TODAY, items: [item('sq', 'Squat', { addedOn: TODAY })] }, { logs: [] })]);
     renderTab();
-    expect(await screen.findByText('Too early')).toBeInTheDocument();
+    expect(await screen.findByText('Not enough data')).toBeInTheDocument();
   });
 
   it('tapping a day shows Morning and Evening with ticks, skips with their reasons, not done, and the Pain / Effort chips', async () => {
@@ -125,7 +132,7 @@ describe('HomeProgramTab: needs your attention and pain review', () => {
   it('opening the tab marks new pain as seen for everyone, once, and still shows the report with "Reviewed ✓ just now"', async () => {
     listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb()] })]);
     renderTab();
-    const box = await screen.findByRole('region', { name: 'Needs your attention' });
+    const box = await screen.findByRole('region', { name: 'Alerts' });
     expect(within(box).getByText('Pain 8/10 after Squat')).toBeInTheDocument();
     expect(within(box).getByText(/Reviewed ✓ just now/)).toBeInTheDocument();
     await waitFor(() => expect(markPainReviewed).toHaveBeenCalledWith('p1'));
@@ -136,7 +143,7 @@ describe('HomeProgramTab: needs your attention and pain review', () => {
     listPatientPrograms.mockResolvedValue([bundle({ painReviewedThrough: new Date(Date.now() + 60_000).toISOString() }, { sessionFeedback: [fb()] })]);
     renderTab();
     await screen.findByRole('region', { name: 'Progress' });
-    expect(screen.queryByRole('region', { name: 'Needs your attention' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Alerts' })).toBeNull();
     expect(markPainReviewed).not.toHaveBeenCalled();
   });
 
@@ -144,14 +151,14 @@ describe('HomeProgramTab: needs your attention and pain review', () => {
     const user = userEvent.setup();
     listPatientPrograms.mockResolvedValue([bundle({ checkinOn: TODAY })]);
     const { unmount } = renderTab();
-    const box = await screen.findByRole('region', { name: 'Needs your attention' });
+    const box = await screen.findByRole('region', { name: 'Alerts' });
     expect(within(box).getByText('Check-in due')).toBeInTheDocument();
     await user.click(within(box).getByRole('button', { name: 'Message patient' }));
     expect(screen.getByRole('dialog', { name: 'message sheet' })).toHaveTextContent('token tok123');
     unmount();
     listPatientPrograms.mockResolvedValue([bundle({ startDate: day(-12), durationDays: 7, items: [item('sq', 'Squat', { addedOn: day(-12) })] }, { logs: [] })]);
     renderTab();
-    const ended = await screen.findByRole('region', { name: 'Needs your attention' });
+    const ended = await screen.findByRole('region', { name: 'Alerts' });
     expect(within(ended).getByRole('button', { name: 'Prescribe next' })).toBeInTheDocument();
     await user.click(within(ended).getByRole('button', { name: 'Prescribe next' }));
     expect(screen.getByRole('dialog', { name: 'program sheet' })).toHaveTextContent('new');
@@ -160,7 +167,7 @@ describe('HomeProgramTab: needs your attention and pain review', () => {
   it('no box when all is well', async () => {
     renderTab();
     await screen.findByRole('region', { name: 'Progress' });
-    expect(screen.queryByRole('region', { name: 'Needs your attention' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Alerts' })).toBeNull();
   });
 });
 

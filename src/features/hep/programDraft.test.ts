@@ -11,7 +11,7 @@ const hi = (title: string, over: Partial<HepItemInput> = {}): HepItemInput => ({
 });
 const pi = (id: string, over: Partial<ProgramItem> = {}): ProgramItem => ({ ...hi(`Item ${id}`), id, programId: 'p', sessionsSchedule: [], specialInstructions: '', sortOrder: 0, addedOn: '2026-11-09', removedOn: null, ...over } as ProgramItem);
 const program = (over: Partial<Program> = {}): Program => ({ id: 'p1', clinicId: 'c', patientId: 'pt', therapistId: 't1', title: 'Knee week 1', status: 'active', startDate: '2026-11-01', durationDays: 7, targetPct: 90, checkinOn: '2026-11-08', feedbackDefault: 'effort', sessionsPerDay: 2, firstOpenedAt: null, items: [pi('a'), pi('b', { removedOn: '2026-11-03' })], createdAt: '2026-11-01', updatedAt: '', ...over });
-const bundle = (over: Partial<Program> = {}): ProgramBundle => ({ program: program(over), patientName: 'Ravi', therapistName: 'Meera', logs: [], sessionFeedback: [], access: null });
+const bundle = (over: Partial<Program> = {}): ProgramBundle => ({ program: program(over), patientName: 'Ravi', therapistName: 'Meera', logs: [], sessionFeedback: [], access: null, patientPhone: null });
 
 describe('starting points', () => {
   it('a template starts a program named like the template, with copies of its rows and the usual times a day', () => {

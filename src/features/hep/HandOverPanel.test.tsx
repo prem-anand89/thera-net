@@ -33,6 +33,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('HandOverPanel', () => {
+  it('is titled "Share with patient"', () => {
+    renderPanel();
+    expect(screen.getByRole('dialog', { name: 'Share with patient' })).toBeInTheDocument();
+  });
+
   it('shows the PIN once with Copy, and the WhatsApp message and link never contain it', async () => {
     const user = userEvent.setup();
     const write = vi.spyOn(navigator.clipboard, 'writeText'); // after setup(): the test tool installs its own clipboard
@@ -48,10 +53,10 @@ describe('HandOverPanel', () => {
     expect(screen.getByText('The WhatsApp message never contains the PIN.')).toBeInTheDocument();
   });
 
-  it('Show PIN on screen opens a centred card with the clinic name and a large PIN, and Done closes it', async () => {
+  it('Show PIN opens a centred card with the clinic name and a large PIN, and Done closes it', async () => {
     const user = userEvent.setup();
     renderPanel();
-    await user.click(screen.getByRole('button', { name: 'Show PIN on screen' }));
+    await user.click(screen.getByRole('button', { name: 'Show PIN' }));
     const overlay = screen.getByRole('dialog', { name: 'Your PIN' });
     expect(within(overlay).getByText('Sunrise Physio')).toBeInTheDocument();
     expect(within(overlay).getByText('4821')).toHaveStyle({ fontSize: '56px' });
@@ -96,14 +101,14 @@ describe('HandOverPanel', () => {
     const user = userEvent.setup();
     renderPanel({ pin: null });
     expect(screen.getByText(/already has a PIN/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show PIN on screen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show PIN' })).toBeNull();
     expect(screen.getByText(/uses the PIN they already have/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reset PIN…' }));
     expect(resetPin).not.toHaveBeenCalled();
     await user.click(within(screen.getByRole('dialog', { name: 'Reset the PIN?' })).getByRole('button', { name: 'Reset PIN' }));
     await waitFor(() => expect(resetPin).toHaveBeenCalledWith('pt1'));
     expect(await screen.findByLabelText('PIN')).toHaveTextContent('7777');
-    expect(screen.getByRole('button', { name: 'Show PIN on screen' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Show PIN' })).toBeEnabled();
   });
 
   it('offers Save as template once for a program that did not come from a template, with its name to edit', async () => {

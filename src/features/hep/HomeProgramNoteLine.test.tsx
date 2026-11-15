@@ -21,7 +21,7 @@ const day = (o: number) => new Date(Date.parse(`${TODAY}T00:00:00Z`) + o * 86_40
 const bundle = (): ProgramBundle => ({
   program: { id: 'p1', clinicId: 'c1', patientId: 'pt1', therapistId: null, title: 'Right knee', status: 'active', startDate: day(-3), durationDays: 14, targetPct: 70, checkinOn: null, feedbackDefault: 'pain', sessionsPerDay: 1, firstOpenedAt: null, painReviewedThrough: null, createdAt: '', updatedAt: '',
     items: [{ id: 'a', programId: 'p1', title: 'Squat', bodyRegion: 'Knee', phase: 'strengthening', equipment: [], instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], doseType: 'reps', sets: 3, reps: 10, holdSeconds: null, durationSeconds: null, restSeconds: 30, side: 'none', sessionsPerDay: 1, optional: false, sessionsSchedule: [], stopIf: '', specialInstructions: '', sortOrder: 0, addedOn: day(-3), removedOn: null }] },
-  patientName: 'Ravi', therapistName: null, logs: [-3, -2, -1].map((o) => ({ id: `l${o}`, programItemId: 'a', logDate: day(o), sessionIndex: 1 as const, skipped: false, completedAt: '' })), sessionFeedback: [], access: null,
+  patientName: 'Ravi', patientPhone: null, therapistName: null, logs: [-3, -2, -1].map((o) => ({ id: `l${o}`, programItemId: 'a', logDate: day(o), sessionIndex: 1 as const, skipped: false, completedAt: '' })), sessionFeedback: [], access: null,
 });
 const renderLine = (startDate: string | null = '2026-11-10') => render(<ClinicContext.Provider value={clinic}><HomeProgramNoteLine patientId="pt1" startDate={startDate} /></ClinicContext.Provider>);
 

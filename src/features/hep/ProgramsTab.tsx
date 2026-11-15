@@ -8,17 +8,19 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Button } from '@/components/Button';
 import { useMediaQuery } from '@/components/useMediaQuery';
 import {
-  ChipCount, ConfirmDialog, ErrorNote, KebabMenu, LoadingRows, SheetDialog, btnPrimary, btnSecondary, cellSub, filterChip, inputCls, menuItem, pillSmAccent, pillSmPrimary, segOption, segTrack, td, th,
+  ChipCount, ConfirmDialog, ErrorNote, KebabMenu, LoadingRows, SheetDialog, btnPrimary, btnSecondary, cellSub, filterChip, inputCls, menuItem, pillSmAccent, pillSmNeutral, pillSmPrimary, segOption, segTrack, td, th,
 } from '@/components/ui';
+import { clinicCountryCode } from '@/domain/clinicRegion';
 import { addDaysISO } from '@/domain/hep';
 import { hepService, type ProgramBundle } from '@/services/hepService';
-import { EXTEND_DAYS, buildProgramRow, countBuckets, filterRows, matchesProgramSearch, sortRows, type ProgramBucket, type ProgramRow, type SignalTone } from './programRows';
+import { EXTEND_DAYS, buildProgramRow, countBuckets, filterRows, matchesProgramSearch, sortRows, telHref, type ProgramBucket, type ProgramRow, type SignalTone } from './programRows';
+import { DayStrip } from './DayStrip';
 import { clinicToday, useOnline } from './useHepData';
 
 const TAB_MEDIA_QUERY = '(min-width: 46.5rem)';
 const WINDOW_DAYS = 14;
 const FILTERS: Array<{ key: ProgramBucket; label: string }> = [
-  { key: 'attention', label: 'Needs attention' }, { key: 'active', label: 'Active' }, { key: 'ended', label: 'Ended' }, { key: 'past', label: 'Past' },
+  { key: 'attention', label: 'Needs attention' }, { key: 'active', label: 'Active' }, { key: 'ending', label: 'Ending this week' }, { key: 'ended', label: 'Recently ended' }, { key: 'past', label: 'Archived' },
 ];
 const TONE_CLASS: Record<SignalTone, string> = {
   red: 'bg-[var(--rust-light)] text-[var(--rust)]',
@@ -47,7 +49,16 @@ function Signals({ row }: { row: ProgramRow }) {
 }
 
 const todayLabel = (r: ProgramRow) => (r.todayTarget > 0 ? `${r.todayCompleted} of ${r.todayTarget} sessions` : '—');
-const habitLabel = (r: ProgramRow) => (r.habitPercent == null ? 'Too early' : `${r.habitPercent}% · ${r.finishedDays} ${r.finishedDays === 1 ? 'day' : 'days'} finished`);
+const habitLabel = (r: ProgramRow) => (r.habitPercent == null ? 'Not enough data' : `${r.habitPercent}%`);
+
+function Adherence({ row }: { row: ProgramRow }) {
+  return (
+    <div className="space-y-1">
+      <DayStrip days={row.days} />
+      <div className={cellSub}>{habitLabel(row)}</div>
+    </div>
+  );
+}
 const programLine = (r: ProgramRow) => `${r.exerciseCount} ${r.exerciseCount === 1 ? 'exercise' : 'exercises'} · ${r.dayLabel}`;
 
 export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: ProgramsTabProps) {
@@ -109,7 +120,12 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
   const primary = (r: ProgramRow) => {
     if (r.status === 'completed') return null;
     if (r.ended) return onPrescribeNext ? <Button type="button" className={pillSmPrimary} onClick={() => onPrescribeNext(r, bundleOf(r.id))}>Prescribe next</Button> : null;
-    return onMessage ? <Button type="button" className={pillSmAccent} onClick={() => onMessage(r, bundleOf(r.id))}>Message</Button> : null;
+    // The first alert decides: red calls, amber messages, anything else just opens the chart.
+    const tone = r.signals[0]?.tone;
+    const tel = tone === 'red' ? telHref(r.patientPhone, clinicCountryCode(clinic)) : null;
+    if (tel) return <a href={tel} className={`${pillSmPrimary} inline-flex items-center`}>Call</a>;
+    if (tone === 'amber' && onMessage) return <Button type="button" className={pillSmAccent} onClick={() => onMessage(r, bundleOf(r.id))}>Message</Button>;
+    return <Link to="/patients/$patientId" params={{ patientId: r.patientId }} className={`${pillSmNeutral} inline-flex items-center`}>Open</Link>;
   };
 
   if (!online && bundles === null) return <p className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted)]">Programs need a connection. Reconnect to see them.</p>;
@@ -119,8 +135,8 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className={segTrack} role="group" aria-label="Whose programs">
-          <button type="button" aria-pressed={showOwner === 'mine'} className={segOption(showOwner === 'mine')} onClick={() => setOwner('mine')}>Mine</button>
-          <button type="button" aria-pressed={showOwner === 'all'} className={segOption(showOwner === 'all')} onClick={() => setOwner('all')}>All</button>
+          <button type="button" aria-pressed={showOwner === 'mine'} className={segOption(showOwner === 'mine')} onClick={() => setOwner('mine')}>My patients</button>
+          <button type="button" aria-pressed={showOwner === 'all'} className={segOption(showOwner === 'all')} onClick={() => setOwner('all')}>All therapists</button>
         </div>
         <input type="search" aria-label="Search programs" placeholder="Search patient or program" className={`${inputCls} max-w-xs`} value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
@@ -146,7 +162,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <th className={th}>Patient</th><th className={th}>Program</th>{showOwner === 'all' && <th className={th}>Therapist</th>}
-                <th className={th}>Today</th><th className={th}>Habit</th><th className={th}>Last active</th><th className={th}>Signals</th><th className={th}><span className="sr-only">Actions</span></th>
+                <th className={th}>Today</th><th className={th}>Adherence, last 14 days</th><th className={th}>Alerts</th><th className={th}>Last active</th><th className={th}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
@@ -156,9 +172,9 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
                   <td className={td}>{r.title}<div className={cellSub}>{programLine(r)}</div></td>
                   {showOwner === 'all' && <td className={td}>{r.therapistName ?? '—'}</td>}
                   <td className={td}>{todayLabel(r)}</td>
-                  <td className={td}>{habitLabel(r)}</td>
-                  <td className={td}>{r.lastActiveLabel}</td>
+                  <td className={td}><Adherence row={r} /></td>
                   <td className={td}><Signals row={r} /></td>
+                  <td className={td}>{r.lastActiveLabel}</td>
                   <td className={td}><div className="flex items-center justify-end gap-2">{primary(r)}{menu(r)}</div></td>
                 </tr>
               ))}
@@ -179,7 +195,8 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
                 </div>
                 {menu(r)}
               </div>
-              <p className="text-sm text-[var(--ink)]">{todayLabel(r)} · {habitLabel(r)}</p>
+              <p className="text-sm text-[var(--ink)]">{todayLabel(r)}</p>
+              <Adherence row={r} />
               <p className={cellSub}>Last active: {r.lastActiveLabel}{showOwner === 'all' && r.therapistName ? ` · ${r.therapistName}` : ''}</p>
               <Signals row={r} />
               {primary(r) && <div>{primary(r)}</div>}

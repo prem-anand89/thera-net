@@ -15,7 +15,8 @@ import type { Patient } from '@/domain/types';
 import { HandOverPanel } from './HandOverPanel';
 import { itemDose, programItemToInput } from './hepItems';
 import { buildHepPortalUrl, buildHepWhatsAppShareUrl } from './hepSharing';
-import { SKIP_REASON_LABEL, currentStreak, dayStrip, dayTimeline, itemsInSessionOrder, trendSeries, type DayCell } from './homeProgram';
+import { SKIP_REASON_LABEL, currentStreak, dayStrip, dayTimeline, itemsInSessionOrder, trendSeries } from './homeProgram';
+import { CELL_CLASS, CELL_WORD } from './DayStrip';
 import { itemProgress, itemProgressLine } from './itemProgress';
 import { MessagePatientSheet } from './MessagePatientSheet';
 import { PrintSheet } from './PrintSheet';
@@ -25,14 +26,6 @@ import { clinicToday, useOnline } from './useHepData';
 
 const WINDOW_DAYS = 30;
 const SESSIONS = ['', 'once a day', 'twice a day', '3 times a day'];
-const CELL_CLASS: Record<DayCell['state'], string> = {
-  all: 'bg-[var(--teal)] text-white',
-  partial: 'bg-[var(--amber-light)] text-[var(--amber-strong)] border border-[var(--amber)]',
-  missed: 'bg-[var(--rust-light)] text-[var(--rust)] border border-[var(--rust)]',
-  today: 'border-2 border-[var(--teal)] text-[var(--teal-strong)]',
-  outside: 'bg-[var(--paper)] text-[var(--muted)]',
-};
-const CELL_WORD: Record<DayCell['state'], string> = { all: 'all done', partial: 'partly done', missed: 'missed', today: 'today', outside: 'not part of the program' };
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -173,8 +166,8 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
           </header>
 
           {(attention.length > 0 || painSeen[prog.id]) && (
-            <section aria-label="Needs your attention" className="space-y-2 rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] p-4">
-              <h3 className="font-display text-sm font-semibold text-[var(--amber-strong)]">Needs your attention</h3>
+            <section aria-label="Alerts" className="space-y-2 rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] p-4">
+              <h3 className="font-display text-sm font-semibold text-[var(--amber-strong)]">Alerts</h3>
               <ul className="space-y-1.5 text-sm text-[var(--ink)]">
                 {painSeen[prog.id] && <li><span className="font-medium text-[var(--rust)]">{painSeen[prog.id]}</span> <span className="text-[var(--muted)]">· Reviewed ✓ just now</span></li>}
                 {attention.filter((s) => s.key !== 'pain').map((s) => (
@@ -198,7 +191,7 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
             <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Progress</h3>
             <div className="grid grid-cols-2 gap-2 desktop:grid-cols-5">
               <Tile label="Today" value={row.todayTarget > 0 ? `${row.todayCompleted} of ${row.todayTarget}` : '—'} sub="sessions" />
-              <Tile label="Habit" value={row.habitPercent == null ? 'Too early' : `${row.habitPercent}%`} sub={row.habitPercent == null ? undefined : `${row.finishedDays} ${row.finishedDays === 1 ? 'day' : 'days'} finished`} />
+              <Tile label="Adherence" value={row.habitPercent == null ? 'Not enough data' : `${row.habitPercent}%`} sub={row.habitPercent == null ? undefined : `${row.finishedDays} ${row.finishedDays === 1 ? 'day' : 'days'} finished`} />
               <Tile label="Streak" value={`${streak} ${streak === 1 ? 'day' : 'days'}`} />
               <Tile label="Last active" value={row.lastActiveLabel} sub={access ? `Opened ${access.openCount}×` : undefined} />
               <Tile label="Pain · Effort" value={trend.some((t) => t.pain != null || t.effort != null) ? `${trend.filter((t) => t.pain != null).at(-1)?.pain ?? '–'} · ${trend.filter((t) => t.effort != null).at(-1)?.effort ?? '–'}` : '—'} sub="latest session" />

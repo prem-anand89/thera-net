@@ -37,7 +37,7 @@ const log = (itemId: string, logDate: string): ProgramLog => ({ id: itemId + log
 const bundle = (id: string, patient: string, p: Partial<Program> = {}, over: Partial<ProgramBundle> = {}): ProgramBundle => ({
   program: { id, clinicId: 'c1', patientId: `pt-${id}`, therapistId: 't1', title: `Program ${id}`, status: 'active', startDate: day(-3), durationDays: 14, targetPct: 70, checkinOn: null, feedbackDefault: 'pain', sessionsPerDay: 1,
     firstOpenedAt: null, painReviewedThrough: null, items: [item(`${id}a`), item(`${id}b`)], createdAt: '', updatedAt: '', ...p },
-  patientName: patient, therapistName: 'Meera Rao', logs: [log(`${id}a`, TODAY), log(`${id}b`, TODAY)], sessionFeedback: [], access: { token: 't', linkRevoked: false, openCount: 3, lastOpenedAt: null }, ...over,
+  patientName: patient, therapistName: 'Meera Rao', logs: [log(`${id}a`, TODAY), log(`${id}b`, TODAY)], sessionFeedback: [], access: { token: 't', linkRevoked: false, openCount: 3, lastOpenedAt: null }, patientPhone: '+91 98765 43210', ...over,
 });
 const pain: SessionFeedback = { id: 'f', programId: 'p1', logDate: TODAY, sessionIndex: 1, painScore: 8, effortScore: null, painItemIds: ['p1a'], hardItemIds: [], createdAt: new Date().toISOString() };
 
@@ -80,16 +80,16 @@ describe('ProgramsTab', () => {
     renderTab();
     await screen.findByText('Asha Pillai');
     expect(chip(/^Active/)).toHaveTextContent('4');
-    expect(chip(/^Ended/)).toHaveTextContent('0');
-    expect(chip(/^Past/)).toHaveTextContent('1');
+    expect(chip(/^Recently ended/)).toHaveTextContent('0');
+    expect(chip(/^Archived/)).toHaveTextContent('1');
     await user.click(chip(/^Active/));
     expect(screen.getByText('Opened Only')).toBeInTheDocument();
     expect(screen.getByText('Opened 6×, nothing ticked')).toBeInTheDocument();
-    await user.click(chip(/^Past/));
+    await user.click(chip(/^Archived/));
     expect(screen.getByText('Old Patient')).toBeInTheDocument();
   });
 
-  it('Mine | All: a therapist starts on Mine; the Therapist column appears only in All', async () => {
+  it('My patients | All therapists: a therapist starts on Mine; the Therapist column appears only in All', async () => {
     const user = userEvent.setup();
     scope = { isAdmin: false, myTherapistId: 't1' };
     renderTab();
@@ -97,7 +97,7 @@ describe('ProgramsTab', () => {
     expect(screen.queryByRole('columnheader', { name: 'Therapist' })).toBeNull();
     await user.click(chip(/^Active/));
     expect(screen.queryByText('Sunil Rao')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'All' }));
+    await user.click(screen.getByRole('button', { name: 'All therapists' }));
     expect(screen.getByText('Sunil Rao')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Therapist' })).toBeInTheDocument();
   });
@@ -105,17 +105,17 @@ describe('ProgramsTab', () => {
   it('an admin starts on All', async () => {
     renderTab();
     await screen.findByText('Asha Pillai');
-    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'All therapists' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('shows the table columns: today, habit and last active', async () => {
+  it('shows the table columns: today, adherence and last active', async () => {
     const user = userEvent.setup();
     renderTab();
     await screen.findByText('Asha Pillai');
     await user.click(chip(/^Active/));
     const row = screen.getByText('Sunil Rao').closest('tr')!;
     expect(within(row).getByText('2 of 2 sessions')).toBeInTheDocument();
-    expect(within(row).getByText(/^\d+% · 3 days finished$/)).toBeInTheDocument();
+    expect(within(row).getByText(/^\d+%$/)).toBeInTheDocument();
     expect(within(row).getByText('Today')).toBeInTheDocument();
     expect(within(row).getByText('2 exercises · Day 4 of 14')).toBeInTheDocument();
   });
@@ -167,10 +167,11 @@ describe('ProgramsTab', () => {
     const { unmount } = renderTab();
     await screen.findByText('Asha Pillai');
     expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open' })).toBeInTheDocument();
     unmount();
     renderTab({ onMessage });
     await user.click((await screen.findAllByRole('button', { name: 'Message' }))[0]);
-    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), expect.objectContaining({ patientName: 'Asha Pillai' }));
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 'p2' }), expect.objectContaining({ patientName: 'Ravi Kumar' }));
   });
 
   it('Pause, Resume and Mark completed (after asking) change the status without touching the exercises', async () => {
@@ -202,7 +203,7 @@ describe('ProgramsTab', () => {
     const user = userEvent.setup();
     renderTab();
     await screen.findByText('Asha Pillai');
-    await user.click(chip(/^Past/));
+    await user.click(chip(/^Archived/));
     await user.click(screen.getByRole('button', { name: /^Actions for Old Patient/ }));
     await user.click(screen.getByRole('button', { name: 'Duplicate' }));
     await waitFor(() => expect(duplicateProgram).toHaveBeenCalledWith('p4'));
@@ -223,5 +224,66 @@ describe('ProgramsTab', () => {
     listClinicPrograms.mockResolvedValue([]);
     renderTab();
     expect(await screen.findByText(/No programs yet/)).toBeInTheDocument();
+  });
+
+  it('has the five filter labels and the owner toggle labels', async () => {
+    renderTab();
+    await screen.findByText('Asha Pillai');
+    for (const n of [/^Needs attention/, /^Active/, /^Ending this week/, /^Recently ended/, /^Archived/]) expect(chip(n)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My patients' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Adherence, last 14 days' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Alerts' })).toBeInTheDocument();
+  });
+
+  it('Ending this week lists active programs whose last day is within 6 days', async () => {
+    const user = userEvent.setup();
+    listClinicPrograms.mockResolvedValue([bundle('e1', 'Ending Soon', { startDate: day(-3), durationDays: 7 }), bundle('e2', 'Far Away', { startDate: day(-3), durationDays: 30 })]);
+    renderTab();
+    await screen.findByRole('button', { name: /^Active/ });
+    expect(chip(/^Ending this week/)).toHaveTextContent('1');
+    await user.click(chip(/^Ending this week/));
+    expect(screen.getByText('Ending Soon')).toBeInTheDocument();
+    expect(screen.queryByText('Far Away')).toBeNull();
+  });
+
+  it('draws the 14-day strip with the percentage under it, or "Not enough data"', async () => {
+    const user = userEvent.setup();
+    listClinicPrograms.mockResolvedValue([bundle('s1', 'Strip Person'), bundle('s2', 'New Person', { startDate: TODAY })]);
+    renderTab();
+    await user.click(await screen.findByRole('button', { name: /^Active/ }));
+    const row = screen.getByText('Strip Person').closest('tr')!;
+    expect(within(row).getAllByRole('img', { name: /^\d{4}-\d{2}-\d{2}:/ })).toHaveLength(14);
+    expect(within(screen.getByText('New Person').closest('tr')!).getByText('Not enough data')).toBeInTheDocument();
+  });
+
+  it('the strip shows on phone cards too', async () => {
+    wide = false;
+    renderTab();
+    await screen.findByText('Asha Pillai');
+    const card = screen.getByText('Asha Pillai').closest('li')!;
+    expect(within(card).getAllByRole('img', { name: /^\d{4}-\d{2}-\d{2}:/ })).toHaveLength(14);
+  });
+
+  it('a red alert with a phone is "Call" (tel: link built from the clinic country code); without a phone it is "Open"', async () => {
+    listClinicPrograms.mockResolvedValue([
+      bundle('c1', 'Has Phone', {}, { sessionFeedback: [{ ...pain, programId: 'c1', painItemIds: ['c1a'] }], patientPhone: '9876543210' }),
+      bundle('c2', 'No Phone', {}, { sessionFeedback: [{ ...pain, programId: 'c2', painItemIds: ['c2a'] }], patientPhone: null }),
+    ]);
+    renderTab();
+    await screen.findByText('Has Phone');
+    const call = within(screen.getByText('Has Phone').closest('tr')!).getByRole('link', { name: 'Call' });
+    expect(call).toHaveAttribute('href', 'tel:+919876543210');
+    const noPhone = screen.getByText('No Phone').closest('tr')!;
+    expect(within(noPhone).queryByRole('link', { name: 'Call' })).toBeNull();
+    expect(within(noPhone).getByRole('link', { name: 'Open' })).toBeInTheDocument();
+  });
+
+  it('an amber alert is "Message", and no alert is "Open"', async () => {
+    const user = userEvent.setup();
+    renderTab({ onMessage: vi.fn() });
+    await screen.findByText('Ravi Kumar');
+    expect(within(screen.getByText('Ravi Kumar').closest('tr')!).getByRole('button', { name: 'Message' })).toBeInTheDocument();
+    await user.click(chip(/^Active/));
+    expect(within(screen.getByText('Sunil Rao').closest('tr')!).getByRole('link', { name: 'Open' })).toBeInTheDocument();
   });
 });
