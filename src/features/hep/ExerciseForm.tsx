@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/Button';
 import { useIsDesktop } from '@/components/useMediaQuery';
+import { useClinic } from '@/app/clinicContext';
 import { ConfirmDialog, SheetDialog, btnPrimary, btnSecondary, pillSmDanger } from '@/components/ui';
 import {
   HEP_REGIONS,
@@ -16,6 +17,7 @@ import {
   type ExerciseMediaType,
   type ExercisePhase,
 } from '@/domain/hep';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { describeDose, doseToExerciseFields, exerciseToDose, isDoseValid, withKind, type DoseValue } from '@/domain/hepDose';
 import { similarExercise } from '@/domain/hepLibrary';
 import { db } from '@/lib/db';
@@ -40,7 +42,7 @@ import {
 } from './ExerciseFormSections';
 import { ExercisePreviewPhone } from './PatientPreview';
 import { exerciseToSaveInput } from './exerciseSaveInput';
-import { useOnline } from './useHepData';
+import { clinicToday, useOnline } from './useHepData';
 
 const blankDose = (): DoseValue => ({ kind: 'reps', sets: 3, reps: 10, holdSeconds: null, durationSeconds: null, restSeconds: 30, side: 'none', sessionsPerDay: 1 });
 
@@ -60,11 +62,14 @@ function startingValues(ex: Exercise | undefined, initialTitle: string | undefin
     otherNames: ex?.otherNames ?? [],
     otherNameDraft: '',
     positions: ex ? positionsOf(ex) : [],
+    hidePictures: ex?.hidePicturesInLists ?? false,
     pictures: (ex?.mediaKeys ?? []).map((key, i): Picture => ({ key, file: null, preview: null, caption: ex?.mediaCaptions[i] ?? '', isGif: ex?.mediaType === 'gif' })),
   };
 }
 type FormValues = ReturnType<typeof startingValues>;
 /** Signed preview links arrive later and are not a change, so pictures compare by key, file and caption. */
+/** Which pictures are in the form: saved ones by key, new or adjusted ones by file. Order and captions do not count. */
+const pictureSet = (ps: Picture[]) => ps.map((p) => (p.file ? `new:${p.file.name}:${p.file.size}:${p.ready ? 1 : 0}` : `key:${p.key}`)).sort().join('|');
 const snapshot = (v: FormValues) =>
   JSON.stringify({ ...v, pictures: v.pictures.map((p) => [p.key, p.file ? `${p.file.name}:${p.file.size}:${p.ready ? 1 : 0}` : null, p.caption, p.isGif]) });
 
@@ -86,6 +91,7 @@ export interface ExerciseFormProps {
 
 export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTitle, saveLabel = 'Save exercise', onClose, onSaved }: ExerciseFormProps) {
   const online = useOnline();
+  const clinic = useClinic();
   const isDesktop = useIsDesktop();
   const isEdit = !!exercise;
   const [id, setId] = useState<string>(() => exercise?.id ?? crypto.randomUUID());
@@ -103,7 +109,11 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const [otherNames, setOtherNames] = useState<string[]>([]);
   const [otherNameDraft, setOtherNameDraft] = useState('');
   const [positions, setPositions] = useState<string[]>([]);
-  const [pictures, setPictures] = useState<Picture[]>([]);
+  const [pictures, setPicturesState] = useState<Picture[]>([]);
+  const [hidePictures, setHidePictures] = useState(false);
+  // Consent ticked in this form: it covers the pictures present when it was ticked, so it clears when they change.
+  const [consentTicked, setConsentTicked] = useState(false);
+  const [consentBlocked, setConsentBlocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -114,6 +124,11 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const kindTouched = useRef(false);
+
+  const setPictures = (next: Picture[]) => {
+    if (pictureSet(next) !== pictureSet(pictures)) { setConsentTicked(false); setConsentBlocked(false); }
+    setPicturesState(next);
+  };
 
   // Load the exercise (or a blank form) each time the sheet opens.
   useEffect(() => {
@@ -135,7 +150,10 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     setOtherNames(v.otherNames);
     setOtherNameDraft(v.otherNameDraft);
     setPositions(v.positions);
-    setPictures(v.pictures);
+    setPicturesState(v.pictures);
+    setHidePictures(v.hidePictures);
+    setConsentTicked(false);
+    setConsentBlocked(false);
     setBaseline(snapshot(v));
     setError(null);
     setBusy(false);
@@ -149,7 +167,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     if (ex && navigator.onLine) hepService.exerciseUsage(ex.id).then(setUsage).catch(() => {});
     if (ex && ex.mediaKeys.length > 0 && navigator.onLine) {
       hepMediaService.mintViewUrls(clinicId, ex.mediaKeys).then((urls) => {
-        setPictures((cur) => cur.map((p) => (p.key && !p.preview ? { ...p, preview: urls[p.key] ?? null } : p)));
+        setPicturesState((cur) => cur.map((p) => (p.key && !p.preview ? { ...p, preview: urls[p.key] ?? null } : p)));
       }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,7 +187,20 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const picturesOk = pictures.length === 0 || (hasGif ? pictures.length === 1 : pictures.length >= 2 && pictures.length <= MAX_PICTURES);
   // Position is not needed to save (older exercises have none); only Classification's ✓ waits for it.
   const valid = title.trim().length > 0 && effectiveRegion.length > 0 && isDoseValid(dose) && picturesOk;
-  const dirty = snapshot({ title, region, customRegion, also, phase, equipment, customEquipment, steps, stopIf, dose, otherNames, otherNameDraft, positions, pictures }) !== baseline;
+  const dirty = snapshot({ title, region, customRegion, also, phase, equipment, customEquipment, steps, stopIf, dose, otherNames, otherNameDraft, positions, hidePictures, pictures }) !== baseline;
+
+  // Consent is asked for when a save brings pictures in: a new exercise (a progression included), or a different set of
+  // pictures from the saved one. An untouched legacy exercise saves without it (the server rule is the same).
+  const editingSaved = isEdit && !duplicated;
+  const picturesIntroduced = pictures.length > 0 && (!editingSaved || pictureSet(pictures) !== pictureSet(startingValues(exercise, undefined).pictures));
+  const recordedConsent = editingSaved && !picturesIntroduced && pictures.length > 0 && exercise?.pictureConsentAt ? exercise.pictureConsentAt : null;
+  const consent = {
+    recordedOn: recordedConsent ? formatDateDM(clinicToday(clinic, new Date(recordedConsent))) : null,
+    ticked: consentTicked,
+    onTick: (v: boolean) => { setConsentTicked(v); if (v) setConsentBlocked(false); },
+    blocked: consentBlocked && picturesIntroduced && !consentTicked,
+    legacy: editingSaved && !picturesIntroduced && !recordedConsent,
+  };
 
   const done: Record<SectionKey, boolean> = {
     details: title.trim().length > 0 && effectiveRegion.length > 0 && typeChosen,
@@ -212,6 +243,11 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
   async function save() {
     if (!online) { setError(HEP_NEEDS_CONNECTION); return; }
+    if (picturesIntroduced && !consentTicked) {
+      setConsentBlocked(true);
+      setOpenSections(['media']);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -255,14 +291,18 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
         mediaKeys: finalKeys,
         mediaCaptions: pictures.map((p) => p.caption.trim()),
         thumbKey,
+        hidePicturesInLists: hidePictures,
         ...doseToExerciseFields(dose),
         stopIf: stopIf.trim(),
         active: exercise?.active ?? true,
       };
-      const savedId = await hepService.saveExercise({ id, clinicId, ...fields });
+      // Consent goes only when newly ticked; the server records who and when (an unchanged exercise keeps its record).
+      const newConsent = pictures.length > 0 && consentTicked;
+      const savedId = await hepService.saveExercise({ id, clinicId, ...fields, ...(newConsent ? { pictureConsent: true } : {}) });
       // Show it in the local list at once; the next sync pull replaces this row with the server's.
       const now = new Date().toISOString();
-      const saved: Exercise = { ...fields, id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
+      const keptConsent = editingSaved && !picturesIntroduced ? { pictureConsentAt: exercise?.pictureConsentAt ?? null, pictureConsentBy: exercise?.pictureConsentBy ?? null } : { pictureConsentAt: null, pictureConsentBy: null };
+      const saved: Exercise = { ...fields, ...(newConsent ? { pictureConsentAt: now, pictureConsentBy: null } : keptConsent), id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
       await db.exercises.put(saved).catch(() => {});
       onSaved(savedId, saved);
       onClose();
@@ -306,6 +346,8 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     setUsage(null);
     kindTouched.current = true;
     setDuplicated(true);
+    setConsentTicked(false);
+    setConsentBlocked(false);
     setOpenSections(['details', 'dose']);
   }
 
@@ -330,7 +372,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
         similarNote={similar && <p className="rounded-md bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]" role="status">Similar: {similar.title} ({canonicalRegion(similar.bodyRegion)}). You can still save this one.</p>}
       />
     ),
-    media: <MediaFields pictures={pictures} setPictures={setPictures} onProblem={setError} busy={busy} steps={steps} setSteps={setSteps} stopIf={stopIf} setStopIf={setStopIf} />,
+    media: <MediaFields pictures={pictures} setPictures={setPictures} onProblem={setError} busy={busy} steps={steps} setSteps={setSteps} stopIf={stopIf} setStopIf={setStopIf} consent={consent} hidePictures={hidePictures} setHidePictures={setHidePictures} />,
     dose: (
       <>
         <ExerciseDoseEditor value={dose} onChange={(v) => { if (v.kind !== dose.kind) kindTouched.current = true; setDose(v); }} />

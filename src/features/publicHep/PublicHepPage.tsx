@@ -84,6 +84,10 @@ export function PublicHepPage() {
   }, [token]);
 
   const boot = useCallback(async () => {
+    // A new token (or a retry) starts clean: no earlier patient's Home may show, and a late answer for it is dropped.
+    homeGen.current += 1;
+    setHome(null);
+    setTab('home');
     setStage({ name: 'loading' });
     const device = readDevice(token);
     if (device) {

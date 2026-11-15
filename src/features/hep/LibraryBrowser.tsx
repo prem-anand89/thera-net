@@ -3,7 +3,7 @@
 // It shows what the filters leave; the parent decides what a tap does (open the form, or tick the exercise).
 // The root is a container (`@container`), so grid / table / rows follow its width, also inside the picker sheet.
 import { useMemo, useState } from 'react';
-import { EXERCISE_TYPES, canonicalRegion, isSensitiveExercise, type Exercise } from '@/domain/hep';
+import { EXERCISE_TYPES, canonicalRegion, type Exercise } from '@/domain/hep';
 import { chipSelect, chipSelectChevron, filterChip, inputCls, segOption, segTrack } from '@/components/ui';
 import { doseSummary } from '@/domain/hepDose';
 import {
@@ -93,7 +93,7 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_CO
   const tick = (ex: Exercise) => !!selected?.has(ex.id);
 
   const card = (ex: Exercise) => {
-    const url = ex.thumbKey && !isSensitiveExercise(ex) ? thumbs[ex.thumbKey] : undefined;
+    const url = ex.thumbKey && !ex.hidePicturesInLists ? thumbs[ex.thumbKey] : undefined;
     return (
       <li key={ex.id} className={`relative rounded-xl border bg-[var(--surface)] ${tick(ex) ? 'border-[var(--teal)] ring-2 ring-[var(--teal)]' : 'border-[var(--border)]'} ${off(ex) ? 'opacity-50' : ''}`}>
         <button type="button" data-exercise={ex.id} disabled={off(ex)} aria-pressed={selected ? tick(ex) : undefined} onClick={() => onActivate(ex)} className="block w-full min-w-0 space-y-1 p-2 text-left">

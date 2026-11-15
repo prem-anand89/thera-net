@@ -2,7 +2,7 @@
 // The signed-in patient page's two tabs (Home and Exercises), the Home RPC's "verify once" rule, and the richer
 // exercise page. The sign-in, checklist and session-check flows are covered in PublicHepPage.test.tsx.
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicHepHome } from '@/services/publicHepService';
@@ -183,6 +183,37 @@ describe('verifying once', () => {
     await waitFor(() => expect(svc.getPublicHome).toHaveBeenCalled());
     expect(screen.getByRole('heading', { name: 'Knee program' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Your 4-digit PIN')).toBeNull();
+  });
+});
+
+describe('Home answers that arrive late, and Home is asked once', () => {
+  it('a late Home answer after "Forget this phone" is dropped, and a new sign-in never shows the old patient', async () => {
+    let late: (v: unknown) => void = () => {};
+    svc.getPublicHome.mockReturnValueOnce(new Promise((r) => { late = r; }));
+    const u = await openWithDevice();
+    await waitFor(() => expect(svc.getPublicHome).toHaveBeenCalledTimes(1));
+    await u.click(screen.getByRole('tab', { name: 'Exercises' }));
+    await u.click(screen.getAllByRole('button', { name: 'Forget this phone' })[0]);
+    await screen.findByLabelText('Your 4-digit PIN');
+    svc.getPublicHome.mockReturnValue(new Promise(() => {}));
+    svc.getPublicHep.mockResolvedValue({ ok: true, ...hepData([wall]) });
+    await act(async () => { late({ ok: true, ...fullHome }); });
+    await u.type(screen.getByLabelText('Your 4-digit PIN'), '1234');
+    await screen.findByRole('heading', { name: 'Knee program' });
+    expect(screen.queryByText('Hi Shiva')).toBeNull();
+  });
+
+  it('refreshing picture links and switching programs never ask for Home again', async () => {
+    const u = await openWithDevice(hepData([item({ id: 'i9', title: 'Heel Raises', mediaType: 'stills', mediaUrls: ['https://signed/a', 'https://signed/b'], mediaCaptions: ['', ''] })]));
+    await waitFor(() => expect(svc.getPublicHome).toHaveBeenCalledTimes(1));
+    vi.setSystemTime(new Date('2026-11-14T06:05:00Z'));
+    await u.click(screen.getByRole('tab', { name: 'Exercises' }));
+    await u.click(screen.getByRole('button', { name: 'Open Heel Raises' }));
+    const hepCalls = svc.getPublicHep.mock.calls.length;
+    fireEvent.error(screen.getAllByRole('img')[0]);
+    await waitFor(() => expect(svc.getPublicHep.mock.calls.length).toBe(hepCalls + 1));
+    expect(svc.getPublicHep).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'refresh' }));
+    expect(svc.getPublicHome).toHaveBeenCalledTimes(1);
   });
 });
 

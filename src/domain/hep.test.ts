@@ -16,7 +16,6 @@ import {
   HEP_BODY_ORDER,
   isFourDigitPin,
   isHighPainAlert,
-  isSensitiveExercise,
   matchesExerciseSearch,
   nextSessionSlotToday,
   regionTree,
@@ -203,10 +202,6 @@ describe('regions and the Library side list', () => {
     expect(regionTree([ex('Knee', 'balance', [], false)], { includeArchived: true }).find((n) => n.region === 'Knee')!.count).toBe(1);
   });
 
-  it('knows which exercises are sensitive (pelvic floor)', () => {
-    expect(isSensitiveExercise({ bodyRegion: 'Hip', alsoRegions: ['Pelvic floor: Women'] })).toBe(true);
-    expect(isSensitiveExercise({ bodyRegion: 'Face', alsoRegions: [] })).toBe(false);
-  });
 });
 
 describe('search forgives wording (other names, plurals, hyphens, typos)', () => {

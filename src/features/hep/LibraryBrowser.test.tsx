@@ -120,11 +120,23 @@ describe('LibraryBrowser', () => {
     expect(screen.getAllByRole('columnheader').length).toBeGreaterThan(0);
   });
 
-  it('pelvic floor rows show a text tile (never a picture); others show their thumbnail', async () => {
-    const { container } = setup();
-    await vi.waitFor(() => expect(container.querySelectorAll('img').length).toBe(1));
-    expect(container.innerHTML).not.toContain('e5/thumb');
+  it('pelvic floor pictures show like any other; only "Hide pictures in lists" hides a thumbnail', async () => {
+    const lib = LIB.map((e) => (e.id === '4' ? { ...e, hidePicturesInLists: true } : e));
+    const { container } = setup({ exercises: lib });
+    await vi.waitFor(() => expect(container.querySelectorAll('img').length).toBe(2));
+    expect(container.innerHTML).toContain('e5/thumb');
+    expect(container.innerHTML).toContain('e6/thumb');
     expect(container.innerHTML).not.toContain('e4/thumb');
+  });
+
+  it('the table view hides a thumbnail the same way', async () => {
+    const user = userEvent.setup();
+    const lib = LIB.map((e) => (e.id === '5' ? { ...e, hidePicturesInLists: true } : e));
+    const { container } = setup({ exercises: lib });
+    await user.click(screen.getByRole('button', { name: 'Table' }));
+    await vi.waitFor(() => expect(container.querySelectorAll('img').length).toBe(2));
+    expect(container.innerHTML).not.toContain('e5/thumb');
+    expect(container.innerHTML).toContain('e4/thumb');
   });
 
   it('a tap calls onActivate; in picker mode ticked ones show pressed and disabled ones show "In program"', async () => {

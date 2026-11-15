@@ -331,6 +331,7 @@ describe('ExerciseForm: saving and managing', () => {
     await user.upload(input, new File(['b'], 'end.jpg', { type: 'image/jpeg' }));
     await user.type(screen.getByLabelText('Caption for picture 1'), 'Start');
     expect(saveButton()).toBeEnabled();
+    await user.click(screen.getByRole('checkbox', { name: /I have consent from the person shown/ }));
     await user.click(saveButton());
     await waitFor(() => expect(saveExercise).toHaveBeenCalled());
     const id = mintUploadUrls.mock.calls[0][1] as string;
@@ -368,6 +369,7 @@ describe('ExerciseForm: saving and managing', () => {
     await user.upload(input, [new File(['a'], 'start.jpg', { type: 'image/jpeg' }), new File(['b'], 'end.jpg', { type: 'image/jpeg' })]);
     await user.click(screen.getAllByRole('button', { name: 'Adjust or blur' })[0]);
     await user.click(await screen.findByRole('button', { name: 'finish adjusting' }));
+    await user.click(screen.getByRole('checkbox', { name: /I have consent from the person shown/ }));
     await user.click(saveButton());
     await waitFor(() => expect(saveExercise).toHaveBeenCalled());
     expect(compress.mock.calls.map((c) => c[0].name)).toEqual(['end.jpg']); // only the one that was not adjusted
@@ -384,6 +386,7 @@ describe('ExerciseForm: saving and managing', () => {
     await nameAndRegion(user);
     await openSection(user, 'Media and instructions');
     await user.upload(screen.getByLabelText('Choose photos or a GIF', { selector: 'input' }), [new File(['a'], 'start.jpg', { type: 'image/jpeg' }), new File(['b'], 'end.jpg', { type: 'image/jpeg' })]);
+    await user.click(screen.getByRole('checkbox', { name: /I have consent from the person shown/ }));
     await user.click(saveButton());
     expect(await screen.findByRole('button', { name: 'Uploading 1 of 3…' })).toBeDisabled();
     release[0]();
@@ -422,5 +425,132 @@ describe('ExerciseForm: saving and managing', () => {
     expect(screen.queryByRole('button', { name: 'Create progression' })).toBeNull();
     await user.click(saveButton());
     expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ title: 'Wall Slides (progression)', id: expect.not.stringMatching(/^e1$/) }));
+  });
+});
+
+describe('ExerciseForm: picture consent and "Hide pictures in lists"', () => {
+  const CONSENT = 'I have consent from the person shown to use these pictures with patients.';
+  const BLOCKED = 'Tick consent to save these pictures, or remove them.';
+  const pictured = (over: Partial<Exercise> = {}) => saved({ mediaType: 'stills', mediaKeys: ['clinics/c1/exercises/e1/0-aaaaaaaa', 'clinics/c1/exercises/e1/1-aaaaaaaa'], mediaCaptions: ['', ''], thumbKey: 'clinics/c1/exercises/e1/thumb-aaaaaaaa', ...over });
+  const photo = (n: string) => new File([n], `${n}.jpg`, { type: 'image/jpeg' });
+  async function addTwoPhotos(user: UserEvent) {
+    await openSection(user, 'Media and instructions');
+    const input = screen.getByLabelText('Choose photos or a GIF', { selector: 'input' });
+    await user.upload(input, photo('a'));
+    await user.upload(input, photo('b'));
+  }
+  beforeEach(() => {
+    mintUploadUrls.mockImplementation(async (_c: string, id: string, slots: Array<number | 'thumb'>) =>
+      slots.map((s) => ({ slot: s, key: `clinics/c1/exercises/${id}/${s}-abcdefgh`, url: `https://r2.test/${s}`, headers: {} })));
+  });
+
+  it('shows neither the consent box nor the switch while there are no pictures', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: saved() });
+    await openSection(user, 'Media and instructions');
+    expect(screen.queryByRole('checkbox', { name: CONSENT })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Hide pictures in lists' })).toBeNull();
+  });
+
+  it('new pictures without the tick block the save, open Media and show the amber note; ticking lets it save with consent', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await nameAndRegion(user);
+    await addTwoPhotos(user);
+    expect(screen.getByText('Recorded with your name and the date.')).toBeInTheDocument();
+    await user.click(sectionButton('Exercise details'));
+    expect(expanded()).toEqual(['Exercise details']);
+    await user.click(saveButton());
+    expect(saveExercise).not.toHaveBeenCalled();
+    expect(expanded()).toEqual(['Media and instructions']);
+    expect(screen.getByText(BLOCKED)).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: CONSENT }));
+    expect(screen.queryByText(BLOCKED)).toBeNull();
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ pictureConsent: true, hidePicturesInLists: false })));
+  });
+
+  it('"Hide pictures in lists" is a switch with its hint, and its value is sent', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: pictured({ pictureConsentAt: '2026-11-10T05:00:00Z' }) });
+    await openSection(user, 'Media and instructions');
+    expect(screen.getByText("Library, picker and the patient's checklist show the name only. The pictures still show on the exercise page itself.")).toBeInTheDocument();
+    const sw = screen.getByRole('switch', { name: 'Hide pictures in lists' });
+    expect(sw).not.toBeChecked();
+    await user.click(sw);
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ hidePicturesInLists: true })));
+  });
+
+  it('recorded consent shows its date instead of an unticked box and is not sent again', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: pictured({ pictureConsentAt: '2026-11-10T05:00:00Z', pictureConsentBy: 'u1', hidePicturesInLists: true }) });
+    await openSection(user, 'Media and instructions');
+    expect(screen.getByText('Consent recorded 10/11')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: CONSENT })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide pictures in lists' })).toBeChecked();
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalled());
+    expect(saveExercise.mock.calls[0][0].pictureConsent).toBeFalsy();
+    expect(saveExercise.mock.calls[0][0].hidePicturesInLists).toBe(true);
+  });
+
+  it('a legacy exercise with pictures and no consent saves untouched, and asks gently', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: pictured() });
+    await openSection(user, 'Media and instructions');
+    expect(screen.getByRole('checkbox', { name: CONSENT })).not.toBeChecked();
+    expect(screen.getByText(/No consent is recorded for these pictures yet/)).toBeInTheDocument();
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalled());
+    expect(saveExercise.mock.calls[0][0].pictureConsent).toBeFalsy();
+  });
+
+  it('adding a picture to an exercise with recorded consent asks for a fresh tick', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: pictured({ pictureConsentAt: '2026-11-10T05:00:00Z' }) });
+    await openSection(user, 'Media and instructions');
+    await user.upload(screen.getByLabelText('Choose photos or a GIF', { selector: 'input' }), photo('c'));
+    expect(screen.queryByText('Consent recorded 10/11')).toBeNull();
+    await user.click(saveButton());
+    expect(saveExercise).not.toHaveBeenCalled();
+    expect(screen.getByText(BLOCKED)).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: CONSENT }));
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ pictureConsent: true })));
+  });
+
+  it('a tick does not carry over to pictures added after it', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await nameAndRegion(user);
+    await addTwoPhotos(user);
+    await user.click(screen.getByRole('checkbox', { name: CONSENT }));
+    await user.upload(screen.getByLabelText('Choose photos or a GIF', { selector: 'input' }), photo('c'));
+    expect(screen.getByRole('checkbox', { name: CONSENT })).not.toBeChecked();
+  });
+
+  it('removing every picture needs no consent', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: pictured({ pictureConsentAt: '2026-11-10T05:00:00Z' }) });
+    await openSection(user, 'Media and instructions');
+    await user.click(screen.getByRole('button', { name: 'Remove picture 1' }));
+    await user.click(screen.getByRole('button', { name: 'Remove picture 1' }));
+    expect(screen.queryByRole('checkbox', { name: CONSENT })).toBeNull();
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ mediaKeys: [] })));
+  });
+
+  it('Create progression copies the pictures, so it needs a tick of its own', async () => {
+    const user = userEvent.setup();
+    renderForm({ exercise: pictured({ pictureConsentAt: '2026-11-10T05:00:00Z' }) });
+    await user.click(screen.getByRole('button', { name: 'Create progression' }));
+    await user.click(saveButton());
+    expect(saveExercise).not.toHaveBeenCalled();
+    expect(expanded()).toEqual(['Media and instructions']);
+    expect(screen.getByText(BLOCKED)).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: CONSENT }));
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ pictureConsent: true, title: 'Wall Slides (progression)' })));
   });
 });

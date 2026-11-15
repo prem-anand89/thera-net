@@ -3,6 +3,7 @@
 import { useId, type ReactNode } from 'react';
 import { Button } from '@/components/Button';
 import { Field, btnPrimary, btnSecondary, filterChip, inputCls } from '@/components/ui';
+import { SwitchRow } from '@/features/settings/settingsShared';
 import {
   EXERCISE_PHASE_LABELS,
   EXERCISE_TYPES,
@@ -170,6 +171,41 @@ export interface MediaFieldsProps {
   setSteps: (v: string) => void;
   stopIf: string;
   setStopIf: (fn: (cur: string) => string) => void;
+  /** The consent line's state; the box is only drawn when there are pictures. */
+  consent: ConsentState;
+  hidePictures: boolean;
+  setHidePictures: (v: boolean) => void;
+}
+
+export interface ConsentState {
+  /** "10/11": consent already on record for exactly these pictures, shown instead of a box. */
+  recordedOn: string | null;
+  ticked: boolean;
+  onTick: (v: boolean) => void;
+  /** The save was refused for want of the tick: the box turns amber with the reason. */
+  blocked: boolean;
+  /** Pictures that were saved before consent existed: a gentle prompt, never a block. */
+  legacy: boolean;
+}
+
+function ConsentBox({ c }: { c: ConsentState }) {
+  const id = useId();
+  if (c.recordedOn) {
+    return <p className="rounded-xl bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]" role="status">Consent recorded {c.recordedOn}</p>;
+  }
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${c.blocked ? 'border-[var(--amber-strong)] bg-[var(--amber-light)]' : 'border-[var(--border)] bg-[var(--paper)]'}`}>
+      <label className="flex min-h-11 cursor-pointer items-start gap-2.5 py-1.5">
+        <input type="checkbox" aria-label="I have consent from the person shown to use these pictures with patients." aria-describedby={`${id}-hint`} className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--teal)]" checked={c.ticked} onChange={(e) => c.onTick(e.target.checked)} />
+        <span>
+          <span className="block text-sm font-medium text-[var(--ink)]">I have consent from the person shown to use these pictures with patients.</span>
+          <span id={`${id}-hint`} className="block text-xs text-[var(--muted)]">Recorded with your name and the date.</span>
+        </span>
+      </label>
+      {c.legacy && !c.blocked && <p className="text-xs text-[var(--muted)]">No consent is recorded for these pictures yet. Tick the box when you have it.</p>}
+      {c.blocked && <p className="text-xs font-semibold text-[var(--amber-strong)]" role="alert">Tick consent to save these pictures, or remove them.</p>}
+    </div>
+  );
 }
 
 export function MediaFields(p: MediaFieldsProps) {
@@ -180,6 +216,18 @@ export function MediaFields(p: MediaFieldsProps) {
         <div className="text-label font-medium text-[var(--muted)]">Photos or GIF</div>
         <PictureField pictures={p.pictures} setPictures={p.setPictures} onProblem={p.onProblem} disabled={p.busy} />
       </div>
+      {p.pictures.length > 0 && (
+        <>
+          <ConsentBox c={p.consent} />
+          <SwitchRow
+            label="Hide pictures in lists"
+            hint="Library, picker and the patient's checklist show the name only. The pictures still show on the exercise page itself."
+            checked={p.hidePictures}
+            onChange={p.setHidePictures}
+            disabled={p.busy}
+          />
+        </>
+      )}
       <Field label="Instructions" hint="One step per line. Shown to the patient as numbered steps.">
         <textarea className={inputCls} rows={5} value={p.steps} onChange={(e) => p.setSteps(e.target.value)} placeholder={'Stand with your back to the wall\nSlide your arms up slowly'} />
       </Field>

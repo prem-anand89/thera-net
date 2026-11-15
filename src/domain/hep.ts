@@ -279,11 +279,6 @@ export const canonicalEquipment = (raw: string) => canonicalFrom(HEP_EQUIPMENT, 
 
 export const isPelvicFloorRegion = (region: string) => canonicalRegion(region).startsWith('Pelvic floor');
 
-/** Pelvic floor pictures never show in lists (amendment 23). */
-export function isSensitiveExercise(ex: Pick<Exercise, 'bodyRegion' | 'alsoRegions'>): boolean {
-  return isPelvicFloorRegion(ex.bodyRegion) || ex.alsoRegions.some(isPelvicFloorRegion);
-}
-
 export interface RegionTypeCount {
   phase: ExercisePhase;
   count: number;

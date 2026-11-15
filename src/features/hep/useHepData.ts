@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { clinicTimezone } from '@/domain/clinicRegion';
-import { addDaysISO, isSensitiveExercise, type Exercise } from '@/domain/hep';
+import { addDaysISO, type Exercise } from '@/domain/hep';
 import { db } from '@/lib/db';
 import { hepMediaService } from '@/services/hepMediaService';
 import { hepService } from '@/services/hepService';
@@ -60,11 +60,11 @@ export function useExerciseUseCounts(): Record<string, number> {
 const THUMB_TTL_MS = 20 * 60 * 1000; // the signer keeps one link for 30 minutes and it is valid for 60
 const thumbCache = new Map<string, { url: string; at: number }>();
 
-/** Signed thumbnail links for the given exercises. Pelvic floor exercises never get one (amendment 23). */
+/** Signed thumbnail links for the given exercises. An exercise with "Hide pictures in lists" never gets one. */
 export function useThumbUrls(clinicId: string, exercises: Exercise[]): Record<string, string> {
   const online = useOnline();
   const keys = useMemo(
-    () => [...new Set(exercises.filter((e) => e.thumbKey && !isSensitiveExercise(e)).map((e) => e.thumbKey as string))],
+    () => [...new Set(exercises.filter((e) => e.thumbKey && !e.hidePicturesInLists).map((e) => e.thumbKey as string))],
     [exercises],
   );
   const wanted = keys.join('|');

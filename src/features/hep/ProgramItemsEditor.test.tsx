@@ -113,15 +113,21 @@ describe('ProgramItemsEditor: the ⋯ menu', () => {
 });
 
 describe('ProgramItemsEditor: rows', () => {
-  it('tapping a row opens its dosage and the note to patient; pelvic floor rows never get a picture', async () => {
+  it('tapping a row opens its dosage and the note to patient; a row shows its picture unless the exercise hides pictures in lists', async () => {
     const user = userEvent.setup();
-    render(<Harness start={[item(squat, { mediaKeys: [] }), item(kegel)]} library={[{ ...squat, thumbKey: 's.jpg' }, kegel]} />);
+    render(<Harness start={[item(squat, { mediaKeys: [] }), item(kegel)]} library={[{ ...squat, thumbKey: 's.jpg' }, { ...kegel, hidePicturesInLists: true }]} />);
     await user.click(screen.getByRole('button', { name: /^Squat/ }));
     expect(screen.getByLabelText('Note to patient (optional, any language)')).toBeInTheDocument();
     const kegelRow = screen.getByRole('button', { name: /^Pelvic floor squeeze/ }).closest('li') as HTMLElement;
     expect(kegelRow.querySelector('img')).toBeNull();
     const squatRow = screen.getByRole('button', { name: /^Squat/ }).closest('li') as HTMLElement;
     await vi.waitFor(() => expect(squatRow.querySelector('img')).not.toBeNull());
+  });
+
+  it('a pelvic floor row shows its picture like any other', async () => {
+    render(<Harness start={[item(kegel)]} library={[kegel]} />);
+    const row = screen.getByRole('button', { name: /^Pelvic floor squeeze/ }).closest('li') as HTMLElement;
+    await vi.waitFor(() => expect(row.querySelector('img')).not.toBeNull());
   });
 
   it('the template editor has no note to patient', async () => {

@@ -1,5 +1,5 @@
 // Small pieces the Library grid, table and picker share: the picture (or tile), the type tag and the one-line facts.
-import { EXERCISE_PHASE_LABELS, EXERCISE_TYPE_TONE, HEP_BODY_ORDER, canonicalRegion, isSensitiveExercise, positionsOf, type Exercise, type ExercisePhase } from '@/domain/hep';
+import { EXERCISE_PHASE_LABELS, EXERCISE_TYPE_TONE, HEP_BODY_ORDER, canonicalRegion, positionsOf, type Exercise, type ExercisePhase } from '@/domain/hep';
 import { regionLabel } from '@/domain/hepLibrary';
 
 /** The CSS colour of a type's tone. */
@@ -29,12 +29,12 @@ export function exerciseFacts(ex: Exercise): string {
   return [regionLabel(canonicalRegion(ex.bodyRegion)), positionsOf(ex).join(', '), equipment].filter(Boolean).join(' · ');
 }
 
-/** The picture (never for pelvic floor exercises), or a tinted tile. `ratio` is a Tailwind aspect class; `size` a fixed square. */
+/** The picture (not when the exercise hides its pictures in lists), or a tinted tile. `ratio` is a Tailwind aspect class; `size` a fixed square. */
 export function Thumb({ ex, url, size, ratio }: { ex: Exercise; url: string | undefined; size?: number; ratio?: string }) {
-  const sensitive = isSensitiveExercise(ex);
+  const hidden = !!ex.hidePicturesInLists;
   const box = size ? { width: size, height: size } : undefined;
   const cls = `relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg ${ratio ?? ''} ${size ? '' : 'w-full'}`;
-  if (url && !sensitive) {
+  if (url && !hidden) {
     return (
       <span className={`${cls} bg-[var(--paper)]`} style={box}>
         <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -44,7 +44,7 @@ export function Thumb({ ex, url, size, ratio }: { ex: Exercise; url: string | un
   }
   return (
     <span className={`${cls} text-[var(--muted)]`} style={{ ...box, background: regionTint(ex.bodyRegion) }} aria-hidden="true">
-      <span className="text-base leading-none">{sensitive ? '🔒' : '📄'}</span>
+      <span className="text-base leading-none">📄</span>
     </span>
   );
 }

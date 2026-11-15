@@ -16,8 +16,12 @@ describe('PackList thumbnails', () => {
     const { container } = render(<PackList clinicId="c1" packs={[pack('Spine / Back')]} library={[ex]} empty="none" onAddAll={() => {}} />);
     expect(container.querySelector('img')).not.toBeNull();
   });
-  it('hides it when the item itself is pelvic floor, even though the source exercise is not', () => {
+  it('shows it for a pelvic floor item too', () => {
     const { container } = render(<PackList clinicId="c1" packs={[pack('Pelvic floor: Women')]} library={[ex]} empty="none" onAddAll={() => {}} />);
+    expect(container.querySelector('img')).not.toBeNull();
+  });
+  it('hides it when the source exercise has "Hide pictures in lists"', () => {
+    const { container } = render(<PackList clinicId="c1" packs={[pack('Spine / Back')]} library={[{ ...ex, hidePicturesInLists: true } as Exercise]} empty="none" onAddAll={() => {}} />);
     expect(container.querySelector('img')).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/Button';
 import { filterChip, btnPrimary } from '@/components/ui';
-import { canonicalRegion, isSensitiveExercise, type Exercise } from '@/domain/hep';
+import { canonicalRegion, type Exercise } from '@/domain/hep';
 import { Thumb } from './LibraryParts';
 import { useThumbUrls } from './useHepData';
 
@@ -46,8 +46,7 @@ export function PackList({ clinicId, packs, library, regionChips, empty, onAddAl
             <div className="flex gap-1.5" aria-hidden="true">
               {p.exercises.slice(0, 5).map((e, i) => {
                 const src = e.sourceExerciseId ? byId.get(e.sourceExerciseId) : undefined;
-                const sensitive = !!src && (isSensitiveExercise(src) || isSensitiveExercise({ bodyRegion: e.bodyRegion, alsoRegions: src.alsoRegions }));
-                return src ? <Thumb key={i} ex={src} url={src.thumbKey && !sensitive ? thumbs[src.thumbKey] : undefined} size={40} /> : null;
+                return src ? <Thumb key={i} ex={src} url={src.thumbKey && !src.hidePicturesInLists ? thumbs[src.thumbKey] : undefined} size={40} /> : null;
               })}
             </div>
             <p className="line-clamp-2 text-xs text-[var(--muted)]">{p.exercises.map((e) => e.title).join(', ')}</p>

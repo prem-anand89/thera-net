@@ -83,6 +83,17 @@ describe('ProgramPreviewDialog', () => {
     expect(screen.getByRole('img')).toHaveAttribute('src', 'https://signed/1');
   });
 
+  it('holds a sourced row\'s thumbnail back until the exercise cache answers', async () => {
+    cache.exercises = undefined;
+    const items = [input({ title: 'Bridge2', sourceExerciseId: 'src1', mediaKeys: ['k1'], mediaCaptions: [''] })];
+    const r = render(<ProgramPreviewDialog open onClose={() => {}} clinicId="c1" clinicName="Sunrise Physio" title="Knee program" items={items} sessionsPerDay={1} />);
+    await waitFor(() => expect(mint).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).toBeNull();
+    cache.exercises = [{ id: 'src1', alsoRegions: [], hidePicturesInLists: false }];
+    r.rerender(<ProgramPreviewDialog open onClose={() => {}} clinicId="c1" clinicName="Sunrise Physio" title="Knee program" items={[...items]} sessionsPerDay={1} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).not.toBeNull());
+  });
+
   it('opens on the Exercises tab; Home is built from the program here and nothing is fetched or saved', async () => {
     const u = userEvent.setup();
     open([input(), input({ title: 'Clam' })]);

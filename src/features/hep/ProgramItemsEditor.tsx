@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { Field, KebabMenu, btnPrimary, btnSecondary, inputCls, menuItem } from '@/components/ui';
-import { EXERCISE_PHASE_LABELS, isSensitiveExercise, type Exercise, type ExercisePhase, type Program, type SessionsPerDay } from '@/domain/hep';
+import { EXERCISE_PHASE_LABELS, type Exercise, type ExercisePhase, type Program, type SessionsPerDay } from '@/domain/hep';
 import { describeDose } from '@/domain/hepDose';
 import type { HepItemInput, ProgramBundle } from '@/services/hepService';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
@@ -137,8 +137,7 @@ function ItemRow({ row, first, last, items, sessionsPerDay, library, editingLive
   const { item, index } = row;
   const open = openRow === index;
   const src = item.sourceExerciseId ? byId.get(item.sourceExerciseId) : undefined;
-  // Pelvic floor rows never get a picture, judged by the row's own region as well as the exercise's.
-  const sensitive = isSensitiveExercise({ bodyRegion: item.bodyRegion, alsoRegions: src?.alsoRegions ?? [] }) || (src ? isSensitiveExercise(src) : false);
+  // A row shows its source exercise's picture unless that exercise hides its pictures in lists (no source in the cache yet: no picture yet).
   const override = !forTemplate && item.sessionsPerDay !== sessionsPerDay;
   const liveItem = live?.items.find((i) => i.id === item.id);
   const block = blockOf(item.phase);
@@ -148,7 +147,7 @@ function ItemRow({ row, first, last, items, sessionsPerDay, library, editingLive
   return (
     <li className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-center gap-2 p-2">
-        {src && !sensitive && <Thumb ex={src} url={src.thumbKey ? thumbs[src.thumbKey] : undefined} size={40} />}
+        {src && !src.hidePicturesInLists && <Thumb ex={src} url={src.thumbKey ? thumbs[src.thumbKey] : undefined} size={40} />}
         <button type="button" aria-expanded={open} className="min-w-0 flex-1 text-left" onClick={() => setOpenRow(open ? null : index)}>
           <span className="block truncate text-sm font-semibold text-[var(--ink)]">{item.title}{item.optional && <span className="ml-2 text-xs font-medium text-[var(--muted)]">Optional</span>}</span>
           <span className="block truncate text-xs text-[var(--muted)]">{describeDose(itemDose(item), forTemplate ? 1 : sessionsPerDay)}{override && ` · Only this one: ${SESSION_LABEL[item.sessionsPerDay]}`}</span>

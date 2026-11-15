@@ -91,8 +91,10 @@ function ProgramPreviewBody(p: ProgramPreviewDialogProps) {
   const items = useMemo(() => {
     const ordered = orderBySection(p.items);
     return toPreviewItems(p.items, { today, sessionsPerDay: p.sessionsPerDay, mediaUrls }).map((it, i) => {
-      const src = ordered[i].sourceExerciseId ? cached?.find((e) => e.id === ordered[i].sourceExerciseId) : undefined;
-      return { ...it, hidePicturesInLists: src?.hidePicturesInLists ?? false };
+      const sourceId = ordered[i].sourceExerciseId;
+      const src = sourceId ? cached?.find((e) => e.id === sourceId) : undefined;
+      // A sourced row waits for the exercise cache before showing a thumbnail, so a hidden one never flashes up.
+      return { ...it, hidePicturesInLists: src ? !!src.hidePicturesInLists : !!sourceId && cached === undefined };
     });
   }, [p.items, today, p.sessionsPerDay, mediaUrls, cached]);
   // Home is built from this program alone: no Home RPC, no patient data.
