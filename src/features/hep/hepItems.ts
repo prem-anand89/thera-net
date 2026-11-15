@@ -1,6 +1,6 @@
 // The exercise rows inside a template or a program, as the editors hold them. An item is a COPY of the exercise at the
 // moment it was added (never a link), so later edits to the Library never change a template or a patient's program.
-import { EXERCISE_PHASES, type Exercise, type ExercisePhase, type ExerciseTemplateItem, type ProgramItem } from '@/domain/hep';
+import { isMainType, SESSION_ORDER, type Exercise, type ExercisePhase, type ExerciseTemplateItem, type ProgramItem } from '@/domain/hep';
 import { estimateSessionMinutes } from '@/domain/hep';
 import type { DoseValue } from '@/domain/hepDose';
 import type { HepItemInput } from '@/services/hepService';
@@ -66,9 +66,10 @@ export interface ItemSection {
   rows: Array<{ item: HepItemInput; index: number }>;
 }
 
-/** Sections in session order (warm-up first ...), each keeping the order the items were added in. Empty sections are left out. */
+/** Sections in session order (warm-up, the six types, other, cool-down), each keeping the order the items were added in.
+ *  Empty sections are left out. */
 export function groupItemsByPhase(items: HepItemInput[]): ItemSection[] {
-  return EXERCISE_PHASES
+  return SESSION_ORDER
     .map((phase) => ({ phase, rows: items.map((item, index) => ({ item, index })).filter((r) => r.item.phase === phase) }))
     .filter((s) => s.rows.length > 0);
 }
@@ -88,6 +89,47 @@ export function moveWithinSection(items: HepItemInput[], index: number, directio
   const next = [...items];
   [next[index], next[target]] = [next[target], next[index]];
   return next;
+}
+
+/** Warm-up and Cool-down are optional blocks at the top and bottom of a program or template, kept on the item's `phase`.
+ *  Everything else (the six types and Other) is the main block. */
+export type ItemBlock = 'warm_up' | 'main' | 'cool_down';
+
+export const blockOf = (phase: ExercisePhase): ItemBlock => (phase === 'warm_up' || phase === 'cool_down' ? phase : 'main');
+
+export interface ItemBlocks {
+  warmUp: ItemSection['rows'];
+  /** The six types then Other, each section keeping the order added. */
+  main: ItemSection[];
+  coolDown: ItemSection['rows'];
+}
+
+/** The program split into its three blocks. Row indexes point into the whole list, as in `groupItemsByPhase`. */
+export function programBlocks(items: HepItemInput[]): ItemBlocks {
+  const sections = groupItemsByPhase(items);
+  const rowsOf = (phase: ExercisePhase) => sections.find((s) => s.phase === phase)?.rows ?? [];
+  return { warmUp: rowsOf('warm_up'), main: sections.filter((s) => blockOf(s.phase) === 'main'), coolDown: rowsOf('cool_down') };
+}
+
+/** The section an item goes back to on "Move to main exercises": its source exercise's type when that is one of the
+ *  six, otherwise Other (source deleted, unknown, or itself a legacy warm-up / cool-down / other exercise). */
+export function mainPhaseFor(item: Pick<HepItemInput, 'sourceExerciseId'>, library: Pick<Exercise, 'id' | 'phase'>[]): ExercisePhase {
+  const source = item.sourceExerciseId ? library.find((e) => e.id === item.sourceExerciseId) : undefined;
+  return source && isMainType(source.phase) ? source.phase : 'other';
+}
+
+/** Moves an item into a block (sets its phase; for main, `mainPhase`, falling back to Other if that is not a main
+ *  section) and to the end of its new section. Returns a new array; an index outside the list changes nothing. */
+export function moveToBlock(items: HepItemInput[], index: number, block: ItemBlock, mainPhase: ExercisePhase): HepItemInput[] {
+  const item = items[index];
+  if (!item || index < 0) return items;
+  const phase: ExercisePhase = block === 'main' ? (blockOf(mainPhase) === 'main' ? mainPhase : 'other') : block;
+  return [...items.slice(0, index), ...items.slice(index + 1), { ...item, phase }];
+}
+
+/** Picker additions into a block: warm-up / cool-down take that block; main keeps each exercise's own type. */
+export function intoBlock(items: HepItemInput[], block: ItemBlock): HepItemInput[] {
+  return block === 'main' ? items : items.map((i) => ({ ...i, phase: block }));
 }
 
 /** "Needs: Towel, Chair": equipment across the items, in the order first met, without "None". */
