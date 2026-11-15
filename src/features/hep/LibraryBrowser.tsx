@@ -46,7 +46,7 @@ export interface LibraryBrowserProps {
   fixedView?: 'grid';
   /** Library mode: a star on every card and row. Absent in the picker. */
   onToggleFavorite?: (ex: Exercise) => void;
-  /** Library only: turns on the Select button (bulk archive / delete). Absent in the picker. */
+  /** Library only: turns on the Delete / archive button (bulk archive / delete). Absent in the picker. */
   selectable?: { online: boolean; onResult: (message: string) => void };
   /** What to show when the clinic has no exercises at all. */
   emptyState?: React.ReactNode;
@@ -138,7 +138,7 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_CO
               <option value="recent">Recently added</option>
             </select>
             {selectable && (
-              <button type="button" aria-pressed={selecting} className={filterChip(selecting)} onClick={() => (selecting ? exitSelect() : setSelecting(true))}>Select</button>
+              <button type="button" aria-pressed={selecting} className={filterChip(selecting)} onClick={() => (selecting ? exitSelect() : setSelecting(true))}>Delete / archive</button>
             )}
             {!fixedView && (
               <div className={segTrack} role="group" aria-label="View">

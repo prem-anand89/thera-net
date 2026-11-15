@@ -40,7 +40,7 @@ afterEach(cleanup);
 
 async function enterSelect(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText('Alpha');
-  await user.click(screen.getByRole('button', { name: 'Select' }));
+  await user.click(screen.getByRole('button', { name: 'Delete / archive' }));
 }
 
 describe('Library select mode', () => {
@@ -56,7 +56,7 @@ describe('Library select mode', () => {
     expect(within(bar).getByText('1 selected')).toBeInTheDocument();
     await user.click(within(bar).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Select' }));
+    await user.click(screen.getByRole('button', { name: 'Delete / archive' }));
     expect(screen.getByText('0 selected')).toBeInTheDocument();
   });
 
@@ -73,7 +73,7 @@ describe('Library select mode', () => {
     renderTab();
     await screen.findByText('Alpha');
     await user.click(screen.getByRole('button', { name: 'Table' }));
-    await user.click(screen.getByRole('button', { name: 'Select' }));
+    await user.click(screen.getByRole('button', { name: 'Delete / archive' }));
     await user.click(screen.getByRole('checkbox', { name: 'Select Bravo' }));
     expect(screen.getByText('1 selected')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Select all 3 shown' }));
@@ -107,7 +107,7 @@ describe('Library select mode', () => {
     renderTab();
     await screen.findByText('Alpha');
     await user.click(screen.getByRole('checkbox', { name: /Show archived/ }));
-    await user.click(screen.getByRole('button', { name: 'Select' }));
+    await user.click(screen.getByRole('button', { name: 'Delete / archive' }));
     await user.click(screen.getByRole('button', { name: 'Select all 4 shown' }));
     await user.click(screen.getByRole('button', { name: 'Archive' }));
     expect(await screen.findByText('Archive 3 exercises?')).toBeInTheDocument();
@@ -148,6 +148,6 @@ describe('Library select mode', () => {
       </ClinicContext.Provider>,
     );
     await screen.findByText('Alpha');
-    expect(screen.queryByRole('button', { name: 'Select' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete / archive' })).not.toBeInTheDocument();
   });
 });
