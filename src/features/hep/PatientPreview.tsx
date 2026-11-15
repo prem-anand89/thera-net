@@ -88,6 +88,8 @@ function ProgramPreviewBody(p: ProgramPreviewDialogProps) {
   const sensitiveIds = useMemo(() => {
     const ordered = orderBySection(p.items);
     return new Set(items.flatMap((it, i) => {
+      // Cache not loaded yet (undefined, not empty): a sourced item might be pelvic floor, so hold its thumbnail back.
+      if (cached === undefined && ordered[i].sourceExerciseId) return [it.id];
       const src = cached?.find((e) => e.id === ordered[i].sourceExerciseId);
       return isSensitiveExercise({ bodyRegion: ordered[i].bodyRegion, alsoRegions: src?.alsoRegions ?? [] }) ? [it.id] : [];
     }));

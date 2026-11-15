@@ -7,7 +7,7 @@ import type { HepItemInput } from '@/services/hepService';
 import { ExercisePreviewPhone, ProgramPreviewDialog } from './PatientPreview';
 
 const mint = vi.hoisted(() => vi.fn());
-const cache = vi.hoisted(() => ({ exercises: [] as Array<{ id: string; alsoRegions: string[] }> }));
+const cache = vi.hoisted(() => ({ exercises: [] as Array<{ id: string; alsoRegions: string[] }> | undefined }));
 const writes = vi.hoisted(() => ({
   hep: new Proxy({}, { get: (t: Record<string, unknown>, k: string) => (t[k] ??= vi.fn()) }) as Record<string, ReturnType<typeof vi.fn>>,
   pub: new Proxy({}, { get: (t: Record<string, unknown>, k: string) => (t[k] ??= vi.fn()) }) as Record<string, ReturnType<typeof vi.fn>>,
@@ -75,6 +75,17 @@ describe('ProgramPreviewDialog', () => {
     open([input({ title: 'Bridge2', sourceExerciseId: 'src1', mediaKeys: ['k1'], mediaCaptions: [''] }), input({ title: 'Clam', mediaKeys: ['k2'], mediaCaptions: [''] })]);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open Clam' }).querySelector('img')).not.toBeNull());
     expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).toBeNull();
+  });
+
+  it('hides a sourced item\'s thumbnail until the exercise cache loads, then shows it when not pelvic floor', async () => {
+    cache.exercises = undefined;
+    const items = [input({ title: 'Bridge2', sourceExerciseId: 'src1', mediaKeys: ['k1'], mediaCaptions: [''] }), input({ title: 'Clam', mediaKeys: ['k2'], mediaCaptions: [''] })];
+    const r = open(items);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Clam' }).querySelector('img')).not.toBeNull());
+    expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).toBeNull();
+    cache.exercises = [{ id: 'src1', alsoRegions: ['Hip'] }];
+    r.rerender(<ProgramPreviewDialog open onClose={() => {}} clinicId="c1" clinicName="Sunrise Physio" title="Knee program" items={[...items]} sessionsPerDay={1} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).not.toBeNull());
   });
 
   it('shows no thumbnail for a pelvic floor exercise in the list', async () => {
