@@ -75,7 +75,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
   const footer = (
     <>
       <Button type="button" className={btnSecondary} onClick={close} disabled={busy}>Cancel</Button>
-      <Button type="button" className={btnSecondary} onClick={() => setPreviewing(true)} disabled={items.length === 0}>Preview as patient</Button>
+      <Button type="button" className={btnSecondary} onClick={() => setPreviewing(true)} disabled={busy || items.length === 0}>Preview as patient</Button>
       <Button type="button" className={btnPrimary} onClick={() => void save()} disabled={busy || !valid || !online}>
         {busy ? 'Saving…' : !online ? 'Needs a connection' : 'Save template'}
       </Button>

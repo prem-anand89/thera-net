@@ -64,7 +64,7 @@ const template: ExerciseTemplate = { id: 't9', clinicId: 'c1', title: 'Knee week
 const pItem = (id: string, title: string, phase: Exercise['phase'] = 'strengthening'): ProgramItem => ({ ...exerciseToItem(ex(id, title, { phase })), id, programId: 'p1', sessionsSchedule: [], specialInstructions: '', sortOrder: 0, addedOn: day(-5), removedOn: null, sessionsPerDay: 2 }) as unknown as ProgramItem;
 const program = (over: Partial<Program> = {}): Program => ({ id: 'p1', clinicId: 'c1', patientId: 'pt1', therapistId: 't2', title: 'Right knee', status: 'active', startDate: day(-5), durationDays: 14, targetPct: 90, checkinOn: day(2), feedbackDefault: 'pain', sessionsPerDay: 2, firstOpenedAt: null, items: [pItem('x1', 'Quad Sets', 'activation'), pItem('x2', 'Squat')], createdAt: '', updatedAt: '', ...over });
 const log = (itemId: string, d: string, s = 1, skipped = false): ProgramLog => ({ id: itemId + d + s, programItemId: itemId, logDate: d, sessionIndex: s as SessionsPerDay, skipped, completedAt: '' });
-const bundle = (over: Partial<Program> = {}, extra: Partial<ProgramBundle> = {}): ProgramBundle => ({ program: program(over), patientName: 'Ravi Kumar', therapistName: 'Kiran Das', logs: [log('x2', day(-4), 1), log('x2', day(-4), 2), log('x2', day(-3), 1)], sessionFeedback: [{ id: 'f', programId: 'p1', logDate: day(-4), sessionIndex: 1, painScore: 8, effortScore: null, painItemIds: ['x2'], hardItemIds: ['x2'], createdAt: '' }], access: null, ...extra });
+const bundle = (over: Partial<Program> = {}, extra: Partial<ProgramBundle> = {}): ProgramBundle => ({ patientPhone: null, program: program(over), patientName: 'Ravi Kumar', therapistName: 'Kiran Das', logs: [log('x2', day(-4), 1), log('x2', day(-4), 2), log('x2', day(-3), 1)], sessionFeedback: [{ id: 'f', programId: 'p1', logDate: day(-4), sessionIndex: 1, painScore: 8, effortScore: null, painItemIds: ['x2'], hardItemIds: ['x2'], createdAt: '' }], access: null, ...extra });
 
 function renderSheet(props: Partial<ProgramSheetProps> = {}) {
   const onClose = vi.fn();
@@ -231,7 +231,7 @@ describe('ProgramSheet: settings', () => {
   it('from a visit note the program starts on the visit date', async () => {
     const user = userEvent.setup();
     renderSheet({ patientId: 'pt1', startFrom: { template }, startDate: '2026-11-10' });
-    expect(screen.getByText('On the visit date (2026-11-10)')).toBeInTheDocument();
+    expect(screen.getByText('On the visit date (10/11)')).toBeInTheDocument();
     await user.click(saveButton());
     await waitFor(() => expect(createProgram).toHaveBeenCalledWith(expect.objectContaining({ today: '2026-11-10' })));
   });

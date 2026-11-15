@@ -39,7 +39,7 @@ export interface ProgramItemsEditorProps {
   canRepeatEarlier?: boolean;
 }
 
-const SESSION_LABEL = ['', 'once a day', 'twice a day', '3 times a day'];
+export const SESSION_LABEL = ['', 'once a day', 'twice a day', '3 times a day'];
 type Row = { item: HepItemInput; index: number };
 
 export function ProgramItemsEditor(props: ProgramItemsEditorProps) {

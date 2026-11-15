@@ -3,7 +3,7 @@
 // come in through the picker's tabs. An edit changes the live program in place (or starts a separate one). Saving needs
 // a connection; after a NEW program is saved the hand-over panel shows the PIN once. Opening and cancelling never change
 // anything.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
@@ -137,7 +137,7 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
   const needsPatient = !knownPatientId;
   const problem = draftProblem(draft, needsPatient, !!patient || !!knownPatientId);
   const set = (patch: Partial<ProgramDraft>) => setDraft((d) => ({ ...d, ...patch }));
-  const before = editing && bundle ? draftFromBundle(bundle, 'edit').items : [];
+  const before = useMemo(() => (editing && bundle ? draftFromBundle(bundle, 'edit').items : []), [editing, bundle]);
   const changes = editing ? changesFor(before, draft.items) : [];
   const live = bundle?.program;
   const patientName = patient?.name ?? bundle?.patientName ?? null;
@@ -185,7 +185,7 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
   const footer = (
     <>
       <Button type="button" className={btnSecondary} onClick={close} disabled={busy}>Cancel</Button>
-      <Button type="button" className={btnSecondary} onClick={() => setPreviewing(true)} disabled={draft.items.length === 0}>Preview as patient</Button>
+      <Button type="button" className={btnSecondary} onClick={() => setPreviewing(true)} disabled={busy || draft.items.length === 0}>Preview as patient</Button>
       <Button type="button" className={btnPrimary} onClick={() => void save()} disabled={busy || !online || problem !== null}>{busy ? 'Saving…' : !online ? 'Needs a connection' : editing ? 'Save changes' : 'Save and share'}</Button>
     </>
   );

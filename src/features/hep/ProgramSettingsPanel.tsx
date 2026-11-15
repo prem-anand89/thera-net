@@ -4,12 +4,13 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/Button';
 import { Field, filterChip, inputCls, segOption, segTrack } from '@/components/ui';
+import { formatDateDM } from '@/domain/fiscalYear';
 import type { SessionsPerDay } from '@/domain/hep';
 import type { Therapist } from '@/domain/types';
+import { SESSION_LABEL } from './ProgramItemsEditor';
 import { CHECKIN_CHOICES, LENGTH_CHOICES, TARGET_CHOICES, type ProgramDraft } from './programDraft';
 
 export const FREQUENCY_LABELS: Record<SessionsPerDay, string> = { 1: '1× daily', 2: '2× daily', 3: '3× daily' };
-const SESSION_LABEL = ['', 'once a day', 'twice a day', '3 times a day'];
 
 export interface ProgramSettingsPanelProps {
   draft: ProgramDraft;
@@ -29,7 +30,7 @@ export interface ProgramSettingsPanelProps {
 /** "Ravi Kumar · 2× daily · 4 weeks · starts today · review in 7 days". */
 export function settingsSummary(d: ProgramDraft, opts: { patientName: string | null; editing: boolean; startDate?: string }): string {
   const length = LENGTH_CHOICES.find((c) => c.days === d.durationDays)?.label.toLowerCase() ?? (d.durationDays == null ? 'ongoing' : `${d.durationDays} days`);
-  const start = opts.editing ? null : opts.startDate ? `starts ${opts.startDate}` : d.startOffset === 0 ? 'starts today' : 'starts tomorrow';
+  const start = opts.editing ? null : opts.startDate ? `starts ${formatDateDM(opts.startDate)}` : d.startOffset === 0 ? 'starts today' : 'starts tomorrow';
   const review = opts.editing ? (d.checkinOn ? `review on ${d.checkinOn}` : 'no review') : d.checkinDays ? `review in ${d.checkinDays} days` : 'no review';
   return [opts.patientName ?? 'No patient chosen', FREQUENCY_LABELS[d.sessionsPerDay], length, start, review].filter(Boolean).join(' · ');
 }
@@ -61,7 +62,7 @@ export function ProgramSettingsPanel({ draft, set, onFrequency, editing, liveSes
       {!editing && (
         <div className="space-y-1.5">
           <div className="text-label font-medium text-[var(--muted)]">Start date</div>
-          {startDate ? <p className="text-sm text-[var(--ink)]">On the visit date ({startDate})</p> : (
+          {startDate ? <p className="text-sm text-[var(--ink)]">On the visit date ({formatDateDM(startDate)})</p> : (
             <div className="flex gap-1.5" role="group" aria-label="Start date">
               <button type="button" aria-pressed={draft.startOffset === 0} className={filterChip(draft.startOffset === 0)} onClick={() => set({ startOffset: 0 })}>Today</button>
               <button type="button" aria-pressed={draft.startOffset === 1} className={filterChip(draft.startOffset === 1)} onClick={() => set({ startOffset: 1 })}>Tomorrow</button>

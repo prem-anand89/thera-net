@@ -87,6 +87,33 @@ describe('TemplatesTab', () => {
     expect(within(screen.getByRole('dialog')).getByLabelText(/^Template name/)).toHaveValue('Shoulder');
   });
 
+  it('a card does not open the editor while offline', async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await user.click(await screen.findByText('Knee week 1'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    cleanup();
+    renderTab();
+    await screen.findByText('Knee week 1');
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    window.dispatchEvent(new Event('offline'));
+    await user.click(screen.getByText('Knee week 1'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('resets the region filter to All when that region is gone after a reload', async () => {
+    const user = userEvent.setup();
+    const shoulder = template({ id: 't9', title: 'Shoulder', note: null, usedCount: 0, items: [tItem(ex('z', 'Pendulum', { bodyRegion: 'Shoulder' }), 0), tItem(ex('y', 'Knee hug'), 1)] });
+    listTemplates.mockResolvedValue([template(), shoulder]);
+    const view = renderTab();
+    await screen.findByRole('button', { name: 'Shoulder' });
+    await user.click(within(screen.getByRole('group', { name: 'Template region' })).getByRole('button', { name: 'Shoulder 1' }));
+    expect(screen.queryByText('Knee week 1')).toBeNull();
+    listTemplates.mockResolvedValue([template()]);
+    view.rerender(<ClinicContext.Provider value={clinic}><TemplatesTab reloadKey={1} /></ClinicContext.Provider>);
+    expect(await screen.findByText('Knee week 1')).toBeInTheDocument();
+  });
+
   it('actions inside a card do not open the editor', async () => {
     const user = userEvent.setup();
     const onUse = vi.fn();

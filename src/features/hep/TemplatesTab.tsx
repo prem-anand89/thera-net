@@ -52,6 +52,8 @@ export function TemplatesTab({ onUse, reloadKey = 0 }: TemplatesTabProps) {
     for (const t of rows ?? []) for (const r of new Set(t.items.map((i) => canonicalRegion(i.bodyRegion)).filter(Boolean))) counts.set(r, (counts.get(r) ?? 0) + 1);
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [rows]);
+  // A region chip that is gone after a reload (or fewer than two regions left) must not keep filtering.
+  useEffect(() => { if (region !== 'All' && (regions.length < 2 || !regions.some(([r]) => r === region))) setRegion('All'); }, [regions, region]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!rows) return [];
@@ -103,7 +105,7 @@ export function TemplatesTab({ onUse, reloadKey = 0 }: TemplatesTabProps) {
           const needs = itemsNeed(items);
           return (
             // The whole card opens the editor; the title is its keyboard button. Actions inside stop the click.
-            <li key={t.id} className="relative cursor-pointer space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--teal)]" onClick={() => setEditor({ template: t })}>
+            <li key={t.id} className="relative cursor-pointer space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--teal)]" onClick={() => { if (online) setEditor({ template: t }); }}>
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate font-display text-base font-semibold text-[var(--ink)]"><button type="button" className="text-left hover:underline">{t.title}</button></h3>
