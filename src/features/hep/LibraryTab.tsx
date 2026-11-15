@@ -23,6 +23,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
   const [form, setForm] = useState<{ exercise?: Exercise } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   if (!exercises) return <LoadingRows rows={4} label="Loading the Library" />;
 
@@ -68,6 +69,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
         <Button type="button" className={btnPrimary} disabled={!online} onClick={() => setForm({})}>{online ? '+ Add exercise' : 'Needs a connection'}</Button>
       </div>
       <ErrorNote message={error} />
+      {bulkResult && <p role="status" className="text-sm text-[var(--muted)]">{bulkResult}</p>}
       <LibraryBrowser
         clinicId={clinic.id}
         exercises={exercises}
@@ -76,6 +78,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
         showArchived={showArchived}
         onActivate={(ex) => setForm({ exercise: ex })}
         onToggleFavorite={online ? (ex) => void toggleFavorite(ex) : undefined}
+        selectable={{ online, onResult: setBulkResult }}
         emptyState={empty}
       />
       <ExerciseForm

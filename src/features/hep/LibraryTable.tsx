@@ -17,11 +17,13 @@ export interface LibraryRowsProps {
   disabledIds?: ReadonlySet<string>;
   onActivate: (ex: Exercise) => void;
   onToggleFavorite?: (ex: Exercise) => void;
+  /** Library select mode: a checkbox column; `onActivate` then toggles. */
+  picks?: ReadonlySet<string>;
 }
 
 const WIDE = 'hidden @[620px]:table-cell';
 
-export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, onActivate, onToggleFavorite, sort, onSort }: LibraryRowsProps & { sort: ColumnSort | null; onSort: (s: ColumnSort) => void }) {
+export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, onActivate, onToggleFavorite, picks, sort, onSort }: LibraryRowsProps & { sort: ColumnSort | null; onSort: (s: ColumnSort) => void }) {
   const head = (key: ColumnSort, label: string, cls = '') => (
     <th scope="col" className={`${th} ${cls}`}>
       <button type="button" className={`uppercase tracking-wide hover:text-[var(--ink)] ${sort === key ? 'text-[var(--ink)]' : ''}`} onClick={() => onSort(key)}>{label}{sort === key ? ' ↓' : ''}</button>
@@ -32,6 +34,7 @@ export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, o
       <table className="w-full border-collapse">
         <thead className="border-b border-[var(--border)]">
           <tr>
+            {picks && <th scope="col" className={th}><span className="sr-only">Select</span></th>}
             <th scope="col" className={th}><span className="sr-only">Picture</span></th>
             {head('az', 'Exercise')}
             {head('region', 'Region', WIDE)}
@@ -46,11 +49,13 @@ export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, o
         <tbody>
           {rows.map((ex) => {
             const off = disabledIds?.has(ex.id);
-            const on = selected?.has(ex.id);
+            const picked = picks?.has(ex.id);
+            const on = selected?.has(ex.id) || picked;
             const uses = useCounts[ex.id] ?? 0;
             const equipment = ex.equipment.filter((e) => e && e !== 'None').join(', ');
             return (
               <tr key={ex.id} className={`border-b border-[var(--border)] last:border-0 ${on ? 'bg-[var(--teal-light)]' : ''} ${off ? 'opacity-50' : ''}`}>
+                {picks && <td className="w-11 pl-2"><input type="checkbox" aria-label={`Select ${ex.title}`} checked={!!picked} onChange={() => onActivate(ex)} className="h-5 w-5" /></td>}
                 <td className="w-16 py-2 pl-3"><Thumb ex={ex} url={ex.thumbKey ? thumbs[ex.thumbKey] : undefined} size={48} /></td>
                 <td className={td}>
                   <button type="button" data-exercise={ex.id} disabled={off} aria-pressed={selected ? on : undefined} onClick={() => onActivate(ex)} className="block text-left font-semibold">
