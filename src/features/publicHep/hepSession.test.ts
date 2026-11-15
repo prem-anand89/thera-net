@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TODAY, item, log } from './hepTestData';
 import {
   currentSession, dayNumber, doseInWords, effortWords, itemsInSession, nextToDo, painWords, sectionLabelCount, sectionsOf, sessionComplete, sessionLabel, sessionsToday,
-  shortDose, statusOf, stepsOf, todayCounts,
+  shortDose, statusOf, stepsOf, timesADay, todayCounts, weekStrip,
 } from './hepSession';
 
 const a = item({ id: 'a', title: 'A', sortOrder: 0 });
@@ -86,5 +86,26 @@ describe('sessions on the patient page', () => {
   it('has words for the pain and effort scales', () => {
     expect([0, 2, 5, 8].map(painWords)).toEqual(['No pain', 'Mild', 'Moderate', 'Severe']);
     expect([0, 1, 3, 5, 7, 9, 10].map(effortWords)).toEqual(['Rest', 'Very easy', 'Easy', 'Somewhat hard', 'Hard', 'Very hard', 'Maximum']);
+  });
+});
+
+describe('the Home tab\'s week', () => {
+  it('shows Mon to Sun of this week: before the start and after today are not due, today stays open', () => {
+    const logs = [log('a', 1, { logDate: '2026-11-11' }), log('b', 1, { logDate: '2026-11-12' }), log('a', 1, { logDate: '2026-11-12' })];
+    const week = weekStrip([a, b], logs, TODAY, { startDate: '2026-11-10', durationDays: 14 });
+    expect(week.map((d) => d.date)).toEqual(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15']);
+    expect(week.map((d) => d.state)).toEqual(['not_due', 'missed', 'partly', 'partly', 'missed', 'open', 'not_due']);
+    expect(week.map((d) => d.isToday)).toEqual([false, false, false, false, false, true, false]);
+    expect(week.map((d) => d.label)).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+  });
+
+  it('a fully done day is done, and days after the program ends are not due', () => {
+    const logs = [log('a', 1, { logDate: '2026-11-10' }), log('a', 1)];
+    const week = weekStrip([a], logs, TODAY, { startDate: '2026-11-09', durationDays: 3 });
+    expect(week.map((d) => d.state)).toEqual(['missed', 'done', 'missed', 'not_due', 'not_due', 'not_due', 'not_due']);
+  });
+
+  it('says how often in words', () => {
+    expect([1, 2, 3].map(timesADay)).toEqual(['once a day', 'twice a day', '3 times a day']);
   });
 });

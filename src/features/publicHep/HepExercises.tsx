@@ -1,13 +1,17 @@
-// The signed-in page (Slice 1: no Home tab). The program header, the checklist, the one-exercise screen, the end-of-session
-// Pain | Effort check, the calendar reminder and "Forget this phone". Taps are saved at once and shown at once; if one
-// cannot be saved it is taken back and the patient is told (an offline queue is Slice 2).
+// The signed-in page: the clinic header (logo, name, reminder, call), the Home and Exercises tabs with the bottom tab bar,
+// the checklist, the one-exercise screen, the end-of-session Pain | Effort check, the calendar reminder and "Forget this
+// phone". Taps are saved at once and shown at once; if one cannot be saved it is taken back and the patient is told (an
+// offline queue is Slice 2).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { publicLogoUrl } from '@/lib/supabase';
 import { addDaysISO, type SessionsPerDay, type SkipReason } from '@/domain/hep';
 import { publicHepService, type PublicCredential, type PublicHepItem, type PublicHepPayload, type PublicResult } from '@/services/publicHepService';
 import { HepChecklist } from './HepChecklist';
 import { HepExerciseScreen } from './HepExerciseScreen';
+import { HepHome, type HepHomeData } from './HepHome';
 import { HepReminder } from './HepReminder';
 import { HepSessionCheck, type SessionCheckValues } from './HepSessionCheck';
+import { HepTabBar, type HepTab } from './HepTabBar';
 import { createHepSound, nextSoundMode, readSoundMode, saveSoundMode, type SoundMode } from './hepSound';
 import { checkHandled, markCheckHandled, markOpened, readOpened } from './hepStorage';
 import { clinicDay, currentSession, dayNumber, itemsInSession, nextToDo, sessionComplete, sessionLabel, sessionsToday, statusOf, todayCounts, type PublicLog } from './hepSession';
@@ -22,11 +26,15 @@ export interface HepExercisesProps {
   onForget: () => void;
   onSwitchProgram: (programId: string) => void;
   onImageError: () => void;
+  tab: HepTab;
+  onTab: (tab: HepTab) => void;
+  /** The Home RPC's answer; null while it loads or when it failed (Home then shows only the Today card). */
+  home: HepHomeData | null;
 }
 
 interface Toast { text: string; undo?: () => void }
 
-export function HepExercises({ token, data, credential, onPinNeeded, onForget, onSwitchProgram, onImageError }: HepExercisesProps) {
+export function HepExercises({ token, data, credential, onPinNeeded, onForget, onSwitchProgram, onImageError, tab, onTab, home }: HepExercisesProps) {
   const program = data.programs.find((p) => p.id === data.shownProgramId) ?? null;
   const items = data.items;
   const [logs, setLogs] = useState<PublicLog[]>(data.logs);
@@ -166,24 +174,26 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
   const clinicPhone = data.clinic.phone;
   const listItems = mine.filter((i) => !i.optional);
 
+  const logoUrl = publicLogoUrl(data.clinic.logoPath);
+  const forgetLine = (
+    <p className="pt-4 text-center text-base text-slate-600">
+      Share this link only with the patient or the person helping them.
+      <br />
+      Not using this phone?{' '}
+      <button type="button" onClick={onForget} className="min-h-11 font-semibold text-slate-800 underline">Forget this phone</button>
+    </p>
+  );
+
   return (
-    <div className="min-h-dvh bg-slate-50 pb-24 text-slate-900">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex max-w-xl items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-slate-500">{data.clinic.name}</p>
-            {data.programs.length > 1 ? (
-              <select aria-label="Program" value={program.id} onChange={(e) => onSwitchProgram(e.target.value)} className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-2 text-lg font-bold">
-                {data.programs.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-              </select>
-            ) : (
-              <h1 className="truncate text-xl font-bold">{program.title}</h1>
-            )}
-            <p className="text-base text-slate-600">
-              {program.durationDays ? `Day ${Math.min(day, program.durationDays)} of ${program.durationDays}` : `Day ${day}`}
-              {counts.total > 0 && <> · Today: {counts.done} of {counts.total} done</>}
-            </p>
-          </div>
+    <div className="min-h-dvh bg-slate-50 pb-28 text-slate-900">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <div className="mx-auto flex max-w-xl items-center gap-2">
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-contain" />
+          ) : (
+            <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-base font-bold text-white">{data.clinic.name.trim().charAt(0).toUpperCase()}</span>
+          )}
+          <p className="min-w-0 flex-1 truncate text-base font-bold">{data.clinic.name}</p>
           <button type="button" onClick={() => setReminderOpen((v) => !v)} aria-label="Add a daily reminder" aria-expanded={reminderOpen} className="min-h-11 min-w-11 text-2xl">🔔</button>
           {clinicPhone && <a href={`tel:${clinicPhone.replace(/\s+/g, '')}`} aria-label="Call the clinic" className="flex min-h-11 min-w-11 items-center justify-center text-2xl">📞</a>}
         </div>
@@ -196,39 +206,56 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
           <HepReminder clinicName={data.clinic.name} url={window.location.origin + window.location.pathname} sessionCount={sessionCount} startDate={program.startDate > today ? program.startDate : today} endDate={endDate} onClose={() => setReminderOpen(false)} />
         )}
 
-        {items.length === 0 ? (
-          <p className="rounded-2xl bg-white p-6 text-center text-lg text-slate-700">Your therapist has not added any exercises to this program yet.</p>
+        {tab === 'home' ? (
+          <HepHome data={data} program={program} logs={logs} today={today} home={home} onStart={() => onTab('exercises')} onOpenProgram={onSwitchProgram} />
         ) : (
-          <HepChecklist items={items} logs={logs} today={today} session={activeSession} sessionCount={sessionCount} onSession={setSession} onOpen={openExercise} onToggle={toggle} onSectionDone={sectionDone} onSectionSkip={sectionSkip} />
+          <>
+            <div>
+              {data.programs.length > 1 ? (
+                <select aria-label="Program" value={program.id} onChange={(e) => onSwitchProgram(e.target.value)} className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-2 text-lg font-bold">
+                  {data.programs.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </select>
+              ) : (
+                <h1 className="text-xl font-bold">{program.title}</h1>
+              )}
+              <p className="text-base text-slate-600">
+                {program.durationDays ? `Day ${Math.min(day, program.durationDays)} of ${program.durationDays}` : `Day ${day}`}
+                {counts.total > 0 && <> · Today: {counts.done} of {counts.total} done</>}
+              </p>
+            </div>
+
+            {items.length === 0 ? (
+              <p className="rounded-2xl bg-white p-6 text-center text-lg text-slate-700">Your therapist has not added any exercises to this program yet.</p>
+            ) : (
+              <HepChecklist items={items} logs={logs} today={today} session={activeSession} sessionCount={sessionCount} onSession={setSession} onOpen={openExercise} onToggle={toggle} onSectionDone={sectionDone} onSectionSkip={sectionSkip} startBottom="bottom-[calc(4.5rem+env(safe-area-inset-bottom))]" />
+            )}
+
+            {checkSession !== null && (
+              <HepSessionCheck
+                key={checkSession}
+                items={itemsInSession(items, logs, today, checkSession)}
+                defaultSide={program.feedbackDefault}
+                initial={feedback.get(checkSession)}
+                clinicPhone={clinicPhone}
+                sessionName={sessionLabel(sessionCount, checkSession)}
+                onSave={(v) => saveCheck(checkSession, v)}
+                onNotNow={() => notNow(checkSession)}
+              />
+            )}
+
+            {checkSession === null && listItems.length > 0 && (
+              <button type="button" onClick={() => setRating(activeSession)} className="min-h-11 w-full text-center text-base font-semibold text-teal-800 underline">Rate this session</button>
+            )}
+          </>
         )}
 
-        {checkSession !== null && (
-          <HepSessionCheck
-            key={checkSession}
-            items={itemsInSession(items, logs, today, checkSession)}
-            defaultSide={program.feedbackDefault}
-            initial={feedback.get(checkSession)}
-            clinicPhone={clinicPhone}
-            sessionName={sessionLabel(sessionCount, checkSession)}
-            onSave={(v) => saveCheck(checkSession, v)}
-            onNotNow={() => notNow(checkSession)}
-          />
-        )}
-
-        {checkSession === null && listItems.length > 0 && (
-          <button type="button" onClick={() => setRating(activeSession)} className="min-h-11 w-full text-center text-base font-semibold text-teal-800 underline">Rate this session</button>
-        )}
-
-        <p className="pt-4 text-center text-base text-slate-600">
-          Share this link only with the patient or the person helping them.
-          <br />
-          Not using this phone?{' '}
-          <button type="button" onClick={onForget} className="min-h-11 font-semibold text-slate-800 underline">Forget this phone</button>
-        </p>
+        {forgetLine}
       </main>
 
+      <HepTabBar tab={tab} onTab={onTab} />
+
       {toast && (
-        <div role="status" className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-xl items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-base text-white shadow-lg">
+        <div role="status" className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-xl items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-base text-white shadow-lg">
           <span className="flex-1">{toast.text}</span>
           {toast.undo && <button type="button" onClick={() => { toast.undo?.(); setToast(null); }} className="min-h-11 px-2 font-bold text-teal-300">Undo</button>}
         </div>

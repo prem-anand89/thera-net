@@ -1,5 +1,7 @@
-// One exercise per screen (amendment 82): the picture with the timer band right under it, the dose in one line, Start / Rest,
-// the steps (open the first time, then collapsed), the Stop-if line, and a fixed bar with Skip and ✓ Done · Next ›.
+// One exercise per screen (amendment 82): the picture (only when the exercise has pictures; "Hide pictures in lists" never
+// hides them here) with the timer band right under it, Sets / Reps / Hold boxes, Start / Rest, set circles to tick off
+// each set (local to this visit of the screen: not logged, not saved), the steps (open the first time, then collapsed),
+// the therapist's note, the Stop-if line, and a fixed bar with Skip and ✓ Done · Next ›.
 // "Preview as patient" renders this same screen read-only.
 import { useMemo, useRef, useState } from 'react';
 import type { SkipReason } from '@/domain/hep';
@@ -39,13 +41,6 @@ export interface HepExerciseScreenProps {
 function Picture({ item, onImageError }: { item: PublicHepItem; onImageError: () => void }) {
   const [at, setAt] = useState(0);
   const strip = useRef<HTMLDivElement>(null);
-  if (item.mediaType === 'none' || item.mediaUrls.length === 0) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-teal-50 p-6 text-center">
-        <p className="text-2xl font-bold text-teal-900">{item.title}</p>
-      </div>
-    );
-  }
   if (item.mediaType === 'gif' || item.mediaUrls.length === 1) {
     return <img src={item.mediaUrls[0]} alt={item.mediaCaptions[0] || item.title} onError={onImageError} className="h-full w-full object-contain" />;
   }
@@ -69,6 +64,54 @@ function Picture({ item, onImageError }: { item: PublicHepItem; onImageError: ()
       <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5" aria-hidden>
         {item.mediaUrls.map((url, i) => (
           <span key={url} className={`h-2 w-2 rounded-full ${i === at ? 'bg-teal-600' : 'bg-white/80 ring-1 ring-slate-400'}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const hasPictures = (item: PublicHepItem) => item.mediaUrls.length > 0;
+
+/** Sets, Reps (or seconds) and Hold as three boxes; the group's name is the dose in words for screen readers. */
+function DoseBoxes({ item }: { item: PublicHepItem }) {
+  const timed = item.doseType === 'timed';
+  const hold = item.doseType === 'hold';
+  const boxes: Array<[string, string]> = [
+    [String(item.sets), item.sets === 1 ? 'set' : 'sets'],
+    timed ? [`${item.durationSeconds ?? 0} s`, 'each'] : [String(item.reps ?? 0), item.reps === 1 ? 'rep' : 'reps'],
+    hold ? [`${item.holdSeconds ?? 0} s`, 'hold'] : ['—', 'no hold'],
+  ];
+  return (
+    <div role="group" aria-label={doseInWords(item)} className="grid grid-cols-3 gap-2">
+      {boxes.map(([value, label], i) => (
+        <div key={i} className="rounded-xl bg-white px-2 py-2 text-center ring-1 ring-slate-200">
+          <span className="block text-2xl font-bold leading-tight">{value}</span>
+          <span className="block text-sm text-slate-600">{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** One circle per set. Tapping set n marks sets 1..n; tapping the last marked one takes it back. Nothing is saved. */
+function SetCircles({ sets }: { sets: number }) {
+  const [done, setDone] = useState(0);
+  const title = 'Sets · tap each one when done';
+  return (
+    <div>
+      <p aria-hidden className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">{title}</p>
+      <div role="group" aria-label={title} className="flex flex-wrap gap-2">
+        {Array.from({ length: sets }, (_, i) => i + 1).map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`Set ${n}`}
+            aria-pressed={n <= done}
+            onClick={() => setDone((d) => (d === n ? n - 1 : n))}
+            className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-lg font-bold ${n <= done ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+          >
+            {n <= done ? '✓' : n}
+          </button>
         ))}
       </div>
     </div>
@@ -106,9 +149,11 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto pb-40">
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
-          <Picture item={item} onImageError={p.onImageError} />
-        </div>
+        {hasPictures(item) && (
+          <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
+            <Picture item={item} onImageError={p.onImageError} />
+          </div>
+        )}
         {timer.view && <HepTimerLayer view={timer.view} repsTotal={item.doseType === 'hold' ? item.reps : null} onSkip={timer.skip} onStop={timer.stop} />}
 
         <div className="mx-auto max-w-xl space-y-4 px-4 py-4">
@@ -117,9 +162,10 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
               {item.title}
               {item.optional && <span className="ml-2 align-middle rounded-full bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-600">Optional</span>}
             </h1>
-            <p className="mt-1 text-lg font-semibold text-slate-800">{doseInWords(item)}</p>
             {notes && <p className="text-base text-slate-600">{notes}</p>}
           </div>
+
+          <DoseBoxes item={item} />
 
           {!p.readOnly && starts.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -132,6 +178,8 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
               )}
             </div>
           )}
+
+          {item.sets > 1 && <SetCircles sets={item.sets} />}
 
           {steps.length > 0 && (
             <section aria-label="How to do it" className="rounded-2xl border border-slate-200 bg-white p-4">

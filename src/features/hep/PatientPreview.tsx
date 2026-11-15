@@ -1,7 +1,8 @@
 // "Preview as patient": the real patient screens inside a phone frame, fed from what the therapist is editing.
 // Nothing is saved and no patient data is touched; done / skipped marks live in local state only.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { isSensitiveExercise, type SessionsPerDay, type SkipReason } from '@/domain/hep';
+import type { SessionsPerDay, SkipReason } from '@/domain/hep';
+import { clinicTimezone } from '@/domain/clinicRegion';
 import { useClinic } from '@/app/clinicContext';
 import { hepMediaService } from '@/services/hepMediaService';
 import type { HepItemInput } from '@/services/hepService';
@@ -10,6 +11,9 @@ import { Button } from '@/components/Button';
 import { SheetDialog, btnSecondary } from '@/components/ui';
 import { HepChecklist } from '../publicHep/HepChecklist';
 import { HepExerciseScreen } from '../publicHep/HepExerciseScreen';
+import type { HepData } from '../publicHep/HepExercises';
+import { HepHome } from '../publicHep/HepHome';
+import { HepTabBar, type HepTab } from '../publicHep/HepTabBar';
 import { createHepSound, nextSoundMode, type SoundMode } from '../publicHep/hepSound';
 import { itemsInSession, nextToDo, statusOf, type PublicLog } from '../publicHep/hepSession';
 import type { Picture } from './PictureField';
@@ -83,17 +87,26 @@ function ProgramPreviewBody(p: ProgramPreviewDialogProps) {
   const cached = useExercises(p.clinicId);
   const allKeys = useMemo(() => [...new Set(p.items.flatMap((i) => i.mediaKeys))], [p.items]);
   const mediaUrls = useMintedUrls(p.clinicId, p.open ? allKeys : []);
-  const items = useMemo(() => toPreviewItems(p.items, { today, sessionsPerDay: p.sessionsPerDay, mediaUrls }), [p.items, today, p.sessionsPerDay, mediaUrls]);
-  // Pelvic floor pictures never show in lists (same rule as the Library), by all regions of the source exercise.
-  const sensitiveIds = useMemo(() => {
+  // Each row carries its source exercise's "Hide pictures in lists" (the same flag the patient's page receives).
+  const items = useMemo(() => {
     const ordered = orderBySection(p.items);
-    return new Set(items.flatMap((it, i) => {
-      // Cache not loaded yet (undefined, not empty): a sourced item might be pelvic floor, so hold its thumbnail back.
-      if (cached === undefined && ordered[i].sourceExerciseId) return [it.id];
-      const src = cached?.find((e) => e.id === ordered[i].sourceExerciseId);
-      return isSensitiveExercise({ bodyRegion: ordered[i].bodyRegion, alsoRegions: src?.alsoRegions ?? [] }) ? [it.id] : [];
-    }));
-  }, [p.items, items, cached]);
+    return toPreviewItems(p.items, { today, sessionsPerDay: p.sessionsPerDay, mediaUrls }).map((it, i) => {
+      const src = ordered[i].sourceExerciseId ? cached?.find((e) => e.id === ordered[i].sourceExerciseId) : undefined;
+      return { ...it, hidePicturesInLists: src?.hidePicturesInLists ?? false };
+    });
+  }, [p.items, today, p.sessionsPerDay, mediaUrls, cached]);
+  // Home is built from this program alone: no Home RPC, no patient data.
+  const homeData = useMemo<HepData>(() => ({
+    clinicId: p.clinicId,
+    today,
+    clinic: { name: p.clinicName, logoPath: null, phone: null, timezone: clinicTimezone(clinic) },
+    programs: [{ id: 'preview', title: p.title || 'Your Home Exercise Program', startDate: today, durationDays: null, feedbackDefault: 'pain', prescribedBy: null }],
+    shownProgramId: 'preview',
+    items,
+    logs: [],
+    sessionFeedback: [],
+  }), [p.clinicId, p.clinicName, p.title, today, clinic, items]);
+  const [tab, setTab] = useState<HepTab>('exercises');
   const [logs, setLogs] = useState<PublicLog[]>([]);
   const [session, setSession] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -112,23 +125,31 @@ function ProgramPreviewBody(p: ProgramPreviewDialogProps) {
   return (
     <>
       <PhoneFrame label="Patient preview">
-        <div className="h-full overflow-y-auto px-3 py-3">
+        <div className="absolute inset-x-0 bottom-14 top-0 overflow-y-auto px-3 py-3">
           <p className="text-sm font-medium text-slate-600">{p.clinicName}</p>
-          <h2 className="mb-3 text-xl font-bold">{p.title || 'Your Home Exercise Program'}</h2>
-          <HepChecklist
-            items={items}
-            logs={logs}
-            today={today}
-            session={session}
-            sessionCount={count}
-            onSession={setSession}
-            onOpen={(it) => setOpenId(it.id)}
-            onToggle={(it) => (statusOf(it, logs, today, session) === 'open' ? mark(it, session, false, null) : unmark(it, session))}
-            onSectionDone={(its) => its.forEach((it) => mark(it, session, false, null))}
-            onSectionSkip={(its, reason) => its.forEach((it) => mark(it, session, true, reason))}
-            showThumb={(it) => !sensitiveIds.has(it.id)}
-          />
+          {tab === 'home' ? (
+            <div className="mt-2">
+              <HepHome data={homeData} program={homeData.programs[0]} logs={logs} today={today} home={null} onStart={() => setTab('exercises')} onOpenProgram={() => {}} />
+            </div>
+          ) : (
+            <>
+              <h2 className="mb-3 text-xl font-bold">{p.title || 'Your Home Exercise Program'}</h2>
+              <HepChecklist
+                items={items}
+                logs={logs}
+                today={today}
+                session={session}
+                sessionCount={count}
+                onSession={setSession}
+                onOpen={(it) => setOpenId(it.id)}
+                onToggle={(it) => (statusOf(it, logs, today, session) === 'open' ? mark(it, session, false, null) : unmark(it, session))}
+                onSectionDone={(its) => its.forEach((it) => mark(it, session, false, null))}
+                onSectionSkip={(its, reason) => its.forEach((it) => mark(it, session, true, reason))}
+              />
+            </>
+          )}
         </div>
+        <HepTabBar framed tab={tab} onTab={setTab} />
         <PreviewToast text={toast} />
         {shown && (
           <HepExerciseScreen

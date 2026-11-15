@@ -1,11 +1,16 @@
 // /p/$token — the patient's exercise page. No login: the link plus a 4-digit PIN, or a remembered phone.
-// States: loading -> sign in -> exercises. Before the PIN it shows only the clinic's name and logo.
+// States: loading -> sign in -> program (Home and Exercises tabs). Before the PIN it shows only the clinic's name and logo.
+// Verify once: the PIN (or device token) is checked by get_public_hep first; only after that succeeded is the Home RPC
+// asked, once per sign-in or reload, with the credential the page already holds (the device token when remembered).
+// Home failing never blocks the Exercises tab or the sign-in state.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { publicLogoUrl } from '@/lib/supabase';
 import { publicHepService, type PublicCredential, type PublicFailure } from '@/services/publicHepService';
 import { HepExercises, type HepData } from './HepExercises';
+import type { HepHomeData } from './HepHome';
 import { HepSignIn, type HepBrand } from './HepSignIn';
+import type { HepTab } from './HepTabBar';
 import { forgetDevice, readDevice, saveDevice } from './hepStorage';
 
 /** Picture links are signed for about an hour; ask for fresh ones well before that. */
@@ -36,6 +41,9 @@ export function PublicHepPage() {
   // The PIN lives here, in memory only. A remembered phone sends its device token instead.
   const cred = useRef<{ pin: string | null; device: string | null }>({ pin: null, device: null });
   const lastRefresh = useRef(0);
+  const [tab, setTab] = useState<HepTab>('home');
+  const [home, setHome] = useState<HepHomeData | null>(null);
+  const homeGen = useRef(0);
   const stageRef = useRef<Stage>(stage);
   useEffect(() => { stageRef.current = stage; }, [stage]);
 
@@ -50,8 +58,22 @@ export function PublicHepPage() {
 
   const credential = useCallback((): PublicCredential => ({ token, pin: cred.current.device ? null : cred.current.pin, device: cred.current.device }), [token]);
 
+  /** The Home tab's data, asked once after the program loaded. A failure (or a missing RPC) leaves Home with Today only. */
+  const loadHome = useCallback(async () => {
+    const gen = ++homeGen.current;
+    try {
+      const res = await publicHepService.getPublicHome(credential());
+      if (gen === homeGen.current && res.ok) setHome(res);
+    } catch {
+      /* Home shows only the Today card */
+    }
+  }, [credential]);
+
   const showSignIn = useCallback(async () => {
     cred.current = { pin: null, device: null };
+    homeGen.current += 1;
+    setHome(null);
+    setTab('home');
     try {
       const res = await publicHepService.clinicBrand(token);
       if (res.ok) setStage({ name: 'signin', brand: { name: res.name, logoUrl: publicLogoUrl(res.logoPath) } });
@@ -71,6 +93,7 @@ export function PublicHepPage() {
           cred.current = { pin: null, device };
           setStage({ name: 'program', data: res });
           lastRefresh.current = Date.now();
+          void loadHome();
           return;
         }
         if (res.reason === 'busy') return setStage({ name: 'busy' });
@@ -80,7 +103,7 @@ export function PublicHepPage() {
       }
     }
     await showSignIn();
-  }, [token, showSignIn]);
+  }, [token, showSignIn, loadHome]);
 
   useEffect(() => { void boot(); }, [boot]);
 
@@ -103,9 +126,10 @@ export function PublicHepPage() {
       cred.current = { pin, device };
       lastRefresh.current = Date.now();
       setStage({ name: 'program', data: res });
+      void loadHome();
       return null;
     },
-    [token],
+    [token, loadHome],
   );
 
   /** Fresh picture links, keeping everything the patient has done on the page. */
@@ -173,6 +197,9 @@ export function PublicHepPage() {
       onForget={forget}
       onSwitchProgram={(id) => void switchProgram(id)}
       onImageError={() => void refreshMedia()}
+      tab={tab}
+      onTab={setTab}
+      home={home}
     />
   );
 }

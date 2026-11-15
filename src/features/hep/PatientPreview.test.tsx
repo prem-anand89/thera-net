@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HepItemInput } from '@/services/hepService';
 import { ExercisePreviewPhone, ProgramPreviewDialog } from './PatientPreview';
 
 const mint = vi.hoisted(() => vi.fn());
-const cache = vi.hoisted(() => ({ exercises: [] as Array<{ id: string; alsoRegions: string[] }> | undefined }));
+const cache = vi.hoisted(() => ({ exercises: [] as Array<{ id: string; alsoRegions: string[]; hidePicturesInLists?: boolean }> | undefined }));
 const writes = vi.hoisted(() => ({
   hep: new Proxy({}, { get: (t: Record<string, unknown>, k: string) => (t[k] ??= vi.fn()) }) as Record<string, ReturnType<typeof vi.fn>>,
   pub: new Proxy({}, { get: (t: Record<string, unknown>, k: string) => (t[k] ??= vi.fn()) }) as Record<string, ReturnType<typeof vi.fn>>,
@@ -70,28 +70,33 @@ describe('ProgramPreviewDialog', () => {
     expect(screen.getByRole('button', { name: 'Mark Bridge as done' })).toBeInTheDocument();
   });
 
-  it('hides the thumbnail when the pelvic floor tag is only in the source exercise\'s other regions', async () => {
-    cache.exercises = [{ id: 'src1', alsoRegions: ['Pelvic floor: Women'] }];
-    open([input({ title: 'Bridge2', sourceExerciseId: 'src1', mediaKeys: ['k1'], mediaCaptions: [''] }), input({ title: 'Clam', mediaKeys: ['k2'], mediaCaptions: [''] })]);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Clam' }).querySelector('img')).not.toBeNull());
+  it('hides a thumbnail only when its exercise has "Hide pictures in lists"; pelvic floor pictures show', async () => {
+    cache.exercises = [{ id: 'src1', alsoRegions: [], hidePicturesInLists: true }];
+    open([
+      input({ title: 'Bridge2', sourceExerciseId: 'src1', mediaKeys: ['k1'], mediaCaptions: [''] }),
+      input({ title: 'Kegel', bodyRegion: 'Pelvic floor: Women', mediaKeys: ['k2'], mediaCaptions: [''] }),
+    ]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Kegel' }).querySelector('img')).not.toBeNull());
     expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).toBeNull();
+    const u = userEvent.setup();
+    await u.click(screen.getByRole('button', { name: 'Open Bridge2' }));
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://signed/1');
   });
 
-  it('hides a sourced item\'s thumbnail until the exercise cache loads, then shows it when not pelvic floor', async () => {
-    cache.exercises = undefined;
-    const items = [input({ title: 'Bridge2', sourceExerciseId: 'src1', mediaKeys: ['k1'], mediaCaptions: [''] }), input({ title: 'Clam', mediaKeys: ['k2'], mediaCaptions: [''] })];
-    const r = open(items);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Clam' }).querySelector('img')).not.toBeNull());
-    expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).toBeNull();
-    cache.exercises = [{ id: 'src1', alsoRegions: ['Hip'] }];
-    r.rerender(<ProgramPreviewDialog open onClose={() => {}} clinicId="c1" clinicName="Sunrise Physio" title="Knee program" items={[...items]} sessionsPerDay={1} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Bridge2' }).querySelector('img')).not.toBeNull());
-  });
-
-  it('shows no thumbnail for a pelvic floor exercise in the list', async () => {
-    open([input({ title: 'Kegel', bodyRegion: 'Pelvic floor: Women', mediaKeys: ['k1'], mediaCaptions: [''] }), input({ title: 'Clam', mediaKeys: ['k2'], mediaCaptions: [''] })]);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Clam' }).querySelector('img')).not.toBeNull());
-    expect(screen.getByRole('button', { name: 'Open Kegel' }).querySelector('img')).toBeNull();
+  it('opens on the Exercises tab; Home is built from the program here and nothing is fetched or saved', async () => {
+    const u = userEvent.setup();
+    open([input(), input({ title: 'Clam' })]);
+    expect(screen.getByRole('tab', { name: 'Exercises' })).toHaveAttribute('aria-selected', 'true');
+    await u.click(screen.getByRole('button', { name: 'Mark Bridge as done' }));
+    await u.click(screen.getByRole('tab', { name: 'Home' }));
+    const today = screen.getByRole('region', { name: 'Today' });
+    expect(within(today).getByText('1 of 2 done')).toBeInTheDocument();
+    await u.click(within(today).getByRole('button', { name: 'Continue my exercises' }));
+    expect(screen.getByRole('tab', { name: 'Exercises' })).toHaveAttribute('aria-selected', 'true');
+    const exSet = screen.getByRole('button', { name: 'Open Clam' });
+    await u.click(exSet);
+    await u.click(within(screen.getByRole('group', { name: 'Sets · tap each one when done' })).getByRole('button', { name: 'Set 1' }));
+    expect(Object.values(writes.hep).concat(Object.values(writes.pub)).every((f) => f.mock.calls.length === 0)).toBe(true);
   });
 });
 

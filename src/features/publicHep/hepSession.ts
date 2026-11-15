@@ -1,6 +1,6 @@
 // The patient page's rules about sessions, rows and wording, kept pure so they are tested without a screen.
 // "Today: X of Y" counts sessions (an exercise done twice a day is two), the same unit as the therapist's adherence.
-import { EXERCISE_PHASE_LABELS, isItemActiveOnDate, sessionsPerDayOnDate, type ExercisePhase, type ProgramLog, type SessionsPerDay, type SkipReason } from '@/domain/hep';
+import { EXERCISE_PHASE_LABELS, addDaysISO, isItemActiveOnDate, sessionsPerDayOnDate, type ExercisePhase, type ProgramLog, type SessionsPerDay, type SkipReason } from '@/domain/hep';
 import type { PublicHepItem, PublicHepPayload } from '@/services/publicHepService';
 
 export type PublicLog = PublicHepPayload['logs'][number];
@@ -186,4 +186,39 @@ export function clinicDay(timeZone: string, now: Date = new Date()): string {
   } catch {
     return now.toISOString().slice(0, 10);
   }
+}
+
+/** How often in words, for the Home tab's Today card: "once a day", "twice a day", "3 times a day". */
+export function timesADay(n: number): string {
+  if (n <= 1) return 'once a day';
+  if (n === 2) return 'twice a day';
+  return `${n} times a day`;
+}
+
+export type WeekDayState = 'done' | 'partly' | 'missed' | 'open' | 'not_due';
+export interface WeekDay { date: string; label: string; state: WeekDayState; isToday: boolean }
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** The Home tab's "This week": Monday to Sunday of the clinic's week, from the page's logs (the last 14 days).
+ *  Days before the program started, after it ends, or still to come are not due; today is open until something is done. */
+export function weekStrip(items: PublicHepItem[], logs: PublicLog[], today: string, program: { startDate: string; durationDays: number | null }): WeekDay[] {
+  const [y, m, d] = today.split('-').map(Number);
+  const fromMonday = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+  const monday = addDaysISO(today, -fromMonday);
+  const end = program.durationDays ? addDaysISO(program.startDate, program.durationDays - 1) : null;
+  return WEEKDAYS.map((label, i) => {
+    const date = addDaysISO(monday, i);
+    const isToday = date === today;
+    let state: WeekDayState;
+    if (date > today || date < program.startDate || (end !== null && date > end)) state = 'not_due';
+    else {
+      const c = todayCounts(items, logs, date);
+      if (c.total === 0) state = 'not_due';
+      else if (c.done >= c.total) state = 'done';
+      else if (c.done > 0) state = 'partly';
+      else state = isToday ? 'open' : 'missed';
+    }
+    return { date, label, state, isToday };
+  });
 }

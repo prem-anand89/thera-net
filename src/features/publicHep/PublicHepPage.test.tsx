@@ -7,7 +7,7 @@ import { hepData, item, log } from './hepTestData';
 import { PublicHepPage } from './PublicHepPage';
 
 const svc = vi.hoisted(() => ({
-  clinicBrand: vi.fn(), getPublicHep: vi.fn(), rememberDevice: vi.fn(), submitExerciseLog: vi.fn(), undoExerciseLog: vi.fn(), submitSessionFeedback: vi.fn(),
+  clinicBrand: vi.fn(), getPublicHep: vi.fn(), getPublicHome: vi.fn(), rememberDevice: vi.fn(), submitExerciseLog: vi.fn(), undoExerciseLog: vi.fn(), submitSessionFeedback: vi.fn(),
 }));
 vi.mock('@/services/publicHepService', () => ({ publicHepService: svc }));
 vi.mock('@tanstack/react-router', () => ({ useParams: () => ({ token: 'tok' }) }));
@@ -28,6 +28,7 @@ beforeEach(() => {
   svc.submitExerciseLog.mockResolvedValue({ ...ok, logDate: '2026-11-14' });
   svc.undoExerciseLog.mockResolvedValue(ok);
   svc.submitSessionFeedback.mockResolvedValue(ok);
+  svc.getPublicHome.mockResolvedValue({ ok: false, reason: 'unavailable' });
   localStorage.clear();
 });
 afterEach(() => {
@@ -44,6 +45,7 @@ async function signInWith(data: ReturnType<typeof hepData>) {
   const u = user();
   await u.type(await screen.findByLabelText('Your 4-digit PIN'), '1234');
   await screen.findByRole('heading', { name: 'Knee program' });
+  await u.click(screen.getByRole('tab', { name: 'Exercises' })); // the page opens on Home
   return u;
 }
 
@@ -209,7 +211,7 @@ describe('the checklist', () => {
 
   it('the Start button sticks to the bottom and every row ends with a ›', async () => {
     await signInWith(hepData([wall, clam]));
-    expect(screen.getByRole('button', { name: /Start: Wall Slides/ })).toHaveClass('sticky', 'bottom-0');
+    expect(screen.getByRole('button', { name: /Start: Wall Slides/ })).toHaveClass('sticky');
     const rows = screen.getAllByRole('listitem');
     expect(rows).toHaveLength(2);
     for (const row of rows) expect(within(row).getByText('›')).toHaveAttribute('aria-hidden', 'true');
@@ -258,7 +260,7 @@ describe('one exercise at a time', () => {
   it('shows the dose in one line, "each side", the equipment, the steps and the Stop-if line', async () => {
     const u = await signInWith(hepData([rich]));
     await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));
-    expect(screen.getByText('3 sets · 12 reps · hold 3 s')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '3 sets · 12 reps · hold 3 s' })).toBeInTheDocument();
     expect(screen.getByText(/each side · needs theraband/)).toBeInTheDocument();
     expect(screen.getByText('Slide down slowly.')).toBeInTheDocument();
     expect(screen.getByText(/Your knee locks\./)).toBeInTheDocument();
