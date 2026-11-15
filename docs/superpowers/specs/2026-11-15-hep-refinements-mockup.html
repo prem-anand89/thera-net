@@ -1,0 +1,413 @@
+<title>HEP Refinements Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: mockup chrome on top; a container-query stage shows each screen at desktop or phone width. TheraNet tokens. */
+:root{
+  --paper:#f5f5f4;--surface:#fff;--ink:#262626;--muted:#5a6064;--border:#e2e2e1;
+  --teal:#2c5f63;--teal-strong:#244d50;--teal-light:#e4edec;--teal-mist:#f1f6f5;
+  --rust:#a6552f;--rust-light:#f3e4dd;--moss:#5b7a52;--moss-light:#eaf0e7;
+  --amber:#80591a;--amber-light:#f6ecd8;--slate:#55636e;--slate-light:#e9edf0;
+  --sky:#2f6690;--sky-light:#e3eef6;--plum:#6a4c86;--plum-light:#eee8f4;
+  --photo-a:#ecebe8;--photo-b:#dcdad5;--figure:#4a4a48;--on-accent:#fff;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.06);--scrim:rgba(20,24,26,.45);
+  --font-display:'Inter',system-ui,sans-serif;--font-sans:'IBM Plex Sans',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#16191a;--surface:#1f2324;--ink:#ecebe8;--muted:#a9b0b2;--border:#33393b;
+  --teal:#7fb5b0;--teal-strong:#a4d0cb;--teal-light:#23393a;--teal-mist:#1c2a2b;
+  --rust:#e09a76;--rust-light:#3a2820;--moss:#9dbb92;--moss-light:#25301f;--amber:#dcb46a;--amber-light:#362b17;
+  --slate:#a9b6c0;--slate-light:#283035;--sky:#8cbbe0;--sky-light:#1d2c3a;--plum:#c1a5dc;--plum-light:#2c2436;
+  --photo-a:#2a2e2f;--photo-b:#353a3b;--figure:#cfd2d2;--on-accent:#10201f;--scrim:rgba(0,0,0,.6);color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#16191a;--surface:#1f2324;--ink:#ecebe8;--muted:#a9b0b2;--border:#33393b;
+  --teal:#7fb5b0;--teal-strong:#a4d0cb;--teal-light:#23393a;--teal-mist:#1c2a2b;
+  --rust:#e09a76;--rust-light:#3a2820;--moss:#9dbb92;--moss-light:#25301f;--amber:#dcb46a;--amber-light:#362b17;
+  --slate:#a9b6c0;--slate-light:#283035;--sky:#8cbbe0;--sky-light:#1d2c3a;--plum:#c1a5dc;--plum-light:#2c2436;
+  --photo-a:#2a2e2f;--photo-b:#353a3b;--figure:#cfd2d2;--on-accent:#10201f;--scrim:rgba(0,0,0,.6);color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto;display:grid;gap:14px}
+.top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.top h1{font-size:19px;font-weight:600}.top p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.pilltabs{display:inline-flex;flex-wrap:wrap;gap:4px;border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:4px}
+.pilltabs button{border:0;background:none;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:500;color:var(--muted)}
+.pilltabs button[aria-pressed="true"],.pilltabs button[aria-selected="true"]{background:var(--teal);color:var(--on-accent)}
+.note{background:var(--teal-mist);border:1px solid var(--teal-light);border-radius:10px;padding:10px 14px;font-size:13px}
+.note b{font-family:var(--font-display);font-weight:600}
+.stage{container-type:inline-size;margin:0 auto;width:100%}
+.stage.phone{max-width:390px}
+.btn{border:1px solid var(--border);background:var(--surface);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:500}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:var(--on-accent)}
+.btn.ghost{border-color:transparent;background:none;color:var(--teal)}
+.btn.small{padding:4px 10px;font-size:12px}
+.btn.pill{border-radius:999px}
+.muted{color:var(--muted)}.small{font-size:12px}
+.lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;font-family:var(--font-display)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px}
+.chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12.5px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--teal-light);border-color:var(--teal);color:var(--teal-strong);font-weight:500}
+.sig{border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.sig.red{background:var(--rust-light);color:var(--rust)}.sig.amber{background:var(--amber-light);color:var(--amber)}.sig.green{background:var(--moss-light);color:var(--moss)}.sig.blue{background:var(--sky-light);color:var(--sky)}.sig.grey{background:var(--slate-light);color:var(--slate)}
+.dot{width:8px;height:8px;border-radius:999px;display:inline-block;flex:none}
+
+/* ===== Patient portal ===== */
+.portal-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:22px;justify-items:center;padding:6px 0}
+.portal-wrap figure{margin:0;display:grid;gap:8px;justify-items:center}
+.portal-wrap figcaption{font-size:12.5px;color:var(--muted);text-align:center;max-width:330px}
+.portal-wrap figcaption b{color:var(--ink);font-family:var(--font-display)}
+.phone{width:340px;max-width:100%;height:700px;border:9px solid var(--ink);border-radius:34px;background:var(--surface);overflow:hidden;position:relative;display:flex;flex-direction:column;font-size:15px}
+.pp-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex:none}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--teal);color:var(--on-accent);display:grid;place-items:center;font-weight:800;font-size:13px;flex:none;font-family:var(--font-display)}
+.pp-head .nm{font-weight:700;font-size:14px;font-family:var(--font-display)}
+.pp-head .ic{margin-left:auto;display:flex;gap:4px}
+.pp-head .ic button{width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface)}
+.pp-main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.pp-card{border:1px solid var(--border);border-radius:14px;padding:12px;background:var(--surface);display:grid;gap:6px}
+.pp-card.hero{border-color:var(--teal);background:var(--teal-mist)}
+.pp-h{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-family:var(--font-display)}
+.pp-big{font-size:17px;font-weight:700;font-family:var(--font-display);line-height:1.25}
+.bar{height:8px;border-radius:99px;background:var(--slate-light);overflow:hidden}.bar i{display:block;height:100%;background:var(--teal);border-radius:99px}
+.pbtn{min-height:46px;border-radius:12px;border:1px solid var(--border);background:var(--surface);font-weight:600;font-size:14.5px;padding:8px 14px}
+.pbtn.primary{background:var(--teal);border-color:var(--teal);color:var(--on-accent)}
+.pbtn.full{width:100%}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.pp-tabs{display:flex;border-top:1px solid var(--border);flex:none;background:var(--surface)}
+.pp-tabs button{flex:1;min-height:56px;border:0;background:none;font-size:12px;font-weight:600;color:var(--muted);display:grid;place-items:center;gap:2px}
+.pp-tabs button svg{width:22px;height:22px}
+.pp-tabs button[aria-selected="true"]{color:var(--teal-strong);box-shadow:inset 0 3px 0 var(--teal)}
+.sess{display:flex;gap:6px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;padding:4px 2px 0}
+.ex{border:1px solid var(--border);border-radius:14px;display:grid;grid-template-columns:34px 1fr 14px;gap:10px;align-items:center;padding:10px 12px;background:var(--surface)}
+.ex.has-pic{grid-template-columns:34px 64px 1fr 14px}
+.ex.done{background:var(--moss-light);border-color:var(--moss)}
+.tick{width:30px;height:30px;border-radius:999px;border:2px solid var(--border);display:grid;place-items:center;color:var(--on-accent);font-weight:700;background:none;padding:0}
+.ex.done .tick{background:var(--moss);border-color:var(--moss)}
+.ex .th{width:64px;aspect-ratio:4/3;border-radius:8px;overflow:hidden}
+.ex .t{font-weight:600;font-size:15px;line-height:1.25}
+.ex .d{font-size:13px;color:var(--muted)}
+.chev{color:var(--muted);font-size:20px}
+.sticky-start{position:sticky;bottom:0;padding-top:10px;background:linear-gradient(to top,var(--surface) 75%,transparent)}
+.dose{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.dose div{background:var(--paper);border-radius:10px;padding:6px 4px;text-align:center}
+.dose b{display:block;font-size:19px;font-family:var(--font-display)}
+.dose span{font-size:11.5px;color:var(--muted)}
+.setdots{display:flex;gap:8px;flex-wrap:wrap}
+.setdots button{width:46px;height:46px;border-radius:999px;border:2px solid var(--teal);background:var(--surface);color:var(--teal-strong);font-weight:700}
+.setdots button.on{background:var(--teal);color:var(--on-accent)}
+.ex-top{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);flex:none;font-size:13.5px}
+.ex-top button{border:0;background:none;color:var(--teal);font-weight:600;padding:6px}
+.pic{aspect-ratio:4/3;width:100%;position:relative;flex:none}
+.pic svg{width:100%;height:100%;display:block}
+.dots{position:absolute;bottom:8px;left:0;right:0;display:flex;justify-content:center;gap:5px}
+.dots i{width:7px;height:7px;border-radius:9px;background:rgba(255,255,255,.6)}.dots i.on{background:#fff}
+.timerband{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 14px;background:var(--teal-mist);border-bottom:1px solid var(--teal-light)}
+.ring{width:58px;height:58px;position:relative;display:grid;place-items:center}.ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring b{font-family:var(--font-display);font-size:20px}
+.steps{margin:0;padding-left:20px;display:grid;gap:5px}
+.stop{background:var(--rust-light);color:var(--rust);border-radius:10px;padding:8px 10px;font-size:13.5px}
+.tnote{background:var(--teal-mist);border-radius:10px;padding:8px 10px;font-size:13.5px}
+.ex-bottom{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:10px;border-top:1px solid var(--border);flex:none}
+.ex-bottom .done{background:var(--moss);border-color:var(--moss);color:var(--on-accent)}
+.pin{display:flex;justify-content:center;gap:8px}.pin span{width:46px;height:54px;border:2px solid var(--border);border-radius:12px;display:grid;place-items:center;font-size:24px;font-weight:700}
+.tip{background:var(--sky-light);color:var(--sky);border-radius:10px;padding:8px 10px;font-size:12.5px;text-align:left}
+
+/* ===== Staff app shell ===== */
+.app{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.pf{padding:16px;display:grid;gap:14px;background:var(--paper)}
+.pf-head{display:grid;grid-template-columns:1fr;gap:12px;padding:14px 16px}
+.pf-name{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.pf-name h2{font-size:21px}
+.pf-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.pf-meta b{color:var(--ink);font-weight:500}
+.pf-actions{display:flex;flex-wrap:wrap;gap:8px}
+.pf-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+@container (min-width:900px){.pf-grid{grid-template-columns:minmax(0,1fr) 300px}.pf-head{grid-template-columns:1fr auto;align-items:start}}
+.ptabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 16px;overflow-x:auto;background:var(--surface)}
+.ptabs button{border:0;background:none;padding:11px 12px;font-size:13.5px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.ptabs button[aria-selected="true"]{color:var(--teal);border-bottom-color:var(--teal)}
+.rail{display:grid;gap:12px}
+.rail .card{padding:12px 14px;display:grid;gap:8px}
+.rail h3{font-size:13.5px}
+.kv{display:flex;justify-content:space-between;font-size:13px;gap:8px}
+.banner{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:12px;font-size:13px}
+.banner.amber{background:var(--amber-light);color:var(--amber)}
+.banner.red{background:var(--rust-light);color:var(--rust)}
+.banner b{color:var(--ink)}
+
+/* Home program tab */
+.hp{display:grid;gap:12px}
+.prog-switch{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.prog-head{padding:14px 16px;display:grid;gap:10px}
+.prog-title{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.prog-title h3{font-size:17px}
+.prog-sub{font-size:13px;color:var(--muted)}
+.prog-bar{display:grid;gap:4px}
+.share{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px;border-top:1px solid var(--border);padding-top:10px}
+.share .st{display:inline-flex;gap:6px;align-items:center;font-weight:500}
+.share a,.share button.link{color:var(--teal);background:none;border:0;padding:0;font-size:12.5px;font-weight:500}
+.share button.link.danger{color:var(--rust)}
+.hp-grid{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
+@container (min-width:900px){.hp-grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1px;background:var(--border);border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+.stats div{background:var(--surface);padding:10px 12px;display:grid;gap:2px}
+.stats .v{font-family:var(--font-display);font-weight:700;font-size:18px}
+.stats .s{font-size:11.5px;color:var(--muted)}
+.box{padding:12px 14px;display:grid;gap:10px}
+.box h4{margin:0;font-family:var(--font-display);font-size:13.5px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.strip{display:grid;grid-template-columns:repeat(14,1fr);gap:4px}
+.strip button{border:0;border-radius:6px;padding:4px 0;display:grid;gap:1px;justify-items:center;font-size:10.5px;background:var(--slate-light);color:var(--muted)}
+.strip button b{font-size:12.5px;color:var(--ink);font-family:var(--font-display)}
+.strip .f{background:var(--moss-light)}.strip .f b{color:var(--moss)}
+.strip .p{background:var(--amber-light)}.strip .p b{color:var(--amber)}
+.strip .m{background:var(--rust-light)}.strip .m b{color:var(--rust)}
+.strip .t{outline:2px solid var(--ink);outline-offset:1px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted)}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.trend{width:100%;height:70px}
+.today li{list-style:none;display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.today ul{margin:0;padding:0}
+.today li:last-child{border-bottom:0}
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-family:var(--font-display);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr.grp td{background:var(--paper);font-family:var(--font-display);font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;padding:5px 10px}
+.mini{display:flex;gap:2px}.mini i{width:7px;height:12px;border-radius:2px;background:var(--border)}.mini i.f{background:var(--moss)}.mini i.p{background:var(--amber)}
+.nm-cell{display:flex;gap:8px;align-items:center}.nm-cell .th{width:44px;aspect-ratio:4/3;border-radius:5px;overflow:hidden;flex:none}
+.nm-cell b{font-weight:600}
+.cards-m{display:none}
+@container (max-width:620px){.tbl-wrap{display:none}.cards-m{display:grid;gap:8px}}
+.cm{border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:grid;gap:4px}
+.earlier summary{cursor:pointer;font-family:var(--font-display);font-weight:600;font-size:13.5px;padding:10px 14px}
+
+/* Exercise form media section */
+.fsec{border:1px solid var(--teal);box-shadow:0 0 0 1px var(--teal-light);border-radius:12px;background:var(--surface);max-width:720px;margin:0 auto}
+.fsec-h{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.fsec-h .st{width:22px;height:22px;border-radius:999px;border:1.5px solid var(--border);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.fsec-b{padding:2px 14px 14px 46px;display:grid;gap:14px}
+@container (max-width:460px){.fsec-b{padding-left:14px}}
+.f{display:grid;gap:6px}.f>.flabel{font-size:13px;font-weight:500}.hint{font-size:11.5px;color:var(--muted)}
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.photo{width:104px;aspect-ratio:4/3;border-radius:8px;overflow:hidden;border:1px solid var(--border);position:relative}
+.photo-add{width:104px;aspect-ratio:4/3;border-radius:8px;border:1.5px dashed var(--border);background:none;color:var(--teal);font-size:12.5px;font-weight:500}
+.consent{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;border:1px solid var(--border);font-size:13px}
+.consent.need{border-color:var(--amber);background:var(--amber-light)}
+.consent input{width:18px;height:18px;margin-top:2px}
+.switch{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.sw{width:38px;height:22px;border-radius:999px;background:var(--border);position:relative;flex:none;border:0;padding:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:999px;background:var(--surface);transition:left .15s}
+.sw[aria-checked="true"]{background:var(--teal)}.sw[aria-checked="true"]::after{left:19px}
+textarea.input,input.input{border:1px solid var(--border);border-radius:8px;padding:7px 10px;background:var(--surface);width:100%}
+textarea.input{min-height:78px;resize:vertical}
+.err{color:var(--rust);font-size:12.5px;font-weight:500}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div><h1>HEP refinements mockup</h1><p>Clickable. Sample data. Nothing is saved.</p></div>
+    <div class="row" style="flex-wrap:wrap;gap:8px">
+      <div class="pilltabs" role="tablist" aria-label="Screen" id="screens"></div>
+      <div class="pilltabs" role="group" aria-label="Width"><button type="button" data-width="full" aria-pressed="true">Desktop</button><button type="button" data-width="phone" aria-pressed="false">Phone width</button></div>
+    </div>
+  </div>
+  <div class="note" id="note"></div>
+  <div class="stage" id="stage"><div id="view"></div></div>
+</div>
+
+<script>
+(function(){
+const SCREENS=[['portal','Patient portal'],['homeprog','Home program tab'],['profile','Patient profile'],['media','Exercise photos']];
+const S={view:'portal',width:'full',portalTab:'home',exOpen:null,done:{},sets:{},timer:null,hp:{prog:0,day:13},media:{photos:2,consent:false,hide:false,tried:false}};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function load(){try{const o=JSON.parse(localStorage.getItem('hep-refine')||'{}');if(o.view&&SCREENS.some(s=>s[0]===o.view))S.view=o.view;if(o.width)S.width=o.width}catch(e){}}
+function save(){try{localStorage.setItem('hep-refine',JSON.stringify({view:S.view,width:S.width}))}catch(e){}}
+function photo(kind,shade){const f='var(--figure)';const L=(a,b,c,d)=>`<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="${f}" stroke-width="5" stroke-linecap="round"/>`;const H=(x,y)=>`<circle cx="${x}" cy="${y}" r="9" fill="${f}"/>`;
+  let g='';if(kind==='stand')g=H(80,28)+L(80,38,80,78)+L(80,48,104,30)+L(80,48,58,66)+L(80,78,70,110)+L(80,78,92,110)+`<rect x="112" y="10" width="6" height="104" fill="${f}" opacity=".35"/>`;
+  else if(kind==='lie')g=H(36,92)+L(46,94,96,94)+L(96,94,114,74)+L(114,74,130,94)+`<rect x="20" y="104" width="122" height="5" rx="2" fill="${f}" opacity=".35"/>`;
+  else g=H(70,34)+L(70,44,70,80)+L(70,54,88,70)+L(70,80,100,80)+L(100,80,100,112)+`<rect x="56" y="80" width="50" height="5" rx="2" fill="${f}" opacity=".4"/>`;
+  return `<svg viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="120" fill="var(--photo-b)"/><rect width="160" height="72" fill="var(--photo-a)" opacity="${shade||1}"/>${g}</svg>`;}
+const icon={home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',ex:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10"/></svg>'};
+
+/* ---------- Patient portal ---------- */
+const EX=[{id:'a',t:'Calf Stretch',sec:'Warm-up',sets:1,reps:3,hold:30,side:'each side',pic:null,steps:['Stand facing a wall with one foot back, heel down','Lean forward, keeping the back knee straight','Hold, then change sides'],stop:'Sharp or increasing pain'},
+ {id:'b',t:'Heel Raises',sec:'Strengthening',sets:3,reps:12,hold:null,side:'',pic:'stand',pics:3,steps:['Stand holding a chair or counter for balance','Rise up onto your toes','Lower slowly'],stop:'Pain or dizziness',note:'Go slow on the way down.'},
+ {id:'c',t:'Single-leg Stand',sec:'Balance',sets:3,reps:null,secs:30,side:'each side',pic:'stand',pics:1,steps:['Stand next to a chair, ready to hold on','Lift one foot and balance','Change sides'],stop:'Dizziness, or if you feel you may fall'},
+ {id:'d',t:'Sleeper Stretch',sec:'Cool-down',sets:3,reps:5,hold:5,side:'each side',pic:null,steps:['Lie on your side','Gently press the forearm down','Hold, then relax'],stop:'Sharp pain'}];
+const doseLine=e=>[e.reps?`${e.sets} × ${e.reps}`:`${e.sets} × ${e.secs} s`,e.hold?`hold ${e.hold} s`:'',e.side].filter(Boolean).join(' · ');
+function portalHead(){return `<div class="pp-head"><div class="logo">SP</div><div style="min-width:0"><div class="nm">Sunrise Physio</div><div class="small muted">Saved</div></div><div class="ic"><button type="button" aria-label="Daily reminder">🔔</button><button type="button" aria-label="Call the clinic">📞</button></div></div>`;}
+function portalTabs(active){return `<div class="pp-tabs" role="tablist"><button type="button" role="tab" data-ptab="home" aria-selected="${active==='home'}">${icon.home}Home</button><button type="button" role="tab" data-ptab="ex" aria-selected="${active==='ex'}">${icon.ex}Exercises</button></div>`;}
+function pSignin(){return `<div class="phone"><div class="pp-main" style="justify-content:center;align-items:center;text-align:center;gap:10px"><div class="logo" style="width:64px;height:64px;font-size:22px;border-radius:16px">SP</div><div style="font-weight:700;font-size:17px;font-family:var(--font-display)">Sunrise Physio</div><h2 style="font-size:21px">Your Home Exercise Program</h2><div class="muted" style="max-width:260px">Enter the 4-digit PIN your clinic gave you.</div><div class="pin"><span>•</span><span>•</span><span></span><span></span></div><label class="row" style="justify-content:center;font-size:14px"><input type="checkbox" checked style="width:20px;height:20px"> Remember this phone for 30 days</label><div class="tip">On iPhone, open this link in Safari so it remembers you. Links opened inside WhatsApp may forget.</div><div class="small muted">Lost your PIN? Ask your clinic for a new one.</div></div></div>`;}
+function doneCount(){return EX.filter(e=>S.done[e.id]).length;}
+function pHome(){const n=doneCount();return `<div class="phone">${portalHead()}<div class="pp-main">
+  <div><div style="font-size:22px;font-weight:800;font-family:var(--font-display)">Hi Shiva</div><div class="muted">Here is where things stand.</div></div>
+  <div class="pp-card hero"><div class="pp-h" style="color:var(--teal-strong)">Today</div><div class="pp-big">Ankle Rehab</div><div class="small muted">From Dr. Prem Anand · 4 exercises · once a day</div>
+   <div class="row between small"><span>Day 1 of 7</span><span>${n} of 4 done</span></div><div class="bar"><i style="width:${n/4*100}%"></i></div>
+   <button type="button" class="pbtn primary full" data-ptab="ex" style="margin-top:4px">${n?'Continue my exercises':'Start my exercises'}</button></div>
+  <div class="pp-card"><div class="pp-h">This week</div><div class="row" style="gap:5px">${['M','T','W','T','F','S','S'].map((d,i)=>`<div style="flex:1;text-align:center"><div style="height:28px;border-radius:7px;background:${i<1?'var(--moss-light)':i===1?'var(--teal-light)':'var(--slate-light)'};border:${i===1?'2px solid var(--teal)':'0'}"></div><div class="small muted">${d}</div></div>`).join('')}</div><div class="small muted">Programs start counting from day 1. Keep going.</div></div>
+  <div class="pp-card"><div class="pp-h">Next visit</div><div class="pp-big" style="font-size:16px">Tue 18 Nov · 5:30 PM</div><div class="small muted">With Dr. Prem Anand · Sunrise Physio</div></div>
+  <div class="pp-card"><div class="pp-h">Your package</div><div class="row between"><b style="font-family:var(--font-display)">Physio 10-pack</b><span class="sig blue">6 of 10 left</span></div><div class="bar"><i style="width:40%"></i></div><div class="small muted">Valid until 31 Dec 2026</div></div>
+  <div class="pp-card"><div class="pp-h">Other programs</div><div class="row between"><div><div style="font-weight:600">Neck mobility</div><div class="small muted">Also active · Day 2 of 7 · 3 exercises</div></div><button type="button" class="pbtn" style="min-height:38px">Open</button></div>
+   <details style="border-top:1px solid var(--border);padding-top:6px"><summary style="font-weight:600;font-size:14px;cursor:pointer">Earlier programs (2)</summary><div class="small muted" style="padding-top:6px;display:grid;gap:4px"><span>Knee strengthening · 4 to 18 Oct</span><span>Lower back basics · 9 to 23 Sep</span></div></details></div>
+  <div class="row" style="gap:8px"><button type="button" class="pbtn" style="flex:1">📅 Book a visit</button><button type="button" class="pbtn" style="flex:1">📞 Call clinic</button></div>
+ </div>${portalTabs('home')}</div>`;}
+function pList(){const n=doneCount();const secs=[...new Set(EX.map(e=>e.sec))];const next=EX.find(e=>!S.done[e.id]);
+ return `<div class="phone">${portalHead()}<div class="pp-main">
+  <div><div style="font-size:20px;font-weight:800;font-family:var(--font-display)">Ankle Rehab</div><div class="muted small">Day 1 of 7 · Today: ${n} of 4 done</div></div>
+  ${secs.map(s=>{const items=EX.filter(e=>e.sec===s);return `<div class="sec-h"><span class="pp-h">${s}</span><span class="small muted">${items.filter(e=>S.done[e.id]).length} of ${items.length}</span></div>
+   ${items.map(e=>`<div class="ex${e.pic?' has-pic':''}${S.done[e.id]?' done':''}"><button type="button" class="tick" data-ptick="${e.id}" aria-label="${S.done[e.id]?'Undo':'Mark'} ${esc(e.t)}">${S.done[e.id]?'✓':''}</button>${e.pic?`<span class="th" data-pex="${e.id}">${photo(e.pic)}</span>`:''}<span data-pex="${e.id}" style="cursor:pointer;min-width:0"><div class="t">${esc(e.t)}</div><div class="d">${esc(doseLine(e))}</div></span><span class="chev" data-pex="${e.id}" aria-hidden="true">›</span></div>`).join('')}`}).join('')}
+  <div class="sticky-start">${next?`<button type="button" class="pbtn primary full" data-pex="${next.id}">▶ ${n?'Continue':'Start'}: ${esc(next.t)}</button>`:`<div class="pp-card" style="text-align:center;background:var(--moss-light);border-color:var(--moss)"><b>All done for today ✓</b></div>`}</div>
+ </div>${portalTabs('ex')}</div>`;}
+function ringSvg(fr){const r=25,c=2*Math.PI*r;return `<svg viewBox="0 0 58 58"><circle cx="29" cy="29" r="${r}" fill="none" stroke="var(--teal-light)" stroke-width="6"/><circle cx="29" cy="29" r="${r}" fill="none" stroke="var(--teal)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c*(1-fr)}"/></svg>`;}
+function pExercise(id){const e=EX.find(x=>x.id===id);const i=EX.indexOf(e);const sets=S.sets[id]||0;const T=S.timer&&S.timer.id===id?S.timer:null;
+ return `<div class="phone"><div class="ex-top"><button type="button" data-pback>‹ List</button><span>${i+1} of ${EX.length}</span><span style="margin-left:auto;display:flex"><button type="button" aria-label="Previous" data-pex="${EX[(i+3)%4].id}">‹</button><button type="button" aria-label="Next" data-pex="${EX[(i+1)%4].id}">›</button><button type="button">🔔 Beeps</button></span></div>
+ <div class="pp-main" style="padding:0;gap:0">
+  ${e.pic?`<div class="pic">${photo(e.pic)}${e.pics>1?`<div class="dots">${Array.from({length:e.pics},(_,k)=>`<i class="${k?'':'on'}"></i>`).join('')}</div>`:''}</div>`:''}
+  ${T?`<div class="timerband" role="timer"><div class="ring">${ringSvg(T.left/T.len)}<b>${Math.ceil(T.left)}</b></div><div><div style="font-weight:700;font-size:17px;font-family:var(--font-display)">${T.phase}</div><div class="small muted">Rep ${T.rep} of ${T.reps}</div></div><button type="button" class="btn small" data-tstop>Stop</button></div>`:''}
+  <div style="padding:14px;display:grid;gap:12px">
+   <div><div style="font-size:21px;font-weight:800;font-family:var(--font-display);line-height:1.2">${esc(e.t)}</div>${e.side?`<div class="small muted">${esc(e.side)}</div>`:''}</div>
+   <div class="dose"><div><b>${e.sets}</b><span>${e.sets===1?'set':'sets'}</span></div><div><b>${e.reps||e.secs+' s'}</b><span>${e.reps?'reps':'each'}</span></div><div><b>${e.hold?e.hold+' s':'—'}</b><span>${e.hold?'hold':'no hold'}</span></div></div>
+   ${T?'':`<div class="row" style="gap:8px"><button type="button" class="pbtn primary" style="flex:1" data-tstart="${id}">▶ ${e.hold?`Start ${e.reps} holds`:e.secs?`Start ${e.secs} s`:'Start'}</button><button type="button" class="pbtn">Rest 30 s</button></div>`}
+   ${e.sets>1?`<div><div class="pp-h" style="margin-bottom:6px">Sets · tap each one when done</div><div class="setdots">${Array.from({length:e.sets},(_,k)=>`<button type="button" data-pset="${id}" data-n="${k+1}" class="${k<sets?'on':''}">${k+1}</button>`).join('')}</div></div>`:''}
+   <div><div class="pp-h" style="margin-bottom:4px">How to do it</div><ol class="steps">${e.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></div>
+   ${e.note?`<div class="tnote"><b>From your therapist:</b> ${esc(e.note)}</div>`:''}
+   <div class="stop"><b>⚠ Stop if:</b> ${esc(e.stop)}</div>
+  </div></div>
+  ${S.timerDone===id?`<div style="background:var(--moss-light);color:var(--moss);padding:9px 12px;font-size:13.5px;font-weight:500;border-top:1px solid var(--border)"><b style="color:var(--ink)">All ${e.reps} holds done.</b> Tap ✓ Done when you're ready.</div>`:''}
+  <div class="ex-bottom"><button type="button" class="pbtn">Skip</button><button type="button" class="pbtn done" data-pdone="${id}">✓ Done · Next ›</button></div></div>`;}
+function viewPortal(){
+ const live=S.exOpen?pExercise(S.exOpen):S.portalTab==='home'?pHome():pList();
+ const second=S.exOpen?pList():pExercise(S.portalTab==='home'?'b':'a');
+ return `<div class="portal-wrap"><figure>${live}<figcaption><b>${S.exOpen?'Exercise page':S.portalTab==='home'?'Home tab':'Exercises tab'}</b><br>Live: tap the tabs, rows, Start, set circles, Done.</figcaption></figure>
+ <figure>${S.exOpen?second:pExercise(S.portalTab==='home'?'b':'a')}<figcaption><b>${S.exOpen?'Exercises tab':S.portalTab==='home'?'Exercise page with photos':'Exercise page without a photo'}</b><br>${S.exOpen?'Back to the list.':S.portalTab==='home'?'Swipe photos (dots). The timer appears in a band under the photo.':'No photo uploaded: no picture box, the page starts with the name, dose and steps.'}</figcaption></figure>
+ <figure>${pSignin()}<figcaption><b>Sign in</b><br>Unchanged, with the Safari tip on iPhones.</figcaption></figure></div>`;
+}
+
+/* ---------- Home program tab ---------- */
+function strip(){const pat='mmpfffpfmff' ;let h='';const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];for(let i=0;i<14;i++){const d=2+i;const k=i<6?'':(i===13?'t ':'')+(i>=6&&i<13?(['f','f','p','f','m','f','p'][i-6]):'');h+=`<button type="button" class="${k}" title="${days[i%7]} ${d} Nov"><span>${days[i%7].slice(0,1)}</span><b>${d}</b></button>`;}return h;}
+function viewHomeProg(){
+ return `<div class="hp">
+  <div class="prog-switch"><span class="lbl" style="margin-right:4px">Programs</span><button type="button" class="chip" aria-pressed="true">Ankle Rehab · active</button><button type="button" class="chip" aria-pressed="false">Neck mobility · active</button><button type="button" class="chip" aria-pressed="false">Earlier (2)</button><span style="flex:1"></span><button type="button" class="btn primary small pill">+ New program</button></div>
+  <div class="banner red"><span><b>Pain 7/10</b> reported after yesterday's session · Heel Raises felt hard</span><span class="row" style="gap:6px"><button type="button" class="btn small">Call</button><button type="button" class="btn small">Mark reviewed</button></span></div>
+  <div class="card prog-head">
+   <div class="prog-title"><h3>Ankle Rehab</h3><span class="sig green">Active</span><span style="flex:1"></span><button type="button" class="btn small">Edit program</button><button type="button" class="btn small">Message patient</button><button type="button" class="btn small" aria-label="More">⋮</button></div>
+   <div class="prog-sub">1× daily · 4 exercises · about 20 min · completion target 70% · prescribed by Prem Anand · review in 7 days</div>
+   <div class="prog-bar"><div class="row between small"><span><b>Day 8</b> of 14</span><span class="muted">8 Nov – 21 Nov</span></div><div class="bar"><i style="width:57%"></i></div></div>
+   <div class="share"><span class="st"><span class="dot" style="background:var(--moss)"></span>Patient link on · opened today 9:10 · PIN set</span><button type="button" class="link">Copy link</button><button type="button" class="link">Send on WhatsApp</button><button type="button" class="link">Reset PIN…</button><button type="button" class="link danger">Stop sharing</button></div>
+  </div>
+  <div class="stats"><div><span class="lbl">Today</span><span class="v">0 of 1</span><span class="s">sessions</span></div><div><span class="lbl">Adherence</span><span class="v">64%</span><span class="s">4 of 7 days finished</span></div><div><span class="lbl">Streak</span><span class="v">2 days</span><span class="s">best 3</span></div><div><span class="lbl">Last active</span><span class="v">Today</span><span class="s">opened 6×</span></div><div><span class="lbl">Pain · effort</span><span class="v">7 · 6</span><span class="s">last session</span></div></div>
+  <div class="hp-grid">
+   <div class="card box"><h4>Last 14 days <span class="small muted" style="font-weight:400">tap a day</span></h4><div class="strip">${strip()}</div>
+    <div class="legend"><span><i class="dot" style="background:var(--moss)"></i>Completed</span><span><i class="dot" style="background:var(--amber)"></i>Partly done</span><span><i class="dot" style="background:var(--rust)"></i>Missed</span><span><i class="dot" style="background:var(--slate-light);border:1px solid var(--border)"></i>Not due</span></div>
+    <div><div class="lbl" style="margin-bottom:4px">Pain and effort after each session</div><svg class="trend" viewBox="0 0 300 70" preserveAspectRatio="none" role="img" aria-label="Pain rising from 3 to 7 over the last week; effort steady around 5"><line x1="0" y1="35" x2="300" y2="35" stroke="var(--border)" stroke-dasharray="3 3"/><polyline fill="none" stroke="var(--rust)" stroke-width="2.5" points="0,48 50,46 100,44 150,40 200,34 250,28 300,20"/><polyline fill="none" stroke="var(--sky)" stroke-width="2.5" points="0,38 50,36 100,37 150,35 200,36 250,34 300,30"/><circle cx="300" cy="20" r="4" fill="var(--rust)"/></svg><div class="legend"><span><i class="dot" style="background:var(--rust)"></i>Pain (0–10)</span><span><i class="dot" style="background:var(--sky)"></i>Effort (0–10)</span></div></div>
+   </div>
+   <div class="card box today"><h4>Today, Sun 15 Nov <span class="small muted" style="font-weight:400">0 of 4</span></h4><ul>${EX.map(e=>`<li><span>${esc(e.t)}</span><span class="sig grey">To do</span></li>`).join('')}</ul><div class="small muted">Yesterday: 3 done, 1 skipped (“too painful”).</div></div>
+  </div>
+  <div class="card">
+   <div class="box" style="padding-bottom:0"><h4>By exercise <span class="small muted" style="font-weight:400">last 7 days</span></h4></div>
+   <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Exercise</th><th>Dose</th><th>Done</th><th>Last 7 days</th><th>Notes</th></tr></thead><tbody>
+    ${[['Warm-up',[EX[0]]],['Main exercises',[EX[1],EX[2]]],['Cool-down',[EX[3]]]].map(([g,list])=>`<tr class="grp"><td colspan="5">${g}</td></tr>`+list.map((e,k)=>`<tr><td><div class="nm-cell">${e.pic?`<span class="th">${photo(e.pic)}</span>`:''}<b>${esc(e.t)}</b></div></td><td class="muted">${esc(doseLine(e))}</td><td>${[4,3,5,2][EX.indexOf(e)]} of 7</td><td><span class="mini">${Array.from({length:7},(_,j)=>`<i class="${(j+EX.indexOf(e))%3?'f':j%2?'p':''}"></i>`).join('')}</span></td><td>${e.id==='b'?'<span class="sig red">felt hard ×2</span>':e.id==='d'?'<span class="sig amber">skipped ×2</span>':'<span class="muted">—</span>'}</td></tr>`).join('')).join('')}
+   </tbody></table></div>
+   <div class="cards-m" style="padding:0 14px 14px">${EX.map(e=>`<div class="cm"><b>${esc(e.t)}</b><span class="small muted">${esc(doseLine(e))}</span><div class="row between small"><span>${[4,3,5,2][EX.indexOf(e)]} of 7 days</span>${e.id==='b'?'<span class="sig red">felt hard ×2</span>':''}</div></div>`).join('')}</div>
+  </div>
+  <details class="card earlier"><summary>Earlier programs (2)</summary><div class="box" style="padding-top:0"><div class="kv"><span>Knee strengthening · 4–18 Oct</span><span class="muted">82% · completed</span></div><div class="kv"><span>Lower back basics · 9–23 Sep</span><span class="muted">61% · ended</span></div></div></details>
+ </div>`;
+}
+
+/* ---------- Patient profile ---------- */
+function viewProfile(){
+ return `<div class="app"><div class="card pf-head" style="border:0;border-radius:0;border-bottom:1px solid var(--border)">
+   <div style="display:grid;gap:6px"><div class="pf-name"><h2>Shiva Kumar</h2><span class="sig blue">Admitted · Ortho · day 8</span><span class="sig red">Pain 7 reported</span></div>
+    <div class="pf-meta"><span>ID <b>PT-0482</b></span><span><b>54 · M</b></span><span><b>+91 98765 43210</b></span><span>Right ankle sprain</span><span>Referred by Dr. Rao</span></div>
+    <div class="pf-meta"><span>Next appointment <b>Tue 18 Nov · 5:30 PM</b></span><span>Package <b>6 of 10 left</b></span></div></div>
+   <div class="pf-actions"><button type="button" class="btn">📞 Call</button><button type="button" class="btn">WhatsApp</button><button type="button" class="btn">Edit</button><button type="button" class="btn primary">New visit</button></div>
+  </div>
+  <div class="ptabs" role="tablist"><button type="button" role="tab" aria-selected="false">Visits (17)</button><button type="button" role="tab" aria-selected="false">Invoices (4)</button><button type="button" role="tab" aria-selected="true">Home program <span class="dot" style="background:var(--rust)"></span></button><button type="button" role="tab" aria-selected="false">Notes (3)</button><button type="button" role="tab" aria-selected="false">Stay</button></div>
+  <div class="pf"><div class="pf-grid"><div style="min-width:0">${viewHomeProg()}</div>
+   <aside class="rail"><div class="card"><h3>Needs attention</h3><div class="kv"><span>17 sessions need a note</span><button type="button" class="btn small">Write notes</button></div><div class="kv"><span>Pain 7 after home session</span><button type="button" class="btn small">Review</button></div></div>
+    <div class="card"><h3>Stay</h3><div class="kv"><span>Admitted 08/11 · Ortho</span><span class="muted">day 8</span></div><div class="row" style="gap:6px;flex-wrap:wrap"><button type="button" class="btn small">Bill this stay</button><button type="button" class="btn small">Edit stay</button><button type="button" class="btn small">Discharge</button></div></div>
+    <div class="card"><h3>Payments</h3><div class="kv"><span>Billed</span><b>₹17,500</b></div><div class="kv"><span>Collected</span><b>₹17,500</b></div><div class="kv"><span>Outstanding</span><b>₹0</b></div><button type="button" class="btn ghost small" style="justify-self:start;padding-left:0">4 bills · View</button></div>
+    <div class="card"><h3>Care plan</h3><div class="muted small">No open package.</div></div>
+    <div class="card"><h3>Clinical notes</h3><div class="muted small">No notes yet.</div><button type="button" class="btn small" style="justify-self:start">New assessment</button></div>
+   </aside></div></div></div>`;
+}
+
+/* ---------- Exercise photos ---------- */
+function viewMedia(){const M=S.media;const need=M.photos>0&&!M.consent;
+ return `<div class="fsec"><div class="fsec-h"><span class="st">2</span><h3 style="font-size:14.5px">Media and instructions</h3></div><div class="fsec-b">
+  <div class="f"><span class="flabel">Photos or GIF</span><div class="photos">${Array.from({length:M.photos},(_,k)=>`<div class="photo">${photo(['stand','lie','sit'][k%3])}</div>`).join('')}<button type="button" class="photo-add" data-addphoto>+ Add photo</button>${M.photos?'<button type="button" class="photo-add" data-rmphoto style="color:var(--rust)">Remove last</button>':''}</div><span class="hint">Up to 4 photos or one GIF. Faces can be blurred.</span></div>
+  ${M.photos?`<label class="consent${need&&M.tried?' need':''}"><input type="checkbox" id="consent" ${M.consent?'checked':''}><span><b>I have consent from the person shown</b> to use these pictures with patients. <span class="hint" style="display:block">Recorded with your name and the date.</span></span></label>${need&&M.tried?'<div class="err">Tick consent to save these pictures, or remove them.</div>':''}
+   <div class="switch"><button type="button" class="sw" role="switch" aria-checked="${M.hide}" data-hide aria-label="Hide pictures in lists"></button><span><b>Hide pictures in lists</b><span class="hint" style="display:block">Library, picker and the patient's checklist show the name only. The pictures still show on the exercise page itself.</span></span></div>`:''}
+  <div class="f"><span class="flabel">Instructions</span><textarea class="input">Stand holding a chair or counter for balance
+Rise up onto your toes
+Lower slowly</textarea><span class="hint">One step per line. Shown to the patient as numbered steps.</span></div>
+  <div class="row" style="justify-content:flex-end"><button type="button" class="btn primary" data-trysave>Save exercise</button></div>
+  ${M.saved?'<div class="small" style="color:var(--moss)">Saved (mockup).</div>':''}
+ </div></div>`;}
+
+const NOTES={
+ portal:`<b>Patient portal</b>. Two tabs at the bottom, <b>Home</b> and <b>Exercises</b>, as in the original design.
+ <ul style="margin:6px 0 0;padding-left:18px">
+ <li><b>Home</b>: the greeting; Today's program with progress and a Start or Continue button; this week; the next clinic visit; package sessions left; other and earlier programs; Book a visit and Call the clinic.</li>
+ <li><b>Exercises</b>: the session list by section. A row with no photo shows only the name and dose, with no grey tile.</li>
+ <li><b>Exercise page</b>: the photo only when one exists; Sets, Reps and Hold boxes; circles to tick off each set; the timer in a band under the photo; the steps; Stop if.</li></ul>`,
+ homeprog:`<b>Home program tab</b> on the patient profile, top to bottom:
+ <ul style="margin:6px 0 0;padding-left:18px">
+ <li>Program chips, with + New program.</li>
+ <li>An alert banner with its actions.</li>
+ <li>One program card: actions, a day progress bar, and the patient link (moved up from the bottom).</li>
+ <li>One compact stats row.</li>
+ <li>The 14-day strip with a pain and effort trend, beside Today.</li>
+ <li>A By exercise table grouped Warm-up / Main / Cool-down, with a 7-day mini strip and flags.</li>
+ <li>Earlier programs, folded.</li></ul>
+ Try Phone width.`,
+ profile:`<b>Patient profile</b>, the whole page:
+ <ul style="margin:6px 0 0;padding-left:18px">
+ <li>One header card with name, status pills, ID, age, phone, condition, referral, next appointment and package, plus Call / WhatsApp / Edit / New visit.</li>
+ <li>The tabs right under the header.</li>
+ <li>A right rail with Needs attention (notes due, pain to review), Stay, Payments, Care plan and Clinical notes.</li></ul>
+ The "Session notes" and admission bars become rail cards, so the tabs start higher.`,
+ media:`<b>Exercise photos</b>. When an exercise has pictures, the therapist ticks <b>"I have consent from the person shown"</b> before saving. Pictures then show everywhere, pelvic floor included. A <b>Hide pictures in lists</b> switch per exercise lets the therapist keep them off lists while still showing them on the exercise page. Press Save without ticking to see the check.`};
+
+let tid=null;
+function render(){
+ $('#screens').innerHTML=SCREENS.map(([k,l])=>`<button type="button" role="tab" data-view="${k}" aria-selected="${S.view===k}">${l}</button>`).join('');
+ document.querySelectorAll('[data-width]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.width===S.width));
+ $('#stage').classList.toggle('phone',S.width==='phone');
+ $('#note').innerHTML=NOTES[S.view];
+ $('#view').innerHTML={portal:viewPortal,homeprog:()=>`<div class="app"><div class="pf">${viewHomeProg()}</div></div>`,profile:viewProfile,media:viewMedia}[S.view]();
+ save();
+}
+function startTimer(id){const e=EX.find(x=>x.id===id);const reps=Math.min(e.reps||1,3),hold=Math.min(e.hold||e.secs||5,4);const ph=[];for(let i=1;i<=reps;i++){ph.push({phase:e.hold?'Hold':'Go',len:hold,rep:i,reps});if(i<reps)ph.push({phase:'Relax',len:2,rep:i,reps});}
+ let k=0,end=performance.now()+ph[0].len*1000;S.timerDone=null;S.timer={id,...ph[0],left:ph[0].len};clearInterval(tid);
+ tid=setInterval(()=>{const now=performance.now();let left=(end-now)/1000;if(left<=0){k++;if(k>=ph.length){clearInterval(tid);S.timer=null;S.timerDone=id;render();return}end+=ph[k].len*1000;left=(end-now)/1000}S.timer={id,...ph[k],left:Math.max(0,left)};render()},250);render();}
+document.addEventListener('click',ev=>{const t=ev.target.closest('button,[data-pex]');if(!t)return;const d=t.dataset;
+ if(d.view){S.view=d.view;return render()}
+ if(d.width){S.width=d.width;return render()}
+ if(d.ptab){S.portalTab=d.ptab;S.exOpen=null;clearInterval(tid);S.timer=null;return render()}
+ if(d.ptick){S.done[d.ptick]=!S.done[d.ptick];return render()}
+ if(d.pex){S.exOpen=d.pex;clearInterval(tid);S.timer=null;S.timerDone=null;return render()}
+ if('pback' in d){S.exOpen=null;S.portalTab='ex';clearInterval(tid);S.timer=null;return render()}
+ if(d.pset){const n=+d.n;S.sets[d.pset]=(S.sets[d.pset]||0)>=n?n-1:n;return render()}
+ if(d.tstart)return startTimer(d.tstart);
+ if('tstop' in d){clearInterval(tid);S.timer=null;return render()}
+ if(d.pdone){S.done[d.pdone]=true;S.timerDone=null;const nx=EX.find(e=>!S.done[e.id]);S.exOpen=nx?nx.id:null;if(!nx)S.portalTab='ex';return render()}
+ if('addphoto' in d){S.media.photos=Math.min(4,S.media.photos+1);S.media.saved=false;return render()}
+ if('rmphoto' in d){S.media.photos=Math.max(0,S.media.photos-1);S.media.saved=false;return render()}
+ if('hide' in d){S.media.hide=!S.media.hide;return render()}
+ if('trysave' in d){S.media.tried=true;S.media.saved=!(S.media.photos>0&&!S.media.consent);return render()}
+});
+document.addEventListener('change',ev=>{if(ev.target.id==='consent'){S.media.consent=ev.target.checked;S.media.saved=false;render()}});
+load();render();
+})();
+</script>
+
