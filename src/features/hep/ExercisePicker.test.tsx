@@ -19,7 +19,7 @@ vi.mock('@/services/hepMediaService', () => ({ hepMediaService: { mintViewUrls: 
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'Asia/Kolkata' } as unknown as Clinic;
 const ex = (id: string, title: string, over: Partial<Exercise> = {}): Exercise => ({
-  id, clinicId: 'c1', title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [],
+  id, clinicId: 'c1', title, positions: [], otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [],
   thumbKey: null, defaultSets: 3, doseType: 'reps', defaultReps: 10, defaultHoldSeconds: null, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1, side: 'none', stopIf: '',
   isFavorite: false, active: true, deleted: false, version: 1, createdAt: '', updatedAt: '', ...over,
 });

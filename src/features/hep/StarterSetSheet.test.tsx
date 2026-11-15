@@ -16,7 +16,7 @@ const saveExercise = vi.fn();
 vi.mock('@/services/hepService', async (orig) => ({ ...(await orig<typeof import('@/services/hepService')>()), hepService: { saveExercise: (...a: unknown[]) => saveExercise(...a) } }));
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;
 const ex = (id: string, title: string): Exercise => ({
-  id, clinicId: 'c1', title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null,
+  id, clinicId: 'c1', title, positions: [], otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null,
   defaultSets: 3, doseType: 'reps', defaultReps: 10, defaultHoldSeconds: null, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1, side: 'none', stopIf: '', isFavorite: false, active: true, deleted: false, version: 1, createdAt: '', updatedAt: '',
 });
 function renderSheet() {

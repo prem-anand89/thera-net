@@ -3,7 +3,7 @@ import type { Exercise, ExerciseTemplateItem } from '@/domain/hep';
 import { exerciseToItem, groupItemsByPhase, itemDose, itemsMinutes, itemsNeed, moveWithinSection, orderBySection, templateItemToInput, withItemDose } from './hepItems';
 
 const ex = (over: Partial<Exercise> = {}): Exercise => ({
-  id: 'e1', clinicId: 'c1', title: 'Quad Sets', otherNames: ['QS'], bodyRegion: 'Knee', alsoRegions: ['Hip'], equipment: ['Towel'], phase: 'activation', instructions: 'Sit\nTighten', mediaType: 'stills',
+  id: 'e1', clinicId: 'c1', title: 'Quad Sets', positions: [], otherNames: ['QS'], bodyRegion: 'Knee', alsoRegions: ['Hip'], equipment: ['Towel'], phase: 'activation', instructions: 'Sit\nTighten', mediaType: 'stills',
   mediaKeys: ['k0', 'k1'], mediaCaptions: ['Start', 'Hold'], thumbKey: 't', defaultSets: 3, doseType: 'hold', defaultReps: 12, defaultHoldSeconds: 10, defaultDurationSeconds: null, defaultRestSeconds: 30,
   defaultSessionsPerDay: 2, side: 'both', stopIf: 'Sharp pain', isFavorite: true, active: true, deleted: false, version: 3, createdAt: '', updatedAt: '', ...over,
 });

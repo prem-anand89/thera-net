@@ -23,6 +23,42 @@ export const EXERCISE_PHASE_LABELS: Record<ExercisePhase, string> = {
   other: 'Other',
 };
 
+/** The six main exercise types. Warm-up, cool-down and other are not types a therapist picks for a new exercise. */
+export const EXERCISE_TYPES = ['mobility', 'stretching', 'activation', 'strengthening', 'balance', 'functional'] as const;
+export type ExerciseType = (typeof EXERCISE_TYPES)[number];
+export const isMainType = (p: ExercisePhase): p is ExerciseType => (EXERCISE_TYPES as readonly string[]).includes(p);
+
+/** The order a session is shown and saved in: warm-up, the six types, other, cool-down. */
+export const SESSION_ORDER: readonly ExercisePhase[] = ['warm_up', 'mobility', 'stretching', 'activation', 'strengthening', 'balance', 'functional', 'other', 'cool_down'];
+
+export const EXERCISE_TYPE_DEFINITIONS: Record<ExerciseType, string> = {
+  mobility: 'Active or assisted range of motion. Default dosage: repetitions.',
+  stretching: 'Sustained end-range hold. Default dosage: holds, 3 × 30 s.',
+  activation: 'Isometric or low-load motor control. Default dosage: repetitions with hold.',
+  strengthening: 'Resisted or loaded exercise. Default dosage: repetitions.',
+  balance: 'Static or dynamic postural control. Default dosage: timed.',
+  functional: 'Task-specific training, for example sit to stand or stairs. Default dosage: repetitions.',
+};
+
+export type TypeTone = 'sky' | 'plum' | 'amber' | 'rust' | 'moss' | 'teal' | 'slate';
+export const EXERCISE_TYPE_TONE: Record<ExercisePhase, TypeTone> = {
+  mobility: 'sky',
+  stretching: 'plum',
+  activation: 'amber',
+  strengthening: 'rust',
+  balance: 'moss',
+  functional: 'teal',
+  warm_up: 'slate',
+  cool_down: 'slate',
+  other: 'slate',
+};
+
+export const HEP_POSITIONS = ['Standing', 'Sitting', 'Supine', 'Prone', 'Side-lying', 'Quadruped', 'Kneeling'] as const;
+export type HepPosition = (typeof HEP_POSITIONS)[number];
+
+/** Old cached rows have no positions. */
+export const positionsOf = (ex: Partial<Pick<Exercise, 'positions'>>): string[] => ex.positions ?? [];
+
 /** The suggested kind for a type; the therapist can always change it (amendment 62). */
 export function suggestedDoseType(phase: ExercisePhase): DoseType {
   if (phase === 'stretching' || phase === 'activation' || phase === 'cool_down') return 'hold';
@@ -42,6 +78,8 @@ export interface Exercise {
   /** What the patient needs, for example "Theraband / resistance band". */
   equipment: string[];
   phase: ExercisePhase;
+  /** Starting positions; a filter for staff, never shown to patients. */
+  positions: string[];
   instructions: string;
   mediaType: ExerciseMediaType;
   mediaKeys: string[];
@@ -323,12 +361,12 @@ function wordMatches(query: string, candidate: string): boolean {
  * ("clam" finds Clamshells), and with one typo in words of 5 letters or more ("hamstrig").
  */
 export function matchesExerciseSearch(
-  ex: Pick<Exercise, 'title' | 'otherNames' | 'bodyRegion' | 'alsoRegions' | 'phase' | 'equipment'>,
+  ex: Pick<Exercise, 'title' | 'otherNames' | 'bodyRegion' | 'alsoRegions' | 'phase' | 'equipment'> & Partial<Pick<Exercise, 'positions'>>,
   query: string,
 ): boolean {
   const q = words(query);
   if (q.length === 0) return true;
-  const base = words([ex.title, ...ex.otherNames, ex.bodyRegion, ...ex.alsoRegions, EXERCISE_PHASE_LABELS[ex.phase], ...ex.equipment].join(' '));
+  const base = words([ex.title, ...ex.otherNames, ex.bodyRegion, ...ex.alsoRegions, EXERCISE_PHASE_LABELS[ex.phase], ...ex.equipment, ...positionsOf(ex)].join(' '));
   // Neighbouring words also count joined, so "pushup" finds "Push-up".
   const hay = [...base, ...base.slice(1).map((w, i) => base[i] + w)];
   return q.every((w) => hay.some((h) => wordMatches(w, h)));

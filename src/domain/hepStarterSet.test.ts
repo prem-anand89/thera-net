@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { EXERCISE_PHASES, HEP_EQUIPMENT, HEP_REGIONS, isPelvicFloorRegion } from './hep';
+import { EXERCISE_PHASES, EXERCISE_TYPES, HEP_EQUIPMENT, HEP_POSITIONS, HEP_REGIONS, isPelvicFloorRegion } from './hep';
 import { isDoseValid } from './hepDose';
 import { STARTER_EXERCISES } from './hepStarterSet';
 
 describe('starter set', () => {
+  it('gives every exercise a position and one of the six types', () => {
+    for (const s of STARTER_EXERCISES) {
+      expect(s.positions.length, s.title).toBeGreaterThanOrEqual(1);
+      for (const p of s.positions) expect(HEP_POSITIONS as readonly string[], `${s.title} ${p}`).toContain(p);
+      expect(EXERCISE_TYPES as readonly string[], s.title).toContain(s.phase);
+    }
+  });
   it('every exercise is a valid dose, region, type and equipment, so saving it can never be refused for its shape', () => {
     for (const s of STARTER_EXERCISES) {
       expect(isDoseValid({ kind: s.dose.kind, sets: s.dose.sets, reps: s.dose.reps ?? null, holdSeconds: s.dose.holdSeconds ?? null, durationSeconds: s.dose.durationSeconds ?? null, restSeconds: s.dose.restSeconds, side: s.dose.side, sessionsPerDay: s.dose.perDay }), s.title).toBe(true);

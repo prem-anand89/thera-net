@@ -42,7 +42,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 const saved = (over: Partial<Exercise> = {}): Exercise => ({
-  id: 'e1', clinicId: 'c1', title: 'Wall Slides', otherNames: ['wall slide'], bodyRegion: 'Shoulder', alsoRegions: ['Spine / Back'], equipment: ['Wall'], phase: 'mobility',
+  id: 'e1', clinicId: 'c1', title: 'Wall Slides', positions: [], otherNames: ['wall slide'], bodyRegion: 'Shoulder', alsoRegions: ['Spine / Back'], equipment: ['Wall'], phase: 'mobility',
   instructions: 'Stand\nSlide', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null, defaultSets: 3, doseType: 'reps', defaultReps: 10, defaultHoldSeconds: null,
   defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 2, side: 'none', stopIf: 'Sharp pain', isFavorite: false, active: true, deleted: false, version: 1, createdAt: '', updatedAt: '', ...over,
 });

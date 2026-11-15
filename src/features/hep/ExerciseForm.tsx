@@ -179,7 +179,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       const savedId = await hepService.saveExercise({ id, clinicId, ...fields });
       // Show it in the local list at once; the next sync pull replaces this row with the server's.
       const now = new Date().toISOString();
-      const saved: Exercise = { ...fields, id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
+      const saved: Exercise = { ...fields, positions: exercise?.positions ?? [], id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
       await db.exercises.put(saved).catch(() => {});
       onSaved(savedId, saved);
       onClose();

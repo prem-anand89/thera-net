@@ -37,7 +37,7 @@ const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clin
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const day = (o: number) => new Date(Date.parse(`${TODAY}T00:00:00Z`) + o * 86_400_000).toISOString().slice(0, 10);
 const ex = (id: string, title: string, over: Partial<Exercise> = {}): Exercise => ({
-  id, clinicId: 'c1', title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null,
+  id, clinicId: 'c1', title, positions: [], otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null,
   defaultSets: 3, doseType: 'reps', defaultReps: 10, defaultHoldSeconds: null, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1, side: 'none', stopIf: '', isFavorite: false, active: true, deleted: false, version: 1, createdAt: '', updatedAt: '', ...over,
 });
 const tItem = (e: Exercise, i: number, spd: SessionsPerDay = 1): ExerciseTemplateItem => ({ ...exerciseToItem(e), sessionsPerDay: spd, sortOrder: i, id: `i${i}` }) as unknown as ExerciseTemplateItem;

@@ -6,6 +6,13 @@ import {
   estimateItemSeconds,
   estimateSessionMinutes,
   EXERCISE_PHASES,
+  EXERCISE_TYPES,
+  EXERCISE_TYPE_TONE,
+  EXERCISE_TYPE_DEFINITIONS,
+  HEP_POSITIONS,
+  SESSION_ORDER,
+  isMainType,
+  positionsOf,
   HEP_BODY_ORDER,
   isFourDigitPin,
   isHighPainAlert,
@@ -28,7 +35,7 @@ import {
 
 function exercise(over: Partial<Exercise> = {}): Exercise {
   return {
-    id: 'ex-1', clinicId: 'c-1', title: 'Wall Slides', otherNames: [], bodyRegion: 'Shoulder', alsoRegions: [], equipment: [],
+    id: 'ex-1', clinicId: 'c-1', title: 'Wall Slides', positions: [], otherNames: [], bodyRegion: 'Shoulder', alsoRegions: [], equipment: [],
     phase: 'strengthening', instructions: 'Slide arms up slowly', mediaType: 'gif', mediaKeys: ['clinics/c-1/exercises/ex-1/0'],
     mediaCaptions: [], thumbKey: null, defaultSets: 3, doseType: 'hold', defaultReps: 10, defaultHoldSeconds: 5, defaultDurationSeconds: null,
     defaultRestSeconds: 30, defaultSessionsPerDay: 2, side: 'both', stopIf: 'Sharp pinching pain', isFavorite: false, active: true,
@@ -247,5 +254,37 @@ describe('suggested kind and session time estimate', () => {
     const items = [{ ...base }, { ...base, sessionsPerDay: 1 }];
     expect(estimateSessionMinutes(items, 2, 1)).toBe(7); // 400 s
     expect(estimateSessionMinutes(items, 2, 2)).toBe(3); // only the one that follows the program's 2 a day
+  });
+});
+
+describe('exercise types, positions and session order', () => {
+  it('orders a session warm-up first, cool-down last, other second to last', () => {
+    expect(SESSION_ORDER[0]).toBe('warm_up');
+    expect(SESSION_ORDER[SESSION_ORDER.length - 1]).toBe('cool_down');
+    expect(SESSION_ORDER[SESSION_ORDER.length - 2]).toBe('other');
+    expect([...SESSION_ORDER].sort()).toEqual([...EXERCISE_PHASES].sort());
+  });
+  it('has exactly the six main types, each defined, and isMainType tells them from the rest', () => {
+    expect([...EXERCISE_TYPES]).toEqual(['mobility', 'stretching', 'activation', 'strengthening', 'balance', 'functional']);
+    for (const t of EXERCISE_TYPES) expect(EXERCISE_TYPE_DEFINITIONS[t].length).toBeGreaterThan(0);
+    expect(EXERCISE_TYPE_DEFINITIONS.mobility).toBe('Active or assisted range of motion. Default dosage: repetitions.');
+    expect(isMainType('balance')).toBe(true);
+    for (const p of ['warm_up', 'cool_down', 'other'] as const) expect(isMainType(p)).toBe(false);
+  });
+  it('gives every phase a tone', () => {
+    for (const p of EXERCISE_PHASES) expect(EXERCISE_TYPE_TONE[p], p).toBeTruthy();
+    expect(EXERCISE_TYPE_TONE.mobility).toBe('sky');
+    expect(EXERCISE_TYPE_TONE.warm_up).toBe('slate');
+  });
+  it('lists the seven positions, and positionsOf copes with old rows that have none', () => {
+    expect(HEP_POSITIONS).toHaveLength(7);
+    expect(positionsOf({} as Pick<Exercise, 'positions'>)).toEqual([]);
+    expect(positionsOf({ positions: ['Prone'] })).toEqual(['Prone']);
+  });
+  it('finds an exercise by its position in search', () => {
+    const base = { title: 'Bridge', otherNames: [], bodyRegion: 'Hip', alsoRegions: [], phase: 'strengthening' as const, equipment: [] };
+    expect(matchesExerciseSearch({ ...base, positions: ['Supine'] }, 'Supine')).toBe(true);
+    expect(matchesExerciseSearch({ ...base, positions: ['Prone'] }, 'Supine')).toBe(false);
+    expect(matchesExerciseSearch(base as never, 'bridge')).toBe(true);
   });
 });

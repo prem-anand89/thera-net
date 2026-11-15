@@ -32,7 +32,7 @@ export function starterToSaveInput(clinicId: string, s: StarterExercise): SaveEx
 export function exerciseFromSaveInput(input: SaveExerciseInput, id: string, now = new Date().toISOString()): Exercise {
   return {
     id, clinicId: input.clinicId, title: input.title, otherNames: input.otherNames ?? [], bodyRegion: input.bodyRegion, alsoRegions: input.alsoRegions ?? [], equipment: input.equipment ?? [],
-    phase: input.phase, instructions: input.instructions, mediaType: input.mediaType, mediaKeys: input.mediaKeys ?? [], mediaCaptions: input.mediaCaptions ?? [], thumbKey: input.thumbKey ?? null,
+    phase: input.phase, positions: [], instructions: input.instructions, mediaType: input.mediaType, mediaKeys: input.mediaKeys ?? [], mediaCaptions: input.mediaCaptions ?? [], thumbKey: input.thumbKey ?? null,
     defaultSets: input.defaultSets, doseType: input.doseType, defaultReps: input.defaultReps, defaultHoldSeconds: input.defaultHoldSeconds, defaultDurationSeconds: input.defaultDurationSeconds,
     defaultRestSeconds: input.defaultRestSeconds, defaultSessionsPerDay: input.defaultSessionsPerDay, side: input.side, stopIf: input.stopIf, isFavorite: false, active: input.active ?? true,
     deleted: false, version: 1, createdAt: now, updatedAt: now,

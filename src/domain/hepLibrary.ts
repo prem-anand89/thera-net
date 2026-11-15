@@ -9,6 +9,7 @@ import {
   canonicalEquipment,
   canonicalRegion,
   matchesExerciseSearch,
+  positionsOf,
   type Exercise,
   type ExercisePhase,
 } from '@/domain/hep';
@@ -19,14 +20,16 @@ export type LibraryRegion = 'All' | 'Fav' | 'Used' | (string & {});
 export interface LibraryFilter {
   region: LibraryRegion;
   phase: ExercisePhase | 'All';
+  /** 'All' = no position filter. */
+  position: string;
   /** OR inside the list: an exercise needing any of these. */
   equipment: string[];
   query: string;
 }
 
-export const EMPTY_LIBRARY_FILTER: LibraryFilter = { region: 'All', phase: 'All', equipment: [], query: '' };
+export const EMPTY_LIBRARY_FILTER: LibraryFilter = { region: 'All', phase: 'All', position: 'All', equipment: [], query: '' };
 
-export type LibraryExercise = Pick<Exercise, 'id' | 'title' | 'otherNames' | 'bodyRegion' | 'alsoRegions' | 'phase' | 'equipment' | 'isFavorite' | 'active' | 'deleted'>;
+export type LibraryExercise = Pick<Exercise, 'id' | 'title' | 'otherNames' | 'bodyRegion' | 'alsoRegions' | 'phase' | 'positions' | 'equipment' | 'isFavorite' | 'active' | 'deleted' | 'createdAt'>;
 
 const PELVIC_FLOOR = 'Pelvic floor';
 
@@ -54,6 +57,7 @@ export function filterLibrary<T extends LibraryExercise>(
     if (filter.region === 'Used' && !opts.usedIds?.has(ex.id)) return false;
     if (filter.region !== 'All' && filter.region !== 'Fav' && filter.region !== 'Used' && !exerciseInRegion(ex, filter.region)) return false;
     if (filter.phase !== 'All' && ex.phase !== filter.phase) return false;
+    if (filter.position !== 'All' && !positionsOf(ex).includes(filter.position)) return false;
     if (wanted.length > 0) {
       const have = ex.equipment.map(canonicalEquipment);
       const ok = wanted.some((w) => (w === 'None' ? have.length === 0 || have.includes('None') : have.includes(w)));
@@ -61,6 +65,17 @@ export function filterLibrary<T extends LibraryExercise>(
     }
     return matchesExerciseSearch(ex, filter.query);
   });
+}
+
+export type LibrarySort = 'used' | 'az' | 'recent';
+
+/** Most used first (ties A to Z), A to Z, or newest first. Returns a new list. */
+export function sortLibrary<T extends LibraryExercise>(list: T[], sort: LibrarySort, useCounts: Record<string, number>): T[] {
+  const az = (a: T, b: T) => a.title.localeCompare(b.title);
+  const out = [...list];
+  if (sort === 'az') return out.sort(az);
+  if (sort === 'recent') return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return out.sort((a, b) => (useCounts[b.id] ?? 0) - (useCounts[a.id] ?? 0) || az(a, b));
 }
 
 export interface LibraryTypeGroup<T> {
@@ -113,6 +128,7 @@ export function activeFilterChips(f: LibraryFilter): Array<{ key: string; label:
   const chips: Array<{ key: string; label: string }> = [];
   if (f.region !== 'All') chips.push({ key: 'region', label: f.region === 'Fav' ? '★ Favourites' : f.region === 'Used' ? 'Used this week' : regionLabel(f.region) });
   if (f.phase !== 'All') chips.push({ key: 'phase', label: EXERCISE_PHASE_LABELS[f.phase] });
+  if (f.position !== 'All') chips.push({ key: 'position', label: f.position });
   for (const e of f.equipment) chips.push({ key: `equip:${e}`, label: e });
   return chips;
 }

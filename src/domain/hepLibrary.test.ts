@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise } from './hep';
-import { EMPTY_LIBRARY_FILTER, activeFilterChips, equipmentInUse, exerciseInRegion, filterLibrary, groupLibrary, regionLabel, similarExercise, type LibraryExercise } from './hepLibrary';
+import { EMPTY_LIBRARY_FILTER, activeFilterChips, equipmentInUse, exerciseInRegion, filterLibrary, groupLibrary, regionLabel, similarExercise, sortLibrary, type LibraryExercise } from './hepLibrary';
 
 const ex = (id: string, title: string, over: Partial<Exercise> = {}): LibraryExercise =>
-  ({ id, title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], phase: 'strengthening', equipment: [], isFavorite: false, active: true, deleted: false, ...over });
+  ({ id, title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], phase: 'strengthening', equipment: [], isFavorite: false, active: true, deleted: false, positions: [], createdAt: '2026-01-01T00:00:00Z', ...over });
 
 const LIB = [
   ex('1', 'Quad Sets', { phase: 'activation', equipment: ['Towel'], isFavorite: true }),
@@ -70,7 +70,7 @@ describe('helpers', () => {
     expect(equipmentInUse(LIB as Exercise[])).toEqual(['Mat', 'Theraband / resistance band', 'Towel']);
   });
   it('shows removable chips for the active filters', () => {
-    expect(activeFilterChips({ region: 'Pelvic floor: Men', phase: 'activation', equipment: ['Wall'], query: 'x' }).map((c) => c.label)).toEqual(['Pelvic floor · Men', 'Activation', 'Wall']);
+    expect(activeFilterChips({ region: 'Pelvic floor: Men', phase: 'activation', position: 'All', equipment: ['Wall'], query: 'x' }).map((c) => c.label)).toEqual(['Pelvic floor · Men', 'Activation', 'Wall']);
     expect(activeFilterChips(EMPTY_LIBRARY_FILTER)).toEqual([]);
     expect(regionLabel('Pelvic floor: Women')).toBe('Pelvic floor · Women');
   });
@@ -89,5 +89,37 @@ describe('similarExercise', () => {
     expect(similarExercise('Clamshells', others, 'a')).toBeNull();
     expect(similarExercise('Old clam', others)).toBeNull();
     expect(similarExercise('Row', others)).toBeNull();
+  });
+});
+
+describe('position filter and sort', () => {
+  const L = [
+    ex('a', 'Bridge', { positions: ['Supine'], createdAt: '2026-03-01T00:00:00Z' }),
+    ex('b', 'Plank', { positions: ['Prone'], createdAt: '2026-05-01T00:00:00Z' }),
+    ex('c', 'Alpha', { createdAt: '2026-04-01T00:00:00Z' }),
+  ];
+  it('keeps only the chosen position', () => {
+    expect(ids(filterLibrary(L, { ...EMPTY_LIBRARY_FILTER, position: 'Prone' }))).toEqual(['b']);
+    expect(ids(filterLibrary(L, EMPTY_LIBRARY_FILTER))).toEqual(['a', 'b', 'c']);
+  });
+  it('copes with an exercise that has no positions property', () => {
+    const old = { ...ex('o', 'Old'), positions: undefined } as unknown as LibraryExercise;
+    delete (old as { positions?: unknown }).positions;
+    expect(ids(filterLibrary([old], EMPTY_LIBRARY_FILTER))).toEqual(['o']);
+    expect(filterLibrary([old], { ...EMPTY_LIBRARY_FILTER, position: 'Prone' })).toEqual([]);
+  });
+  it('shows a position chip', () => {
+    expect(activeFilterChips({ ...EMPTY_LIBRARY_FILTER, position: 'Prone' })).toContainEqual({ key: 'position', label: 'Prone' });
+    expect(activeFilterChips(EMPTY_LIBRARY_FILTER).some((c) => c.key === 'position')).toBe(false);
+  });
+  it('sorts by most used, A to Z, and newest', () => {
+    const counts = { a: 2, b: 9 };
+    expect(ids(sortLibrary(L, 'used', counts))).toEqual(['b', 'a', 'c']);
+    expect(ids(sortLibrary(L, 'az', counts))).toEqual(['c', 'a', 'b']);
+    expect(ids(sortLibrary(L, 'recent', counts))).toEqual(['b', 'c', 'a']);
+    expect(ids(L)).toEqual(['a', 'b', 'c']);
+  });
+  it('breaks used ties A to Z', () => {
+    expect(ids(sortLibrary(L, 'used', {}))).toEqual(['c', 'a', 'b']);
   });
 });
