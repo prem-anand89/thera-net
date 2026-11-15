@@ -245,3 +245,19 @@ describe('programs for the Programs tab and the chart', () => {
     expect(seen.find((s) => s.table === 'programs')!.calls).toContainEqual(['eq', ['patient_id', 'pt-1']]);
   });
 });
+
+describe('active programs count (the plan meter)', () => {
+  it('counts the clinic\'s active programs with a head-only exact count, as the server cap does', async () => {
+    (tables as Record<string, unknown>).programs = { data: null, error: null, count: 3 };
+    await expect(hepService.countActivePrograms('c-1')).resolves.toBe(3);
+    const calls = seen.find((s) => s.table === 'programs')!.calls;
+    expect(calls).toContainEqual(['select', ['id', { count: 'exact', head: true }]]);
+    expect(calls).toContainEqual(['eq', ['clinic_id', 'c-1']]);
+    expect(calls).toContainEqual(['eq', ['status', 'active']]);
+  });
+
+  it('fails when the database says no', async () => {
+    tables.programs = { data: null, error: { message: 'boom' } };
+    await expect(hepService.countActivePrograms('c-1')).rejects.toThrow();
+  });
+});

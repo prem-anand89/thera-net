@@ -9,15 +9,19 @@ import type { Clinic } from '@/domain/types';
 import type { Exercise, ExerciseTemplate, ExerciseTemplateItem, Program, ProgramItem, ProgramLog, SessionsPerDay } from '@/domain/hep';
 import type { HepItemInput, ProgramBundle } from '@/services/hepService';
 import { ProgramSheet, type ProgramSheetProps } from './ProgramSheet';
-import { exerciseToItem } from './hepItems';
+import { exerciseToItem, intoBlock } from './hepItems';
 
 const createProgram = vi.fn();
 const updateProgram = vi.fn();
 const listPatientPrograms = vi.fn();
 const listTemplates = vi.fn();
+const countActivePrograms = vi.fn();
 vi.mock('@/services/hepService', async (orig) => ({
   ...(await orig<typeof import('@/services/hepService')>()),
-  hepService: { createProgram: (...a: unknown[]) => createProgram(...a), updateProgram: (...a: unknown[]) => updateProgram(...a), listPatientPrograms: (...a: unknown[]) => listPatientPrograms(...a), listTemplates: (...a: unknown[]) => listTemplates(...a) },
+  hepService: {
+    createProgram: (...a: unknown[]) => createProgram(...a), updateProgram: (...a: unknown[]) => updateProgram(...a), listPatientPrograms: (...a: unknown[]) => listPatientPrograms(...a),
+    listTemplates: (...a: unknown[]) => listTemplates(...a), countActivePrograms: (...a: unknown[]) => countActivePrograms(...a),
+  },
 }));
 const patients = [{ id: 'pt1', name: 'Ravi Kumar', mrno: 'M-001', phone: '+91 98765 43210', deletedAt: null }, { id: 'pt2', name: 'Asha Pillai', mrno: 'M-002', phone: null, deletedAt: null }];
 vi.mock('@/services', () => ({
@@ -29,8 +33,23 @@ vi.mock('@/services', () => ({
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (fn: () => Promise<unknown>) => { const [v, setV] = useState<unknown>(); // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void Promise.resolve(fn()).then(setV); }, []); return v; } }));
 vi.mock('@/app/useWorkspaceScope', () => ({ useWorkspaceScope: () => ({ myTherapistId: 't1' }) }));
+let desktop = true;
+vi.mock('@/components/useMediaQuery', () => ({ useIsDesktop: () => desktop, useMediaQuery: () => desktop }));
+let ent: { tier: string; enforcementEnabled: boolean } = { tier: 'lite', enforcementEnabled: true };
+vi.mock('@/app/useEntitlements', () => ({ useEntitlements: () => ent }));
+let libraryList: Exercise[] = [];
+vi.mock('./useHepData', async (orig) => ({ ...(await orig<typeof import('./useHepData')>()), useExercises: () => libraryList, useThumbUrls: () => ({}) }));
 let pickList: Exercise[] = [];
-vi.mock('./ExercisePicker', () => ({ ExercisePicker: ({ open, onAdd, onClose }: { open: boolean; onAdd: (e: HepItemInput[]) => void; onClose: () => void }) => (open ? <button type="button" onClick={() => { onAdd(pickList.map(exerciseToItem)); onClose(); }}>pick from library</button> : null) }));
+let pickMeta: { templateId?: string; suggestedTitle?: string } | undefined;
+let pickerProps: { target?: string; initialTab?: string; patientId?: string; patientName?: string; excludeProgramId?: string } = {};
+vi.mock('./ExercisePicker', () => ({
+  ExercisePicker: (p: { open: boolean; onAdd: (e: HepItemInput[], meta?: unknown) => void; onClose: () => void; target?: 'warm_up' | 'main' | 'cool_down'; initialTab?: string; patientId?: string; patientName?: string; excludeProgramId?: string }) => {
+    if (!p.open) return null;
+    pickerProps = { target: p.target, initialTab: p.initialTab, patientId: p.patientId, patientName: p.patientName, excludeProgramId: p.excludeProgramId };
+    return <button type="button" onClick={() => { p.onAdd(intoBlock(pickList.map(exerciseToItem), p.target ?? 'main'), pickMeta); p.onClose(); }}>pick from library</button>;
+  },
+}));
+vi.mock('./PatientPreview', () => ({ ProgramPreviewDialog: (p: { open: boolean; title: string; items: unknown[]; onClose: () => void }) => (p.open ? <div role="dialog" aria-label="patient preview">{p.title} · {p.items.length} items<button type="button" onClick={p.onClose}>close preview</button></div> : null) }));
 vi.mock('./HandOverPanel', () => ({ HandOverPanel: (p: { open: boolean; pin: string | null; token: string; patientName: string; fromTemplate: boolean; onClose: () => void }) => (p.open ? <div role="dialog" aria-label="hand over"><span>pin {p.pin ?? 'none'}</span><span>token {p.token}</span><span>for {p.patientName}</span><span>{p.fromTemplate ? 'from template' : 'not from template'}</span><button type="button" onClick={p.onClose}>close hand over</button></div> : null) }));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;
@@ -53,7 +72,12 @@ function renderSheet(props: Partial<ProgramSheetProps> = {}) {
   const { unmount } = render(<ClinicContext.Provider value={clinic}><ProgramSheet open mode="new" onClose={onClose} onSaved={onSaved} {...props} /></ClinicContext.Provider>);
   return { onClose, onSaved, unmount };
 }
-const saveButton = () => screen.getByRole('button', { name: /Save program|Needs a connection|Saving/ });
+const saveButton = () => screen.getByRole('button', { name: /Save and share|Save changes|Needs a connection|Saving/ });
+const settings = () => screen.getByRole('region', { name: 'Program settings' });
+const menu = async (user: ReturnType<typeof userEvent.setup>, title: string, choice: string) => {
+  await user.click(screen.getByRole('button', { name: `More for ${title}` }));
+  await user.click(screen.getByRole('button', { name: choice }));
+};
 const created = { programId: 'np1', patientId: 'pt1', token: 'tok9', pin: '4821' };
 
 beforeEach(() => {
@@ -61,7 +85,9 @@ beforeEach(() => {
   updateProgram.mockReset().mockResolvedValue(undefined);
   listPatientPrograms.mockReset().mockResolvedValue([]);
   listTemplates.mockReset().mockResolvedValue([{ ...template, usedCount: 3 }, { ...template, id: 't8', title: 'Shoulder', items: [], usedCount: 0 }]);
-  pickList = [];
+  countActivePrograms.mockReset().mockResolvedValue(3);
+  pickList = []; pickMeta = undefined; pickerProps = {}; libraryList = []; desktop = true;
+  ent = { tier: 'lite', enforcementEnabled: true };
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 });
 afterEach(cleanup);
@@ -77,17 +103,17 @@ describe('ProgramSheet: opening and cancelling', () => {
     expect(updateProgram).not.toHaveBeenCalled();
   });
 
-  it('asks "Discard changes?" only when something was edited', async () => {
+  it('asks "Discard unsaved changes?" only when something was edited', async () => {
     const user = userEvent.setup();
     const { onClose } = renderSheet({ patientId: 'pt1' });
     await user.type(screen.getByLabelText(/^Program name/), 'Hip');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).not.toHaveBeenCalled();
-    const ask = screen.getByRole('dialog', { name: 'Discard changes?' });
+    const ask = screen.getByRole('dialog', { name: 'Discard unsaved changes?' });
     await user.click(within(ask).getByRole('button', { name: 'Cancel' }));
     expect(onClose).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    await user.click(within(screen.getByRole('dialog', { name: 'Discard changes?' })).getByRole('button', { name: 'Discard' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Discard unsaved changes?' })).getByRole('button', { name: 'Discard' }));
     expect(onClose).toHaveBeenCalled();
     expect(createProgram).not.toHaveBeenCalled();
   });
@@ -139,12 +165,12 @@ describe('ProgramSheet: a new program from a template', () => {
   });
 });
 
-describe('ProgramSheet: times a day', () => {
+describe('ProgramSheet: frequency', () => {
   it('applies to every row; a row that differs reads "Only this one: once a day"', async () => {
     const user = userEvent.setup();
     renderSheet({ patientId: 'pt1', startFrom: { template } });
     expect(screen.getAllByText(/twice a day/)).toHaveLength(3);
-    await user.click(within(screen.getByRole('group', { name: 'Times a day' })).getByRole('button', { name: '3 times' }));
+    await user.click(within(within(settings()).getByRole('group', { name: 'Frequency' })).getByRole('button', { name: '3× daily' }));
     expect(screen.getAllByText(/3 times a day/)).toHaveLength(3);
     await user.click(screen.getByRole('button', { name: /^Squat/ }));
     const row = screen.getByRole('button', { name: /^Squat/ }).closest('li') as HTMLElement;
@@ -167,11 +193,11 @@ describe('ProgramSheet: times a day', () => {
 });
 
 describe('ProgramSheet: optional', () => {
-  it('Optional on a row and "Make the whole section optional" are sent as optional: true for those items only', async () => {
+  it('Optional on a row and "Optional" on a block are sent as optional: true for those items only', async () => {
     const user = userEvent.setup();
     renderSheet({ patientId: 'pt1', startFrom: { template } });
     const warm = screen.getByRole('region', { name: 'Warm-up' });
-    await user.click(within(warm).getByLabelText('Make the whole section optional'));
+    await user.click(within(warm).getByRole('checkbox', { name: /Optional/ }));
     await user.click(screen.getByRole('button', { name: /^Squat/ }));
     const row = screen.getByRole('button', { name: /^Squat/ }).closest('li') as HTMLElement;
     await user.click(within(row).getByLabelText(/^Optional/));
@@ -183,17 +209,17 @@ describe('ProgramSheet: optional', () => {
 });
 
 describe('ProgramSheet: settings', () => {
-  it('Advanced: Effort first, completed at 90% and the clinician\'s own PIN go with the program', async () => {
+  it('More settings: Effort first, completed at 90% and the clinician\'s own PIN go with the program', async () => {
     const user = userEvent.setup();
     renderSheet({ patientId: 'pt1', startFrom: { template } });
-    await user.click(screen.getByText('Advanced'));
+    await user.click(screen.getByText('More settings'));
     await user.click(screen.getByRole('button', { name: 'Effort first' }));
     await user.click(screen.getByRole('button', { name: '90%' }));
-    await user.type(screen.getByLabelText(/Set my own 4-digit PIN/), '12ab3456');
-    expect(screen.getByLabelText(/Set my own 4-digit PIN/)).toHaveValue('1234');
-    await user.click(within(screen.getByRole('group', { name: 'Length' })).getByRole('button', { name: 'Ongoing' }));
-    await user.click(within(screen.getByRole('group', { name: 'Check in' })).getByRole('button', { name: 'None' }));
-    await user.click(within(screen.getByRole('group', { name: 'Start' })).getByRole('button', { name: 'Tomorrow' }));
+    await user.type(screen.getByLabelText(/^Custom PIN \(optional\)/), '12ab3456');
+    expect(screen.getByLabelText(/^Custom PIN \(optional\)/)).toHaveValue('1234');
+    await user.click(within(screen.getByRole('group', { name: 'Duration' })).getByRole('button', { name: 'Ongoing' }));
+    await user.click(within(screen.getByRole('group', { name: 'Review in' })).getByRole('button', { name: 'No review' }));
+    await user.click(within(screen.getByRole('group', { name: 'Start date' })).getByRole('button', { name: 'Tomorrow' }));
     await user.click(saveButton());
     await waitFor(() => expect(createProgram).toHaveBeenCalled());
     const input = createProgram.mock.calls[0][0];
@@ -221,32 +247,145 @@ describe('ProgramSheet: settings', () => {
   });
 });
 
-describe('ProgramSheet: start from', () => {
+describe('ProgramSheet: starting a new program', () => {
   const finished = (): ProgramBundle => bundle({ id: 'old', status: 'completed', startDate: day(-30), title: 'Right knee, week 2', sessionsPerDay: 1, targetPct: 50, items: [pItem('o1', 'Bridge'), pItem('o2', 'Wall slides', 'mobility')] });
-  it('"Same as last time" starts from the latest completed program: its rows and settings, as a new program', async () => {
+
+  it('an empty program offers quick starts; "Start from a template" opens the picker on the Templates tab', async () => {
+    const user = userEvent.setup();
+    renderSheet({ patientId: 'pt1' });
+    expect(screen.queryByRole('button', { name: 'Repeat an earlier program' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Start from a template' }));
+    expect(pickerProps).toMatchObject({ initialTab: 'templates', patientId: 'pt1' });
+    await waitFor(() => expect(pickerProps.patientName).toBe('Ravi Kumar'));
+  });
+
+  it('"Repeat an earlier program" shows when the patient has one, and opens the earlier-programs tab', async () => {
     const user = userEvent.setup();
     listPatientPrograms.mockResolvedValue([finished()]);
     renderSheet({ patientId: 'pt1' });
-    await user.click(await screen.findByRole('button', { name: 'Same as last time' }));
-    expect(screen.getByLabelText(/^Program name/)).toHaveValue('Right knee, week 2');
-    expect(screen.getByText('Bridge')).toBeInTheDocument();
-    await user.click(saveButton());
-    await waitFor(() => expect(createProgram).toHaveBeenCalled());
-    const input = createProgram.mock.calls[0][0];
-    expect(input.items.every((i: HepItemInput) => i.id === undefined)).toBe(true);
-    expect(input.settings).toMatchObject({ targetPct: 50, checkinDays: 7 });
-    expect(input.sourceTemplateId).toBeNull();
+    await user.click(await screen.findByRole('button', { name: 'Repeat an earlier program' }));
+    expect(pickerProps.initialTab).toBe('earlier');
+    expect(listPatientPrograms).toHaveBeenCalledWith('pt1', TODAY);
   });
 
-  it('is not offered when the patient has no earlier program; a template can be chosen from the list, used ones first', async () => {
+  it('a template added from the picker keeps its id and fills a blank name, so saving records where it came from', async () => {
     const user = userEvent.setup();
+    pickList = [ex('a', 'Squat')];
+    pickMeta = { templateId: 't5', suggestedTitle: 'Hip week 1' };
     renderSheet({ patientId: 'pt1' });
-    expect(screen.queryByRole('button', { name: 'Same as last time' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'A template' }));
-    const select = await screen.findByLabelText('Template');
-    await waitFor(() => expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a template', 'Knee week 1 · used 3×', 'Shoulder']));
-    await user.selectOptions(select, 't9');
-    expect(screen.getByText('Marching')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start from a template' }));
+    await user.click(screen.getByRole('button', { name: 'pick from library' }));
+    expect(screen.getByLabelText(/^Program name/)).toHaveValue('Hip week 1');
+    await user.click(saveButton());
+    await waitFor(() => expect(createProgram).toHaveBeenCalledWith(expect.objectContaining({ sourceTemplateId: 't5', title: 'Hip week 1' })));
+    expect(await screen.findByText('from template')).toBeInTheDocument();
+  });
+
+  it('a suggested name never replaces one already typed', async () => {
+    const user = userEvent.setup();
+    pickList = [ex('a', 'Squat')];
+    pickMeta = { suggestedTitle: 'Earlier knee' };
+    renderSheet({ patientId: 'pt1' });
+    await user.type(screen.getByLabelText(/^Program name/), 'Mine');
+    await user.click(screen.getByRole('button', { name: '+ Add exercises' }));
+    await user.click(screen.getByRole('button', { name: 'pick from library' }));
+    expect(screen.getByLabelText(/^Program name/)).toHaveValue('Mine');
+  });
+
+  it('"Start from" is gone: templates and earlier programs live in the picker', () => {
+    renderSheet({ patientId: 'pt1' });
+    expect(screen.queryByText('Start from')).toBeNull();
+    expect(listTemplates).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProgramSheet: warm-up, main and cool-down blocks', () => {
+  it('"+ Add a warm-up" opens the picker for the warm-up and what is added lands in the Warm-up block', async () => {
+    const user = userEvent.setup();
+    pickList = [ex('w1', 'Ankle pumps')];
+    renderSheet({ patientId: 'pt1', startFrom: { template } });
+    await user.click(screen.getByRole('button', { name: /^\+ Add to warm-up/ }));
+    expect(pickerProps.target).toBe('warm_up');
+    await user.click(screen.getByRole('button', { name: 'pick from library' }));
+    expect(within(screen.getByRole('region', { name: 'Warm-up' })).getByText('Ankle pumps')).toBeInTheDocument();
+  });
+
+  it('⋯ → "Move to cool-down" moves a row and the saved list ends with it; the order is warm-up, types, other, cool-down', async () => {
+    const user = userEvent.setup();
+    const t: ExerciseTemplate = { ...template, items: [tItem(ex('o', 'Odd one', { phase: 'other' }), 0), tItem(ex('a', 'Squat'), 1), tItem(ex('c', 'Calf stretch', { phase: 'cool_down' }), 2), tItem(ex('m', 'Hip circles', { phase: 'mobility' }), 3), tItem(ex('b', 'Marching', { phase: 'warm_up' }), 4)] };
+    renderSheet({ patientId: 'pt1', startFrom: { template: t } });
+    await menu(user, 'Squat', 'Move to cool-down');
+    await user.click(saveButton());
+    await waitFor(() => expect(createProgram).toHaveBeenCalled());
+    expect(createProgram.mock.calls[0][0].items.map((i: HepItemInput) => `${i.title}:${i.phase}`)).toEqual(['Marching:warm_up', 'Hip circles:mobility', 'Odd one:other', 'Calf stretch:cool_down', 'Squat:cool_down']);
+  });
+
+  it('"Move to main exercises" puts a warm-up row back under its exercise\'s type', async () => {
+    const user = userEvent.setup();
+    libraryList = [ex('b', 'Marching', { phase: 'balance' })];
+    renderSheet({ patientId: 'pt1', startFrom: { template } });
+    await menu(user, 'Marching', 'Move to main exercises');
+    expect(within(screen.getByRole('region', { name: 'Balance' })).getByText('Marching')).toBeInTheDocument();
+  });
+});
+
+describe('ProgramSheet: layout, plan meter and preview', () => {
+  it('on a phone the settings fold into one summary card with Edit', async () => {
+    const user = userEvent.setup();
+    desktop = false;
+    renderSheet({ patientId: 'pt1', startFrom: { template } });
+    expect(await screen.findByText('Ravi Kumar · 2× daily · 1 week · starts today · review in 7 days')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Program name/)).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Edit settings' }));
+    expect(screen.getByLabelText(/^Program name/)).toHaveValue('Knee week 1');
+  });
+
+  it('on a phone, with no patient chosen yet, the settings start open so the patient search shows', () => {
+    desktop = false;
+    renderSheet({ startFrom: { template } });
+    expect(screen.getByPlaceholderText('Search by name or number')).toBeInTheDocument();
+  });
+
+  it('on a desktop the settings sit in a side panel next to the exercises', () => {
+    renderSheet({ patientId: 'pt1', startFrom: { template } });
+    expect(within(settings()).getByLabelText(/^Program name/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit settings' })).toBeNull();
+  });
+
+  it('a new program on the free plan shows "Free plan · n of 5 active programs"; none on an edit or an unlimited plan', async () => {
+    const { unmount } = renderSheet({ patientId: 'pt1' });
+    expect(await screen.findByText('Free plan · 3 of 5 active programs')).toBeInTheDocument();
+    expect(countActivePrograms).toHaveBeenCalledWith('c1');
+    unmount();
+    const edit = renderSheet({ mode: 'edit', bundle: bundle() });
+    await screen.findByText('Quad Sets');
+    expect(screen.queryByText(/Free plan/)).toBeNull();
+    edit.unmount();
+    ent = { tier: 'solo', enforcementEnabled: true };
+    renderSheet({ patientId: 'pt1' });
+    await waitFor(() => expect(screen.queryByText(/Free plan/)).toBeNull());
+  });
+
+  it('no plan meter when the count cannot be loaded', async () => {
+    countActivePrograms.mockRejectedValue(new Error('offline'));
+    renderSheet({ patientId: 'pt1' });
+    await waitFor(() => expect(countActivePrograms).toHaveBeenCalled());
+    expect(screen.queryByText(/Free plan/)).toBeNull();
+  });
+
+  it('"Preview as patient" opens the preview with the program name and its exercises', async () => {
+    const user = userEvent.setup();
+    renderSheet({ patientId: 'pt1', startFrom: { template } });
+    await user.click(screen.getByRole('button', { name: 'Preview as patient' }));
+    expect(screen.getByRole('dialog', { name: 'patient preview' })).toHaveTextContent('Knee week 1 · 3 items');
+  });
+
+  it('the save button says "Save and share" for a new program and "Save changes" on an edit', () => {
+    const { unmount } = renderSheet({ patientId: 'pt1', startFrom: { template } });
+    expect(screen.getByRole('button', { name: 'Save and share' })).toBeEnabled();
+    unmount();
+    renderSheet({ mode: 'edit', bundle: bundle() });
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
   });
 });
 
@@ -282,10 +421,17 @@ describe('ProgramSheet: editing a live program', () => {
     expect(createProgram).not.toHaveBeenCalled();
   });
 
-  it('changing times a day says today stays and the new number starts tomorrow', async () => {
+  it('the picker leaves the program being edited out of the earlier programs', async () => {
     const user = userEvent.setup();
     renderSheet({ mode: 'edit', bundle: bundle() });
-    await user.click(within(screen.getByRole('group', { name: 'Times a day' })).getByRole('button', { name: 'Once' }));
+    await user.click(screen.getByRole('button', { name: '+ Add exercises' }));
+    expect(pickerProps).toMatchObject({ excludeProgramId: 'p1', patientId: 'pt1' });
+  });
+
+  it('changing the frequency says today stays and the new number starts tomorrow', async () => {
+    const user = userEvent.setup();
+    renderSheet({ mode: 'edit', bundle: bundle() });
+    await user.click(within(within(settings()).getByRole('group', { name: 'Frequency' })).getByRole('button', { name: '1× daily' }));
     expect(screen.getByText('Today stays twice a day; the new number starts tomorrow.')).toBeInTheDocument();
   });
 

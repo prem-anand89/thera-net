@@ -483,6 +483,14 @@ export const hepService = {
     return fetchBundles((q) => q.eq('clinic_id', clinicId), since);
   },
 
+  /** How many active programs the clinic has: the same rule the server's free-plan cap counts by. For the plan meter. */
+  async countActivePrograms(clinicId: string): Promise<number> {
+    const supabase = requireOnline();
+    const { count, error } = await supabase.from('programs').select('id', { count: 'exact', head: true }).eq('clinic_id', clinicId).eq('status', 'active');
+    if (error) fail(error);
+    return count ?? 0;
+  },
+
   /** One patient's programs (active, paused, completed), newest first. */
   async listPatientPrograms(patientId: string, since: string): Promise<ProgramBundle[]> {
     return fetchBundles((q) => q.eq('patient_id', patientId), since);

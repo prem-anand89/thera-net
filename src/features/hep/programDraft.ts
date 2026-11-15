@@ -28,7 +28,7 @@ export interface ProgramDraft {
 export const LENGTH_CHOICES: Array<{ label: string; days: number | null }> = [
   { label: '1 week', days: 7 }, { label: '2 weeks', days: 14 }, { label: '3 weeks', days: 21 }, { label: '4 weeks', days: 28 }, { label: 'Ongoing', days: null },
 ];
-export const CHECKIN_CHOICES: Array<{ label: string; days: number | null }> = [{ label: 'In 7 days', days: 7 }, { label: 'In 14 days', days: 14 }, { label: 'None', days: null }];
+export const CHECKIN_CHOICES: Array<{ label: string; days: number | null }> = [{ label: 'In 7 days', days: 7 }, { label: 'In 14 days', days: 14 }, { label: 'No review', days: null }];
 export const TARGET_CHOICES = [50, 70, 90] as const;
 
 export const blankDraft = (therapistId: string | null = null): ProgramDraft => ({

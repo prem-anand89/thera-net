@@ -17,6 +17,8 @@ vi.mock('@/services/hepService', async (orig) => ({
   ...(await orig<typeof import('@/services/hepService')>()),
   hepService: { listTemplates: (...a: unknown[]) => listTemplates(...a), saveTemplate: (...a: unknown[]) => saveTemplate(...a), duplicateTemplate: (...a: unknown[]) => duplicateTemplate(...a) },
 }));
+vi.mock('./useHepData', async (orig) => ({ ...(await orig<typeof import('./useHepData')>()), useExercises: () => [], useThumbUrls: () => ({}) }));
+vi.mock('./PatientPreview', () => ({ ProgramPreviewDialog: (p: { open: boolean; title: string; items: unknown[] }) => (p.open ? <div role="dialog" aria-label="patient preview">{p.title} · {p.items.length} items</div> : null) }));
 let pickList: Exercise[] = [];
 let pickDisabled: ReadonlySet<string> | undefined;
 vi.mock('./ExercisePicker', () => ({
@@ -70,6 +72,30 @@ describe('TemplatesTab', () => {
     renderTab({ onUse });
     await user.click(await screen.findByRole('button', { name: 'Use for a patient' }));
     expect(onUse).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }));
+  });
+
+  it('region chips with counts filter the cards, and the whole card opens the editor', async () => {
+    const user = userEvent.setup();
+    listTemplates.mockResolvedValue([template(), template({ id: 't9', title: 'Shoulder', note: null, usedCount: 0, items: [tItem(ex('z', 'Pendulum', { bodyRegion: 'Shoulder' }), 0), tItem(ex('y', 'Knee hug'), 1)] })]);
+    renderTab();
+    await screen.findByRole('button', { name: 'Shoulder' });
+    const chips = screen.getByRole('group', { name: 'Template region' });
+    expect(within(chips).getAllByRole('button').map((b) => b.textContent)).toEqual(['All 2', 'Knee 2', 'Shoulder 1']);
+    await user.click(within(chips).getByRole('button', { name: 'Shoulder 1' }));
+    expect(screen.queryByText('Knee week 1')).toBeNull();
+    await user.click(screen.getByText('Pendulum, Knee hug'));
+    expect(within(screen.getByRole('dialog')).getByLabelText(/^Template name/)).toHaveValue('Shoulder');
+  });
+
+  it('actions inside a card do not open the editor', async () => {
+    const user = userEvent.setup();
+    const onUse = vi.fn();
+    renderTab({ onUse });
+    await user.click(await screen.findByRole('button', { name: 'Use for a patient' }));
+    expect(onUse).toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Actions for Knee week 1' }));
+    await user.click(screen.getByRole('button', { name: 'Duplicate' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('offline, with nothing loaded, says templates need a connection', () => {
@@ -131,19 +157,38 @@ describe('TemplateEditor (through the tab)', () => {
   async function openEditor(user: ReturnType<typeof userEvent.setup>) {
     renderTab();
     await screen.findByText('Knee week 1');
-    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Knee week 1' }));
     return screen.getByRole('dialog');
   }
 
-  it('groups rows in collapsible sections in session order with Collapse all / Expand all and the estimate', async () => {
+  it('shows Warm-up, Main exercises by type and Cool-down, with the estimate', async () => {
     const user = userEvent.setup();
     const dlg = await openEditor(user);
-    expect(within(dlg).getAllByRole('heading', { level: 3 }).map((h) => h.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['▾ Warm-up (1)', '▾ Strengthening (2)', '▾ Cool-down (1)']);
-    expect(within(dlg).getByText(/^4 exercises · about \d+ min$/)).toBeInTheDocument();
-    await user.click(within(dlg).getByRole('button', { name: 'Collapse all' }));
-    expect(within(dlg).queryByText('Squat')).toBeNull();
-    await user.click(within(dlg).getByRole('button', { name: 'Expand all' }));
-    expect(within(dlg).getByText('Squat')).toBeInTheDocument();
+    expect(within(within(dlg).getByRole('region', { name: 'Warm-up' })).getByText('Marching')).toBeInTheDocument();
+    expect(within(within(dlg).getByRole('region', { name: 'Strengthening' })).getAllByText(/Squat|Lunge/)).toHaveLength(2);
+    expect(within(within(dlg).getByRole('region', { name: 'Cool-down' })).getByText('Calf stretch')).toBeInTheDocument();
+    expect(within(dlg).getByText(/^4 exercises · About \d+ min a session$/)).toBeInTheDocument();
+  });
+
+  it('"Preview as patient" shows the template as the patient would see it', async () => {
+    const user = userEvent.setup();
+    const dlg = await openEditor(user);
+    await user.click(within(dlg).getByRole('button', { name: 'Preview as patient' }));
+    expect(screen.getByRole('dialog', { name: 'patient preview' })).toHaveTextContent('Knee week 1 · 4 items');
+  });
+
+  it('Cancel after an edit asks "Discard unsaved changes?"; with no edit it just closes', async () => {
+    const user = userEvent.setup();
+    let dlg = await openEditor(user);
+    await user.click(within(dlg).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    dlg = (await user.click(screen.getByRole('button', { name: 'Knee week 1' })), screen.getByRole('dialog'));
+    await user.type(within(dlg).getByLabelText(/^Template name/), ' (new)');
+    await user.click(within(dlg).getByRole('button', { name: 'Cancel' }));
+    const ask = screen.getByRole('dialog', { name: 'Discard unsaved changes?' });
+    await user.click(within(ask).getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(saveTemplate).not.toHaveBeenCalled();
   });
 
   it('changing a dose and saving sends the items section by section to the same template', async () => {
@@ -162,7 +207,8 @@ describe('TemplateEditor (through the tab)', () => {
   it('moves and removes rows inside a section', async () => {
     const user = userEvent.setup();
     const dlg = await openEditor(user);
-    await user.click(within(dlg).getByRole('button', { name: 'Move Squat down' }));
+    await user.click(within(dlg).getByRole('button', { name: 'More for Squat' }));
+    await user.click(screen.getByRole('button', { name: 'Move down' }));
     await user.click(within(dlg).getByRole('button', { name: 'Remove Calf stretch' }));
     await user.click(within(dlg).getByRole('button', { name: 'Save template' }));
     await waitFor(() => expect(saveTemplate).toHaveBeenCalled());
