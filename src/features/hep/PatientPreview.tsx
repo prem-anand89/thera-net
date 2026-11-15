@@ -1,8 +1,8 @@
 // "Preview as patient": the real patient screens inside a phone frame, fed from what the therapist is editing.
 // Nothing is saved and no patient data is touched; done / skipped marks live in local state only.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isSensitiveExercise, type SessionsPerDay, type SkipReason } from '@/domain/hep';
-import { browserTimezone } from '@/domain/clinicRegion';
+import { useClinic } from '@/app/clinicContext';
 import { hepMediaService } from '@/services/hepMediaService';
 import type { HepItemInput } from '@/services/hepService';
 import type { PublicHepItem } from '@/services/publicHepService';
@@ -15,7 +15,7 @@ import { itemsInSession, nextToDo, statusOf, type PublicLog } from '../publicHep
 import type { Picture } from './PictureField';
 import { orderBySection } from './hepItems';
 import { toPreviewItems } from './patientPreview';
-import { clinicToday, useOnline } from './useHepData';
+import { clinicToday, useExercises, useOnline } from './useHepData';
 
 export function PhoneFrame({ children, label }: { children: ReactNode; label: string }) {
   return (
@@ -29,9 +29,17 @@ export function PhoneFrame({ children, label }: { children: ReactNode; label: st
   );
 }
 
+const PREVIEW_TOAST = 'Preview: marked done, nothing saved';
+
+function PreviewToast({ text }: { text: string | null }) {
+  return text ? <p role="status" className="absolute inset-x-3 top-12 z-50 rounded-2xl bg-slate-900 px-4 py-2 text-center text-sm text-white shadow-lg">{text}</p> : null;
+}
+
 function usePreviewSound() {
   const [mode, setMode] = useState<SoundMode>('off');
-  const sound = useMemo(() => createHepSound(() => 'off'), []);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const sound = useMemo(() => createHepSound(() => modeRef.current), []);
   return { mode, sound, cycle: () => setMode(nextSoundMode) };
 }
 
@@ -60,19 +68,34 @@ export interface ProgramPreviewDialogProps {
   sessionsPerDay: SessionsPerDay;
 }
 
+/** The body mounts each time the dialog opens, so every opening starts from a clean local state. */
 export function ProgramPreviewDialog(p: ProgramPreviewDialogProps) {
-  const today = useMemo(() => clinicToday({ timezone: browserTimezone() }), []);
+  return (
+    <SheetDialog open={p.open} title="Preview as patient" onClose={p.onClose} footer={<Button type="button" className={btnSecondary} onClick={p.onClose}>Close</Button>}>
+      <ProgramPreviewBody {...p} />
+    </SheetDialog>
+  );
+}
+
+function ProgramPreviewBody(p: ProgramPreviewDialogProps) {
+  const clinic = useClinic();
+  const today = useMemo(() => clinicToday(clinic), [clinic]);
+  const cached = useExercises(p.clinicId);
   const allKeys = useMemo(() => [...new Set(p.items.flatMap((i) => i.mediaKeys))], [p.items]);
   const mediaUrls = useMintedUrls(p.clinicId, p.open ? allKeys : []);
   const items = useMemo(() => toPreviewItems(p.items, { today, sessionsPerDay: p.sessionsPerDay, mediaUrls }), [p.items, today, p.sessionsPerDay, mediaUrls]);
-  // Pelvic floor pictures never show in lists (same rule as the Library); the exercise screen still shows them.
-  const sensitiveIds = useMemo(
-    () => new Set(orderBySection(p.items).flatMap((it, i) => (isSensitiveExercise({ bodyRegion: it.bodyRegion, alsoRegions: [] }) ? [`preview-${i}`] : []))),
-    [p.items],
-  );
+  // Pelvic floor pictures never show in lists (same rule as the Library), by all regions of the source exercise.
+  const sensitiveIds = useMemo(() => {
+    const ordered = orderBySection(p.items);
+    return new Set(items.flatMap((it, i) => {
+      const src = cached?.find((e) => e.id === ordered[i].sourceExerciseId);
+      return isSensitiveExercise({ bodyRegion: ordered[i].bodyRegion, alsoRegions: src?.alsoRegions ?? [] }) ? [it.id] : [];
+    }));
+  }, [p.items, items, cached]);
   const [logs, setLogs] = useState<PublicLog[]>([]);
   const [session, setSession] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const { mode, sound, cycle } = usePreviewSound();
   const count = p.sessionsPerDay;
 
@@ -85,7 +108,7 @@ export function ProgramPreviewDialog(p: ProgramPreviewDialogProps) {
   const shownIndex = shown ? mine.indexOf(shown) : -1;
 
   return (
-    <SheetDialog open={p.open} title="Preview as patient" onClose={p.onClose} footer={<Button type="button" className={btnSecondary} onClick={p.onClose}>Close</Button>}>
+    <>
       <PhoneFrame label="Patient preview">
         <div className="h-full overflow-y-auto px-3 py-3">
           <p className="text-sm font-medium text-slate-600">{p.clinicName}</p>
@@ -104,11 +127,11 @@ export function ProgramPreviewDialog(p: ProgramPreviewDialogProps) {
             showThumb={(it) => !sensitiveIds.has(it.id)}
           />
         </div>
+        <PreviewToast text={toast} />
         {shown && (
           <HepExerciseScreen
             key={shown.id}
             framed
-            readOnly
             item={shown}
             position={shownIndex + 1}
             total={mine.length}
@@ -119,24 +142,26 @@ export function ProgramPreviewDialog(p: ProgramPreviewDialogProps) {
             soundMode={mode}
             sound={sound}
             onSoundMode={cycle}
-            onBack={() => setOpenId(null)}
+            onBack={() => { setToast(null); setOpenId(null); }}
             onPrev={shownIndex > 0 ? () => setOpenId(mine[shownIndex - 1].id) : null}
             onNext={shownIndex < mine.length - 1 ? () => setOpenId(mine[shownIndex + 1].id) : null}
-            onDone={() => { mark(shown, session, false, null); setOpenId(nextToDo(mine, logs, today, session, shown.id)?.id ?? null); }}
+            onDone={() => { mark(shown, session, false, null); setToast(PREVIEW_TOAST); setOpenId(nextToDo(mine, logs, today, session, shown.id)?.id ?? null); }}
             onSkip={(reason) => mark(shown, session, true, reason)}
             onUndo={() => unmark(shown, session)}
             onImageError={() => {}}
           />
         )}
       </PhoneFrame>
-    </SheetDialog>
+    </>
   );
 }
 
 export function ExercisePreviewPhone({ clinicId, item, pictures }: { clinicId: string; item: HepItemInput; pictures: Picture[] }) {
   const savedKeys = useMemo(() => pictures.flatMap((pic) => (pic.key ? [pic.key] : [])), [pictures]);
   const minted = useMintedUrls(clinicId, savedKeys);
-  const today = useMemo(() => clinicToday({ timezone: browserTimezone() }), []);
+  const clinic = useClinic();
+  const today = useMemo(() => clinicToday(clinic), [clinic]);
+  const [toast, setToast] = useState<string | null>(null);
   const { mode, sound, cycle } = usePreviewSound();
   const shown = useMemo(() => {
     const keyed = pictures.map((pic, i) => ({ id: pic.key ?? `new-${i}`, url: pic.key ? minted[pic.key] : pic.preview, caption: pic.caption })).filter((m) => !!m.url);
@@ -152,9 +177,9 @@ export function ExercisePreviewPhone({ clinicId, item, pictures }: { clinicId: s
 
   return (
     <PhoneFrame label="Patient preview">
+      <PreviewToast text={toast} />
       <HepExerciseScreen
         framed
-        readOnly
         item={shown}
         position={1}
         total={1}
@@ -168,9 +193,9 @@ export function ExercisePreviewPhone({ clinicId, item, pictures }: { clinicId: s
         onBack={() => {}}
         onPrev={null}
         onNext={null}
-        onDone={() => {}}
+        onDone={() => setToast(PREVIEW_TOAST)}
         onSkip={() => {}}
-        onUndo={() => {}}
+        onUndo={() => setToast(null)}
         onImageError={() => {}}
       />
     </PhoneFrame>
