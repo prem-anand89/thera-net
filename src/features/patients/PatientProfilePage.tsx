@@ -1,4 +1,3 @@
-import { PatientFollowUpLine } from '@/features/followUp/PatientFollowUpLine';
 import { askConfirm } from '@/lib/notify';
 import { useMemo, useState, useCallback } from 'react';
 import { BackLink } from '@/components/BackLink';
@@ -12,7 +11,6 @@ import {
   advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { PatientAddressLine } from './PatientAddressLine';
 import { PatientInvoicesList } from './PatientInvoicesList';
 import { PatientViewTabs, type PatientView } from './PatientViewTabs';
 import { HomeProgramTab } from '@/features/hep/HomeProgramTab';
@@ -23,26 +21,23 @@ import { useVisitDetails } from '@/features/visits/visitDetails';
 import { useAssistedVisits } from '@/features/visits/assistedVisits';
 import { AssistedVisitList } from '@/features/visits/AssistedVisitList';
 import { usePermissions } from '@/app/usePermissions';
-import { PatientAdmissionBar } from './PatientAdmissionBar';
+import { PatientHeaderCard } from './PatientHeaderCard';
+import { NeedsAttentionCard, PatientSideRail } from './PatientSideRail';
+import { dayOfStay, openAdmissionOf } from '@/domain/admissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
-import { Pill, btnPrimary, btnSecondary, pillSmAccent, pillSmNeutral, pillSmPrimary } from '@/components/ui';
+import { btnPrimary, pillSmNeutral, pillSmPrimary } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
-import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
-import { placeLabelFor, clinicCareLocations } from '@/domain/careLocations';
-import { clinicTimezone } from '@/domain/clinicRegion';
+import { clinicCareLocations } from '@/domain/careLocations';
 import { useDepartment } from '@/app/DepartmentContext';
 import { DEPARTMENT_LABELS, departmentOf, inDepartment, invoiceDepartment } from '@/domain/departments';
 import { canBillInpatientStay, inpatientVisitBillingMode, isInpatientVisit } from '@/domain/departmentMoney';
 import { advancesForDepartment } from '@/domain/departmentMoney';
-import { formatAppointmentWhen } from '@/domain/appointmentWhen';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import {
   REFERRING_SOURCE_LABELS,
   clinicBillingConfig,
-  type ConsultationNote,
-  type ConsultationNoteStatus,
   type Invoice,
 } from '@/domain/types';
 import { formatAmount, currencySymbol } from '@/domain/money';
@@ -55,22 +50,7 @@ import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { BulkCollectDialog } from '@/components/BulkCollectDialog';
-import { IconPhone, IconMessage } from '@/components/StatIcons';
-import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import { BookSlotSheet } from '@/components/BookSlotSheet';
-
-/** How many notes the side panel lists before collapsing the rest into a
- *  "+N older" line — the full history stays reachable by opening any note. */
-const NOTE_LIST_LIMIT = 6;
-
-const NOTE_STATUS_PILL: Record<
-  ConsultationNoteStatus,
-  { tone: 'green' | 'amber' | 'slate'; label: string }
-> = {
-  draft: { tone: 'amber', label: 'Draft' },
-  completed: { tone: 'green', label: 'Completed' },
-  archived: { tone: 'slate', label: 'Archived' },
-};
 
 /**
  * Patient Hub — the patient-centric home of the app. One patient's identity,
@@ -143,6 +123,13 @@ export function PatientProfilePage() {
     () => repos.patientModuleEnrollments.getActive(clinic.id, patientId, 'consultation_notes'),
     [clinic.id, patientId]
   );
+
+  // The patient's stays, for the header's "Admitted · {ward} · day N" pill (the Stay card in the rail reads its own).
+  const stays = useLiveQuery(() => repos.admissions.listByPatient(clinic.id, patientId), [clinic.id, patientId]);
+  const openStay = openAdmissionOf(stays ?? []);
+  const admittedLabel = openStay
+    ? ['Admitted', openStay.wardBed, `day ${dayOfStay(openStay.admittedOn, toLocalDateStr(new Date()))}`].filter(Boolean).join(' · ')
+    : null;
 
   const visits = useLiveQuery(
     () => repos.visits.list({ clinicId: clinic.id, patientId }),
@@ -568,17 +555,6 @@ export function PatientProfilePage() {
     );
   }
 
-  const initials = patient.name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-
-  const ageSex = [
-    patient.age != null ? `${patient.age} yrs` : null,
-    patient.sex,
-  ].filter(Boolean).join(' · ');
-
   const matchedReferralName = patient.referringSourceId
     ? referringSources.find((s) => s.id === patient.referringSourceId)?.name
     : patient.referringSource
@@ -622,277 +598,39 @@ export function PatientProfilePage() {
         </div>
       )}
 
-      {/* Patient identity header */}
-      <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-5">
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-xl bg-[var(--teal-light)] font-display text-lg font-semibold text-[var(--teal)]">
-            {initials || '?'}
-          </div>
-          <div className="min-w-[12rem] flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="font-display text-xl font-semibold text-[var(--ink)]">
-                {patient.name}
-              </h1>
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                className="text-[var(--muted)] hover:text-[var(--ink)]"
-                title="Edit patient"
-              >
-                ✎
-              </button>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--muted)]">
-              <span>
-                <span className="text-[var(--muted)]/70">Patient ID</span>{' '}
-                <span className="font-num">{patient.mrno}</span>
-              </span>
-              {ageSex && <span className="font-num">{ageSex}</span>}
-              {patient.phone && (
-                <span className="inline-flex items-center gap-2">
-                  <a
-                    href={`tel:${patient.phone}`}
-                    className="font-num inline-flex items-center gap-1 text-[var(--ink)] hover:text-[var(--teal)] hover:underline"
-                    title="Call patient"
-                  >
-                    <IconPhone className="h-3.5 w-3.5 text-[var(--teal)]" />
-                    {patient.phone}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => openPatientWhatsAppChat(`Hello ${patient.name}, this is ${clinic.name}.`, patient.phone)}
-                    className={pillSmAccent}
-                    title="Chat on WhatsApp"
-                  >
-                    <IconMessage className="h-3 w-3" />
-                    WhatsApp
-                  </button>
-                </span>
-              )}
-            </div>
-            <PatientAddressLine clinic={clinic} address={patient.address} />
-            <PatientFollowUpLine patient={patient} />
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {billingSummary.outstandingBalance > 0 && (
-                <span className="rounded-full bg-[var(--rust-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--rust)]">
-                  {formatAmount(billingSummary.outstandingBalance)} outstanding
-                </span>
-              )}
-              {patient.primaryCondition && (
-                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
-                  {patient.primaryCondition}
-                </span>
-              )}
-              {referral && (
-                <span className="rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-xs font-medium text-[var(--ink)]">
-                  Ref: {referral}
-                </span>
-              )}
-              {patient.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
-              {advanceBalancePaise > 0 && (
-                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
-                  {formatAmount(advanceBalancePaise)} advance available
-                </span>
-              )}
-            </div>
-            {upcomingAppointments.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--ink)]">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[var(--teal)]" />
-                  <span className="font-medium text-[var(--teal)]">Next appointment:</span>
-                  <span className="font-num font-semibold">
-                    {formatAppointmentWhen(upcomingAppointments[0].scheduledAt, clinicTimezone(clinic))}
-                  </span>
-                  {placeLabelFor(clinic, upcomingAppointments[0]) && (
-                    <Pill tone="slate">{placeLabelFor(clinic, upcomingAppointments[0])}</Pill>
-                  )}
-                  {therapistName.get(upcomingAppointments[0].therapistId ?? '') && (
-                    <span className="text-[var(--muted)]">
-                      · {therapistName.get(upcomingAppointments[0].therapistId ?? '')}
-                    </span>
-                  )}
-                </div>
-                <Link
-                  to="/schedule"
-                  search={{ date: upcomingAppointments[0].scheduledAt.slice(0, 10) }}
-                  className="font-medium text-[var(--teal)] hover:underline"
-                >
-                  View in schedule →
-                </Link>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={btnSecondary}
-              onClick={() => setBookingOpen(true)}
-            >
-              Book appointment
-            </button>
-            {canCollectPayment && (
-              <button
-                type="button"
-                className={btnSecondary}
-                onClick={() => setRecordingAdvance(true)}
-              >
-                Record advance
-              </button>
-            )}
-            <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
-              New visit
-            </Link>
-          </div>
-        </div>
-      </section>
+      <PatientHeaderCard
+        patient={patient}
+        referral={referral}
+        outstandingPaise={billingSummary.outstandingBalance}
+        advanceBalancePaise={advanceBalancePaise}
+        nextAppointment={upcomingAppointments[0]}
+        nextAppointmentTherapist={therapistName.get(upcomingAppointments[0]?.therapistId ?? '')}
+        packages={patientPackages}
+        admittedLabel={admittedLabel}
+        painReported={homeProgramDot}
+        canRecordAdvance={canCollectPayment}
+        onEdit={() => setEditOpen(true)}
+        onBook={() => setBookingOpen(true)}
+        onRecordAdvance={() => setRecordingAdvance(true)}
+      />
 
-      <PatientAdmissionBar patient={patient} />
-
-      {/* Both columns pin to row 1 explicitly. Without `lg:row-start-1`,
-          grid auto-placement puts the side column (first in DOM, at
-          col-start-2) in row 1, then finds its cursor already past column 1
-          and drops the main column to row 2 — leaving a tall blank gap on
-          the left and pushing Visit history below the side cards. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        {/* Side column — rendered first on mobile for proper ordering */}
-        <div className="order-1 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1">
-          {/* One bordered panel instead of stacked separate cards — a
-              therapist opening a profile mid-visit wants notes, money, and
-              care-plan progress read together as one "where things stand"
-              snapshot, not three disconnected boxes. */}
-          <div className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-            {/* Front desk keeps read access to `notes` for the safety-flags
-                banner above (blood thinners, implants, pregnancy) — that's a
-                narrow derived subset, not clinical documentation. The full
-                note list/authoring entry point is gated separately, matching
-                canViewClinicalNotes's "reception has no clinical-documentation
-                need" (NoteEditorPage enforces the same gate for anyone who
-                navigates to a note URL directly). */}
-            {canViewClinicalNotes && (
-              <ConsultationNotePanel patientId={patientId} notes={notes ?? []} backTo={backTo} />
-            )}
-
-            {visitRows.length > 0 && (
-              <PaymentsSummarySection
-                billed={billingSummary.totalBilled}
-                collected={billingSummary.totalCollected}
-                outstanding={billingSummary.outstandingBalance}
-                billCount={showInvoicesTab ? activeInvoiceCount : 0}
-                onViewBills={() => setView('invoices')}
-              />
-            )}
-
-            <SideCard title="Care plan">
-              {patientPackages.length === 0 ? (
-                <p className="text-sm text-[var(--muted)]">No open package.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {patientPackages.map((p) => {
-                    const pct = Math.min(
-                      100,
-                      Math.round((p.sessionsLogged / p.packageTotal) * 100)
-                    );
-                    return (
-                      <li key={p.packageGroupId}>
-                        <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
-                          <span>{p.serviceName}</span>
-                          {p.stale ? (
-                            <Pill tone="amber">⚠ Stale</Pill>
-                          ) : (
-                            p.nearingCompletion && <Pill tone="amber">Renew soon</Pill>
-                          )}
-                        </div>
-                        <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
-                          <span
-                            className="block h-full rounded-full bg-[var(--teal)]"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className="font-num flex justify-between text-xs text-[var(--muted)]">
-                          <span>
-                            {p.sessionsLogged} of {p.packageTotal} sessions
-                          </span>
-                          <span>
-                            last {formatDateDMY(p.lastVisitOn)} · {p.daysSinceLastVisit}d ago
-                          </span>
-                        </div>
-                        {treatmentCountsByPackage.get(p.packageGroupId) && (
-                          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
-                            {[...treatmentCountsByPackage.get(p.packageGroupId)!.entries()].map(
-                              ([name, count]) => (
-                                <span key={name}>
-                                  {name}: {count}
-                                </span>
-                              )
-                            )}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </SideCard>
-          </div>
-        </div>
+      {/* Tabs and their content on the left; the rail on the right from `desktop:` up. Below that everything stacks:
+          Needs attention first (above the tabs), then the tab content, then the rest of the rail. Needs attention is
+          its own grid item (row 1 of the right column) so it can sit above the tabs on phones without rendering twice;
+          the main column spans both rows and the second row takes the slack, so the rail has no gap. */}
+      <div className="grid grid-cols-1 gap-4 desktop:grid-cols-[minmax(0,1fr)_20rem] desktop:grid-rows-[auto_1fr]">
+        <NeedsAttentionCard
+          className="desktop:col-start-2 desktop:row-start-1 desktop:self-start"
+          patientId={patientId}
+          needsNoteVisitIds={needsNoteVisitIds}
+          canWriteNotes={canViewClinicalNotes && visitRows.length > 0}
+          painToReview={homeProgramDot}
+          backTo={effectiveBack}
+          onReviewPain={() => setView('home-program')}
+        />
 
         {/* Main column */}
-        <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
-          {/* Standalone session-notes entry point — previously two small
-              text links buried at the bottom of the side-panel "Clinical
-              notes" card, only shown once a session note already existed.
-              Promoted to the main column so a therapist scanning the
-              profile sees at a glance whether documentation is caught up,
-              and gets a direct way to catch up on all of it at once. */}
-          {canViewClinicalNotes && visitRows.length > 0 && (
-            <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="font-display text-sm font-semibold text-[var(--ink)]">
-                    Session notes
-                  </h2>
-                  <p className="text-xs text-[var(--muted)]">
-                    {needsNoteVisitIds.length > 0
-                      ? `${needsNoteVisitIds.length} session${needsNoteVisitIds.length === 1 ? '' : 's'} need${needsNoteVisitIds.length === 1 ? 's' : ''} a note`
-                      : 'All session notes up to date'}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  {needsNoteVisitIds.length > 0 && (
-                    <Link
-                      to="/patients/$patientId/notes/session-batch"
-                      params={{ patientId }}
-                      search={{ visitIds: needsNoteVisitIds, from: effectiveBack }}
-                      className={btnPrimary}
-                    >
-                      Write session notes
-                    </Link>
-                  )}
-                  {hasSessionNotes && sessionNotesEnrollmentId && canPrintNotes && (
-                    <>
-                      <Link
-                        to="/patients/$patientId/session-log/$enrollmentId"
-                        params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
-                        search={{ from: effectiveBack }}
-                        className="text-xs font-medium text-[var(--teal)] hover:underline"
-                      >
-                        View session log
-                      </Link>
-                      <Link
-                        to="/patients/$patientId/insurer-packet/$enrollmentId"
-                        params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
-                        search={{ from: effectiveBack }}
-                        className="text-xs font-medium text-[var(--teal)] hover:underline"
-                      >
-                        Insurer packet
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
-
+        <div className="min-w-0 space-y-4 desktop:col-start-1 desktop:row-span-2 desktop:row-start-1">
           {(showInvoicesTab || canUseExercises) && (
             <PatientViewTabs
               active={activeView}
@@ -1040,6 +778,36 @@ export function PatientProfilePage() {
             </>
           )}
         </div>
+
+        <div className="desktop:col-start-2 desktop:row-start-2">
+          <PatientSideRail
+            patient={patient}
+            backTo={backTo}
+            payments={
+              visitRows.length > 0
+                ? {
+                    billed: billingSummary.totalBilled,
+                    collected: billingSummary.totalCollected,
+                    outstanding: billingSummary.outstandingBalance,
+                    billCount: showInvoicesTab ? activeInvoiceCount : 0,
+                    onViewBills: () => setView('invoices'),
+                  }
+                : null
+            }
+            packages={patientPackages}
+            treatmentCountsByPackage={treatmentCountsByPackage}
+            clinicalNotes={
+              canViewClinicalNotes
+                ? {
+                    notes: notes ?? [],
+                    sessionLogEnrollmentId:
+                      visitRows.length > 0 && hasSessionNotes && canPrintNotes ? sessionNotesEnrollmentId : null,
+                    effectiveBack,
+                  }
+                : null
+            }
+          />
+        </div>
       </div>
 
       {invoicing && (
@@ -1148,177 +916,11 @@ export function PatientProfilePage() {
 
 /* -------------------------------------------------------------------------- */
 
-/**
- * Entry point into consultation notes — always the HEAVY editor (C5), one
- * open heavy draft per patient at a time (v1 constraint), surfaced instead
- * of offering to start a second. Deliberately ignores any open LIGHT
- * (session) draft: those surface on their own visit row instead, and
- * "Continue draft" here should never silently open a session note under a
- * button whose contract is "always heavy."
- */
-function ConsultationNotePanel({
-  patientId,
-  notes,
-  backTo,
-}: {
-  patientId: string;
-  notes: ConsultationNote[];
-  backTo?: PatientProfileBackTarget;
-}) {
-  const draft = notes.find(
-    (n) =>
-      n.status === 'draft' &&
-      (n.noteMode == null || n.noteMode === 'initial' || n.noteMode === 'followup')
-  );
-  const visible = notes.slice(0, NOTE_LIST_LIMIT);
-  const hiddenCount = notes.length - visible.length;
-  const backSearch = backTo ? { from: backTo } : undefined;
-
-  return (
-    <SideCard
-      title="Clinical notes"
-      action={
-        <Link
-          to={draft ? '/patients/$patientId/notes/$noteId' : '/patients/$patientId/notes/new'}
-          params={draft ? { patientId, noteId: draft.id } : { patientId }}
-          search={backSearch}
-          className={btnSecondary}
-        >
-          {draft ? 'Continue draft' : 'New assessment'}
-        </Link>
-      }
-    >
-      {notes.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">No notes yet.</p>
-      ) : (
-        // Every note gets the same row shape — date, Initial/Follow-up,
-        // status — instead of the previous "latest note is a special
-        // header, older ones are bare dates" split, which gave the older
-        // entries no mode and no way to tell an evaluation from a
-        // follow-up without opening each one.
-        <ul className="divide-y divide-[var(--border)] text-xs">
-          {visible.map((n) => (
-            <li key={n.id} className="py-1.5 first:pt-0 last:pb-0">
-              <Link
-                to="/patients/$patientId/notes/$noteId"
-                params={{ patientId, noteId: n.id }}
-                search={backSearch}
-                className="flex items-center justify-between gap-2 hover:underline"
-              >
-                <span className="min-w-0">
-                  <span className="font-num text-[var(--ink)]">
-                    {formatDateDM(n.updatedAt.slice(0, 10))}
-                  </span>
-                  <span className="ml-1.5 text-[var(--muted)]">
-                    {n.noteMode === 'session'
-                      ? 'Session'
-                      : n.noteMode === 'followup'
-                        ? 'Follow-up'
-                        : 'Initial'}
-                  </span>
-                </span>
-                <Pill tone={NOTE_STATUS_PILL[n.status].tone}>
-                  {NOTE_STATUS_PILL[n.status].label}
-                </Pill>
-              </Link>
-            </li>
-          ))}
-          {hiddenCount > 0 && (
-            <li className="pt-1.5 text-[var(--muted)]">
-              +{hiddenCount} older note{hiddenCount === 1 ? '' : 's'}
-            </li>
-          )}
-        </ul>
-      )}
-    </SideCard>
-  );
-}
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80">
       {children}
     </div>
-  );
-}
-
-/** One section of the side panel — border/background live on the shared
- *  wrapper (see the patient snapshot panel above), this just supplies the
- *  header + padding so Notes / Payments / Care plan read as one connected
- *  panel with divider lines instead of three separate boxes. */
-function SideCard({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="p-4">
-      <div className="mb-2.5 flex items-center justify-between">
-        <h3 className="font-display text-sm font-semibold text-[var(--ink)]">{title}</h3>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** Lifetime billed / collected / outstanding for this patient — the
- *  header's outstanding pill only tells half the story; this gives the
- *  full picture in one glance without leaving the profile. */
-function PaymentsSummarySection({
-  billed,
-  collected,
-  outstanding,
-  billCount,
-  onViewBills,
-}: {
-  billed: number;
-  collected: number;
-  outstanding: number;
-  /** Bills on the patient; 0 hides the link (the viewer cannot see bills, or there are none). */
-  billCount: number;
-  onViewBills: () => void;
-}) {
-  return (
-    <SideCard title="Payments">
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-[var(--paper)] p-2 border border-[var(--border)]/60">
-          <div className="font-num text-sm font-semibold text-[var(--ink)]">
-            {formatAmount(billed)}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)] mt-0.5">Billed</div>
-        </div>
-        <div className="rounded-lg bg-[var(--teal-light)]/60 p-2 border border-[var(--teal)]/20">
-          <div className="font-num text-sm font-semibold text-[var(--teal)]">
-            {formatAmount(collected)}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-[var(--teal-strong)] mt-0.5">Collected</div>
-        </div>
-        <div className={`rounded-lg p-2 border ${outstanding > 0 ? 'bg-[var(--rust-light)]/60 border-[var(--rust)]/20' : 'bg-[var(--paper)] border-[var(--border)]/60'}`}>
-          <div
-            className={`font-num text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}
-          >
-            {formatAmount(outstanding)}
-          </div>
-          <div className={`text-[10px] uppercase tracking-wide mt-0.5 ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
-            Outstanding
-          </div>
-        </div>
-      </div>
-      {billCount > 0 && (
-        <button
-          type="button"
-          className="mt-3 text-xs font-medium text-[var(--teal)] hover:underline"
-          onClick={onViewBills}
-        >
-          {billCount} {billCount === 1 ? 'bill' : 'bills'} · View
-        </button>
-      )}
-    </SideCard>
   );
 }
 
