@@ -8,6 +8,7 @@ import type { Clinic } from '@/domain/types';
 import type { Program, ProgramItem, ProgramLog, SessionsPerDay, SkipReason } from '@/domain/hep';
 import type { ProgramBundle, SessionFeedback } from '@/services/hepService';
 import { HomeProgramTab } from './HomeProgramTab';
+import { useHomeProgramDot } from './useHomeProgramDot';
 
 const listPatientPrograms = vi.fn();
 const markPainReviewed = vi.fn();
@@ -190,6 +191,16 @@ describe('HomeProgramTab: header and progress', () => {
     expect(container).toHaveTextContent('Pain (0–10)');
   });
 
+  it('a single session check still shows a round dot for pain and for effort', async () => {
+    listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb({ logDate: day(-1), painScore: 5, effortScore: 4, createdAt: '2020-01-01T00:00:00Z' })] })]);
+    const { container } = renderTab();
+    const chart = await screen.findByRole('img', { name: 'Pain 5 over the last 7 days. Effort 4.' });
+    expect(chart.querySelector('polyline')?.getAttribute('points')?.split(' ')).toHaveLength(1);
+    expect(container.querySelector('[data-point="pain"]')).not.toBeNull();
+    expect(container.querySelector('[data-point="effort"]')).not.toBeNull();
+    expect(chart.querySelector('circle')).toBeNull(); // dots live outside the stretched SVG
+  });
+
   it('with no session checks the trend says so in one line', async () => {
     renderTab();
     expect(await screen.findByText('No session feedback yet.')).toBeInTheDocument();
@@ -223,6 +234,29 @@ describe('HomeProgramTab: needs your attention and pain review', () => {
     expect(markPainReviewed).toHaveBeenCalledTimes(1);
     expect(within(box).getByText(/Reviewed ✓ just now/)).toBeInTheDocument();
     expect(within(box).queryByRole('button', { name: 'Mark reviewed' })).toBeNull();
+  });
+
+  it('the profile tab\'s red dot clears after Mark reviewed', async () => {
+    const user = userEvent.setup();
+    listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb()] })]);
+    markPainReviewed.mockImplementation(async () => { listPatientPrograms.mockResolvedValue([bundle({ painReviewedThrough: new Date(Date.now() + 60_000).toISOString() }, { sessionFeedback: [fb()] })]); });
+    function Dot() { return <span>dot:{useHomeProgramDot('pt1', true) ? 'on' : 'off'}</span>; }
+    render(<ClinicContext.Provider value={clinic}><Dot /><HomeProgramTab patientId="pt1" /></ClinicContext.Provider>);
+    expect(await screen.findByText('dot:on')).toBeInTheDocument();
+    await user.click(within(await screen.findByRole('region', { name: 'Alerts' })).getByRole('button', { name: 'Mark reviewed' }));
+    expect(await screen.findByText('dot:off')).toBeInTheDocument();
+  });
+
+  it('if Mark reviewed fails, the banner goes back to waiting and says why', async () => {
+    const user = userEvent.setup();
+    listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb()] })]);
+    markPainReviewed.mockRejectedValue(new Error('Network down'));
+    renderTab();
+    const box = await screen.findByRole('region', { name: 'Alerts' });
+    await user.click(within(box).getByRole('button', { name: 'Mark reviewed' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Network down');
+    expect(within(box).getByRole('button', { name: 'Mark reviewed' })).toBeInTheDocument();
+    expect(within(box).queryByText(/Reviewed ✓/)).toBeNull();
   });
 
   it('once seen elsewhere (reviewed after the report) it is not shown again and nothing is marked', async () => {
@@ -274,6 +308,20 @@ describe('HomeProgramTab: programs and actions', () => {
     expect(fold).toHaveAttribute('aria-expanded', 'true');
     await user.click(screen.getByRole('button', { name: /^Old knee/ }));
     expect(screen.getByRole('heading', { name: /Old knee/ })).toHaveTextContent('Completed');
+  });
+
+  it('chips use the card\'s status word (an active program past its last day is "ended") and dot another program with a pain report waiting', async () => {
+    listPatientPrograms.mockResolvedValue([
+      bundle(),
+      bundle({ id: 'p2', title: 'Left shoulder', startDate: day(-12), durationDays: 7, items: [item('sq', 'Squat', { addedOn: day(-12) })] }, { logs: [] }),
+      bundle({ id: 'p4', title: 'Neck', startDate: day(-3) }, { sessionFeedback: [fb({ programId: 'p4' })] }),
+    ]);
+    renderTab();
+    await screen.findByRole('heading', { name: /Right knee, week 1/ });
+    const chips = screen.getByRole('group', { name: 'Programs' });
+    expect(within(chips).getByRole('button', { name: 'Left shoulder · ended' })).toBeInTheDocument();
+    expect(within(chips).getByRole('button', { name: 'Neck · active, pain report waiting' })).toBeInTheDocument();
+    expect(within(chips).getByRole('button', { name: 'Right knee, week 1 · active' })).toBeInTheDocument();
   });
 
   it('an empty patient gets the first-program prompt', async () => {

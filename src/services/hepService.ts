@@ -444,7 +444,7 @@ export const hepService = {
     if (error) fail(error);
   },
 
-  /** Opening the Home program tab marks pain as reviewed for everyone (shared state on the program). */
+  /** "Mark reviewed" on the chart's Home program tab marks pain as reviewed for everyone (shared state on the program). */
   async markPainReviewed(programId: string): Promise<void> {
     const supabase = requireOnline();
     const { error } = await supabase.rpc('mark_pain_reviewed', { p_program_id: programId });

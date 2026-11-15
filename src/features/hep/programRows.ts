@@ -93,7 +93,7 @@ export function buildProgramRow(bundle: ProgramBundle, opts: { today: string; wi
 
   const signals: ProgramSignal[] = [];
 
-  // Pain of 7+ that no one has looked at yet (opening the program on the chart marks it seen for everyone).
+  // Pain of 7+ that no one has looked at yet ("Mark reviewed" on the chart's Home program tab marks it seen for everyone).
   if (program.status !== 'completed') {
     const reviewed = program.painReviewedThrough ?? null;
     const unseen = sessionFeedback.filter((f) => f.painScore != null && f.painScore >= 7 && (reviewed == null || f.createdAt > reviewed));

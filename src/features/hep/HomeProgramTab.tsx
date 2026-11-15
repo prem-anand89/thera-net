@@ -18,13 +18,14 @@ import { buildHepPortalUrl, buildHepWhatsAppShareUrl } from './hepSharing';
 import { currentStreak, dayStrip, daySummary, dayTimeline, programDateRange, reviewLabel, trendSeries } from './homeProgram';
 import { MessagePatientSheet } from './MessagePatientSheet';
 import { PrintSheet } from './PrintSheet';
-import { ProgramCard } from './ProgramCard';
+import { ProgramCard, programStatusKey, programStatusWord } from './ProgramCard';
 import { ProgramDays } from './ProgramDays';
 import { SESSION_LABEL } from './ProgramItemsEditor';
 import { ProgramLinkLine } from './ProgramLinkLine';
 import { ProgramSheet } from './ProgramSheet';
 import { EXTEND_DAYS, buildProgramRow, telHref } from './programRows';
 import { clinicToday, useOnline } from './useHepData';
+import { notifyPainReviewed } from './useHomeProgramDot';
 
 const WINDOW_DAYS = 30;
 
@@ -82,7 +83,7 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
   // here for this visit, with "Reviewed ✓ just now".
   function markReviewed(programId: string, label: string) {
     setPainSeen((cur) => ({ ...cur, [programId]: label }));
-    void hepService.markPainReviewed(programId).catch((e: unknown) => {
+    void hepService.markPainReviewed(programId).then(() => notifyPainReviewed(patientId), (e: unknown) => {
       setPainSeen((cur) => { const next = { ...cur }; delete next[programId]; return next; });
       setError(e instanceof Error ? e.message : 'Could not mark it reviewed. Try again.');
     });
@@ -118,12 +119,22 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
     ? [SESSION_LABEL[prog.sessionsPerDay], `${items.length} ${items.length === 1 ? 'exercise' : 'exercises'}`, minutes != null && `about ${minutes} min`, `completion target ${prog.targetPct}%`, current?.therapistName && `prescribed by ${current.therapistName}`, review].filter(Boolean).join(' · ')
     : '';
   const earlier = completed.map((b) => ({ id: b.program.id, title: b.program.title, range: programDateRange(b.program.startDate, b.program.durationDays), percent: buildProgramRow(b, { today, windowStart: addDaysISO(today, -WINDOW_DAYS) }).habitPercent }));
+  // Chips use the card's status word; a rust dot marks another program with a pain report nobody has reviewed yet.
+  const chips = active.map((b) => {
+    const r = b.program.id === shownId && row ? row : buildProgramRow(b, { today, windowStart: addDaysISO(today, -WINDOW_DAYS) });
+    return { id: b.program.id, title: b.program.title, word: programStatusWord(programStatusKey(r)), pain: b.program.id !== shownId && !painSeen[b.program.id] && r.signals.some((s) => s.key === 'pain') };
+  });
   const show = (id: string) => { setShownId(id); setDay(today); };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Programs">
-        {active.map((b) => <button key={b.program.id} type="button" aria-pressed={b.program.id === shownId} className={filterChip(b.program.id === shownId)} onClick={() => show(b.program.id)}>{b.program.title} · {b.program.status === 'paused' ? 'paused' : 'active'}</button>)}
+        {chips.map((c) => (
+          <button key={c.id} type="button" aria-pressed={c.id === shownId} className={filterChip(c.id === shownId)} onClick={() => show(c.id)}>
+            {c.title} · {c.word}
+            {c.pain && <><span aria-hidden="true" className="ml-1.5 inline-block h-2 w-2 rounded-full bg-[var(--rust)] align-middle" /><span className="sr-only">, pain report waiting</span></>}
+          </button>
+        ))}
         {completed.length > 0 && <button type="button" aria-pressed={completed.some((b) => b.program.id === shownId)} aria-controls="hep-earlier" className={filterChip(completed.some((b) => b.program.id === shownId))} onClick={() => { setEarlierOpen(true); requestAnimationFrame(() => document.getElementById('hep-earlier')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })); }}>Earlier ({completed.length})</button>}
         <div className="flex-1" />
         <Button type="button" className={pillSmPrimary} disabled={!online} onClick={() => setSheet({ mode: 'new' })}>+ New program</Button>

@@ -14,6 +14,14 @@ const STATUS_PILL: Record<'active' | 'paused' | 'ended' | 'completed', { label: 
   completed: { label: 'Completed', cls: 'bg-[var(--paper)] text-[var(--muted)]' },
 };
 
+export type ProgramStatusKey = keyof typeof STATUS_PILL;
+
+/** One status for the card's pill and the program chips: completed, paused, ended (active but past its last day) or active. */
+export function programStatusKey(row: Pick<ProgramRow, 'status' | 'ended'>): ProgramStatusKey {
+  return row.status === 'completed' ? 'completed' : row.status === 'paused' ? 'paused' : row.ended ? 'ended' : 'active';
+}
+export const programStatusWord = (key: ProgramStatusKey) => STATUS_PILL[key].label.toLowerCase();
+
 /** How far through the program today is: day number and length, or null for an ongoing one. */
 function dayProgress(program: Pick<Program, 'startDate' | 'durationDays' | 'status'>, today: string): { day: number; of: number } | null {
   if (!program.durationDays) return null;
@@ -34,7 +42,7 @@ export function ProgramCard(props: {
   linkLine: ReactNode;
 }) {
   const { program: prog, row } = props;
-  const status = prog.status === 'completed' ? 'completed' : prog.status === 'paused' ? 'paused' : row.ended ? 'ended' : 'active';
+  const status = programStatusKey(row);
   const pill = STATUS_PILL[status];
   const progress = dayProgress(prog, props.today);
   const barLabel = status === 'completed' ? 'Completed' : row.dayLabel;
