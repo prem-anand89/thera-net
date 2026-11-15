@@ -123,9 +123,18 @@ describe('exercises', () => {
       p_clinic_id: 'c-1', p_id: null, p_title: 'Quad Sets', p_body_region: 'Knee', p_phase: 'activation', p_also_regions: ['Hip'], p_equipment: ['Towel'], p_instructions: 'Tighten',
       p_media_type: 'gif', p_media_keys: ['clinics/c-1/exercises/ex-9/0-ab12cd34'], p_default_sets: 3, p_default_reps: 12, p_default_hold_seconds: 10, p_default_sessions_per_day: 2,
       p_side: 'none', p_stop_if: 'Sharp pain', p_deleted: false, p_dose_type: 'hold', p_default_duration_seconds: null, p_default_rest_seconds: 30, p_media_captions: ['Hold'],
-      p_active: true, p_other_names: ['QS'], p_thumb_key: 'clinics/c-1/exercises/ex-9/thumb-ab12cd34',
+      p_active: true, p_other_names: ['QS'], p_thumb_key: 'clinics/c-1/exercises/ex-9/thumb-ab12cd34', p_positions: [],
     });
     expect(schedule).toHaveBeenCalledWith(0);
+  });
+
+  it('sends the positions as p_positions, and an empty list when none are given', async () => {
+    const input = { clinicId: 'c-1', title: 'x', bodyRegion: 'Knee', phase: 'other' as const, instructions: '', mediaType: 'none' as const, defaultSets: 3, doseType: 'reps' as const, defaultReps: 10, defaultHoldSeconds: null, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1 as const, side: 'none' as const, stopIf: '' };
+    mockRpc.mockResolvedValue({ data: 'ex-9', error: null });
+    await hepService.saveExercise({ ...input, positions: ['Supine'] });
+    expect(mockRpc).toHaveBeenLastCalledWith('save_exercise', expect.objectContaining({ p_positions: ['Supine'] }));
+    await hepService.saveExercise(input);
+    expect(mockRpc).toHaveBeenLastCalledWith('save_exercise', expect.objectContaining({ p_positions: [] }));
   });
 
   it('archives with active = false', async () => {

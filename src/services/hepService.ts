@@ -64,6 +64,8 @@ export interface SaveExerciseInput {
   active?: boolean;
   /** true = delete (only for an exercise no template or program uses). */
   deleted?: boolean;
+  /** Starting positions (HEP_POSITIONS); staff-only. Absent = none. */
+  positions?: string[];
 }
 
 /** One exercise inside a template or program, as the RPCs read it (camelCase keys). */
@@ -267,6 +269,7 @@ export const hepService = {
       p_active: input.active ?? true,
       p_other_names: input.otherNames ?? [],
       p_thumb_key: input.thumbKey ?? null,
+      p_positions: input.positions ?? [],
     });
     if (error) fail(error);
     syncEngine.schedule(0); // bring the saved row into the offline cache

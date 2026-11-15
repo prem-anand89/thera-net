@@ -10,7 +10,8 @@ import type { Exercise } from '@/domain/hep';
 import { STARTER_EXERCISES } from '@/domain/hepStarterSet';
 import { db } from '@/lib/db';
 import { StarterSetSheet } from './StarterSetSheet';
-import { starterToSaveInput } from './starterSet';
+import { exerciseFromSaveInput, starterToSaveInput } from './starterSet';
+import { exerciseToSaveInput } from './exerciseSaveInput';
 
 const saveExercise = vi.fn();
 vi.mock('@/services/hepService', async (orig) => ({ ...(await orig<typeof import('@/services/hepService')>()), hepService: { saveExercise: (...a: unknown[]) => saveExercise(...a) } }));
@@ -98,5 +99,17 @@ describe('starterToSaveInput', () => {
       if (i.doseType === 'hold') expect(i.defaultHoldSeconds).not.toBeNull();
       expect(i.mediaKeys).toEqual([]);
     }
+  });
+  it("carries each starter's positions into the save request and into the local row", () => {
+    for (const s of STARTER_EXERCISES) {
+      const i = starterToSaveInput('c1', s);
+      expect(i.positions).toEqual(s.positions);
+      expect(exerciseFromSaveInput(i, 'x').positions).toEqual(s.positions);
+    }
+  });
+
+  it("keeps an exercise's positions when it is sent back (archive, restore, delete)", () => {
+    expect(exerciseToSaveInput({ ...ex('e1', 'Bridge'), positions: ['Supine'] }).positions).toEqual(['Supine']);
+    expect(exerciseToSaveInput({ ...ex('e1', 'Bridge'), positions: undefined as unknown as string[] }).positions).toEqual([]);
   });
 });

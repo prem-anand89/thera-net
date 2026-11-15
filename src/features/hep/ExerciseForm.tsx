@@ -11,6 +11,7 @@ import {
   HEP_REGIONS,
   canonicalEquipment,
   canonicalRegion,
+  positionsOf,
   suggestedDoseType,
   type Exercise,
   type ExerciseMediaType,
@@ -167,6 +168,8 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
         alsoRegions: also.filter((a) => a !== effectiveRegion),
         equipment,
         phase,
+        // The form's own Position control comes later; until then an edit keeps what the exercise already has.
+        positions: positionsOf(exercise ?? {}),
         instructions: steps.trim(),
         mediaType,
         mediaKeys: finalKeys,
@@ -179,7 +182,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       const savedId = await hepService.saveExercise({ id, clinicId, ...fields });
       // Show it in the local list at once; the next sync pull replaces this row with the server's.
       const now = new Date().toISOString();
-      const saved: Exercise = { ...fields, positions: exercise?.positions ?? [], id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
+      const saved: Exercise = { ...fields, id: savedId, clinicId, isFavorite: duplicated ? false : (exercise?.isFavorite ?? false), deleted: false, version: (exercise && !duplicated ? exercise.version : 0) + 1, createdAt: exercise && !duplicated ? exercise.createdAt : now, updatedAt: now };
       await db.exercises.put(saved).catch(() => {});
       onSaved(savedId, saved);
       onClose();
