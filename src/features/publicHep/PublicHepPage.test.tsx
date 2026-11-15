@@ -56,6 +56,19 @@ describe('signing in', () => {
     expect(svc.getPublicHep).not.toHaveBeenCalled();
   });
 
+  it('tells iPhone users to open the link in Safari, and nobody else', async () => {
+    const ua = vi.spyOn(navigator, 'userAgent', 'get');
+    ua.mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)');
+    const first = render(<PublicHepPage />);
+    expect(await screen.findByText(/open this link in Safari so it remembers you/)).toBeInTheDocument();
+    first.unmount();
+    ua.mockReturnValue('Mozilla/5.0 (Linux; Android 14)');
+    render(<PublicHepPage />);
+    await screen.findByText('Sunrise Physiotherapy');
+    expect(screen.queryByText(/open this link in Safari/)).toBeNull();
+    ua.mockRestore();
+  });
+
   it('asks search engines not to index the page while it is open', async () => {
     const { unmount } = render(<PublicHepPage />);
     await screen.findByText('Sunrise Physiotherapy');
@@ -179,12 +192,27 @@ describe('the checklist', () => {
   });
 
   it('Skip › on a section asks one reason and logs every open exercise in it as skipped', async () => {
-    const u = await signInWith(hepData([wall, clam, bridge], { logs: [log('i2')] }));
+    const u = await signInWith(hepData([wall, clam, bridge]));
     const section = screen.getByRole('region', { name: 'Strengthening' });
     await u.click(within(section).getByRole('button', { name: 'Skip ›' }));
     await u.click(within(section).getByRole('button', { name: 'Pain' }));
-    await waitFor(() => expect(svc.submitExerciseLog).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(svc.submitExerciseLog).toHaveBeenCalledTimes(2));
     expect(svc.submitExerciseLog).toHaveBeenCalledWith(expect.objectContaining({ itemId: 'i1', skipped: true, skipReason: 'pain' }));
+  });
+
+  it('a section with one open exercise has neither All done nor Skip ›', async () => {
+    await signInWith(hepData([wall, clam, bridge], { logs: [log('i2')] }));
+    const section = screen.getByRole('region', { name: 'Strengthening' });
+    expect(within(section).queryByRole('button', { name: 'All done' })).toBeNull();
+    expect(within(section).queryByRole('button', { name: 'Skip ›' })).toBeNull();
+  });
+
+  it('the Start button sticks to the bottom and every row ends with a ›', async () => {
+    await signInWith(hepData([wall, clam]));
+    expect(screen.getByRole('button', { name: /Start: Wall Slides/ })).toHaveClass('sticky', 'bottom-0');
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(within(row).getByText('›')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('All done on a section logs each open exercise in it as done', async () => {

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildHoldPhases, buildTimedPhases, type TimerPhase } from '@/domain/hepTimers';
 import { HepTimerLayer, useHepTimer } from './HepTimer';
+import { HepExerciseScreen } from './HepExerciseScreen';
+import { item as makeItem } from './hepTestData';
 import { createHepSound, type SoundMode, type TimerSound } from './hepSound';
 
 const fakeSound = (): TimerSound => ({ unlock: vi.fn(), cue: vi.fn(), tick: vi.fn(), stop: vi.fn() });
@@ -147,5 +149,59 @@ describe('the sound', () => {
     s.cue(hold);
     s.cue(hold);
     expect(contexts).toBe(1);
+  });
+});
+
+describe('the exercise screen with a timer', () => {
+  beforeEach(() => { vi.useFakeTimers({ now: 1_000_000 }); });
+  afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+  const screenFor = (over: Parameters<typeof makeItem>[0], extra: { framed?: boolean } = {}) => {
+    const onDone = vi.fn();
+    const onUndo = vi.fn();
+    render(
+      <HepExerciseScreen
+        item={makeItem({ mediaType: 'gif', mediaUrls: ['a.gif'], ...over })}
+        position={1} total={1} session={1} sessionCount={1} status="open" firstVisit={false}
+        soundMode="off" sound={fakeSound()} onSoundMode={() => {}} onBack={() => {}} onPrev={null} onNext={null}
+        onDone={onDone} onSkip={() => {}} onUndo={onUndo} onImageError={() => {}} {...extra}
+      />,
+    );
+    return { onDone, onUndo };
+  };
+
+  it('puts the timer band after the picture, and the picture stays', () => {
+    screenFor({ doseType: 'hold', reps: 2, holdSeconds: 2 });
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 holds' }));
+    const timer = screen.getByRole('timer');
+    const picture = screen.getByRole('img');
+    expect(picture.compareDocumentPosition(timer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(picture.parentElement?.contains(timer)).toBe(false);
+  });
+
+  it('says the holds are done when the run ends, and the message goes away on Done', () => {
+    const { onDone } = screenFor({ doseType: 'hold', reps: 2, holdSeconds: 2 });
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 holds' }));
+    act(() => { vi.advanceTimersByTime(120_000); });
+    expect(screen.getByText("All 2 holds done. Tap ✓ Done when you're ready.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /✓ Done/ }));
+    expect(onDone).toHaveBeenCalled();
+    expect(screen.queryByText(/holds done/)).toBeNull();
+  });
+
+  it('says "Time\'s up" after a timed run, and stopping early shows no message', () => {
+    screenFor({ doseType: 'timed', durationSeconds: 5 });
+    fireEvent.click(screen.getByRole('button', { name: 'Start 5 s' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Stop' })[0]);
+    expect(screen.queryByText(/Time's up/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Start 5 s' }));
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.getByText("Time's up. Tap ✓ Done when you're ready.")).toBeInTheDocument();
+  });
+
+  it('framed fills its parent instead of the window', () => {
+    screenFor({}, { framed: true });
+    expect(screen.getByRole('button', { name: '✓ Done · Next ›' }).closest('.absolute')).not.toBeNull();
+    expect(document.querySelector('.fixed')).toBeNull();
   });
 });

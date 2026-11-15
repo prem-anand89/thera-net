@@ -112,6 +112,9 @@ export function HepSignIn({ brand, onSubmit, notice }: HepSignInProps) {
           <span>Remember this phone for 30 days</span>
         </label>
         <p className="-mt-2 text-sm text-slate-500">Untick this on a shared or borrowed phone.</p>
+        {/iPhone|iPad|iPod/.test(navigator.userAgent) && (
+          <p className="-mt-2 text-sm text-slate-500">On iPhone, open this link in Safari so it remembers you. Links opened inside WhatsApp may forget.</p>
+        )}
 
         <button type="submit" disabled={pin.length !== 4 || busy || locked} className="min-h-12 w-full rounded-full bg-teal-700 px-6 text-lg font-semibold text-white disabled:opacity-50">
           {busy ? 'Checking…' : 'Open my exercises'}

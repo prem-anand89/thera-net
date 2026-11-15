@@ -1,4 +1,4 @@
-// One exercise per screen (amendment 82): the picture with the timer over it, the dose in one line, Start / Rest,
+// One exercise per screen (amendment 82): the picture with the timer band right under it, the dose in one line, Start / Rest,
 // the steps (open the first time, then collapsed), the Stop-if line, and a fixed bar with Skip and ✓ Done · Next ›.
 // "Preview as patient" renders this same screen read-only.
 import { useMemo, useRef, useState } from 'react';
@@ -32,6 +32,8 @@ export interface HepExerciseScreenProps {
   onImageError: () => void;
   /** Preview as patient: the buttons that change data are hidden. */
   readOnly?: boolean;
+  /** Fill the nearest positioned parent (a phone frame) instead of the whole window. */
+  framed?: boolean;
 }
 
 function Picture({ item, onImageError }: { item: PublicHepItem; onImageError: () => void }) {
@@ -78,19 +80,21 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
   const [stepsOpen, setStepsOpen] = useState(p.firstVisit);
   const [asking, setAsking] = useState(false);
   const timer = useHepTimer(p.sound);
+  const startKind = useRef<'hold' | 'timed' | 'rest'>('hold');
   const steps = useMemo(() => stepsOf(item.instructions), [item.instructions]);
   const eachSide = item.side === 'both';
   const notes = doseNotes(item, p.sessionCount, p.session);
   const done = p.status === 'done';
   const skipped = p.status === 'skipped';
 
-  const starts: Array<{ label: string; phases: ReturnType<typeof buildHoldPhases> }> = [];
-  if (item.doseType === 'hold') starts.push({ label: `Start ${item.reps ?? 1} holds`, phases: buildHoldPhases(item.reps ?? 1, item.holdSeconds ?? 1, eachSide) });
-  if (item.doseType === 'timed') starts.push({ label: `Start ${item.durationSeconds ?? 1} s`, phases: buildTimedPhases(item.durationSeconds ?? 1, eachSide) });
-  if (item.restSeconds > 0) starts.push({ label: `Rest ${item.restSeconds} s`, phases: buildRestPhases(item.restSeconds) });
-
+  const starts: Array<{ label: string; kind: 'hold' | 'timed' | 'rest'; phases: ReturnType<typeof buildHoldPhases> }> = [];
+  if (item.doseType === 'hold') starts.push({ label: `Start ${item.reps ?? 1} holds`, kind: 'hold', phases: buildHoldPhases(item.reps ?? 1, item.holdSeconds ?? 1, eachSide) });
+  if (item.doseType === 'timed') starts.push({ label: `Start ${item.durationSeconds ?? 1} s`, kind: 'timed', phases: buildTimedPhases(item.durationSeconds ?? 1, eachSide) });
+  if (item.restSeconds > 0) starts.push({ label: `Rest ${item.restSeconds} s`, kind: 'rest', phases: buildRestPhases(item.restSeconds) });
+  const finishedText = timer.finished && startKind.current !== 'rest' ? (startKind.current === 'hold' ? `All ${item.reps ?? 1} holds done. Tap ✓ Done when you're ready.` : "Time's up. Tap ✓ Done when you're ready.") : null;
+  const place = p.framed ? 'absolute' : 'fixed';
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-slate-50 text-slate-900">
+    <div className={`${place} inset-0 z-30 flex flex-col bg-slate-50 text-slate-900`}>
       <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-2 pt-[env(safe-area-inset-top)]">
         <button type="button" onClick={() => { timer.stop(); p.onBack(); }} className="min-h-11 px-3 text-base font-semibold text-teal-800">‹ List</button>
         <p className="flex-1 text-center text-base font-medium text-slate-600">{p.position} of {p.total}</p>
@@ -104,8 +108,8 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
       <div className="flex-1 overflow-y-auto pb-40">
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
           <Picture item={item} onImageError={p.onImageError} />
-          {timer.view && <HepTimerLayer view={timer.view} repsTotal={item.doseType === 'hold' ? item.reps : null} onSkip={timer.skip} onStop={timer.stop} />}
         </div>
+        {timer.view && <HepTimerLayer view={timer.view} repsTotal={item.doseType === 'hold' ? item.reps : null} onSkip={timer.skip} onStop={timer.stop} />}
 
         <div className="mx-auto max-w-xl space-y-4 px-4 py-4">
           <div>
@@ -123,7 +127,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
                 <button type="button" onClick={timer.stop} className="min-h-12 flex-1 rounded-full border-2 border-rose-600 px-5 text-lg font-semibold text-rose-700">Stop</button>
               ) : (
                 starts.map((s) => (
-                  <button key={s.label} type="button" onClick={() => timer.start(s.phases)} className="min-h-12 flex-1 rounded-full bg-slate-900 px-5 text-lg font-semibold text-white">{s.label}</button>
+                  <button key={s.label} type="button" onClick={() => { startKind.current = s.kind; timer.start(s.phases); }} className="min-h-12 flex-1 rounded-full bg-slate-900 px-5 text-lg font-semibold text-white">{s.label}</button>
                 ))
               )}
             </div>
@@ -154,7 +158,8 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
       </div>
 
       {!p.readOnly && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className={`${place} inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]`}>
+          {finishedText && <p role="status" className="mb-3 rounded-2xl bg-teal-50 px-4 py-2 text-center text-base font-semibold text-teal-900">{finishedText}</p>}
           {asking && (
             <div className="mb-3">
               <p className="mb-2 text-base font-semibold">Why are you skipping this?</p>
@@ -168,7 +173,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
           {done || skipped ? (
             <div className="flex items-center gap-3">
               <p className="flex-1 text-base font-semibold text-slate-700">{done ? '✓ Done' : `Skipped${p.skipReason ? ` (${SKIP_REASONS.find((r) => r.value === p.skipReason)?.label.toLowerCase() ?? ''})` : ''}`}</p>
-              <button type="button" onClick={p.onUndo} className="min-h-12 rounded-full border border-slate-300 px-5 text-base font-semibold">Undo</button>
+              <button type="button" onClick={() => { timer.stop(); p.onUndo(); }} className="min-h-12 rounded-full border border-slate-300 px-5 text-base font-semibold">Undo</button>
               {p.onNext && <button type="button" onClick={() => { timer.stop(); p.onNext?.(); }} className="min-h-12 rounded-full bg-teal-700 px-6 text-base font-semibold text-white">Next ›</button>}
             </div>
           ) : (

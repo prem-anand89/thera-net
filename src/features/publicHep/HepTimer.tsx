@@ -1,6 +1,6 @@
 // The helper timer: a hook that walks a list of phases by END TIME (a phone slows timers when the screen locks, so the
-// display is recomputed from the clock about four times a second), and the layer drawn over the exercise picture.
-// Hold and Go get the big ring over the picture; the short phases are a tinted band along the bottom with Skip.
+// display is recomputed from the clock about four times a second), and the band drawn directly below the exercise
+// picture (the picture stays visible and swipeable). Hold and Go get a ring; the short phases a tinted band with Skip.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TimerPhase } from '@/domain/hepTimers';
 import type { TimerSound } from './hepSound';
@@ -18,6 +18,8 @@ const TICK_MS = 250;
 export function useHepTimer(sound: TimerSound) {
   const run = useRef<{ phases: TimerPhase[]; index: number; endAt: number; lastBeep: number } | null>(null);
   const [view, setView] = useState<TimerView | null>(null);
+  /** True after a run ended on its own (not Stop); cleared by the next start or a stop. */
+  const [finished, setFinished] = useState(false);
   const running = view !== null;
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
 
@@ -39,6 +41,7 @@ export function useHepTimer(sound: TimerSound) {
   const finish = useCallback(() => {
     run.current = null;
     setView(null);
+    setFinished(true);
     releaseWake();
     sound.cue('done');
   }, [sound]);
@@ -72,6 +75,7 @@ export function useHepTimer(sound: TimerSound) {
     (phases: TimerPhase[]) => {
       if (phases.length === 0) return;
       sound.unlock();
+      setFinished(false);
       const now = Date.now();
       run.current = { phases, index: 0, endAt: now + phases[0].seconds * 1000, lastBeep: 0 };
       sound.cue(phases[0]);
@@ -89,6 +93,7 @@ export function useHepTimer(sound: TimerSound) {
   const stop = useCallback(() => {
     run.current = null;
     setView(null);
+    setFinished(false);
     sound.stop();
     releaseWake();
   }, [sound]);
@@ -114,7 +119,7 @@ export function useHepTimer(sound: TimerSound) {
     releaseWake();
   }, [sound]);
 
-  return { view, running, start, stop, skip };
+  return { view, running, finished, start, stop, skip };
 }
 
 const RING_R = 54;
@@ -143,25 +148,25 @@ export function HepTimerLayer({ view, repsTotal, onSkip, onStop }: { view: Timer
   if (big) {
     const fraction = phase.seconds > 0 ? Math.min(1, Math.max(0, remaining / phase.seconds)) : 0;
     return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-900/70 text-white" role="timer" aria-label={`${phase.label}, ${remaining} seconds`}>
-        <div className="relative h-40 w-40">
+      <div className="flex items-center gap-3 bg-slate-900 px-3 py-2 text-white" role="timer" aria-label={`${phase.label}, ${remaining} seconds`}>
+        <div className="relative h-14 w-14 shrink-0">
           <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden>
-            <circle cx="60" cy="60" r={RING_R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="8" />
-            <circle cx="60" cy="60" r={RING_R} fill="none" stroke="#5eead4" strokeWidth="8" strokeLinecap="round" strokeDasharray={RING_LENGTH} strokeDashoffset={RING_LENGTH * (1 - fraction)} />
+            <circle cx="60" cy="60" r={RING_R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="10" />
+            <circle cx="60" cy="60" r={RING_R} fill="none" stroke="#5eead4" strokeWidth="10" strokeLinecap="round" strokeDasharray={RING_LENGTH} strokeDashoffset={RING_LENGTH * (1 - fraction)} />
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-sm font-bold tracking-widest">{phase.kind === 'hold' ? 'HOLD' : 'GO'}</span>
-            <span className="text-[3.25rem] font-bold leading-none tabular-nums">{remaining}</span>
-          </div>
+          <span className="absolute inset-0 flex items-center justify-center text-xl font-bold tabular-nums">{remaining}</span>
         </div>
-        {subtitle && <p className="text-base font-medium">{subtitle}</p>}
-        <button type="button" onClick={onStop} className="mt-2 min-h-11 rounded-full border border-white/60 px-5 text-base font-semibold text-white">Stop</button>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-bold leading-tight tracking-widest">{phase.kind === 'hold' ? 'HOLD' : 'GO'}</p>
+          {subtitle && <p className="text-sm leading-tight">{subtitle}</p>}
+        </div>
+        <button type="button" onClick={onStop} className="min-h-11 shrink-0 rounded-full border border-white/60 px-5 text-base font-semibold text-white">Stop</button>
       </div>
     );
   }
   const band = BAND[phase.kind] ?? BAND.relax;
   return (
-    <div className={`absolute inset-x-0 bottom-0 flex items-center gap-3 px-3 py-2 ${band.bg}`} role="timer" aria-label={`${phase.label}, ${remaining} seconds`}>
+    <div className={`flex items-center gap-3 px-3 py-2 ${band.bg}`} role="timer" aria-label={`${phase.label}, ${remaining} seconds`}>
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-xl font-bold tabular-nums">{remaining}</span>
       <div className="min-w-0 flex-1">
         <p className="text-base font-bold leading-tight">{phase.label}</p>

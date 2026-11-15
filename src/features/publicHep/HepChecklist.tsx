@@ -17,6 +17,8 @@ export interface HepChecklistProps {
   onToggle: (item: PublicHepItem) => void;
   onSectionDone: (items: PublicHepItem[]) => void;
   onSectionSkip: (items: PublicHepItem[], reason: SkipReason) => void;
+  /** Lets a caller hide an exercise's picture in the list (the therapist preview does for pelvic floor). Default: shown. */
+  showThumb?: (item: PublicHepItem) => boolean;
 }
 
 const SECTION_REASONS = SKIP_REASONS.filter((r) => r.value !== 'didnt_understand');
@@ -36,7 +38,7 @@ function Tick({ status, title, onClick }: { status: 'done' | 'skipped' | 'open';
   );
 }
 
-export function HepChecklist({ items, logs, today, session, sessionCount, onSession, onOpen, onToggle, onSectionDone, onSectionSkip }: HepChecklistProps) {
+export function HepChecklist({ items, logs, today, session, sessionCount, onSession, onOpen, onToggle, onSectionDone, onSectionSkip, showThumb }: HepChecklistProps) {
   const [skipping, setSkipping] = useState<string | null>(null);
   const mine = itemsInSession(items, logs, today, session);
   const sections = sectionsOf(mine);
@@ -71,7 +73,7 @@ export function HepChecklist({ items, logs, today, session, sessionCount, onSess
               <h2 className="min-w-0 flex-1 text-lg font-bold text-slate-900">
                 {section.title} <span className="text-base font-medium text-slate-500">{sectionLabelCount(required.length, doneCount)}</span>
               </h2>
-              {open.length > 0 && (
+              {open.length >= 2 && (
                 <>
                   <button type="button" onClick={() => { setSkipping(null); onSectionDone(open); }} className="min-h-11 rounded-full border border-teal-700 px-4 text-base font-semibold text-teal-800">All done</button>
                   <button type="button" aria-expanded={skipping === section.phase} onClick={() => setSkipping(skipping === section.phase ? null : section.phase)} className="min-h-11 rounded-full px-3 text-base font-semibold text-slate-700">Skip ›</button>
@@ -104,11 +106,12 @@ export function HepChecklist({ items, logs, today, session, sessionCount, onSess
                         </span>
                         <span className="block text-sm text-slate-600">{shortDose(item)}</span>
                       </span>
-                      {item.mediaUrls[0] ? (
+                      {item.mediaUrls[0] && (showThumb?.(item) ?? true) ? (
                         <img src={item.mediaUrls[0]} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-slate-100 object-cover" />
                       ) : (
                         <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-lg font-bold text-teal-800">{item.title.trim().charAt(0).toUpperCase()}</span>
                       )}
+                      <span aria-hidden className="shrink-0 text-2xl text-slate-400">›</span>
                     </button>
                   </li>
                 );
@@ -119,7 +122,7 @@ export function HepChecklist({ items, logs, today, session, sessionCount, onSess
       })}
 
       {next ? (
-        <button type="button" onClick={() => onOpen(next)} className="min-h-14 w-full rounded-full bg-teal-700 px-6 text-lg font-bold text-white shadow">
+        <button type="button" onClick={() => onOpen(next)} className="sticky bottom-0 z-10 min-h-14 w-full rounded-full bg-teal-700 px-6 text-lg font-bold text-white shadow">
           ▶ {anyDone ? 'Continue' : 'Start'}: {next.title}
         </button>
       ) : (
