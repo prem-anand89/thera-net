@@ -11,14 +11,16 @@ import { db } from '@/lib/db';
 import { ExercisePicker } from './ExercisePicker';
 
 const saveExercise = vi.fn();
+const listTemplates = vi.fn();
+const listPatientPrograms = vi.fn();
 const tItem = (id: string, title: string, sourceExerciseId: string | null) => ({ id, templateId: 't1', sourceExerciseId, title, bodyRegion: 'Knee', phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], equipment: [], doseType: 'reps', sets: 3, reps: 10, holdSeconds: null, durationSeconds: null, restSeconds: 30, sessionsPerDay: 1, side: 'none', optional: false, stopIf: '', sortOrder: 0 });
 vi.mock('@/services/hepService', async (orig) => ({
   ...(await orig<typeof import('@/services/hepService')>()),
   hepService: {
     saveExercise: (...a: unknown[]) => saveExercise(...a), recentlyUsedExerciseIds: async () => [], exerciseUsage: async () => ({ programs: 0, templates: 0 }),
     exerciseUseCounts: async () => ({}),
-    listTemplates: async () => [{ id: 't1', title: 'Knee week 1', note: null, bodyRegion: 'Knee', usedCount: 2, items: [tItem('i1', 'Quad Sets', '1'), tItem('i2', 'Wall Slides', '2')] }],
-    listPatientPrograms: async () => [{ program: { id: 'p1', title: 'Earlier knee', items: [{ ...tItem('pi1', 'Sit to Stand', '3'), removedOn: null, specialInstructions: '' }] } }],
+    listTemplates: (...a: unknown[]) => listTemplates(...a),
+    listPatientPrograms: (...a: unknown[]) => listPatientPrograms(...a),
   },
 }));
 vi.mock('./StarterSetSheet', () => ({ StarterSetSheet: ({ open }: { open: boolean }) => (open ? <div>starter sheet</div> : null) }));
@@ -41,6 +43,11 @@ beforeEach(async () => {
   await db.exercises.clear();
   await db.exercises.bulkPut([ex('1', 'Quad Sets'), ex('2', 'Wall Slides', { bodyRegion: 'Shoulder' }), ex('3', 'Sit to Stand')]);
   saveExercise.mockReset().mockResolvedValue('new-id');
+  listTemplates.mockReset().mockResolvedValue([{ id: 't1', title: 'Knee week 1', note: null, bodyRegion: 'Knee', usedCount: 2, items: [tItem('i1', 'Quad Sets', '1'), tItem('i2', 'Wall Slides', '2')] }]);
+  listPatientPrograms.mockReset().mockResolvedValue([
+    { program: { id: 'p1', title: 'Earlier knee', startDate: '2026-10-01', items: [{ ...tItem('pi1', 'Sit to Stand', '3'), removedOn: null, specialInstructions: '' }] } },
+    { program: { id: 'p-now', title: 'Being edited', startDate: '2026-11-01', items: [{ ...tItem('pi2', 'Bridge', null), removedOn: null, specialInstructions: '' }] } },
+  ]);
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 });
 afterEach(cleanup);
@@ -89,7 +96,7 @@ describe('ExercisePicker', () => {
 
   it('an earlier-programs tab appears only with a patient, and "Add all" passes the program title', async () => {
     const user = userEvent.setup();
-    const { onAdd } = renderPicker({ patientId: 'pt1', patientName: 'Asha Rao' });
+    const { onAdd } = renderPicker({ patientId: 'pt1', patientName: 'Asha Rao', excludeProgramId: 'p-now' });
     await user.click(await screen.findByRole('tab', { name: 'Asha’s earlier programs' }));
     await user.click(await screen.findByRole('button', { name: 'Add all 1' }));
     expect(onAdd.mock.calls[0][0].map((i: { title: string }) => i.title)).toEqual(['Sit to Stand']);
@@ -138,5 +145,45 @@ describe('ExercisePicker', () => {
     await db.exercises.clear();
     renderPicker();
     expect(await screen.findByText('Your Library is empty')).toBeInTheDocument();
+  });
+
+  it('earlier programs load from the clinic\'s today (not every log ever) and leave out the program being edited', async () => {
+    const user = userEvent.setup();
+    renderPicker({ patientId: 'pt1', patientName: 'Asha Rao', excludeProgramId: 'p-now' });
+    await user.click(await screen.findByRole('tab', { name: 'Asha’s earlier programs' }));
+    expect(await screen.findByText('Earlier knee')).toBeInTheDocument();
+    expect(screen.queryByText('Being edited')).toBeNull();
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    expect(listPatientPrograms).toHaveBeenCalledWith('pt1', today);
+  });
+
+  it('a templates load error clears once a later load works', async () => {
+    listTemplates.mockRejectedValueOnce(new Error('Network down'));
+    const onAdd = vi.fn();
+    const onClose = vi.fn();
+    const ui = (open: boolean) => <ClinicContext.Provider value={clinic}><ExercisePicker open={open} onClose={onClose} onAdd={onAdd} initialTab="templates" /></ClinicContext.Provider>;
+    const { rerender } = render(ui(true));
+    expect(await screen.findByText('Network down')).toBeInTheDocument();
+    rerender(ui(false));
+    rerender(ui(true));
+    expect(await screen.findByText('Knee week 1')).toBeInTheDocument();
+    expect(screen.queryByText('Network down')).toBeNull();
+  });
+
+  it('opening on the earlier-programs tab without a patient falls back to Exercises', async () => {
+    renderPicker({ initialTab: 'earlier' });
+    expect(await screen.findByRole('tab', { name: 'Exercises' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByLabelText('Loading earlier programs')).toBeNull();
+  });
+
+  it('"Add all" on a template also adds the exercises ticked on the Exercises tab, without doubles', async () => {
+    const user = userEvent.setup();
+    const { onAdd } = renderPicker();
+    await user.click(await screen.findByRole('button', { name: /^Sit to Stand/ }));
+    await user.click(screen.getByRole('button', { name: /^Quad Sets/ }));
+    await user.click(screen.getByRole('tab', { name: 'Templates' }));
+    await user.click(await screen.findByRole('button', { name: 'Add all 2' }));
+    expect(onAdd.mock.calls[0][0].map((i: { title: string }) => i.title)).toEqual(['Quad Sets', 'Wall Slides', 'Sit to Stand']);
+    expect(onAdd.mock.calls[0][1]).toEqual({ templateId: 't1', suggestedTitle: 'Knee week 1' });
   });
 });

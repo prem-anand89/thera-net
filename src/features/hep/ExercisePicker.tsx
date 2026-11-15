@@ -13,7 +13,7 @@ import { LibraryBrowser } from './LibraryBrowser';
 import { exerciseToItem, intoBlock, itemsMinutes, programItemToInput, templateItemToInput, type ItemBlock } from './hepItems';
 import { PackList, type Pack } from './PickerPacks';
 import { StarterSetSheet } from './StarterSetSheet';
-import { useExerciseUseCounts, useExercises, useOnline, useUsedThisWeek } from './useHepData';
+import { clinicToday, useExerciseUseCounts, useExercises, useOnline, useUsedThisWeek } from './useHepData';
 
 export type PickerTab = 'exercises' | 'templates' | 'earlier';
 export interface AddMeta { templateId?: string; suggestedTitle?: string }
@@ -30,13 +30,15 @@ export interface ExercisePickerProps {
   /** The block being filled: the warm-up or cool-down; omitted = the main exercises. */
   target?: ItemBlock;
   initialTab?: PickerTab;
+  /** The program being edited: left out of the earlier programs. */
+  excludeProgramId?: string;
 }
 
 type TemplateRow = ExerciseTemplate & { usedCount: number };
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, patientName, target, initialTab }: ExercisePickerProps) {
+export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, patientName, target, initialTab, excludeProgramId }: ExercisePickerProps) {
   const clinic = useClinic();
   const exercises = useExercises(clinic.id);
   const usedIds = useUsedThisWeek();
@@ -51,14 +53,21 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const withPatient = !!patientId && !!patientName;
-  useEffect(() => { if (open) { setTicked([]); setNewName(null); setTab(initialTab ?? 'exercises'); } }, [open, initialTab]);
+  const startTab: PickerTab = initialTab === 'earlier' && !withPatient ? 'exercises' : initialTab ?? 'exercises';
+  useEffect(() => { if (open) { setTicked([]); setNewName(null); setTab(startTab); setLoadError(null); } }, [open, startTab]);
   useEffect(() => {
     if (!open || !online) return;
     let live = true;
-    Promise.resolve().then(() => hepService.listTemplates(clinic.id)).then((t) => { if (live) setTemplates(t); }).catch((e) => { if (live) setLoadError(e instanceof Error ? e.message : 'Could not load the templates.'); });
-    if (patientId) Promise.resolve().then(() => hepService.listPatientPrograms(patientId, '2000-01-01')).then((p) => { if (live) setEarlier(p); }).catch(() => { if (live) setEarlier([]); });
+    Promise.resolve().then(() => hepService.listTemplates(clinic.id)).then((t) => { if (live) { setTemplates(t); setLoadError(null); } }).catch((e) => { if (live) setLoadError(e instanceof Error ? e.message : 'Could not load the templates.'); });
+    // Only today's logs come along (the cards need the rows, not the history), and never the program being edited.
+    if (patientId) {
+      Promise.resolve().then(() => hepService.listPatientPrograms(patientId, clinicToday(clinic)))
+        .then((p) => { if (live) setEarlier(p.filter((b) => b.program.id !== excludeProgramId)); })
+        .catch(() => { if (live) setEarlier([]); });
+    }
     return () => { live = false; };
-  }, [open, online, clinic.id, patientId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `clinic` is read for its timezone only
+  }, [open, online, clinic.id, patientId, excludeProgramId]);
 
   const block = target ?? 'main';
   const byId = new Map((exercises ?? []).map((e) => [e.id, e]));
@@ -77,13 +86,23 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
     const live = p.items.filter((i) => i.removedOn == null);
     return { id: p.id, title: p.title, meta: `${plural(live.length, 'exercise', 'exercises')} · from ${p.startDate}`, exercises: live, addable: live.filter(free).length };
   });
+  /** A whole set plus whatever was ticked on the Exercises tab, each exercise once, never one already in the program. */
+  const withTicked = (items: HepItemInput[]) => {
+    const seen = new Set<string>();
+    return [...items, ...chosenItems].filter(free).filter((i) => {
+      if (!i.sourceExerciseId) return true;
+      if (seen.has(i.sourceExerciseId)) return false;
+      seen.add(i.sourceExerciseId);
+      return true;
+    });
+  };
   const addTemplate = (pack: Pack) => {
     const t = templates?.find((x) => x.id === pack.id);
-    if (t) finish(t.items.filter(free).map(templateItemToInput), { templateId: t.id, suggestedTitle: t.title });
+    if (t) finish(withTicked(t.items.map(templateItemToInput)), { templateId: t.id, suggestedTitle: t.title });
   };
   const addEarlier = (pack: Pack) => {
     const p = earlier?.find((x) => x.program.id === pack.id)?.program;
-    if (p) finish(p.items.filter((i) => i.removedOn == null).filter(free).map((i) => ({ ...programItemToInput(i), id: undefined })), { suggestedTitle: p.title });
+    if (p) finish(withTicked(p.items.filter((i) => i.removedOn == null).map((i) => ({ ...programItemToInput(i), id: undefined }))), { suggestedTitle: p.title });
   };
 
   const minutes = chosen.length > 0 ? itemsMinutes(chosenItems) : 0;
