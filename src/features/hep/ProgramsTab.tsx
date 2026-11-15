@@ -105,7 +105,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
     <KebabMenu ariaLabel={`Actions for ${r.patientName}, ${r.title}`}>
       {(close) => (
         <>
-          <Link to="/patients/$patientId" params={{ patientId: r.patientId }} className={menuItem} onClick={close}>Open Home program</Link>
+          <Link to="/patients/$patientId" params={{ patientId: r.patientId }} search={{ view: 'home-program' }} className={menuItem} onClick={close}>Open Home program</Link>
           {r.status === 'active' && !r.ended && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(r.id, 'paused')); }}>Pause</button>}
           {r.status === 'paused' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(r.id, 'active')); }}>Resume</button>}
           {r.status !== 'completed' && r.durationDays != null && <button type="button" className={menuItem} onClick={() => { close(); setExtending(r); }}>Extend</button>}
@@ -125,7 +125,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
     const tel = tone === 'red' ? telHref(r.patientPhone, clinicCountryCode(clinic)) : null;
     if (tel) return <a href={tel} className={`${pillSmPrimary} inline-flex items-center`}>Call</a>;
     if (tone === 'amber' && onMessage) return <Button type="button" className={pillSmAccent} onClick={() => onMessage(r, bundleOf(r.id))}>Message</Button>;
-    return <Link to="/patients/$patientId" params={{ patientId: r.patientId }} className={`${pillSmNeutral} inline-flex items-center`}>Open</Link>;
+    return <Link to="/patients/$patientId" params={{ patientId: r.patientId }} search={{ view: 'home-program' }} className={`${pillSmNeutral} inline-flex items-center`}>Open</Link>;
   };
 
   if (!online && bundles === null) return <p className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted)]">Programs need a connection. Reconnect to see them.</p>;

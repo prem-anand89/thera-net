@@ -2,7 +2,7 @@
 // front desk is sent back to Workspace. The URL keeps the tab (?tab=library|templates|programs).
 import { Navigate, useNavigate, useSearch } from '@tanstack/react-router';
 import { usePermissions } from '@/app/usePermissions';
-import { LoadingRows, segOption, segTrack } from '@/components/ui';
+import { LoadingRows } from '@/components/ui';
 import { HEP_TABS, type HepSearch, type HepTab } from './hepSearch';
 import { useState } from 'react';
 import type { ExerciseTemplate } from '@/domain/hep';
@@ -32,9 +32,9 @@ export function HepPage() {
   return (
     <div className="space-y-5">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:sr-only">HEP</h1>
-      <div className={segTrack} role="tablist" aria-label="HEP sections">
+      <div className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1" role="tablist" aria-label="HEP sections">
         {HEP_TABS.map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={tab === t} className={segOption(tab === t)} onClick={() => void navigate({ to: '/hep', search: { tab: t } })}>
+          <button key={t} type="button" role="tab" aria-selected={tab === t} className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors sm:px-4 sm:py-1.5 sm:text-sm ${tab === t ? 'bg-[var(--teal)] text-white shadow-sm' : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'}`} onClick={() => void navigate({ to: '/hep', search: { tab: t } })}>
             {LABELS[t]}
           </button>
         ))}

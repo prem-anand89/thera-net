@@ -24,7 +24,7 @@ let wide = true;
 vi.mock('@/components/useMediaQuery', () => ({ useMediaQuery: () => wide }));
 let scope = { isAdmin: true, myTherapistId: 't1' as string | undefined };
 vi.mock('@/app/useWorkspaceScope', () => ({ useWorkspaceScope: () => scope }));
-vi.mock('@tanstack/react-router', () => ({ Link: ({ children, to, params, ...rest }: { children: React.ReactNode; to: string; params?: Record<string, string> } & Record<string, unknown>) => <a href={to.replace('$patientId', params?.patientId ?? '')} {...rest}>{children}</a> }));
+vi.mock('@tanstack/react-router', () => ({ Link: ({ children, to, params, search, ...rest }: { children: React.ReactNode; to: string; params?: Record<string, string>; search?: Record<string, string> } & Record<string, unknown>) => <a href={to.replace('$patientId', params?.patientId ?? '') + (search?.view ? `?view=${search.view}` : '')} {...rest}>{children}</a> }));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -167,7 +167,7 @@ describe('ProgramsTab', () => {
     const { unmount } = renderTab();
     await screen.findByText('Asha Pillai');
     expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Open' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('view=home-program');
     unmount();
     renderTab({ onMessage });
     await user.click((await screen.findAllByRole('button', { name: 'Message' }))[0]);
