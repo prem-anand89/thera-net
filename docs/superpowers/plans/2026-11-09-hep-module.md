@@ -1,5 +1,7 @@
 # Home Exercise Prescription (HEP) Implementation Plan
 
+> **Superseded in part:** the 2026-11-14 redesign plan (`2026-11-14-hep-library-and-program-redesign.md`) supersedes this plan's Library, exercise form, picker, program sheet and Programs list UI details. See FEATURES_AND_SCHEMA.md section 11.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. After each task, use `superpowers:requesting-code-review` to verify the task's diff against the locked rules in this plan before moving to the next task.
 
 **Goal:** Build the clinic-owned Home Exercise Prescription (HEP) module inside TheraNet: therapists create exercises with private R2 media (GIF or 2–4 stills), save templates, prescribe programs onto patients, share a PIN-protected `/p/$token` magic link via WhatsApp (without the PIN in the message), and monitor finished-day adherence and high pain ($\ge 7$).

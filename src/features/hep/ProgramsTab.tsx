@@ -208,7 +208,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
       <ConfirmDialog
         open={completing !== null}
         title="Mark this program completed?"
-        message={`“${completing?.title ?? ''}” for ${completing?.patientName ?? ''} moves to Past. The patient's page stops showing it.`}
+        message={`“${completing?.title ?? ''}” for ${completing?.patientName ?? ''} moves to Archived. The patient's page stops showing it.`}
         confirmLabel="Mark completed"
         onConfirm={() => { const r = completing; setCompleting(null); if (r) void act(() => hepService.setProgramStatus(r.id, 'completed')); }}
         onCancel={() => setCompleting(null)}

@@ -43,7 +43,7 @@ export interface ProgramRow {
   lastActiveLabel: string;
   signals: ProgramSignal[];
   needsAttention: boolean;
-  /** Where it is listed besides Needs attention: Active, Ended or Past. */
+  /** Where it is listed besides Needs attention: Active, Recently ended or Archived. */
   /** Running (not paused, not past its last day) with its last day from today through today + 6. Also listed under Active. */
   ending: boolean;
   /** The last 14 days, oldest first, for the adherence strip. */
