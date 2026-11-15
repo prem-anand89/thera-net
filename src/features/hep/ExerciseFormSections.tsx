@@ -78,16 +78,16 @@ export function FormSection({ index, title, open, done, summary, onToggle, nextT
           {!open && <span className="text-xs font-medium text-[var(--teal)]">{done ? 'Edit' : 'Open'}</span>}
         </button>
       </h3>
-      {open && (
-        <div id={bodyId} className="space-y-4 px-3.5 pb-3.5 pt-0.5 sm:pl-[2.875rem]">
-          {children}
-          <div className="flex justify-end">
-            {nextTitle
-              ? <Button type="button" className={btnPrimary} onClick={onNext}>Next: {nextTitle} ›</Button>
-              : <Button type="button" className={btnSecondary} onClick={onNext}>Done</Button>}
-          </div>
+      {/* Folded bodies stay mounted (only hidden): PictureField revokes its new photos' object URLs when it unmounts, and
+          the form and the preview phone still show those photos. They are let go when the sheet itself closes. */}
+      <div id={bodyId} hidden={!open} className="space-y-4 px-3.5 pb-3.5 pt-0.5 sm:pl-[2.875rem]">
+        {children}
+        <div className="flex justify-end">
+          {nextTitle
+            ? <Button type="button" className={btnPrimary} onClick={onNext}>Next: {nextTitle} ›</Button>
+            : <Button type="button" className={btnSecondary} onClick={onNext}>Done</Button>}
         </div>
-      )}
+      </div>
     </section>
   );
 }

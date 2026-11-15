@@ -224,9 +224,41 @@ describe('ExerciseForm: existing and legacy exercises', () => {
   });
 
   it('Archive and Delete stay in the form for an existing exercise, not in the footer', async () => {
+    exerciseUsage.mockResolvedValue({ programs: 1, templates: 0 });
+    const { unmount } = render(<ExerciseForm open clinicId="c1" allExercises={[]} onClose={vi.fn()} onSaved={vi.fn()} exercise={saved()} />);
+    const footer = screen.getByRole('button', { name: 'Cancel' }).parentElement as HTMLElement;
+    expect(within(footer).getByRole('button', { name: 'Create progression' })).toBeInTheDocument();
+    const archive = await screen.findByRole('button', { name: 'Archive' });
+    expect(footer).not.toContainElement(archive);
+    expect(sectionButton('Classification').compareDocumentPosition(archive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+    exerciseUsage.mockResolvedValue({ programs: 0, templates: 0 });
     renderForm({ exercise: saved() });
-    expect(await screen.findByRole('button', { name: 'Delete' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create progression' })).toBeInTheDocument();
+    const del = await screen.findByRole('button', { name: 'Delete' });
+    expect(screen.getByRole('button', { name: 'Cancel' }).parentElement).not.toContainElement(del);
+    expect(sectionButton('Classification').compareDocumentPosition(del) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('new photos keep their previews when Media folds, and are let go only when the sheet closes', async () => {
+    const user = userEvent.setup();
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:photo-${++n}`);
+    const props = { clinicId: 'c1', allExercises: [], onClose: vi.fn(), onSaved: vi.fn() };
+    const { rerender } = render(<ExerciseForm open {...props} />);
+    await openSection(user, 'Media and instructions');
+    await user.upload(screen.getByLabelText('Choose photos or a GIF', { selector: 'input' }), [new File(['a'], 'start.jpg', { type: 'image/jpeg' }), new File(['b'], 'end.jpg', { type: 'image/jpeg' })]);
+    await user.click(screen.getByRole('button', { name: 'Next: Classification ›' }));
+    expect(expanded()).toEqual(['Classification']);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    const srcs = within(screen.getByLabelText('Patient preview')).getAllByRole('img').map((i) => i.getAttribute('src'));
+    expect(srcs.length).toBeGreaterThan(0);
+    expect(srcs.every((src) => src?.startsWith('blob:photo-'))).toBe(true);
+    await openSection(user, 'Media and instructions');
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    rerender(<ExerciseForm open={false} {...props} />);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo-1');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo-2');
   });
 });
 
