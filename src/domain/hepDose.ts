@@ -29,10 +29,10 @@ export const DOSE_CHIPS = {
 
 export const DOSE_LIMITS = { sets: [1, 20], reps: [1, 600], hold: [1, 600], time: [1, 3600], rest: [0, 300] } as const;
 
-export const DOSE_KIND_LABELS: Record<DoseType, string> = { reps: 'Reps', hold: 'Reps with a hold', timed: 'Timed' };
+export const DOSE_KIND_LABELS: Record<DoseType, string> = { reps: 'Repetitions', hold: 'Repetitions with hold', timed: 'Timed' };
 
 export const SIDE_LABELS: Record<ExerciseSide, string> = {
-  none: 'Not side-specific',
+  none: 'Not applicable',
   left: 'Left side only',
   right: 'Right side only',
   both: 'Each side',

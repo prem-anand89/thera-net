@@ -24,32 +24,33 @@ const current = () => JSON.parse(screen.getByTestId('value').textContent ?? '{}'
 const chipsIn = (group: string) => within(screen.getByRole('group', { name: group })).getAllByRole('button').map((b) => b.textContent);
 
 describe('ExerciseDoseEditor', () => {
-  it('renders the same chips everywhere (Sets 1 2 3; Reps 5 8 10 12 15; Rest 0 15 30 60 s) and Other', () => {
+  it('renders the same chips everywhere (Sets 1 2 3; Repetitions 5 8 10 12 15; Rest 0 15 30 60 s) and Other', () => {
     render(<Harness />);
     expect(chipsIn('Sets')).toEqual(['1', '2', '3', 'Other']);
-    expect(chipsIn('Reps')).toEqual(['5', '8', '10', '12', '15', 'Other']);
+    expect(chipsIn('Repetitions')).toEqual(['5', '8', '10', '12', '15', 'Other']);
     expect(chipsIn('Rest between sets')).toEqual(['0 s', '15 s', '30 s', '60 s', 'Other']);
   });
 
-  it('Reps with a hold adds Hold each rep (5 10 30 s); Timed swaps Reps for Time (15 30 45 60 s)', async () => {
+  it('Dosage type: Repetitions with hold adds Hold (5 10 30 s); Timed swaps Repetitions for Duration (15 30 45 60 s)', async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    expect(screen.queryByRole('group', { name: 'Hold each rep' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Reps with a hold' }));
-    expect(chipsIn('Hold each rep')).toEqual(['5 s', '10 s', '30 s', 'Other']);
+    expect(within(screen.getByRole('group', { name: 'Dosage type' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['Repetitions', 'Repetitions with hold', 'Timed']);
+    expect(screen.queryByRole('group', { name: 'Hold' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Repetitions with hold' }));
+    expect(chipsIn('Hold')).toEqual(['5 s', '10 s', '30 s', 'Other']);
     expect(current()).toMatchObject({ kind: 'hold', reps: 10, holdSeconds: 10 });
     await user.click(screen.getByRole('button', { name: 'Timed' }));
-    expect(screen.queryByRole('group', { name: 'Reps' })).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Hold each rep' })).toBeNull();
-    expect(chipsIn('Time')).toEqual(['15 s', '30 s', '45 s', '60 s', 'Other']);
+    expect(screen.queryByRole('group', { name: 'Repetitions' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Hold' })).toBeNull();
+    expect(chipsIn('Duration')).toEqual(['15 s', '30 s', '45 s', '60 s', 'Other']);
     expect(current()).toMatchObject({ kind: 'timed', reps: null, holdSeconds: null, durationSeconds: 30 });
   });
 
   it('Other accepts any whole number and keeps it inside the limit', async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    await user.click(within(screen.getByRole('group', { name: 'Reps' })).getByRole('button', { name: 'Other' }));
-    const input = screen.getByRole('spinbutton', { name: 'Reps, other' });
+    await user.click(within(screen.getByRole('group', { name: 'Repetitions' })).getByRole('button', { name: 'Other' }));
+    const input = screen.getByRole('spinbutton', { name: 'Repetitions, other' });
     await user.clear(input);
     await user.type(input, '25');
     expect(current().reps).toBe(25);
@@ -60,17 +61,17 @@ describe('ExerciseDoseEditor', () => {
 
   it('a value that is not a chip shows its own number in the Other box', () => {
     render(<Harness initial={{ ...start, reps: 20 }} />);
-    expect(screen.getByRole('spinbutton', { name: 'Reps, other' })).toHaveValue(20);
+    expect(screen.getByRole('spinbutton', { name: 'Repetitions, other' })).toHaveValue(20);
   });
 
-  it('Times a day offers "Same as the program (N)" only when a program is given', async () => {
+  it('Frequency (1× daily / 2× daily / 3× daily) offers "Same as the program (N)" only when a program is given', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<Harness />);
-    expect(chipsIn('Times a day')).toEqual(['1', '2', '3']);
+    expect(chipsIn('Frequency')).toEqual(['1× daily', '2× daily', '3× daily']);
     unmount();
     render(<Harness programSessionsPerDay={2} />);
-    expect(chipsIn('Times a day')).toEqual(['Same as the program (2)', '1', '2', '3']);
-    await user.click(within(screen.getByRole('group', { name: 'Times a day' })).getByRole('button', { name: '3' }));
+    expect(chipsIn('Frequency')).toEqual(['Same as the program (2)', '1× daily', '2× daily', '3× daily']);
+    await user.click(within(screen.getByRole('group', { name: 'Frequency' })).getByRole('button', { name: '3× daily' }));
     expect(current().sessionsPerDay).toBe(3);
     await user.click(screen.getByRole('button', { name: 'Same as the program (2)' }));
     expect(current().sessionsPerDay).toBeNull();
@@ -97,9 +98,9 @@ describe('ExerciseDoseEditor', () => {
     expect(current().optional).toBe(true);
   });
 
-  it('Side lists the four wordings', () => {
+  it('Side lists the four wordings, starting with Not applicable', () => {
     render(<Harness />);
     const options = within(screen.getByLabelText('Side')).getAllByRole('option').map((o) => o.textContent);
-    expect(options).toEqual(['Not side-specific', 'Left side only', 'Right side only', 'Each side']);
+    expect(options).toEqual(['Not applicable', 'Left side only', 'Right side only', 'Each side']);
   });
 });

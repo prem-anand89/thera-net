@@ -148,7 +148,7 @@ describe('ProgramSheet: times a day', () => {
     expect(screen.getAllByText(/3 times a day/)).toHaveLength(3);
     await user.click(screen.getByRole('button', { name: /^Squat/ }));
     const row = screen.getByRole('button', { name: /^Squat/ }).closest('li') as HTMLElement;
-    await user.click(within(within(row).getByRole('group', { name: 'Times a day' })).getByRole('button', { name: '1' }));
+    await user.click(within(within(row).getByRole('group', { name: 'Frequency' })).getByRole('button', { name: '1× daily' }));
     expect(within(row).getByText(/Only this one: once a day/)).toBeInTheDocument();
     await user.click(within(row).getByRole('button', { name: 'Same as the program (3)' }));
     expect(within(row).queryByText(/Only this one/)).toBeNull();

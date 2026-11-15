@@ -1,4 +1,4 @@
-// The dose lines every HEP editor shares: how it is done, sets, reps, hold, time, rest, side, times a day.
+// The dose lines every HEP editor shares: dosage type, sets, repetitions, hold, duration, rest, side, frequency.
 // One component for the Edit exercise form, the template editor and the program sheet (amendment 67), so the chips and
 // wording never drift apart. It holds no state of its own: the parent owns the DoseValue.
 import { useEffect, useId, useState } from 'react';
@@ -74,7 +74,7 @@ function OtherNumber({ label, value, limits, onChange }: { label: string; value:
 export interface ExerciseDoseEditorProps {
   value: DoseValue;
   onChange: (v: DoseValue) => void;
-  /** Shown as "Same as the program (N)" for Times a day. Absent in the Library (no program yet). */
+  /** Shown as "Same as the program (N)" under Frequency. Absent in the Library (no program yet). */
   programSessionsPerDay?: SessionsPerDay;
   /** Show the Progress chips (+1 set, +2 reps ...): only on a program that is already running. */
   showProgress?: boolean;
@@ -88,7 +88,7 @@ export function ExerciseDoseEditor({ value, onChange, programSessionsPerDay, sho
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <div id={kindId} className="text-label font-medium text-[var(--muted)]">How is it done?</div>
+        <div id={kindId} className="text-label font-medium text-[var(--muted)]">Dosage type</div>
         <div role="group" aria-labelledby={kindId} className={segTrack}>
           {(['reps', 'hold', 'timed'] as DoseType[]).map((k) => (
             <button key={k} type="button" aria-pressed={value.kind === k} className={segOption(value.kind === k)} onClick={() => onChange(withKind(value, k))}>
@@ -100,13 +100,13 @@ export function ExerciseDoseEditor({ value, onChange, programSessionsPerDay, sho
 
       <ChipRow label="Sets" chips={DOSE_CHIPS.sets} value={value.sets} limits={DOSE_LIMITS.sets} onChange={(n) => set({ sets: n })} />
       {value.kind !== 'timed' && (
-        <ChipRow label="Reps" chips={DOSE_CHIPS.reps} value={value.reps} limits={DOSE_LIMITS.reps} onChange={(n) => set({ reps: n })} />
+        <ChipRow label="Repetitions" chips={DOSE_CHIPS.reps} value={value.reps} limits={DOSE_LIMITS.reps} onChange={(n) => set({ reps: n })} />
       )}
       {value.kind === 'hold' && (
-        <ChipRow label="Hold each rep" unit="s" chips={DOSE_CHIPS.hold} value={value.holdSeconds} limits={DOSE_LIMITS.hold} onChange={(n) => set({ holdSeconds: n })} />
+        <ChipRow label="Hold" unit="s" chips={DOSE_CHIPS.hold} value={value.holdSeconds} limits={DOSE_LIMITS.hold} onChange={(n) => set({ holdSeconds: n })} />
       )}
       {value.kind === 'timed' && (
-        <ChipRow label="Time" unit="s" chips={DOSE_CHIPS.time} value={value.durationSeconds} limits={DOSE_LIMITS.time} onChange={(n) => set({ durationSeconds: n })} />
+        <ChipRow label="Duration" unit="s" chips={DOSE_CHIPS.time} value={value.durationSeconds} limits={DOSE_LIMITS.time} onChange={(n) => set({ durationSeconds: n })} />
       )}
       <ChipRow label="Rest between sets" unit="s" chips={DOSE_CHIPS.rest} value={value.restSeconds} limits={DOSE_LIMITS.rest} onChange={(n) => set({ restSeconds: n })} />
 
@@ -117,7 +117,7 @@ export function ExerciseDoseEditor({ value, onChange, programSessionsPerDay, sho
         </select>
       </label>
 
-      <TimesADay value={value.sessionsPerDay} programSessionsPerDay={programSessionsPerDay} onChange={(n) => set({ sessionsPerDay: n })} />
+      <Frequency value={value.sessionsPerDay} programSessionsPerDay={programSessionsPerDay} onChange={(n) => set({ sessionsPerDay: n })} />
 
       {showOptional && value.optional !== undefined && (
         <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
@@ -140,11 +140,11 @@ export function ExerciseDoseEditor({ value, onChange, programSessionsPerDay, sho
   );
 }
 
-function TimesADay({ value, programSessionsPerDay, onChange }: { value: SessionsPerDay | null; programSessionsPerDay?: SessionsPerDay; onChange: (n: SessionsPerDay | null) => void }) {
+function Frequency({ value, programSessionsPerDay, onChange }: { value: SessionsPerDay | null; programSessionsPerDay?: SessionsPerDay; onChange: (n: SessionsPerDay | null) => void }) {
   const id = useId();
   return (
     <div role="group" aria-labelledby={id} className="space-y-1.5">
-      <div id={id} className="text-label font-medium text-[var(--muted)]">Times a day</div>
+      <div id={id} className="text-label font-medium text-[var(--muted)]">Frequency</div>
       <div className="flex flex-wrap gap-1.5">
         {programSessionsPerDay != null && (
           <button type="button" aria-pressed={value == null} className={filterChip(value == null)} onClick={() => onChange(null)}>
@@ -152,7 +152,7 @@ function TimesADay({ value, programSessionsPerDay, onChange }: { value: Sessions
           </button>
         )}
         {([1, 2, 3] as SessionsPerDay[]).map((n) => (
-          <button key={n} type="button" aria-pressed={value === n} className={filterChip(value === n)} onClick={() => onChange(n)}>{n}</button>
+          <button key={n} type="button" aria-pressed={value === n} className={filterChip(value === n)} onClick={() => onChange(n)}>{n}× daily</button>
         ))}
       </div>
     </div>
