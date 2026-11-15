@@ -30,6 +30,8 @@ vi.mock('@/services', () => ({ repos: { patients: { get: async () => ({ id: 'pt1
 vi.mock('./ProgramSheet', () => ({ ProgramSheet: ({ open, mode, bundle, startFrom }: { open: boolean; mode: string; bundle?: { program: { id: string } }; startFrom?: { program?: { program: { id: string } } } }) => (open ? <div role="dialog" aria-label="program sheet">{mode} {bundle?.program.id ?? ''} {startFrom?.program?.program.id ? `from ${startFrom.program.program.id}` : ''}</div> : null) }));
 vi.mock('./MessagePatientSheet', () => ({ MessagePatientSheet: ({ token }: { token: string }) => <div role="dialog" aria-label="message sheet">token {token}</div> }));
 vi.mock('./PrintSheet', () => ({ PrintSheet: ({ open, pin }: { open: boolean; pin: string | null }) => (open ? <div>print sheet pin {pin ?? 'none'}</div> : null) }));
+const library: { current: Array<Record<string, unknown>> } = { current: [] };
+vi.mock('./useHepData', async (orig) => ({ ...(await orig<typeof import('./useHepData')>()), useExercises: () => library.current, useThumbUrls: () => ({ k1: 'blob:pic' }) }));
 vi.mock('./HandOverPanel', () => ({ HandOverPanel: ({ pin }: { pin: string | null }) => <div role="dialog" aria-label="hand over">hand over pin {pin}</div> }));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;
@@ -60,14 +62,32 @@ beforeEach(() => {
   resetPin.mockReset().mockResolvedValue('9090');
   rotateToken.mockReset().mockResolvedValue('newtok');
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  library.current = [];
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+/** The By exercise table shows from tablet width; phones get cards (jsdom has no matchMedia, so cards by default). */
+const wideScreen = () => vi.stubGlobal('matchMedia', (q: string) => ({ matches: true, media: q, addEventListener: () => {}, removeEventListener: () => {} }));
 
 describe('HomeProgramTab: header and progress', () => {
-  it('shows the program, its day, times a day, estimate, minimum and who prescribed it', async () => {
+  it('the program card: title, status, one sub line, the day bar with its dates, and the review date', async () => {
+    listPatientPrograms.mockResolvedValue([bundle({ checkinOn: day(7) })]);
     renderTab();
     expect(await screen.findByRole('heading', { name: /Right knee, week 1/ })).toBeInTheDocument();
-    expect(screen.getByText(/^Day 6 of 14 · twice a day · about \d+ min a session · completed at 70% · by Meera Rao$/)).toBeInTheDocument();
+    const card = screen.getByRole('region', { name: 'Program' });
+    expect(within(card).getByText('Active')).toBeInTheDocument();
+    expect(within(card).getByText(/^twice a day · 3 exercises · about \d+ min · completion target 70% · prescribed by Meera Rao · review in 7 days$/)).toBeInTheDocument();
+    const bar = within(card).getByRole('progressbar', { name: 'Day 6 of 14' });
+    expect(bar).toHaveAttribute('aria-valuenow', '6');
+    const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+    expect(within(card).getByText(`${dm(day(-5))} – ${dm(day(8))}`)).toBeInTheDocument();
+  });
+
+  it('the patient link line sits in the program card with its actions', async () => {
+    renderTab();
+    const card = await screen.findByRole('region', { name: 'Program' });
+    expect(within(card).getByText('Patient link on · opened today 07:00 · PIN set')).toBeInTheDocument();
+    for (const name of ['Copy link', 'Reset PIN…', 'Stop sharing']) expect(within(card).getByRole('button', { name })).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'Send on WhatsApp' })).toBeInTheDocument();
   });
 
   it('Today counts sessions ("3 of 8" style) and the habit % ignores optional exercises', async () => {
@@ -111,14 +131,75 @@ describe('HomeProgramTab: header and progress', () => {
     expect(within(evening).getByText(/^Done \d\d:\d\d$/)).toBeInTheDocument();
   });
 
-  it('By exercise shows the dose, done, Hurt n× and Hardest n×', async () => {
-    listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb({ createdAt: '2020-01-01T00:00:00Z' }), fb({ id: 'g', logDate: day(-2), painItemIds: ['sq'], hardItemIds: [], createdAt: '2020-01-01T00:00:00Z' })] })]);
+  const weekFeedback = () => [fb({ createdAt: '2020-01-01T00:00:00Z' }), fb({ id: 'g', logDate: day(-2), painItemIds: ['sq'], hardItemIds: [], createdAt: '2020-01-01T00:00:00Z' })];
+  const withSkip = () => bundle({}, { sessionFeedback: weekFeedback(), logs: [...bundle().logs, log('mr', TODAY, 2, { skipped: true, skipReason: 'no_time' as SkipReason })] });
+
+  it('By exercise (table, from tablet width): grouped Warm-up / Main exercises / Cool-down, dose, days done, the 7-day strip and flags', async () => {
+    wideScreen();
+    listPatientPrograms.mockResolvedValue([withSkip()]);
     renderTab();
-    const list = await screen.findByRole('region', { name: 'By exercise' });
-    const squat = within(list).getByText('Squat').closest('li') as HTMLElement;
-    expect(within(squat).getByText(/done 8 of 10 · hurt 2× · hardest 1×/)).toBeInTheDocument();
+    const box = await screen.findByRole('region', { name: 'By exercise' });
+    const table = within(box).getByRole('table');
+    const groups = within(table).getAllByRole('row').filter((r) => r.getAttribute('data-group') != null).map((r) => r.textContent);
+    expect(groups).toEqual(['Warm-up', 'Main exercises', 'Cool-down']);
+    const squat = within(table).getByText('Squat').closest('tr') as HTMLElement;
     expect(within(squat).getByText(/3 sets × 10 reps · twice a day/)).toBeInTheDocument();
-    expect(within(list).getByText('Calf stretch').closest('li')).toHaveTextContent('Optional');
+    expect(within(squat).getByText('4 of 7 days')).toBeInTheDocument(); // day -4 to -1 both sessions; today 1 of 2
+    expect(within(squat).getByText('felt hard ×1')).toBeInTheDocument();
+    expect(within(squat).getByText('pain ×2')).toBeInTheDocument();
+    const cells = within(squat).getAllByRole('img', { name: /^\d\d\/\d\d: / });
+    expect(cells).toHaveLength(7);
+    expect(cells[6]).toHaveAccessibleName(/partly done$/);
+    const marching = within(table).getByText('Marching').closest('tr') as HTMLElement;
+    expect(within(marching).getByText('skipped ×1')).toBeInTheDocument();
+    expect(within(table).getByText('Calf stretch').closest('tr')).toHaveTextContent('Optional');
+  });
+
+  it('By exercise shows a picture only when the exercise has one and it is not hidden in lists; no empty tile otherwise', async () => {
+    wideScreen();
+    library.current = [
+      { id: 'ex1', clinicId: 'c1', title: 'Squat', thumbKey: 'k1', mediaType: 'image', bodyRegion: 'Knee', hidePicturesInLists: false },
+      { id: 'ex2', clinicId: 'c1', title: 'Marching', thumbKey: 'k1', mediaType: 'image', bodyRegion: 'Knee', hidePicturesInLists: true },
+    ];
+    listPatientPrograms.mockResolvedValue([bundle({ items: [item('sq', 'Squat', { sourceExerciseId: 'ex1' }), item('mr', 'Marching', { phase: 'warm_up', sourceExerciseId: 'ex2' }), item('op', 'Calf stretch', { phase: 'cool_down', optional: true })] })]);
+    renderTab();
+    const box = await screen.findByRole('region', { name: 'By exercise' });
+    expect(within(within(box).getByText('Squat').closest('tr') as HTMLElement).getByRole('presentation')).toHaveAttribute('src', 'blob:pic');
+    expect((within(box).getByText('Marching').closest('tr') as HTMLElement).querySelector('img')).toBeNull();
+    expect((within(box).getByText('Calf stretch').closest('tr') as HTMLElement).querySelector('img, [aria-hidden="true"] span')).toBeNull();
+  });
+
+  it('By exercise on a phone is a card per exercise with the same facts', async () => {
+    listPatientPrograms.mockResolvedValue([withSkip()]);
+    renderTab();
+    const box = await screen.findByRole('region', { name: 'By exercise' });
+    expect(within(box).queryByRole('table')).toBeNull();
+    const squat = within(box).getByText('Squat').closest('li') as HTMLElement;
+    expect(within(squat).getByText('4 of 7 days')).toBeInTheDocument();
+    expect(within(squat).getByText('felt hard ×1')).toBeInTheDocument();
+    expect(within(box).getByRole('heading', { name: 'Warm-up' })).toBeInTheDocument();
+    expect(within(box).getByRole('heading', { name: 'Cool-down' })).toBeInTheDocument();
+  });
+
+  it('the pain and effort trend draws from the session checks, with a summary for screen readers', async () => {
+    listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb({ logDate: day(-3), painScore: 3, effortScore: 5, createdAt: '2020-01-01T00:00:00Z' }), fb({ id: 'g', logDate: day(-1), painScore: 6, effortScore: 6, createdAt: '2020-01-01T00:00:00Z' })] })]);
+    const { container } = renderTab();
+    const chart = await screen.findByRole('img', { name: 'Pain went from 3 to 6 over the last 7 days. Effort went from 5 to 6.' });
+    expect(chart.querySelectorAll('polyline')).toHaveLength(2);
+    expect(chart.querySelector('polyline')?.getAttribute('points')?.split(' ')).toHaveLength(2);
+    expect(container).toHaveTextContent('Pain (0–10)');
+  });
+
+  it('with no session checks the trend says so in one line', async () => {
+    renderTab();
+    expect(await screen.findByText('No session feedback yet.')).toBeInTheDocument();
+  });
+
+  it('the Today card lists today\'s exercises and sums up yesterday', async () => {
+    renderTab();
+    const todayCard = await screen.findByRole('region', { name: 'Day' });
+    expect(within(todayCard).getByRole('heading', { name: /^Today/ })).toBeInTheDocument();
+    expect(within(todayCard).getByText('Yesterday: 4 done')).toBeInTheDocument();
   });
 
   it('By section appears when there is more than one section', async () => {
@@ -129,14 +210,19 @@ describe('HomeProgramTab: header and progress', () => {
 });
 
 describe('HomeProgramTab: needs your attention and pain review', () => {
-  it('opening the tab marks new pain as seen for everyone, once, and still shows the report with "Reviewed ✓ just now"', async () => {
+  it('a waiting pain report shows a banner with Call (clinic country code) and Mark reviewed, which marks it seen for everyone once', async () => {
+    const user = userEvent.setup();
     listPatientPrograms.mockResolvedValue([bundle({}, { sessionFeedback: [fb()] })]);
     renderTab();
     const box = await screen.findByRole('region', { name: 'Alerts' });
     expect(within(box).getByText('Pain 8/10 after Squat')).toBeInTheDocument();
-    expect(within(box).getByText(/Reviewed ✓ just now/)).toBeInTheDocument();
+    expect(within(box).getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:+919876543210');
+    expect(markPainReviewed).not.toHaveBeenCalled();
+    await user.click(within(box).getByRole('button', { name: 'Mark reviewed' }));
     await waitFor(() => expect(markPainReviewed).toHaveBeenCalledWith('p1'));
     expect(markPainReviewed).toHaveBeenCalledTimes(1);
+    expect(within(box).getByText(/Reviewed ✓ just now/)).toBeInTheDocument();
+    expect(within(box).queryByRole('button', { name: 'Mark reviewed' })).toBeNull();
   });
 
   it('once seen elsewhere (reviewed after the report) it is not shown again and nothing is marked', async () => {
@@ -172,16 +258,22 @@ describe('HomeProgramTab: needs your attention and pain review', () => {
 });
 
 describe('HomeProgramTab: programs and actions', () => {
-  it('switches between active programs and finds completed ones under "Completed (n)"', async () => {
+  it('switches between active programs with chips, and "Earlier (n)" unfolds the earlier programs at the bottom', async () => {
     const user = userEvent.setup();
     listPatientPrograms.mockResolvedValue([bundle(), bundle({ id: 'p2', title: 'Left shoulder', startDate: day(-3) }), bundle({ id: 'p3', title: 'Old knee', status: 'completed', startDate: day(-60) }, { access: null })]);
     renderTab();
     await screen.findByRole('heading', { name: /Right knee, week 1/ });
-    await user.click(screen.getByRole('button', { name: 'Left shoulder' }));
+    const chips = screen.getByRole('group', { name: 'Programs' });
+    expect(within(chips).getByRole('button', { name: 'Right knee, week 1 · active' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(within(chips).getByRole('button', { name: 'Left shoulder · active' }));
     expect(screen.getByRole('heading', { name: /Left shoulder/ })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Completed programs'), 'p3');
+    const fold = screen.getByRole('button', { name: 'Earlier programs (1)' });
+    expect(fold).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /^Old knee/ })).toBeNull();
+    await user.click(within(chips).getByRole('button', { name: 'Earlier (1)' }));
+    expect(fold).toHaveAttribute('aria-expanded', 'true');
+    await user.click(screen.getByRole('button', { name: /^Old knee/ }));
     expect(screen.getByRole('heading', { name: /Old knee/ })).toHaveTextContent('Completed');
-    expect(screen.getByRole('option', { name: /Completed \(1\)/ })).toBeInTheDocument();
   });
 
   it('an empty patient gets the first-program prompt', async () => {
@@ -192,12 +284,12 @@ describe('HomeProgramTab: programs and actions', () => {
     expect(screen.getByRole('dialog', { name: 'program sheet' })).toBeInTheDocument();
   });
 
-  it('Edit program opens the sheet on this program; Share link goes to the patient\'s WhatsApp with the link and no PIN', async () => {
+  it('Edit program opens the sheet on this program; Send on WhatsApp goes to the patient\'s WhatsApp with the link and no PIN', async () => {
     const user = userEvent.setup();
     renderTab();
     await user.click(await screen.findByRole('button', { name: 'Edit program' }));
     expect(screen.getByRole('dialog', { name: 'program sheet' })).toHaveTextContent('edit p1');
-    const href = decodeURIComponent(screen.getByRole('link', { name: 'Share link' }).getAttribute('href') ?? '');
+    const href = decodeURIComponent(screen.getByRole('link', { name: 'Send on WhatsApp' }).getAttribute('href') ?? '');
     expect(href).toContain('wa.me/919876543210');
     expect(href).toContain('/p/tok123');
     expect(href).not.toMatch(/PIN\D{0,4}\d{4}/);
@@ -262,7 +354,7 @@ describe('HomeProgramTab: programs and actions', () => {
     await user.click(screen.getByRole('button', { name: 'More actions' }));
     await user.click(screen.getByRole('button', { name: 'Start sharing again' }));
     await waitFor(() => expect(rotateToken).toHaveBeenCalledWith('pt1'));
-    expect(screen.queryByRole('link', { name: 'Share link' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Send on WhatsApp' })).toBeNull();
   });
 
   it('shows the database\'s message when an action fails', async () => {

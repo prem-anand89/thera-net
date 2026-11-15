@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgramLog, SessionsPerDay, SkipReason } from '@/domain/hep';
 import type { SessionFeedback } from '@/services/hepService';
-import { currentStreak, dayStrip, dayTimeline, itemsInSessionOrder, sessionLabel, trendSeries } from './homeProgram';
+import { currentStreak, dayStrip, daySummary, dayTimeline, itemWeek, itemsInSessionOrder, programDateRange, reviewLabel, sessionLabel, trendChart, trendSeries } from './homeProgram';
 
 const TODAY = '2026-11-14';
 const item = (id: string, over: Record<string, unknown> = {}) => ({ id, title: `Item ${id}`, phase: 'strengthening' as const, optional: false, addedOn: '2026-11-08', removedOn: null, sessionsPerDay: 1 as SessionsPerDay, sessionsSchedule: [], ...over });
@@ -94,5 +94,93 @@ describe('itemsInSessionOrder', () => {
   it('puts other before cool-down, like the sheet, print and patient page', () => {
     const rows = [{ phase: 'cool_down', sortOrder: 0 }, { phase: 'other', sortOrder: 1 }, { phase: 'warm_up', sortOrder: 2 }, { phase: 'strengthening', sortOrder: 3 }] as const;
     expect(itemsInSessionOrder([...rows]).map((r) => r.phase)).toEqual(['warm_up', 'strengthening', 'other', 'cool_down']);
+  });
+});
+
+describe('itemWeek', () => {
+  const twice = item('a', { sessionsPerDay: 2 as SessionsPerDay });
+  it('one cell per day for the last 7 days: done, partly done, skipped, missed, to do today, and not due before it was added', () => {
+    const it2 = { ...twice, addedOn: '2026-11-09' };
+    const logs = [
+      log('a', '2026-11-09', 1), log('a', '2026-11-09', 2),
+      log('a', '2026-11-10', 1),
+      log('a', '2026-11-11', 1, { skipped: true, skipReason: 'pain' as SkipReason }), log('a', '2026-11-11', 2, { skipped: true, skipReason: 'pain' as SkipReason }),
+      log('a', '2026-11-13', 1), log('a', '2026-11-13', 2),
+    ];
+    const w = itemWeek(it2, logs, [], TODAY);
+    expect(w.days.map((d) => d.date)).toEqual(['2026-11-08', '2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', TODAY]);
+    expect(w.days.map((d) => d.state)).toEqual(['not_due', 'done', 'partial', 'skipped', 'missed', 'done', 'to_do']);
+    expect(w.doneDays).toBe(2);
+    expect(w.skipped).toBe(2);
+  });
+  it('today counts as done once every session is ticked; days after the program ended are not due', () => {
+    const w = itemWeek(item('a'), [log('a', TODAY)], [], TODAY);
+    expect(w.days.at(-1)?.state).toBe('done');
+    expect(w.doneDays).toBe(1);
+    const ended = itemWeek(item('a'), [log('a', '2026-11-12')], [], TODAY, { startDate: '2026-11-08', durationDays: 5 });
+    expect(ended.days.find((d) => d.date === '2026-11-12')?.state).toBe('done');
+    expect(ended.days.find((d) => d.date === '2026-11-13')?.state).toBe('not_due');
+    expect(ended.days.at(-1)?.state).toBe('not_due');
+  });
+  it('counts "felt hard" and pain reports tied to the item in the last 7 days only', () => {
+    const feedback = [
+      fb({ logDate: '2026-11-12', hardItemIds: ['a'], painItemIds: ['a'] }),
+      fb({ logDate: '2026-11-13', sessionIndex: 1, hardItemIds: ['a', 'b'] }),
+      fb({ logDate: '2026-11-01', hardItemIds: ['a'], painItemIds: ['a'] }), // older than a week
+      fb({ logDate: '2026-11-12', hardItemIds: ['b'] }),
+    ];
+    const w = itemWeek(item('a'), [], feedback, TODAY);
+    expect(w.hard).toBe(2);
+    expect(w.pain).toBe(1);
+    expect(w.skipped).toBe(0);
+  });
+  it('an optional item still shows its days (it just never counts against the patient elsewhere)', () => {
+    const w = itemWeek(item('a', { optional: true }), [log('a', '2026-11-13')], [], TODAY);
+    expect(w.days.find((d) => d.date === '2026-11-13')?.state).toBe('done');
+  });
+});
+
+describe('daySummary', () => {
+  it('counts done, skipped (with reasons) and not done across the sessions', () => {
+    const tl = dayTimeline(items, [log('a', '2026-11-13'), log('b', '2026-11-13', 1, { skipped: true, skipReason: 'too_hard' as SkipReason })], [], '2026-11-13', TODAY);
+    expect(daySummary(tl)).toBe('1 done, 1 skipped (Too hard)');
+    const missed = dayTimeline(items, [log('a', '2026-11-13')], [], '2026-11-13', TODAY);
+    expect(daySummary(missed)).toBe('1 done, 1 not done');
+  });
+  it('is null when nothing was due', () => {
+    expect(daySummary([])).toBeNull();
+  });
+});
+
+describe('trendChart', () => {
+  it('draws pain and effort from the reported days only, scaled 0 to 10 top to bottom, and labels first to last pain', () => {
+    const series = [
+      { date: 'd1', pain: 3, effort: 5 }, { date: 'd2', pain: null, effort: null }, { date: 'd3', pain: 7, effort: 6 },
+    ];
+    const c = trendChart(series, { width: 300, height: 70, pad: 5 });
+    expect(c).not.toBeNull();
+    expect(c?.pain).toEqual([{ x: 0, y: 47 }, { x: 300, y: 23 }]);
+    expect(c?.effort.map((p) => p.x)).toEqual([0, 300]);
+    expect(c?.label).toBe('Pain went from 3 to 7 over the last 3 days. Effort went from 5 to 6.');
+  });
+  it('is null when nothing was reported', () => {
+    expect(trendChart([{ date: 'd1', pain: null, effort: null }], { width: 300, height: 70, pad: 5 })).toBeNull();
+  });
+  it('a single report reads as one value', () => {
+    expect(trendChart([{ date: 'd1', pain: 4, effort: null }, { date: 'd2', pain: null, effort: null }], { width: 300, height: 70, pad: 5 })?.label).toBe('Pain 4 over the last 2 days. No effort reported.');
+  });
+});
+
+describe('reviewLabel and programDateRange', () => {
+  it('says when the review is', () => {
+    expect(reviewLabel(null, TODAY)).toBeNull();
+    expect(reviewLabel('2026-11-21', TODAY)).toBe('review in 7 days');
+    expect(reviewLabel('2026-11-15', TODAY)).toBe('review tomorrow');
+    expect(reviewLabel(TODAY, TODAY)).toBe('review today');
+    expect(reviewLabel('2026-11-10', TODAY)).toBe('review due');
+  });
+  it('shows the dates with the app date format', () => {
+    expect(programDateRange('2026-11-08', 14)).toBe('08/11 – 21/11');
+    expect(programDateRange('2026-11-08', null)).toBe('From 08/11');
   });
 });

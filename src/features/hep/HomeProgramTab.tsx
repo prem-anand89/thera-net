@@ -1,28 +1,29 @@
-// The patient chart's Home program tab: one program at a time (a switcher for several), what needs attention, how the
-// patient is doing (today, habit, streak, the 14-day strip and each day's sessions), by section and by exercise, and the
-// patient's link. Opening it marks any new pain report as seen for everyone, but the report stays on screen for this
-// visit ("Reviewed ✓ just now"). Programs live on the server: this tab needs a connection.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// The patient chart's Home program tab, top to bottom: program chips (+ New program), the alert banners (a pain report
+// with Call and Mark reviewed; check-in, ended and no-activity alerts with their actions), the program card (actions,
+// sub line, day bar, patient link), the stats row, the last 14 days with the pain and effort trend beside the chosen day,
+// By exercise, and the folded Earlier programs. Programs live on the server: this tab needs a connection.
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
-import { ConfirmDialog, ErrorNote, KebabMenu, LoadingRows, SheetDialog, btnPrimary, btnSecondary, filterChip, inputCls, menuItem, menuItemDestructive, pillSmAccent, pillSmNeutral, pillSmPrimary } from '@/components/ui';
-import { clinicTimezone } from '@/domain/clinicRegion';
+import { ConfirmDialog, ErrorNote, LoadingRows, SheetDialog, btnPrimary, btnSecondary, filterChip, inputCls, menuItem, menuItemDestructive, pillSmNeutral, pillSmPrimary } from '@/components/ui';
+import { clinicCountryCode, clinicTimezone } from '@/domain/clinicRegion';
 import { EXERCISE_PHASE_LABELS, addDaysISO, estimateSessionMinutes, sectionAdherence } from '@/domain/hep';
-import { describeDose } from '@/domain/hepDose';
 import { repos } from '@/services';
 import { hepService, type ProgramBundle } from '@/services/hepService';
 import type { Patient } from '@/domain/types';
+import { ByExerciseTable } from './ByExerciseTable';
 import { HandOverPanel } from './HandOverPanel';
-import { itemDose, programItemToInput } from './hepItems';
+import { programItemToInput } from './hepItems';
 import { buildHepPortalUrl, buildHepWhatsAppShareUrl } from './hepSharing';
-import { SKIP_REASON_LABEL, currentStreak, dayStrip, dayTimeline, itemsInSessionOrder, trendSeries } from './homeProgram';
-import { CELL_CLASS, CELL_WORD } from './DayStrip';
-import { itemProgress, itemProgressLine } from './itemProgress';
+import { currentStreak, dayStrip, daySummary, dayTimeline, programDateRange, reviewLabel, trendSeries } from './homeProgram';
 import { MessagePatientSheet } from './MessagePatientSheet';
-import { SESSION_LABEL } from './ProgramItemsEditor';
 import { PrintSheet } from './PrintSheet';
+import { ProgramCard } from './ProgramCard';
+import { ProgramDays } from './ProgramDays';
+import { SESSION_LABEL } from './ProgramItemsEditor';
+import { ProgramLinkLine } from './ProgramLinkLine';
 import { ProgramSheet } from './ProgramSheet';
-import { EXTEND_DAYS, buildProgramRow } from './programRows';
+import { EXTEND_DAYS, buildProgramRow, telHref } from './programRows';
 import { clinicToday, useOnline } from './useHepData';
 
 const WINDOW_DAYS = 30;
@@ -57,7 +58,7 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
   const [templateName, setTemplateName] = useState<string | null>(null);
   const [handOver, setHandOver] = useState<{ pin: string } | null>(null);
   const [painSeen, setPainSeen] = useState<Record<string, string>>({});
-  const marked = useRef(new Set<string>());
+  const [earlierOpen, setEarlierOpen] = useState(false);
 
   useEffect(() => { void repos.patients.get(patientId).then((p) => setPatient(p ?? null)).catch(() => {}); }, [patientId]);
 
@@ -77,15 +78,15 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
   const current = bundles?.find((b) => b.program.id === shownId) ?? null;
   const row = useMemo(() => (current ? buildProgramRow(current, { today, windowStart: addDaysISO(today, -WINDOW_DAYS) }) : null), [current, today]);
 
-  // Opening the program marks new pain as seen for everyone, but keeps showing the report for this visit.
-  useEffect(() => {
-    if (!current || !row || marked.current.has(current.program.id)) return;
-    const pain = row.signals.find((s) => s.key === 'pain');
-    if (!pain) return;
-    marked.current.add(current.program.id);
-    setPainSeen((cur) => ({ ...cur, [current.program.id]: pain.label }));
-    void hepService.markPainReviewed(current.program.id).catch(() => { marked.current.delete(current.program.id); });
-  }, [current, row]);
+  // "Mark reviewed" marks the pain report seen for everyone (the Programs list stops flagging it) but keeps showing it
+  // here for this visit, with "Reviewed ✓ just now".
+  function markReviewed(programId: string, label: string) {
+    setPainSeen((cur) => ({ ...cur, [programId]: label }));
+    void hepService.markPainReviewed(programId).catch((e: unknown) => {
+      setPainSeen((cur) => { const next = { ...cur }; delete next[programId]; return next; });
+      setError(e instanceof Error ? e.message : 'Could not mark it reviewed. Try again.');
+    });
+  }
 
   async function act(fn: () => Promise<unknown>) {
     try { setError(null); await fn(); await load(); } catch (e) { setError(e instanceof Error ? e.message : 'That did not work. Try again.'); }
@@ -103,24 +104,27 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
   const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz }) : '');
   const strip = prog && current ? dayStrip(prog, prog.items, current.logs, today) : [];
   const timeline = prog && current ? dayTimeline(prog.items, current.logs, current.sessionFeedback, day, today) : [];
+  const yesterday = prog && current ? daySummary(dayTimeline(prog.items, current.logs, current.sessionFeedback, addDaysISO(today, -1), today)) : null;
   const streak = prog && current ? currentStreak(prog, prog.items, current.logs, today) : 0;
   const trend = current ? trendSeries(current.sessionFeedback, today) : [];
   const sections = prog && current ? sectionAdherence({ items: prog.items, logs: current.logs, startDate: prog.startDate, today, durationDays: prog.durationDays }) : [];
   const minutes = items.length > 0 && prog ? estimateSessionMinutes(items.map(programItemToInput), prog.sessionsPerDay) : null;
+  const pain = row?.signals.find((s) => s.key === 'pain') ?? null;
   const attention = (row?.signals ?? []).filter((s) => s.attention || s.key === 'skip');
+  const tel = telHref(patient?.phone, clinicCountryCode(clinic));
   const shareUrl = access ? buildHepWhatsAppShareUrl({ token: access.token, clinicName: clinic.name, phone: patient?.phone }) : '#';
-  const dayLabel = day === today ? 'Today' : new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const review = prog && prog.status !== 'completed' ? reviewLabel(prog.checkinOn, today) : null;
+  const subLine = prog
+    ? [SESSION_LABEL[prog.sessionsPerDay], `${items.length} ${items.length === 1 ? 'exercise' : 'exercises'}`, minutes != null && `about ${minutes} min`, `completion target ${prog.targetPct}%`, current?.therapistName && `prescribed by ${current.therapistName}`, review].filter(Boolean).join(' · ')
+    : '';
+  const earlier = completed.map((b) => ({ id: b.program.id, title: b.program.title, range: programDateRange(b.program.startDate, b.program.durationDays), percent: buildProgramRow(b, { today, windowStart: addDaysISO(today, -WINDOW_DAYS) }).habitPercent }));
+  const show = (id: string) => { setShownId(id); setDay(today); };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Programs">
-        {active.map((b) => <button key={b.program.id} type="button" aria-pressed={b.program.id === shownId} className={filterChip(b.program.id === shownId)} onClick={() => { setShownId(b.program.id); setDay(today); }}>{b.program.title}{b.program.status === 'paused' ? ' (paused)' : ''}</button>)}
-        {completed.length > 0 && (
-          <select aria-label="Completed programs" className={`${inputCls} !w-auto`} value={completed.some((b) => b.program.id === shownId) ? (shownId ?? '') : ''} onChange={(e) => { if (e.target.value) { setShownId(e.target.value); setDay(today); } }}>
-            <option value="">Completed ({completed.length})</option>
-            {completed.map((b) => <option key={b.program.id} value={b.program.id}>{b.program.title} · {b.program.startDate}</option>)}
-          </select>
-        )}
+        {active.map((b) => <button key={b.program.id} type="button" aria-pressed={b.program.id === shownId} className={filterChip(b.program.id === shownId)} onClick={() => show(b.program.id)}>{b.program.title} · {b.program.status === 'paused' ? 'paused' : 'active'}</button>)}
+        {completed.length > 0 && <button type="button" aria-pressed={completed.some((b) => b.program.id === shownId)} aria-controls="hep-earlier" className={filterChip(completed.some((b) => b.program.id === shownId))} onClick={() => { setEarlierOpen(true); requestAnimationFrame(() => document.getElementById('hep-earlier')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })); }}>Earlier ({completed.length})</button>}
         <div className="flex-1" />
         <Button type="button" className={pillSmPrimary} disabled={!online} onClick={() => setSheet({ mode: 'new' })}>+ New program</Button>
       </div>
@@ -134,45 +138,21 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
         </div>
       ) : (
         <>
-          <header className="space-y-2">
-            <div className="flex flex-wrap items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <h2 className="font-display text-lg font-semibold text-[var(--ink)]">{prog.title} <span className="ml-1 rounded-full bg-[var(--paper)] px-2 py-0.5 align-middle text-xs font-medium text-[var(--muted)]">{prog.status === 'completed' ? 'Completed' : prog.status === 'paused' ? 'Paused' : row.ended ? 'Ended' : 'Active'}</span></h2>
-                <p className="text-sm text-[var(--muted)]">{row.dayLabel} · {SESSION_LABEL[prog.sessionsPerDay]}{minutes != null && ` · about ${minutes} min a session`} · completed at {prog.targetPct}%{current.therapistName && ` · by ${current.therapistName}`}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {sharing && <a href={shareUrl} target="_blank" rel="noreferrer" className={`${pillSmPrimary} !min-h-9`}>Share link</a>}
-                <Button type="button" className={pillSmAccent} disabled={!sharing} onClick={() => setMessaging(true)}>Message patient</Button>
-                {prog.status !== 'completed' && <Button type="button" className={pillSmAccent} disabled={!online} onClick={() => setSheet({ mode: 'edit' })}>Edit program</Button>}
-                <KebabMenu ariaLabel="More actions">
-                  {(close) => (
-                    <>
-                      <button type="button" className={menuItem} onClick={() => { close(); setPrinting(true); }}>Print sheet</button>
-                      <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.duplicateProgram(prog.id)); }}>Duplicate</button>
-                      <button type="button" className={menuItem} onClick={() => { close(); setTemplateName(prog.title); }}>Save as template</button>
-                      {prog.durationDays != null && prog.status !== 'completed' && <button type="button" className={menuItem} onClick={() => { close(); setExtending(true); }}>Extend</button>}
-                      {prog.status === 'active' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(prog.id, 'paused')); }}>Pause</button>}
-                      {prog.status === 'paused' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(prog.id, 'active')); }}>Resume</button>}
-                      {prog.status !== 'completed' && <button type="button" className={menuItem} onClick={() => { close(); setCompleting(true); }}>Mark completed</button>}
-                      <button type="button" className={menuItem} onClick={() => { close(); setConfirmReset(true); }}>Reset PIN…</button>
-                      {sharing
-                        ? <button type="button" className={menuItemDestructive} onClick={() => { close(); setConfirmStop(true); }}>Stop sharing</button>
-                        : <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.rotateToken(patientId)); }}>Start sharing again</button>}
-                    </>
-                  )}
-                </KebabMenu>
-              </div>
-            </div>
-          </header>
-
-          {(attention.length > 0 || painSeen[prog.id]) && (
-            <section aria-label="Alerts" className="space-y-2 rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] p-4">
-              <h3 className="font-display text-sm font-semibold text-[var(--amber-strong)]">Alerts</h3>
-              <ul className="space-y-1.5 text-sm text-[var(--ink)]">
-                {painSeen[prog.id] && <li><span className="font-medium text-[var(--rust)]">{painSeen[prog.id]}</span> <span className="text-[var(--muted)]">· Reviewed ✓ just now</span></li>}
-                {attention.filter((s) => s.key !== 'pain').map((s) => (
-                  <li key={s.key} className="flex flex-wrap items-center gap-2">
-                    <span>{s.label}</span>
+          {(attention.length > 0 || pain || painSeen[prog.id]) && (
+            <section aria-label="Alerts" className="space-y-2">
+              {(pain || painSeen[prog.id]) && (
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl bg-[var(--rust-light)] px-3.5 py-2.5 text-sm text-[var(--rust)]">
+                  <span><span className="font-semibold">{painSeen[prog.id] ?? pain?.label}</span>{painSeen[prog.id] && <span className="text-[var(--muted)]"> · Reviewed ✓ just now</span>}</span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {tel && <a href={tel} className={`${pillSmNeutral} inline-flex items-center`}>Call</a>}
+                    {!painSeen[prog.id] && <Button type="button" className={pillSmNeutral} disabled={!online} onClick={() => markReviewed(prog.id, pain?.label ?? '')}>Mark reviewed</Button>}
+                  </span>
+                </div>
+              )}
+              {attention.filter((s) => s.key !== 'pain').map((s) => (
+                <div key={s.key} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl bg-[var(--amber-light)] px-3.5 py-2.5 text-sm text-[var(--amber-strong)]">
+                  <span className="font-medium">{s.label}</span>
+                  <span className="flex flex-wrap gap-1.5">
                     {(s.key === 'checkin' || s.key === 'idle' || s.key === 'link') && sharing && <Button type="button" className={pillSmNeutral} onClick={() => setMessaging(true)}>Message patient</Button>}
                     {s.key === 'ended' && (
                       <>
@@ -181,94 +161,99 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
                         <Button type="button" className={pillSmPrimary} onClick={() => setSheet({ mode: 'new' })}>Prescribe next</Button>
                       </>
                     )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <section aria-label="Progress" className="space-y-3">
-            <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Progress</h3>
-            <div className="grid grid-cols-2 gap-2 desktop:grid-cols-5">
-              <Tile label="Today" value={row.todayTarget > 0 ? `${row.todayCompleted} of ${row.todayTarget}` : '—'} sub="sessions" />
-              <Tile label="Adherence" value={row.habitPercent == null ? 'Not enough data' : `${row.habitPercent}%`} sub={row.habitPercent == null ? undefined : `${row.finishedDays} ${row.finishedDays === 1 ? 'day' : 'days'} finished`} />
-              <Tile label="Streak" value={`${streak} ${streak === 1 ? 'day' : 'days'}`} />
-              <Tile label="Last active" value={row.lastActiveLabel} sub={access ? `Opened ${access.openCount}×` : undefined} />
-              <Tile label="Pain · Effort" value={trend.some((t) => t.pain != null || t.effort != null) ? `${trend.filter((t) => t.pain != null).at(-1)?.pain ?? '–'} · ${trend.filter((t) => t.effort != null).at(-1)?.effort ?? '–'}` : '—'} sub="latest session" />
-            </div>
-            {trend.some((t) => t.pain != null || t.effort != null) && (
-              <p className="text-xs text-[var(--muted)]" aria-label="Pain and effort, last 7 days">Last 7 days · Pain {trend.map((t) => t.pain ?? '–').join(' ')} · Effort {trend.map((t) => t.effort ?? '–').join(' ')}</p>
-            )}
-
-            <div className="space-y-1.5">
-              <p className="text-sm font-semibold text-[var(--ink)]">Last 14 days <span className="font-normal text-[var(--muted)]">· tap a day to see what was done</span></p>
-              <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Last 14 days">
-                {strip.map((c) => {
-                  const d = new Date(`${c.date}T00:00:00Z`);
-                  return (
-                    <button key={c.date} type="button" title={d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} aria-label={`${c.date}: ${CELL_WORD[c.state]}`} aria-pressed={c.date === day} onClick={() => setDay(c.date)} className={`flex h-12 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-xs font-medium leading-tight ${CELL_CLASS[c.state]} ${c.date === day ? 'ring-2 ring-[var(--ink)]' : ''}`}>
-                      <span className="text-[10px] uppercase opacity-80">{d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>
-                      <span className="text-sm">{d.getUTCDate()}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-[var(--muted)]">Green: everything done · Amber: partly done · Red: missed · Grey: nothing due that day (before the program started or after it ended).</p>
-            </div>
-
-            <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-              <h4 className="text-sm font-semibold text-[var(--ink)]">{dayLabel}</h4>
-              {timeline.length === 0 && <p className="text-sm text-[var(--muted)]">Nothing was due this day.</p>}
-              {timeline.map((s) => (
-                <div key={s.index} className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h5 className="text-sm font-medium text-[var(--ink)]">{s.label}</h5>
-                    {s.pain != null && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.pain >= 7 ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--paper)] text-[var(--muted)]'}`}>Pain {s.pain}/10</span>}
-                    {s.effort != null && <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">Effort {s.effort}/10</span>}
-                  </div>
-                  {(s.hurt.length > 0 || s.hardest.length > 0) && <p className="text-xs text-[var(--muted)]">{s.hurt.length > 0 && <>Hurt: {s.hurt.join(', ')}. </>}{s.hardest.length > 0 && <>Hardest: {s.hardest.join(', ')}.</>}</p>}
-                  <ul className="space-y-0.5 text-sm">
-                    {s.entries.map((e) => (
-                      <li key={e.itemId} className="flex flex-wrap items-center gap-x-2">
-                        <span aria-hidden="true" className={e.status === 'done' ? 'text-[var(--teal)]' : e.status === 'skipped' ? 'text-[var(--amber-strong)]' : e.status === 'not_done' ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}>{e.status === 'done' ? '✓' : e.status === 'skipped' ? '↷' : e.status === 'not_done' ? '✕' : '○'}</span>
-                        <span className="text-[var(--ink)]">{e.title}{e.optional ? ' (optional)' : ''}</span>
-                        <span className="text-xs text-[var(--muted)]">{e.status === 'done' ? `Done ${fmtTime(e.at)}` : e.status === 'skipped' ? `Skipped${e.reason ? `: ${SKIP_REASON_LABEL[e.reason]}` : ''}` : e.status === 'not_done' ? 'Not done' : 'To do'}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  </span>
                 </div>
               ))}
-            </div>
-          </section>
-
-          {sections.length > 1 && (
-            <section aria-label="By section" className="space-y-1">
-              <h3 className="font-display text-sm font-semibold text-[var(--ink)]">By section</h3>
-              <p className="text-sm text-[var(--ink)]">{sections.map((s) => `${EXERCISE_PHASE_LABELS[s.phase]} ${s.percent == null ? '–' : `${s.percent}%`}`).join(' · ')}</p>
             </section>
           )}
 
-          <section aria-label="By exercise" className="space-y-1.5">
-            <h3 className="font-display text-sm font-semibold text-[var(--ink)]">By exercise</h3>
-            <ul className="divide-y divide-[var(--border)] rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-              {itemsInSessionOrder(items).map((i) => (
-                <li key={i.id} className="p-3">
-                  <p className="text-sm font-medium text-[var(--ink)]">{i.title}{i.optional && <span className="ml-2 text-xs font-normal text-[var(--muted)]">Optional</span>}</p>
-                  <p className="text-xs text-[var(--muted)]">{describeDose(itemDose(programItemToInput(i)), prog.sessionsPerDay)}</p>
-                  <p className="text-xs text-[var(--muted)]">{itemProgressLine(itemProgress(i, prog, current.logs, current.sessionFeedback, today))}</p>
+          <ProgramCard
+            program={prog}
+            row={row}
+            today={today}
+            subLine={subLine}
+            online={online}
+            canMessage={sharing}
+            onEdit={() => setSheet({ mode: 'edit' })}
+            onMessage={() => setMessaging(true)}
+            menu={(close) => (
+              <>
+                <button type="button" className={menuItem} onClick={() => { close(); setPrinting(true); }}>Print sheet</button>
+                <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.duplicateProgram(prog.id)); }}>Duplicate</button>
+                <button type="button" className={menuItem} onClick={() => { close(); setTemplateName(prog.title); }}>Save as template</button>
+                {prog.durationDays != null && prog.status !== 'completed' && <button type="button" className={menuItem} onClick={() => { close(); setExtending(true); }}>Extend</button>}
+                {prog.status === 'active' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(prog.id, 'paused')); }}>Pause</button>}
+                {prog.status === 'paused' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(prog.id, 'active')); }}>Resume</button>}
+                {prog.status !== 'completed' && <button type="button" className={menuItem} onClick={() => { close(); setCompleting(true); }}>Mark completed</button>}
+                {(prog.status === 'completed' || row.ended) && <button type="button" className={menuItem} onClick={() => { close(); setSheet({ mode: 'new' }); }}>Prescribe next</button>}
+                <button type="button" className={menuItem} onClick={() => { close(); setConfirmReset(true); }}>Reset PIN…</button>
+                {sharing
+                  ? <button type="button" className={menuItemDestructive} onClick={() => { close(); setConfirmStop(true); }}>Stop sharing</button>
+                  : <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.rotateToken(patientId)); }}>Start sharing again</button>}
+              </>
+            )}
+            linkLine={(
+              <ProgramLinkLine
+                access={access}
+                today={today}
+                timeZone={tz}
+                online={online}
+                whatsAppUrl={shareUrl}
+                onCopy={() => { if (access) void navigator.clipboard.writeText(buildHepPortalUrl(access.token)).catch(() => setError('Could not copy. Select it and copy by hand.')); }}
+                onResetPin={() => setConfirmReset(true)}
+                onStop={() => setConfirmStop(true)}
+              />
+            )}
+          />
+
+          <section aria-label="Progress" className="grid grid-cols-2 gap-2 tab:grid-cols-5">
+            <Tile label="Today" value={row.todayTarget > 0 ? `${row.todayCompleted} of ${row.todayTarget}` : '—'} sub="sessions" />
+            <Tile label="Adherence" value={row.habitPercent == null ? 'Not enough data' : `${row.habitPercent}%`} sub={row.habitPercent == null ? undefined : `${row.finishedDays} ${row.finishedDays === 1 ? 'day' : 'days'} finished`} />
+            <Tile label="Streak" value={`${streak} ${streak === 1 ? 'day' : 'days'}`} />
+            <Tile label="Last active" value={row.lastActiveLabel} sub={access ? `Opened ${access.openCount}×` : undefined} />
+            <Tile label="Pain · effort" value={trend.some((t) => t.pain != null || t.effort != null) ? `${trend.filter((t) => t.pain != null).at(-1)?.pain ?? '–'} · ${trend.filter((t) => t.effort != null).at(-1)?.effort ?? '–'}` : '—'} sub="latest session" />
+          </section>
+
+          <ProgramDays
+            strip={strip}
+            day={day}
+            today={today}
+            onDay={setDay}
+            timeline={timeline}
+            yesterday={yesterday}
+            todayCount={row.todayTarget > 0 ? `${row.todayCompleted} of ${row.todayTarget} sessions` : null}
+            trend={trend}
+            fmtTime={fmtTime}
+          />
+
+          <ByExerciseTable items={items} program={prog} logs={current.logs} feedback={current.sessionFeedback} today={today}>
+            {sections.length > 1 && (
+              <section aria-label="By section">
+                <p className="text-xs text-[var(--muted)]">{sections.map((s) => `${EXERCISE_PHASE_LABELS[s.phase]} ${s.percent == null ? '–' : `${s.percent}%`}`).join(' · ')}</p>
+              </section>
+            )}
+          </ByExerciseTable>
+        </>
+      )}
+
+      {completed.length > 0 && (
+        <section id="hep-earlier" aria-label="Earlier programs" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+          <button type="button" aria-expanded={earlierOpen} className="flex w-full items-center justify-between p-3 text-left text-sm font-semibold text-[var(--ink)]" onClick={() => setEarlierOpen((o) => !o)}>
+            Earlier programs ({completed.length})<span aria-hidden="true" className="text-[var(--muted)]">{earlierOpen ? '▴' : '▾'}</span>
+          </button>
+          {earlierOpen && (
+            <ul className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
+              {earlier.map((e) => (
+                <li key={e.id}>
+                  <button type="button" aria-pressed={e.id === shownId} className="flex w-full flex-wrap items-baseline justify-between gap-x-3 p-3 text-left text-sm hover:bg-[var(--paper)]" onClick={() => show(e.id)}>
+                    <span className="font-medium text-[var(--ink)]">{e.title} <span className="font-normal text-[var(--muted)]">· {e.range}</span></span>
+                    <span className="text-xs text-[var(--muted)]">{e.percent == null ? 'Not enough data' : `${e.percent}%`} · completed</span>
+                  </button>
                 </li>
               ))}
             </ul>
-          </section>
-
-          <section aria-label="Patient link" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-[var(--paper)] p-3 text-sm">
-            <span className="font-medium text-[var(--ink)]">Patient link</span>
-            <span className="text-[var(--muted)]">{!access ? 'Not shared yet' : sharing ? `Sharing on · ${access.lastOpenedAt ? `last opened ${new Date(access.lastOpenedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: tz })}` : 'not opened yet'}` : 'Sharing stopped'}</span>
-            {sharing && access && <Button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={() => void navigator.clipboard.writeText(buildHepPortalUrl(access.token)).catch(() => setError('Could not copy. Select it and copy by hand.'))}>Copy link</Button>}
-            <Button type="button" className="text-xs font-medium text-[var(--teal)]" disabled={!online} onClick={() => setConfirmReset(true)}>Reset PIN…</Button>
-            {sharing && <Button type="button" className="text-xs font-medium text-[var(--rust)]" disabled={!online} onClick={() => setConfirmStop(true)}>Stop sharing</Button>}
-          </section>
-        </>
+          )}
+        </section>
       )}
 
       <ProgramSheet
