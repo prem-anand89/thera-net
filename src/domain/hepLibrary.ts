@@ -3,7 +3,6 @@
 import {
   EXERCISE_PHASES,
   EXERCISE_PHASE_LABELS,
-  HEP_BODY_ORDER,
   HEP_PELVIC_FLOOR_MEN,
   HEP_PELVIC_FLOOR_WOMEN,
   canonicalEquipment,
@@ -77,43 +76,6 @@ export function sortLibrary<T extends LibraryExercise>(list: T[], sort: LibraryS
   if (sort === 'az') return out.sort(az);
   if (sort === 'recent') return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || az(a, b));
   return out.sort((a, b) => (useCounts[b.id] ?? 0) - (useCounts[a.id] ?? 0) || az(a, b));
-}
-
-export interface LibraryTypeGroup<T> {
-  phase: ExercisePhase;
-  exercises: T[];
-}
-export interface LibraryRegionGroup<T> {
-  region: string;
-  types: LibraryTypeGroup<T>[];
-}
-
-const regionRank = (region: string): number => {
-  const key = region.startsWith(PELVIC_FLOOR) ? PELVIC_FLOOR : region;
-  const i = (HEP_BODY_ORDER as readonly string[]).indexOf(key);
-  return i === -1 ? HEP_BODY_ORDER.length : i; // clinic-added regions go after the fixed ones
-};
-
-/**
- * Groups by region head to toe, then by type in session order, each A to Z. Under a chosen region (not All, Fav, Used)
- * everything is grouped under that region, so a Knee exercise that is also under Hip shows in Hip's own list under Hip.
- */
-export function groupLibrary<T extends LibraryExercise>(exercises: T[], region: LibraryRegion): LibraryRegionGroup<T>[] {
-  const fixed = region !== 'All' && region !== 'Fav' && region !== 'Used';
-  const byRegion = new Map<string, T[]>();
-  for (const ex of exercises) {
-    const key = fixed ? region : canonicalRegion(ex.bodyRegion);
-    byRegion.set(key, [...(byRegion.get(key) ?? []), ex]);
-  }
-  return [...byRegion.entries()]
-    .sort(([a], [b]) => regionRank(a) - regionRank(b) || a.localeCompare(b))
-    .map(([r, list]) => ({
-      region: r,
-      types: EXERCISE_PHASES.map((phase) => ({
-        phase,
-        exercises: list.filter((e) => e.phase === phase).sort((a, b) => a.title.localeCompare(b.title)),
-      })).filter((t) => t.exercises.length > 0),
-    }));
 }
 
 /** "Pelvic floor: Women" shows as "Pelvic floor · Women". */

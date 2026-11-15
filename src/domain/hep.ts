@@ -551,7 +551,7 @@ export function sectionAdherence(opts: {
       totals.set(phase, t);
     }
   }
-  return EXERCISE_PHASES.filter((p) => totals.has(p)).map((phase) => {
+  return SESSION_ORDER.filter((p) => totals.has(p)).map((phase) => {
     const t = totals.get(phase)!;
     return { phase, expected: t.expected, completed: t.completed, percent: t.expected > 0 ? Math.round((t.completed / t.expected) * 100) : null };
   });

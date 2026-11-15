@@ -1,6 +1,6 @@
 // What the Home program tab shows, worked out from a program's rows, logs and session checks: the 14-day strip, the
 // streak, one day's timeline by session, and the pain and effort trend. Pure and tested; the clinic's day is passed in.
-import { EXERCISE_PHASES, addDaysISO, isItemActiveOnDate, sessionsPerDayOnDate, type ProgramItem, type ProgramLog, type SkipReason } from '@/domain/hep';
+import { SESSION_ORDER, addDaysISO, isItemActiveOnDate, sessionsPerDayOnDate, type ProgramItem, type ProgramLog, type SkipReason } from '@/domain/hep';
 import type { SessionFeedback } from '@/services/hepService';
 
 type RowItem = Pick<ProgramItem, 'id' | 'title' | 'phase' | 'optional' | 'addedOn' | 'removedOn' | 'sessionsPerDay' | 'sessionsSchedule'>;
@@ -106,5 +106,5 @@ export function trendSeries(feedback: SessionFeedback[], today: string, days = 7
 
 /** The rows in session order, for the By exercise list. */
 export function itemsInSessionOrder<T extends Pick<ProgramItem, 'phase' | 'sortOrder'>>(items: T[]): T[] {
-  return [...items].sort((a, b) => EXERCISE_PHASES.indexOf(a.phase) - EXERCISE_PHASES.indexOf(b.phase) || a.sortOrder - b.sortOrder);
+  return [...items].sort((a, b) => SESSION_ORDER.indexOf(a.phase) - SESSION_ORDER.indexOf(b.phase) || a.sortOrder - b.sortOrder);
 }

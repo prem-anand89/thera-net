@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgramLog, SessionsPerDay, SkipReason } from '@/domain/hep';
 import type { SessionFeedback } from '@/services/hepService';
-import { currentStreak, dayStrip, dayTimeline, sessionLabel, trendSeries } from './homeProgram';
+import { currentStreak, dayStrip, dayTimeline, itemsInSessionOrder, sessionLabel, trendSeries } from './homeProgram';
 
 const TODAY = '2026-11-14';
 const item = (id: string, over: Record<string, unknown> = {}) => ({ id, title: `Item ${id}`, phase: 'strengthening' as const, optional: false, addedOn: '2026-11-08', removedOn: null, sessionsPerDay: 1 as SessionsPerDay, sessionsSchedule: [], ...over });
@@ -87,5 +87,12 @@ describe('trendSeries', () => {
     expect(t.at(-1)).toEqual({ date: TODAY, pain: null, effort: null });
     expect(t.find((d) => d.date === '2026-11-13')).toEqual({ date: '2026-11-13', pain: 7, effort: 5 });
     expect(t.find((d) => d.date === '2026-11-10')).toEqual({ date: '2026-11-10', pain: 4, effort: null });
+  });
+});
+
+describe('itemsInSessionOrder', () => {
+  it('puts other before cool-down, like the sheet, print and patient page', () => {
+    const rows = [{ phase: 'cool_down', sortOrder: 0 }, { phase: 'other', sortOrder: 1 }, { phase: 'warm_up', sortOrder: 2 }, { phase: 'strengthening', sortOrder: 3 }] as const;
+    expect(itemsInSessionOrder([...rows]).map((r) => r.phase)).toEqual(['warm_up', 'strengthening', 'other', 'cool_down']);
   });
 });

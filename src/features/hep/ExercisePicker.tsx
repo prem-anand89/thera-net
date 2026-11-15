@@ -7,6 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { LoadingRows, SheetDialog, btnPrimary, btnSecondary } from '@/components/ui';
 import type { Exercise, ExerciseTemplate } from '@/domain/hep';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { hepService, type HepItemInput, type ProgramBundle } from '@/services/hepService';
 import { ExerciseForm } from './ExerciseForm';
 import { LibraryBrowser } from './LibraryBrowser';
@@ -54,7 +55,9 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
 
   const withPatient = !!patientId && !!patientName;
   const startTab: PickerTab = initialTab === 'earlier' && !withPatient ? 'exercises' : initialTab ?? 'exercises';
-  useEffect(() => { if (open) { setTicked([]); setNewName(null); setTab(startTab); setLoadError(null); } }, [open, startTab]);
+  useEffect(() => { if (open) { setTicked([]); setNewName(null); setTab(startTab); setLoadError(null); setEarlier(null); setTemplates(null); } }, [open, startTab]);
+  // A different patient (or program being edited) must never see the previous patient's programs while theirs load.
+  useEffect(() => { setEarlier(null); }, [patientId, excludeProgramId]);
   useEffect(() => {
     if (!open || !online) return;
     let live = true;
@@ -84,7 +87,7 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
   }));
   const earlierPacks: Pack[] = (earlier ?? []).map(({ program: p }) => {
     const live = p.items.filter((i) => i.removedOn == null);
-    return { id: p.id, title: p.title, meta: `${plural(live.length, 'exercise', 'exercises')} · from ${p.startDate}`, exercises: live, addable: live.filter(free).length };
+    return { id: p.id, title: p.title, meta: `${plural(live.length, 'exercise', 'exercises')} · from ${formatDateDM(p.startDate)}`, exercises: live, addable: live.filter(free).length };
   });
   /** A whole set plus whatever was ticked on the Exercises tab, each exercise once, never one already in the program. */
   const withTicked = (items: HepItemInput[]) => {

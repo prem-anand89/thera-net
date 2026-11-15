@@ -157,6 +157,23 @@ describe('ExercisePicker', () => {
     expect(listPatientPrograms).toHaveBeenCalledWith('pt1', today);
   });
 
+  it('never shows or adds the previous patient\'s earlier programs while the next patient\'s load', async () => {
+    const user = userEvent.setup();
+    let release: (v: unknown) => void = () => {};
+    const onAdd = vi.fn();
+    const ui = (patientId: string, patientName: string) => <ClinicContext.Provider value={clinic}><ExercisePicker open onClose={vi.fn()} onAdd={onAdd} patientId={patientId} patientName={patientName} initialTab="earlier" /></ClinicContext.Provider>;
+    const { rerender } = render(ui('pt1', 'Asha Rao'));
+    expect(await screen.findByText('Earlier knee')).toBeInTheDocument();
+    listPatientPrograms.mockReturnValueOnce(new Promise((r) => { release = r; }));
+    rerender(ui('pt2', 'Ben Roy'));
+    await user.click(await screen.findByRole('tab', { name: 'Ben’s earlier programs' }));
+    expect(screen.queryByText('Earlier knee')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add all/ })).toBeNull();
+    release([{ program: { id: 'p9', title: 'Ben shoulder', startDate: '2026-10-05', items: [{ ...tItem('x', 'Wall Slides', '2'), removedOn: null, specialInstructions: '' }] } }]);
+    expect(await screen.findByText('Ben shoulder')).toBeInTheDocument();
+    expect(screen.getByText(/from 05\/10/)).toBeInTheDocument();
+  });
+
   it('a templates load error clears once a later load works', async () => {
     listTemplates.mockRejectedValueOnce(new Error('Network down'));
     const onAdd = vi.fn();

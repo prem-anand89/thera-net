@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise } from './hep';
-import { EMPTY_LIBRARY_FILTER, activeFilterChips, equipmentInUse, exerciseInRegion, filterLibrary, groupLibrary, regionLabel, similarExercise, sortLibrary, type LibraryExercise } from './hepLibrary';
+import { EMPTY_LIBRARY_FILTER, activeFilterChips, equipmentInUse, exerciseInRegion, filterLibrary, regionLabel, similarExercise, sortLibrary, type LibraryExercise } from './hepLibrary';
 
 const ex = (id: string, title: string, over: Partial<Exercise> = {}): LibraryExercise =>
   ({ id, title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], phase: 'strengthening', equipment: [], isFavorite: false, active: true, deleted: false, positions: [], createdAt: '2026-01-01T00:00:00Z', ...over });
@@ -47,21 +47,6 @@ describe('filterLibrary', () => {
     const withNames = [ex('9', 'Straight Leg Raise', { otherNames: ['SLR'], bodyRegion: 'Hip' }), ex('10', 'Hamstring Curl')];
     expect(ids(filterLibrary(withNames, { ...EMPTY_LIBRARY_FILTER, query: 'slr' }))).toEqual(['9']);
     expect(ids(filterLibrary(withNames, { ...EMPTY_LIBRARY_FILTER, query: 'hamstrig' }))).toEqual(['10']);
-  });
-});
-
-describe('groupLibrary', () => {
-  it('groups head to toe, then by type in session order, each A to Z; clinic regions go last', () => {
-    const list = filterLibrary([...LIB, ex('11', 'Custom', { bodyRegion: 'Jaw' })], EMPTY_LIBRARY_FILTER);
-    const g = groupLibrary(list, 'All');
-    expect(g.map((r) => r.region)).toEqual(['Face', 'Hip', 'Knee', 'Pelvic floor: Men', 'Jaw']);
-    const knee = g.find((r) => r.region === 'Knee')!;
-    expect(knee.types.map((t) => t.phase)).toEqual(['stretching', 'activation']);
-  });
-  it('under a chosen region everything is grouped under that region', () => {
-    const g = groupLibrary(filterLibrary(LIB, { ...EMPTY_LIBRARY_FILTER, region: 'Hip' }), 'Hip');
-    expect(g.map((r) => r.region)).toEqual(['Hip']);
-    expect(g[0].types.flatMap((t) => t.exercises.map((e) => e.id))).toEqual(['2', '3', '4']);
   });
 });
 

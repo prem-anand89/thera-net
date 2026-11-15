@@ -31,7 +31,7 @@ export interface ProgramSettingsPanelProps {
 export function settingsSummary(d: ProgramDraft, opts: { patientName: string | null; editing: boolean; startDate?: string }): string {
   const length = LENGTH_CHOICES.find((c) => c.days === d.durationDays)?.label.toLowerCase() ?? (d.durationDays == null ? 'ongoing' : `${d.durationDays} days`);
   const start = opts.editing ? null : opts.startDate ? `starts ${formatDateDM(opts.startDate)}` : d.startOffset === 0 ? 'starts today' : 'starts tomorrow';
-  const review = opts.editing ? (d.checkinOn ? `review on ${d.checkinOn}` : 'no review') : d.checkinDays ? `review in ${d.checkinDays} days` : 'no review';
+  const review = opts.editing ? (d.checkinOn ? `review on ${formatDateDM(d.checkinOn)}` : 'no review') : d.checkinDays ? `review in ${d.checkinDays} days` : 'no review';
   return [opts.patientName ?? 'No patient chosen', FREQUENCY_LABELS[d.sessionsPerDay], length, start, review].filter(Boolean).join(' · ');
 }
 

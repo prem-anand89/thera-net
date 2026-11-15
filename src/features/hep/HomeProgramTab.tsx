@@ -19,13 +19,13 @@ import { SKIP_REASON_LABEL, currentStreak, dayStrip, dayTimeline, itemsInSession
 import { CELL_CLASS, CELL_WORD } from './DayStrip';
 import { itemProgress, itemProgressLine } from './itemProgress';
 import { MessagePatientSheet } from './MessagePatientSheet';
+import { SESSION_LABEL } from './ProgramItemsEditor';
 import { PrintSheet } from './PrintSheet';
 import { ProgramSheet } from './ProgramSheet';
 import { EXTEND_DAYS, buildProgramRow } from './programRows';
 import { clinicToday, useOnline } from './useHepData';
 
 const WINDOW_DAYS = 30;
-const SESSIONS = ['', 'once a day', 'twice a day', '3 times a day'];
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -138,7 +138,7 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
             <div className="flex flex-wrap items-start gap-2">
               <div className="min-w-0 flex-1">
                 <h2 className="font-display text-lg font-semibold text-[var(--ink)]">{prog.title} <span className="ml-1 rounded-full bg-[var(--paper)] px-2 py-0.5 align-middle text-xs font-medium text-[var(--muted)]">{prog.status === 'completed' ? 'Completed' : prog.status === 'paused' ? 'Paused' : row.ended ? 'Ended' : 'Active'}</span></h2>
-                <p className="text-sm text-[var(--muted)]">{row.dayLabel} · {SESSIONS[prog.sessionsPerDay]}{minutes != null && ` · about ${minutes} min a session`} · completed at {prog.targetPct}%{current.therapistName && ` · by ${current.therapistName}`}</p>
+                <p className="text-sm text-[var(--muted)]">{row.dayLabel} · {SESSION_LABEL[prog.sessionsPerDay]}{minutes != null && ` · about ${minutes} min a session`} · completed at {prog.targetPct}%{current.therapistName && ` · by ${current.therapistName}`}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {sharing && <a href={shareUrl} target="_blank" rel="noreferrer" className={`${pillSmPrimary} !min-h-9`}>Share link</a>}

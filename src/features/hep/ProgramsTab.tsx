@@ -39,7 +39,7 @@ export interface ProgramsTabProps {
   reloadKey?: number;
 }
 
-function Signals({ row }: { row: ProgramRow }) {
+function Alerts({ row }: { row: ProgramRow }) {
   if (row.signals.length === 0) return <span className={cellSub}>—</span>;
   return (
     <ul className="flex flex-wrap gap-1">
@@ -173,7 +173,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
                   {showOwner === 'all' && <td className={td}>{r.therapistName ?? '—'}</td>}
                   <td className={td}>{todayLabel(r)}</td>
                   <td className={td}><Adherence row={r} /></td>
-                  <td className={td}><Signals row={r} /></td>
+                  <td className={td}><Alerts row={r} /></td>
                   <td className={td}>{r.lastActiveLabel}</td>
                   <td className={td}><div className="flex items-center justify-end gap-2">{primary(r)}{menu(r)}</div></td>
                 </tr>
@@ -198,7 +198,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
               <p className="text-sm text-[var(--ink)]">{todayLabel(r)}</p>
               <Adherence row={r} />
               <p className={cellSub}>Last active: {r.lastActiveLabel}{showOwner === 'all' && r.therapistName ? ` · ${r.therapistName}` : ''}</p>
-              <Signals row={r} />
+              <Alerts row={r} />
               {primary(r) && <div>{primary(r)}</div>}
             </li>
           ))}

@@ -150,6 +150,12 @@ describe('sections: how a patient does only some of it', () => {
     expect(r.find((x) => x.phase === 'mobility')).toMatchObject({ percent: 100 });
     expect(r.find((x) => x.phase === 'strengthening')).toMatchObject({ percent: 0, expected: 6 });
   });
+  it('lists sections in session order: other before cool-down', () => {
+    const cool = item({ id: 'c', phase: 'cool_down', sessionsPerDay: 1, sessionsSchedule: [], addedOn: '2026-11-01' });
+    const other = item({ id: 'o', phase: 'other', sessionsPerDay: 1, sessionsSchedule: [], addedOn: '2026-11-01' });
+    const r = sectionAdherence({ ...common, items: [cool, other, mobility], logs: [] });
+    expect(r.map((x) => x.phase)).toEqual(['mobility', 'other', 'cool_down']);
+  });
   it('signals a section skipped on 4 or more of the last 5 finished days while the rest was done', () => {
     expect(sectionSkipPattern({ ...common, logs: mobilityOnly })).toEqual([{ phase: 'strengthening', missedDays: 5, ofDays: 5 }]);
   });

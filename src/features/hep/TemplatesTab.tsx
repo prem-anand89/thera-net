@@ -105,7 +105,7 @@ export function TemplatesTab({ onUse, reloadKey = 0 }: TemplatesTabProps) {
           const needs = itemsNeed(items);
           return (
             // The whole card opens the editor; the title is its keyboard button. Actions inside stop the click.
-            <li key={t.id} className="relative cursor-pointer space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--teal)]" onClick={() => { if (online) setEditor({ template: t }); }}>
+            <li key={t.id} title={online ? undefined : 'Needs a connection to edit'} className="relative cursor-pointer space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 hover:border-[var(--teal)]" onClick={() => { if (online) setEditor({ template: t }); }}>
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate font-display text-base font-semibold text-[var(--ink)]"><button type="button" className="text-left hover:underline">{t.title}</button></h3>
