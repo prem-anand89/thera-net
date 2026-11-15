@@ -34,6 +34,7 @@ export function exerciseFromSaveInput(input: SaveExerciseInput, id: string, now 
   return {
     id, clinicId: input.clinicId, title: input.title, otherNames: input.otherNames ?? [], bodyRegion: input.bodyRegion, alsoRegions: input.alsoRegions ?? [], equipment: input.equipment ?? [],
     phase: input.phase, positions: input.positions ?? [], instructions: input.instructions, mediaType: input.mediaType, mediaKeys: input.mediaKeys ?? [], mediaCaptions: input.mediaCaptions ?? [], thumbKey: input.thumbKey ?? null,
+    pictureConsentAt: null, pictureConsentBy: null, hidePicturesInLists: input.hidePicturesInLists ?? false,
     defaultSets: input.defaultSets, doseType: input.doseType, defaultReps: input.defaultReps, defaultHoldSeconds: input.defaultHoldSeconds, defaultDurationSeconds: input.defaultDurationSeconds,
     defaultRestSeconds: input.defaultRestSeconds, defaultSessionsPerDay: input.defaultSessionsPerDay, side: input.side, stopIf: input.stopIf, isFavorite: false, active: input.active ?? true,
     deleted: false, version: 1, createdAt: now, updatedAt: now,

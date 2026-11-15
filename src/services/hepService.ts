@@ -66,6 +66,10 @@ export interface SaveExerciseInput {
   deleted?: boolean;
   /** Starting positions (HEP_POSITIONS); staff-only. Absent = none. */
   positions?: string[];
+  /** True only when the therapist has just ticked consent for these pictures; the server records who and when. */
+  pictureConsent?: boolean;
+  /** Lists show the name only; the exercise page still shows the pictures. Absent = false. */
+  hidePicturesInLists?: boolean;
 }
 
 /** One exercise inside a template or program, as the RPCs read it (camelCase keys). */
@@ -273,6 +277,8 @@ export const hepService = {
       p_other_names: input.otherNames ?? [],
       p_thumb_key: input.thumbKey ?? null,
       p_positions: input.positions ?? [],
+      p_picture_consent: input.pictureConsent ?? false,
+      p_hide_pictures_in_lists: input.hidePicturesInLists ?? false,
     });
     if (error) fail(error);
     syncEngine.schedule(0); // bring the saved row into the offline cache

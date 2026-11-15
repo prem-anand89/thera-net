@@ -34,6 +34,8 @@ export function toPreviewItems(
       specialInstructions: it.specialInstructions ?? '',
       sortOrder: index,
       addedOn: opts.today,
+      // The preview shows pictures in the checklist until the item carries its exercise's "Hide pictures in lists".
+      hidePicturesInLists: false,
     };
   });
 }

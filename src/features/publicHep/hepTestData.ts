@@ -9,7 +9,7 @@ export function item(over: Partial<PublicHepItem> = {}): PublicHepItem {
   return {
     id: 'i1', title: 'Wall Slides', phase: 'strengthening', equipment: [], instructions: 'Stand with your back to a wall.\nSlide down slowly.',
     mediaType: 'none', mediaUrls: [], mediaCaptions: [], doseType: 'reps', sets: 3, reps: 10, holdSeconds: null, durationSeconds: null, restSeconds: 0,
-    sessionsPerDay: 1, sessionsSchedule: [], side: 'none', optional: false, stopIf: '', specialInstructions: '', sortOrder: 0, addedOn: '2026-11-01', ...over,
+    sessionsPerDay: 1, sessionsSchedule: [], side: 'none', optional: false, stopIf: '', specialInstructions: '', sortOrder: 0, addedOn: '2026-11-01', hidePicturesInLists: false, ...over,
   };
 }
 

@@ -83,3 +83,41 @@ describe('the patient page calls', () => {
     await expect(publicHepService.clinicBrand('tok')).rejects.toThrow('connection reset');
   });
 });
+
+describe('the patient Home tab', () => {
+  const home = {
+    ok: true,
+    firstName: 'Asha',
+    bookingSlug: 'sunrise',
+    nextVisit: { at: '2026-11-18T04:30:00Z', therapistName: 'Ravi Kumar', location: 'clinic' },
+    package: { name: 'Knee rehab 10', done: 4, total: 10, expiresOn: '2026-12-20' },
+    programs: [{ id: 'p-1', title: 'Knee', status: 'active', startDate: '2026-11-10', durationDays: 28, itemCount: 6 }],
+  };
+
+  it('asks get_public_hep_home with the credential and returns the payload', async () => {
+    mockRpc.mockResolvedValueOnce({ data: home, error: null });
+    expect(await publicHepService.getPublicHome({ token: 'tok', pin: '1234' })).toEqual(home);
+    expect(mockRpc).toHaveBeenCalledWith('get_public_hep_home', { p_token: 'tok', p_pin: '1234', p_device: null });
+  });
+
+  it('uses the remembered phone and keeps the empty cards as null', async () => {
+    mockRpc.mockResolvedValueOnce({ data: { ...home, nextVisit: null, package: null, programs: [] }, error: null });
+    const res = await publicHepService.getPublicHome({ token: 'tok', device: 'dev1' });
+    expect(res).toMatchObject({ ok: true, nextVisit: null, package: null, programs: [] });
+    expect(mockRpc).toHaveBeenCalledWith('get_public_hep_home', { p_token: 'tok', p_pin: null, p_device: 'dev1' });
+  });
+
+  it('treats a wrong PIN, a lock or busy as a value, like getPublicHep', async () => {
+    mockRpc.mockResolvedValueOnce({ data: { ok: false, reason: 'wrong_pin', attemptsLeft: 2 }, error: null });
+    expect(await publicHepService.getPublicHome({ token: 'tok', pin: '0000' })).toEqual({ ok: false, reason: 'wrong_pin', attemptsLeft: 2 });
+    mockRpc.mockResolvedValueOnce({ data: { ok: false, reason: 'locked', attemptsLeft: 0 }, error: null });
+    expect(await publicHepService.getPublicHome({ token: 'tok', pin: '0000' })).toEqual({ ok: false, reason: 'locked', attemptsLeft: 0 });
+    mockRpc.mockResolvedValueOnce({ data: { ok: false, reason: 'busy' }, error: null });
+    expect(await publicHepService.getPublicHome({ token: 'tok', pin: '0000' })).toEqual({ ok: false, reason: 'busy' });
+  });
+
+  it('throws on a database or network failure (the page treats it as offline)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' } });
+    await expect(publicHepService.getPublicHome({ token: 'tok', pin: '1234' })).rejects.toThrow('Failed to fetch');
+  });
+});

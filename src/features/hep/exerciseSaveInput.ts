@@ -21,6 +21,8 @@ export function exerciseToSaveInput(ex: Exercise, over: Partial<SaveExerciseInpu
     mediaKeys: ex.mediaKeys,
     mediaCaptions: ex.mediaCaptions,
     thumbKey: ex.thumbKey,
+    // save_exercise writes the flag on every save, so Archive / Restore / Delete must send it back unchanged.
+    hidePicturesInLists: ex.hidePicturesInLists ?? false,
     defaultSets: ex.defaultSets,
     doseType: ex.doseType,
     defaultReps: ex.defaultReps,

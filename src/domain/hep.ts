@@ -85,6 +85,14 @@ export interface Exercise {
   mediaKeys: string[];
   mediaCaptions: string[];
   thumbKey: string | null;
+  /** When staff confirmed consent from the person shown in the pictures; null = not recorded. Absent on rows cached
+   *  before 20261115100000 (like positions), so optional. */
+  pictureConsentAt?: string | null;
+  /** Who confirmed that consent (auth user id). */
+  pictureConsentBy?: string | null;
+  /** Lists (Library, picker, program rows, the patient's checklist) show the name only; the exercise page still shows
+   *  pictures. Absent = false. */
+  hidePicturesInLists?: boolean;
   defaultSets: number;
   doseType: DoseType;
   defaultReps: number | null;

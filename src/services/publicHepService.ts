@@ -37,6 +37,8 @@ export interface PublicHepItem {
   specialInstructions: string;
   sortOrder: number;
   addedOn: string;
+  /** The therapist chose "Hide pictures in lists": the checklist shows the name only, the exercise page still shows pictures. */
+  hidePicturesInLists: boolean;
 }
 
 export interface PublicHepPayload {
@@ -50,6 +52,21 @@ export interface PublicHepPayload {
   items: PublicHepItem[];
   logs: Array<{ programItemId: string; logDate: string; sessionIndex: SessionsPerDay; skipped: boolean; skipReason: SkipReason | null; completedAt: string }>;
   sessionFeedback: Array<{ sessionIndex: SessionsPerDay; pain: number | null; effort: number | null; painItemIds: string[]; hardItemIds: string[] }>;
+}
+
+/** The patient's Home tab: only this patient's own next booking, open package progress and programs. */
+export interface PublicHepHome {
+  ok: true;
+  /** First word of the patient's name; null when the name is empty. */
+  firstName: string | null;
+  /** The clinic's public booking slug for "Book a visit"; null when online booking is off. */
+  bookingSlug: string | null;
+  /** The earliest confirmed or rescheduled booking still to come. */
+  nextVisit: { at: string; therapistName: string | null; location: 'clinic' | 'home' | 'ward' } | null;
+  /** The newest open package (sessions left, not past its last valid day). */
+  package: { name: string | null; done: number; total: number; expiresOn: string | null } | null;
+  /** Active, paused and completed programs, newest first. */
+  programs: Array<{ id: string; title: string; status: 'active' | 'paused' | 'completed'; startDate: string; durationDays: number | null; itemCount: number }>;
 }
 
 /** A call that answers only ok or a failure. */
@@ -115,6 +132,13 @@ export const publicHepService = {
     }
     const d = (data ?? {}) as Record<string, unknown>;
     return d.ok === true ? (d as unknown as PublicResult<Omit<PublicHepPayload, 'ok'>>) : asFailure(d);
+  },
+
+  /** The Home tab's data, behind the same PIN / remembered-phone check, lockout and rate limit as the page. */
+  async getPublicHome(cred: PublicCredential): Promise<PublicResult<Omit<PublicHepHome, 'ok'>>> {
+    return fromRpc<Omit<PublicHepHome, 'ok'>>(
+      await client().rpc('get_public_hep_home', { p_token: cred.token, p_pin: cred.pin ?? null, p_device: cred.device ?? null }),
+    );
   },
 
   /** After a correct PIN: a random device token (shown once) so this phone is not asked again for 30 days. */
