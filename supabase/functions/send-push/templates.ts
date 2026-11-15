@@ -5,7 +5,8 @@ export type PushKind =
   | 'appointment_reassigned'
   | 'booking_request'
   | 'overnight_requests'
-  | 'low_rating_feedback';
+  | 'low_rating_feedback'
+  | 'hep_high_pain';
 
 export interface PushPayload {
   title: string;
@@ -81,7 +82,7 @@ export function relativeDayLabel(ymd: string, today: string): string {
 }
 
 export interface AppointmentPushInput {
-  kind: Exclude<PushKind, 'booking_request' | 'overnight_requests' | 'low_rating_feedback'>;
+  kind: Exclude<PushKind, 'booking_request' | 'overnight_requests' | 'low_rating_feedback' | 'hep_high_pain'>;
   appointmentId: string;
   therapistId: string;
   /** Null when the recipient asked to keep patient names off notifications. */
@@ -143,5 +144,36 @@ export function buildPayload(kind: PushKind, when: string | null, timeZone: stri
       throw new Error('booking_request uses buildBookingRequestPayload');
     case 'overnight_requests':
       throw new Error('overnight_requests uses buildOvernightRequestsPayload');
+    case 'hep_high_pain':
+      throw new Error('hep_high_pain uses buildHepPainPayload');
   }
+}
+
+export interface HepPainDetails {
+  /** The patient's first name, or null when the recipient hides patient names. */
+  patientFirstName: string | null;
+  painScore: number;
+  /** The first exercise the patient marked as painful; null when none was marked or it must not be shown. */
+  exerciseTitle: string | null;
+  programId: string;
+  patientId: string;
+  /** The clinic day of the report (YYYY-MM-DD), so the phone keeps one alert per program per day. */
+  logDate: string;
+}
+
+/**
+ * HEP (amendment 53): a session pain score of 7 or more. With names hidden the alert names neither the patient nor the
+ * exercise (an exercise title can itself be sensitive). Never contains a note, PIN, phone number or token.
+ */
+export function buildHepPainPayload(d: HepPainDetails, hideName = false): PushPayload {
+  const score = `${Math.max(0, Math.min(10, Math.round(d.painScore)))}/10`;
+  const who = hideName ? '' : sanitizePatientName(d.patientFirstName ?? '');
+  const after = !hideName && d.exerciseTitle ? ` after ${sanitizePatientName(d.exerciseTitle)}` : '';
+  return {
+    title: `Pain ${score} reported`,
+    body: who ? `${who} reported pain ${score}${after}` : `A patient reported pain ${score}${after}`,
+    tag: `hep-pain-${d.programId}-${d.logDate}`,
+    url: `/patients/${d.patientId}?view=home-program`,
+    renotify: true,
+  };
 }

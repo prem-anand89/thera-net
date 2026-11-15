@@ -29,6 +29,7 @@ import type {
   UserSeenMarker,
   UserPushPreference,
 } from '@/domain/types';
+import type { Exercise } from '@/domain/hep';
 
 /**
  * Queued local mutation awaiting push to Supabase. Only the row id is stored —
@@ -85,7 +86,8 @@ export type SyncedTable =
   | 'shift_templates'
   | 'therapist_shift_assignments'
   | 'user_seen_markers'
-  | 'user_push_preferences';
+  | 'user_push_preferences'
+  | 'exercises';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -125,6 +127,7 @@ export const ALL_SYNCED_TABLES = [
   'therapist_shift_assignments',
   'user_seen_markers',
   'user_push_preferences',
+  'exercises',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -203,6 +206,8 @@ export class ClinicDB extends Dexie {
   therapist_shift_assignments!: Table<TherapistShiftAssignment, string>;
   user_seen_markers!: Table<UserSeenMarker, string>;
   user_push_preferences!: Table<UserPushPreference, string>;
+  /** HEP library. Pull-only like appointments: every write goes through the save_exercise RPC (online). */
+  exercises!: Table<Exercise, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -336,6 +341,10 @@ export class ClinicDB extends Dexie {
     // Inpatient stays (ward rounds, discharge bill). Opens and discharges are read by patient and by clinic.
     this.version(27).stores({
       admissions: 'id, clinicId, patientId, [clinicId+updatedAt]',
+    });
+    // HEP exercise library: read-only cache for offline browsing (writes are online-only RPCs).
+    this.version(28).stores({
+      exercises: 'id, clinicId, bodyRegion, [clinicId+updatedAt]',
     });
   }
 }

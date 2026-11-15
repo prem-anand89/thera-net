@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 import { encryptPayload, vapidAuthHeader } from '../_shared/webPush.ts';
-import { buildAppointmentPayload, buildBookingRequestPayload, buildOvernightRequestsPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
+import { buildAppointmentPayload, buildBookingRequestPayload, buildHepPainPayload, buildOvernightRequestsPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
 import { PUSH_CATEGORY_BY_KIND, withoutOptedOut, type PushCategory } from './preferences.ts';
 import { subscriptionsToRemove } from './delivery.ts';
 import { hookAllowed } from '../_shared/hookAuth.ts';
@@ -117,6 +117,48 @@ async function resolveRecipients(req: SendRequest, tz: string, now: Date): Promi
       sameDay: false,
       build: (hideName) =>
         buildBookingRequestPayload({ patientName: reqRow.name, date: reqRow.preferred_date, timeLabel: reqRow.preferred_time_text }, tz, hideName),
+    };
+  }
+
+  if (req.kind === 'hep_high_pain') {
+    // HEP session check (program_session_feedback). Recipient: the prescribing therapist's login, else the admins.
+    const { data: fb } = await admin
+      .from('program_session_feedback').select('program_id, pain_score, pain_item_ids, log_date')
+      .eq('id', req.row_id).maybeSingle();
+    if (!fb || fb.pain_score == null || fb.pain_score < 7) return NOTHING;
+    const { data: prog } = await admin
+      .from('programs').select('id, clinic_id, patient_id, therapist_id')
+      .eq('id', fb.program_id).eq('clinic_id', req.clinic_id).maybeSingle();
+    if (!prog) return NOTHING;
+    let userIds: string[] = [];
+    if (prog.therapist_id) {
+      const { data: t } = await admin
+        .from('therapists').select('user_id').eq('id', prog.therapist_id).eq('clinic_id', req.clinic_id).maybeSingle();
+      if (t?.user_id) userIds = [t.user_id];
+    }
+    if (!userIds.length) {
+      const { data: admins } = await admin
+        .from('clinic_members').select('user_id').eq('clinic_id', req.clinic_id).eq('role', 'admin');
+      userIds = (admins ?? []).map((m) => m.user_id);
+    }
+    const { data: patient } = await admin.from('patients').select('name').eq('id', prog.patient_id).maybeSingle();
+    let exerciseTitle: string | null = null;
+    const firstItem = (fb.pain_item_ids as string[] | null)?.[0];
+    if (firstItem) {
+      const { data: item } = await admin
+        .from('program_items').select('title, body_region').eq('id', firstItem).eq('program_id', prog.id).maybeSingle();
+      // Pelvic floor exercise names never go on a lock screen.
+      if (item && !String(item.body_region ?? '').startsWith('Pelvic floor')) exerciseTitle = item.title;
+    }
+    const firstName = String(patient?.name ?? '').trim().split(/\s+/)[0] || null;
+    return {
+      userIds,
+      sameDay: false,
+      build: (hideName) =>
+        buildHepPainPayload(
+          { patientFirstName: firstName, painScore: fb.pain_score, exerciseTitle, programId: prog.id, patientId: prog.patient_id, logDate: fb.log_date },
+          hideName,
+        ),
     };
   }
 

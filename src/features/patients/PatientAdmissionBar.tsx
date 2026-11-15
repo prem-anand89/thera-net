@@ -21,9 +21,9 @@ import { AdmissionSheet } from './AdmissionSheet';
 import { DischargeSheet } from './DischargeSheet';
 
 /**
- * On the patient profile: whether the patient is on the ward, with Admit / Edit stay / Discharge. Shown only for a clinic
- * that has Inpatient on (or a patient who has stays on record). Admitting also needs a plan with the inpatient feature;
- * a stay already open can always be edited or discharged.
+ * The "Stay" card in the patient profile's rail: whether the patient is on the ward, with Admit / Bill this stay /
+ * Edit stay / Discharge. Shown only for a clinic that has Inpatient on (or a patient who has stays on record). Admitting
+ * also needs a plan with the inpatient feature; a stay already open can always be edited or discharged.
  */
 export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   const clinic = useClinic();
@@ -89,10 +89,11 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
   const canOpenIP = departments.includes('ward');
   const canAdmit = canOpenIP && entitlements.can('inpatient');
   return (
-    <section aria-label="Ward stay" className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-5 py-3">
+    <section aria-label="Ward stay" className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <h3 className="mb-2.5 font-display text-sm font-semibold text-[var(--ink)]">Stay</h3>
       {open ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="min-w-[12rem] flex-1">
+        <div className="space-y-2.5">
+          <div>
             <div className="flex flex-wrap items-center gap-2">
               <Pill tone="teal">Admitted</Pill>
               <span className="text-sm font-medium text-[var(--ink)]">
@@ -119,8 +120,8 @@ export function PatientAdmissionBar({ patient }: { patient: Patient }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <p className="min-w-[12rem] flex-1 text-sm text-[var(--muted)]">
+        <div className="space-y-2.5">
+          <p className="text-sm text-[var(--muted)]">
             {last ? `Last stay ${formatDateDM(last.admittedOn)} to ${formatDateDM(last.dischargedOn!)}` : 'Not admitted'}
             {last && (
               <button type="button" className="ml-2 text-xs text-[var(--teal)] hover:underline" onClick={() => void reopen(last.id)}>

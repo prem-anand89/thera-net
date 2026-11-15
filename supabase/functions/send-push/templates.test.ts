@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { buildBookingRequestPayload, buildOvernightRequestsPayload, buildPayload, sanitizePatientName, sanitizeSlotLabel } from './templates.ts';
+import { buildBookingRequestPayload, buildHepPainPayload, buildOvernightRequestsPayload, buildPayload, sanitizePatientName, sanitizeSlotLabel } from './templates.ts';
 
 Deno.test('appointment payload shows clinic-local time and no patient data', () => {
   const p = buildPayload('appointment_confirmed', '2026-10-03T10:30:00Z', 'Asia/Kolkata');
@@ -105,4 +105,23 @@ Deno.test('a request date reads as the date it names, not shifted by the server 
 Deno.test('the overnight note counts the requests and says so in the singular', () => {
   assertEquals(buildOvernightRequestsPayload(1).body, '1 new booking request came in overnight');
   assertEquals(buildOvernightRequestsPayload(3).body, '3 new booking requests came in overnight');
+});
+
+const pain = { patientFirstName: 'Ravi', painScore: 8, exerciseTitle: 'Wall Slides', programId: 'p1', patientId: 'pt1', logDate: '2026-11-13' };
+
+Deno.test('HEP pain alert names the patient and the exercise, one tag per program per day', () => {
+  const p = buildHepPainPayload(pain);
+  assertEquals(p.title, 'Pain 8/10 reported');
+  assertEquals(p.body, 'Ravi reported pain 8/10 after Wall Slides');
+  assertEquals(p.tag, 'hep-pain-p1-2026-11-13');
+  assertEquals(p.url, '/patients/pt1?view=home-program');
+});
+
+Deno.test('HEP pain alert with names hidden shows neither the patient nor the exercise', () => {
+  const p = buildHepPainPayload(pain, true);
+  assertEquals(p.body, 'A patient reported pain 8/10');
+});
+
+Deno.test('HEP pain alert without a marked exercise says only the score', () => {
+  assertEquals(buildHepPainPayload({ ...pain, exerciseTitle: null }).body, 'Ravi reported pain 8/10');
 });

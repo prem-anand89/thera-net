@@ -204,3 +204,12 @@ export function IconUser({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** HEP (home exercise programs): a dumbbell. */
+export function IconHep({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M2.5 8v4M5 6v8M15 6v8M17.5 8v4M5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}

@@ -5,22 +5,23 @@ describe('filterNavItems', () => {
   it('shows core nav items including Reports to an admin in the header nav', () => {
     const items = filterNavItems('admin');
     const paths = items.map((i) => i.to);
-    expect(paths).toEqual(['/workspace', '/schedule', '/ledger', '/insights']);
+    expect(paths).toEqual(['/workspace', '/schedule', '/ledger', '/insights', '/hep']);
     expect(paths).not.toContain('/settings');
   });
 
   it('hides Reports from a plain therapist', () => {
     const items = filterNavItems('therapist');
     const paths = items.map((i) => i.to);
-    expect(paths).toEqual(['/workspace', '/schedule', '/ledger']);
+    expect(paths).toEqual(['/workspace', '/schedule', '/ledger', '/hep']);
     expect(paths).not.toContain('/settings');
     expect(paths).not.toContain('/insights');
   });
 
-  it('shows Reports for front desk', () => {
+  it('shows Reports for front desk but never HEP (clinical staff only)', () => {
     const items = filterNavItems('front_desk');
     const paths = items.map((i) => i.to);
     expect(paths).toEqual(['/workspace', '/schedule', '/ledger', '/insights']);
+    expect(paths).not.toContain('/hep');
     expect(paths).not.toContain('/settings');
   });
 

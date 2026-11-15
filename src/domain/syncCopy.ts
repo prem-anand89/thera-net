@@ -29,6 +29,7 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   therapist_shift_assignments: { one: 'shift assignment', many: 'shift assignments' },
   user_seen_markers: { one: 'notification marker', many: 'notification markers' },
   user_push_preferences: { one: 'notification setting', many: 'notification settings' },
+  exercises: { one: 'exercise', many: 'exercises' },
 };
 
 export function syncFailureHeadline(tables: string[]): string {

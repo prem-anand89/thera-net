@@ -86,14 +86,25 @@ describe('MyNotificationsSheet', () => {
     expect(names()).toEqual(['New booking requests', 'Hide patient names in notifications']);
 
     rerender(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={undefined} />);
-    expect(names()).toEqual(['New booking requests', 'Low-rated feedback', 'Hide patient names in notifications']);
+    expect(names()).toEqual([
+      'New booking requests',
+      'Low-rated feedback',
+      'Patient exercise alerts',
+      'Hide patient names in notifications',
+    ]);
 
     // An admin who is also a therapist gets appointment alerts too.
     rerender(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={therapist} />);
-    expect(names().slice(0, 3)).toEqual(['New booking requests', 'Changes to my appointments', 'Low-rated feedback']);
+    expect(names().slice(0, 4)).toEqual([
+      'New booking requests',
+      'Changes to my appointments',
+      'Low-rated feedback',
+      'Patient exercise alerts',
+    ]);
 
+    // A therapist with a linked profile gets the exercise alerts too (pain reports go to the prescriber).
     rerender(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
-    expect(names().slice(0, 1)).toEqual(['Changes to my appointments']);
+    expect(names().slice(0, 2)).toEqual(['Changes to my appointments', 'Patient exercise alerts']);
   });
 
   it('says to link the profile when a therapist login has no therapist profile', () => {

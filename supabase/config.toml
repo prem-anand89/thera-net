@@ -45,3 +45,9 @@ verify_jwt = false
 
 [functions.send-agenda]
 verify_jwt = false
+
+# HEP pictures. hep-media checks the caller itself: a staff login (is_hep_staff) for uploads and previews, or the
+# patient's link + PIN for the patient page. verify_jwt must be off so the browser's CORS OPTIONS preflight (which
+# never carries Authorization) reaches the handler, and because patients have no login at all.
+[functions.hep-media]
+verify_jwt = false

@@ -9,6 +9,7 @@ import {
   SESSION_PLAN_OPTIONS,
   type SessionNotePayload,
 } from '@/domain/sessionNote';
+import { HomeProgramNoteLine } from '@/features/hep/HomeProgramNoteLine';
 import { useSessionNoteEditor } from './useSessionNoteEditor';
 
 /**
@@ -175,6 +176,8 @@ export function SessionNoteEditorBody({
             value={payload.plan}
             onChange={(v) => update('plan', v as SessionNotePayload['plan'])}
           />
+          <p className="section-label" style={{ marginTop: 14 }}>Home exercise program</p>
+          <HomeProgramNoteLine patientId={patientId} startDate={editor.visitDate} />
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import {
   validateInsightsSearch,
 } from '@/features/reports/insightsTrendPeriod';
 import { parseSettingsSearch, type SettingsSearch } from '@/features/settings/sections';
+import { validateHepSearch } from '@/features/hep/hepSearch';
 import { RouterErrorFallback } from './ErrorBoundary';
 
 // Code-split every route except the default post-login landing page
@@ -15,6 +16,9 @@ import { RouterErrorFallback } from './ErrorBoundary';
 // import UI, settings) only loads when actually visited.
 const NewVisitPage = lazy(() =>
   import('@/features/visits/NewVisitPage').then((m) => ({ default: m.NewVisitPage }))
+);
+const HepPage = lazy(() =>
+  import('@/features/hep/HepPage').then((m) => ({ default: m.HepPage }))
 );
 const SetupPage = lazy(() =>
   import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage }))
@@ -102,6 +106,11 @@ const FeedbackFormPage = lazy(() =>
   import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({
     default: m.FeedbackFormPage,
   }))
+);
+const PublicHepPage = lazy(() =>
+  import('@/features/publicHep/PublicHepPage').then((m) => ({
+    default: m.PublicHepPage,
+  })),
 );
 const BookingFormPage = lazy(() =>
   import('@/features/publicBooking/BookingFormPage').then((m) => ({
@@ -234,12 +243,12 @@ const patientProfileRoute = createRoute({
   // Where "← Back" should return to — set by whichever screen linked here
   // (Patients list, Workspace, Ledger) so it doesn't always land on one
   // fixed page regardless of where the visitor came from.
-  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget; view?: 'invoices' } => ({
+  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget; view?: 'invoices' | 'home-program' } => ({
     ...(PATIENT_PROFILE_BACK_TARGETS.includes(search.from as PatientProfileBackTarget)
       ? { from: search.from as PatientProfileBackTarget }
       : {}),
-    // 'invoices' opens the Invoices tab; anything else is the Visits tab.
-    ...(search.view === 'invoices' ? { view: 'invoices' as const } : {}),
+    // 'invoices' opens the Invoices tab, 'home-program' the Home program tab (clinical staff); anything else is the Visits tab.
+    ...(search.view === 'invoices' ? { view: 'invoices' as const } : search.view === 'home-program' ? { view: 'home-program' as const } : {}),
   }),
   component: PatientProfilePage,
 });
@@ -535,6 +544,14 @@ const invoicesRedirectRoute = createRoute({
   },
 });
 
+// HEP (home exercise programs). Clinical staff only: HepPage sends front desk back to Workspace.
+const hepRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/hep',
+  validateSearch: validateHepSearch,
+  component: HepPage,
+});
+
 const moreRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/more',
@@ -583,6 +600,13 @@ const bookingFormRoute = createRoute({
   component: BookingFormPage,
 });
 
+// Public, unauthenticated home-exercise page (link + PIN) — see Shell.tsx's early bypass.
+const publicHepRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$token',
+  component: PublicHepPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
@@ -613,12 +637,14 @@ const routeTree = rootRoute.addChildren([
   importVisitsRoute,
   importVisitsRedirectRoute,
   insightsRoute,
+  hepRoute,
   moreRoute,
   resetPasswordRoute,
   onboardingRoute,
   onboardingProfileRoute,
   feedbackFormRoute,
   bookingFormRoute,
+  publicHepRoute,
 ]);
 
 export const router = createRouter({ 
