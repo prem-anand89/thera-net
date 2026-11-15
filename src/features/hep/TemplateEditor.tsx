@@ -9,7 +9,7 @@ import { useClinic } from '@/app/clinicContext';
 import { hepService, HEP_NEEDS_CONNECTION, type HepItemInput } from '@/services/hepService';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
 import { ExercisePicker } from './ExercisePicker';
-import { exerciseToItem, groupItemsByPhase, itemDose, itemsMinutes, moveWithinSection, orderBySection, templateItemToInput, withItemDose } from './hepItems';
+import { groupItemsByPhase, itemDose, itemsMinutes, moveWithinSection, orderBySection, templateItemToInput, withItemDose } from './hepItems';
 import { useOnline } from './useHepData';
 
 export interface TemplateEditorProps {
@@ -133,7 +133,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
         open={open && picking}
         onClose={() => setPicking(false)}
         disabledIds={new Set(items.map((i) => i.sourceExerciseId).filter((x): x is string => !!x))}
-        onAdd={(list) => setItems((cur) => [...cur, ...list.map(exerciseToItem)])}
+        onAdd={(list) => setItems((cur) => [...cur, ...list])}
       />
     </>
   );

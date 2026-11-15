@@ -119,6 +119,10 @@ describe('position filter and sort', () => {
     expect(ids(sortLibrary(L, 'recent', counts))).toEqual(['b', 'c', 'a']);
     expect(ids(L)).toEqual(['a', 'b', 'c']);
   });
+  it('breaks newest-first ties A to Z', () => {
+    const T = [ex('x', 'Zed', { createdAt: '2026-06-01T00:00:00Z' }), ex('y', 'Abe', { createdAt: '2026-06-01T00:00:00Z' }), ex('z', 'Mid', { createdAt: '2026-07-01T00:00:00Z' })];
+    expect(ids(sortLibrary(T, 'recent', {}))).toEqual(['z', 'y', 'x']);
+  });
   it('breaks used ties A to Z', () => {
     expect(ids(sortLibrary(L, 'used', {}))).toEqual(['c', 'a', 'b']);
   });

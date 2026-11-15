@@ -297,6 +297,18 @@ export const hepService = {
     return [...new Set(((data ?? []) as Row[]).map((r) => String(r.source_exercise_id)))];
   },
 
+  /** How many times each exercise has been prescribed (a grouped count in the database, not every row). Any error: {}. */
+  async exerciseUseCounts(clinicId: string): Promise<Record<string, number>> {
+    try {
+      const supabase = requireOnline();
+      const { data, error } = await supabase.rpc('exercise_use_counts', { p_clinic_id: clinicId });
+      if (error) return {};
+      return Object.fromEntries(((data ?? []) as Array<{ exercise_id: string; uses: number }>).map((r) => [r.exercise_id, Number(r.uses)]));
+    } catch {
+      return {};
+    }
+  },
+
   /** How many programs and templates carry a copy of this exercise: an exercise that is used is archived, not deleted. */
   async exerciseUsage(exerciseId: string): Promise<{ programs: number; templates: number }> {
     const supabase = requireOnline();

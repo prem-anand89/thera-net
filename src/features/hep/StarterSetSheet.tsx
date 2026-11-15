@@ -1,4 +1,4 @@
-// Library > Add from starter set: tick the exercises to copy into the clinic's own Library. Optional, never automatic.
+// Library > Starter library: tick the exercises to copy into the clinic's own Library. Optional, never automatic.
 // Exercises the clinic already has (same name) are shown but not offered again. The free plan's cap is enforced by the
 // server: if it is hit part-way, what was added stays and the message says how many.
 import { useEffect, useMemo, useState } from 'react';
@@ -73,7 +73,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
   return (
     <SheetDialog
       open={open}
-      title="Add from starter set"
+      title="Starter library"
       onClose={onClose}
       busy={busy}
       error={error}

@@ -11,10 +11,17 @@ import { db } from '@/lib/db';
 import { ExercisePicker } from './ExercisePicker';
 
 const saveExercise = vi.fn();
+const tItem = (id: string, title: string, sourceExerciseId: string | null) => ({ id, templateId: 't1', sourceExerciseId, title, bodyRegion: 'Knee', phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], equipment: [], doseType: 'reps', sets: 3, reps: 10, holdSeconds: null, durationSeconds: null, restSeconds: 30, sessionsPerDay: 1, side: 'none', optional: false, stopIf: '', sortOrder: 0 });
 vi.mock('@/services/hepService', async (orig) => ({
   ...(await orig<typeof import('@/services/hepService')>()),
-  hepService: { saveExercise: (...a: unknown[]) => saveExercise(...a), recentlyUsedExerciseIds: async () => [], exerciseUsage: async () => ({ programs: 0, templates: 0 }) },
+  hepService: {
+    saveExercise: (...a: unknown[]) => saveExercise(...a), recentlyUsedExerciseIds: async () => [], exerciseUsage: async () => ({ programs: 0, templates: 0 }),
+    exerciseUseCounts: async () => ({}),
+    listTemplates: async () => [{ id: 't1', title: 'Knee week 1', note: null, bodyRegion: 'Knee', usedCount: 2, items: [tItem('i1', 'Quad Sets', '1'), tItem('i2', 'Wall Slides', '2')] }],
+    listPatientPrograms: async () => [{ program: { id: 'p1', title: 'Earlier knee', items: [{ ...tItem('pi1', 'Sit to Stand', '3'), removedOn: null, specialInstructions: '' }] } }],
+  },
 }));
+vi.mock('./StarterSetSheet', () => ({ StarterSetSheet: ({ open }: { open: boolean }) => (open ? <div>starter sheet</div> : null) }));
 vi.mock('@/services/hepMediaService', () => ({ hepMediaService: { mintViewUrls: async () => ({}), mintUploadUrls: vi.fn(), putBlob: vi.fn() } }));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'Asia/Kolkata' } as unknown as Clinic;
@@ -42,13 +49,13 @@ describe('ExercisePicker', () => {
   it('selecting two cards enables "Add 2 exercises", which hands them back in the order ticked', async () => {
     const user = userEvent.setup();
     const { onAdd, onClose } = renderPicker();
-    const add = await screen.findByRole('button', { name: 'Add exercises' });
+    const add = await screen.findByRole('button', { name: 'Add' });
     expect(add).toBeDisabled();
     await user.click(await screen.findByRole('button', { name: /^Wall Slides/ }));
     await user.click(screen.getByRole('button', { name: /^Quad Sets/ }));
-    expect(screen.getByRole('button', { name: 'Add 2 exercises' })).toBeEnabled();
-    await user.click(screen.getByRole('button', { name: 'Add 2 exercises' }));
-    expect(onAdd.mock.calls[0][0].map((e: Exercise) => e.title)).toEqual(['Wall Slides', 'Quad Sets']);
+    expect(screen.getByRole('button', { name: 'Add 2' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Add 2' }));
+    expect(onAdd.mock.calls[0][0].map((e: { title: string }) => e.title)).toEqual(['Wall Slides', 'Quad Sets']);
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -57,7 +64,7 @@ describe('ExercisePicker', () => {
     renderPicker();
     const row = await screen.findByRole('button', { name: /^Quad Sets/ });
     await user.click(row);
-    expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('1 chosen');
+    expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('Adding · 1');
     await user.click(row);
     expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('Nothing chosen yet');
   });
@@ -65,7 +72,52 @@ describe('ExercisePicker', () => {
   it('exercises already in the program are shown but cannot be ticked', async () => {
     renderPicker({ disabledIds: new Set(['1']) });
     expect(await screen.findByRole('button', { name: /^Quad Sets/ })).toBeDisabled();
-    expect(screen.getByText('Already in the program')).toBeInTheDocument();
+    expect(screen.getByText('In program')).toBeInTheDocument();
+  });
+
+  it('Templates tab "Add all" skips exercises already in the program and passes the template id and title', async () => {
+    const user = userEvent.setup();
+    const { onAdd } = renderPicker({ disabledIds: new Set(['1']) });
+    await user.click(await screen.findByRole('tab', { name: 'Templates' }));
+    expect(await screen.findByText('Knee week 1')).toBeInTheDocument();
+    expect(screen.getByText(/used 2×/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add all 1' }));
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd.mock.calls[0][0].map((i: { title: string }) => i.title)).toEqual(['Wall Slides']);
+    expect(onAdd.mock.calls[0][1]).toEqual({ templateId: 't1', suggestedTitle: 'Knee week 1' });
+  });
+
+  it('an earlier-programs tab appears only with a patient, and "Add all" passes the program title', async () => {
+    const user = userEvent.setup();
+    const { onAdd } = renderPicker({ patientId: 'pt1', patientName: 'Asha Rao' });
+    await user.click(await screen.findByRole('tab', { name: 'Asha’s earlier programs' }));
+    await user.click(await screen.findByRole('button', { name: 'Add all 1' }));
+    expect(onAdd.mock.calls[0][0].map((i: { title: string }) => i.title)).toEqual(['Sit to Stand']);
+    expect(onAdd.mock.calls[0][1]).toEqual({ suggestedTitle: 'Earlier knee' });
+  });
+
+  it('has no earlier-programs tab without a patient', async () => {
+    renderPicker();
+    await screen.findByRole('tab', { name: 'Exercises' });
+    expect(screen.queryByRole('tab', { name: /earlier programs/ })).toBeNull();
+  });
+
+  it('adding into the warm-up makes every item a warm-up', async () => {
+    const user = userEvent.setup();
+    const { onAdd } = renderPicker({ target: 'warm_up' });
+    expect(screen.getByText('Add to the warm-up')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /^Quad Sets/ }));
+    await user.click(screen.getByRole('button', { name: 'Add 1' }));
+    expect(onAdd.mock.calls[0][0].map((i: { phase: string }) => i.phase)).toEqual(['warm_up']);
+  });
+
+  it('an empty Library offers the starter library', async () => {
+    await db.exercises.clear();
+    const user = userEvent.setup();
+    renderPicker();
+    await user.click(await screen.findByRole('button', { name: 'Add the starter library' }));
+    expect(screen.getByText('starter sheet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Or create your own exercise' })).toBeInTheDocument();
   });
 
   it('typing an unknown name offers "+ New exercise", and Save and add saves it then adds it with the ticked ones', async () => {
@@ -79,12 +131,12 @@ describe('ExercisePicker', () => {
     await user.click(screen.getByRole('button', { name: 'Save and add' }));
     await waitFor(() => expect(onAdd).toHaveBeenCalled());
     expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ title: 'Bird dog', bodyRegion: 'Core' }));
-    expect(onAdd.mock.calls[0][0].map((e: Exercise) => e.title)).toEqual(['Sit to Stand', 'Bird dog']);
+    expect(onAdd.mock.calls[0][0].map((e: { title: string }) => e.title)).toEqual(['Sit to Stand', 'Bird dog']);
   });
 
   it('says so when the Library is empty', async () => {
     await db.exercises.clear();
     renderPicker();
-    expect(await screen.findByText(/Your Library is empty/)).toBeInTheDocument();
+    expect(await screen.findByText('Your Library is empty')).toBeInTheDocument();
   });
 });

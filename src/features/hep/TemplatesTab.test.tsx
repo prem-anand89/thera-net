@@ -7,6 +7,7 @@ import { ClinicContext } from '@/app/clinicContext';
 import type { Clinic } from '@/domain/types';
 import type { Exercise, ExerciseTemplate, ExerciseTemplateItem } from '@/domain/hep';
 import { exerciseToItem } from './hepItems';
+import type { HepItemInput } from '@/services/hepService';
 import { TemplatesTab } from './TemplatesTab';
 
 const listTemplates = vi.fn();
@@ -19,9 +20,9 @@ vi.mock('@/services/hepService', async (orig) => ({
 let pickList: Exercise[] = [];
 let pickDisabled: ReadonlySet<string> | undefined;
 vi.mock('./ExercisePicker', () => ({
-  ExercisePicker: ({ open, onAdd, onClose, disabledIds }: { open: boolean; onAdd: (e: Exercise[]) => void; onClose: () => void; disabledIds?: ReadonlySet<string> }) => {
+  ExercisePicker: ({ open, onAdd, onClose, disabledIds }: { open: boolean; onAdd: (e: HepItemInput[]) => void; onClose: () => void; disabledIds?: ReadonlySet<string> }) => {
     pickDisabled = disabledIds;
-    return open ? <button type="button" onClick={() => { onAdd(pickList); onClose(); }}>pick from library</button> : null;
+    return open ? <button type="button" onClick={() => { onAdd(pickList.map(exerciseToItem)); onClose(); }}>pick from library</button> : null;
   },
 }));
 

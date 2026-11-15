@@ -11,12 +11,13 @@ import { hepService } from '@/services/hepService';
 import type { Exercise } from '@/domain/hep';
 import { ExerciseForm } from './ExerciseForm';
 import { LibraryBrowser } from './LibraryBrowser';
-import { useExercises, useOnline, useUsedThisWeek } from './useHepData';
+import { useExerciseUseCounts, useExercises, useOnline, useUsedThisWeek } from './useHepData';
 
 export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
   const clinic = useClinic();
   const exercises = useExercises(clinic.id);
   const usedIds = useUsedThisWeek();
+  const useCounts = useExerciseUseCounts();
   const online = useOnline();
   const ent = useEntitlements(clinic.id);
   const [form, setForm] = useState<{ exercise?: Exercise } | null>(null);
@@ -45,7 +46,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
       <p className="mx-auto max-w-md text-sm text-[var(--muted)]">Add the exercises you prescribe most, with a photo or GIF and the usual dose. Then build a program for a patient in a minute.</p>
       <div className="flex flex-wrap justify-center gap-2">
         <Button type="button" className={btnPrimary} onClick={() => setForm({})}>Add your first exercise</Button>
-        {onStarter && <Button type="button" className={btnSecondary} onClick={onStarter}>Add from starter set</Button>}
+        {onStarter && <Button type="button" className={btnSecondary} onClick={onStarter}>Add the starter library</Button>}
       </div>
     </div>
   );
@@ -63,7 +64,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived ({archivedCount})
           </label>
         )}
-        {onStarter && count > 0 && <Button type="button" className={btnSecondary} onClick={onStarter}>Add from starter set</Button>}
+        {onStarter && count > 0 && <Button type="button" className={btnSecondary} onClick={onStarter}>Starter library</Button>}
         <Button type="button" className={btnPrimary} disabled={!online} onClick={() => setForm({})}>{online ? '+ Add exercise' : 'Needs a connection'}</Button>
       </div>
       <ErrorNote message={error} />
@@ -71,6 +72,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
         clinicId={clinic.id}
         exercises={exercises}
         usedIds={usedIds}
+        useCounts={useCounts}
         showArchived={showArchived}
         onActivate={(ex) => setForm({ exercise: ex })}
         onToggleFavorite={online ? (ex) => void toggleFavorite(ex) : undefined}

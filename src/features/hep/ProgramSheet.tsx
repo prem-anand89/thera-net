@@ -17,7 +17,7 @@ import { AddPatientSheet } from '@/features/patients/AddPatientSheet';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
 import { ExercisePicker } from './ExercisePicker';
 import { HandOverPanel } from './HandOverPanel';
-import { exerciseToItem, groupItemsByPhase, itemDose, moveWithinSection, orderBySection, withItemDose } from './hepItems';
+import { groupItemsByPhase, itemDose, moveWithinSection, orderBySection, withItemDose } from './hepItems';
 import { itemProgress, itemProgressLine } from './itemProgress';
 import {
   CHECKIN_CHOICES, LENGTH_CHOICES, TARGET_CHOICES, blankDraft, changeSessionsPerDay, changesFor, createSettings, draftFromBundle, draftFromTemplate, draftProblem, estimateLabel, isSectionOptional,
@@ -390,7 +390,7 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
         open={open && picking && !handOver}
         onClose={() => setPicking(false)}
         disabledIds={new Set(draft.items.map((i) => i.sourceExerciseId).filter((x): x is string => !!x))}
-        onAdd={(list) => setItems([...draft.items, ...list.map((e) => ({ ...exerciseToItem(e), sessionsPerDay: draft.sessionsPerDay }))])}
+        onAdd={(list, meta) => { setItems([...draft.items, ...list.map((i) => ({ ...i, sessionsPerDay: draft.sessionsPerDay }))]); if (meta?.templateId) setTemplateId(meta.templateId); }}
       />
       <ConfirmDialog open={confirmDiscard} title="Discard changes?" message="What you changed in this program will not be saved." confirmLabel="Discard" destructive onConfirm={() => { setConfirmDiscard(false); onClose(); }} onCancel={() => setConfirmDiscard(false)} />
       <AddPatientSheet open={addingPatient} onClose={() => setAddingPatient(false)} initialName={query.trim()} onCreated={(p) => { setPatient(p); setQuery(''); setAddingPatient(false); }} onUseExisting={(p) => { setPatient(p); setQuery(''); setAddingPatient(false); }} />

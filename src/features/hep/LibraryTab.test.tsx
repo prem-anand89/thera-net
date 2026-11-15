@@ -42,7 +42,7 @@ describe('LibraryTab', () => {
     renderTab({ onStarter });
     expect(await screen.findByText('Your Library is empty')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add your first exercise' })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Add from starter set' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Add the starter library' }));
     expect(onStarter).toHaveBeenCalled();
   });
 

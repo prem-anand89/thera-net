@@ -30,7 +30,7 @@ vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (fn: () => Promise<unknown>)
   useEffect(() => { void Promise.resolve(fn()).then(setV); }, []); return v; } }));
 vi.mock('@/app/useWorkspaceScope', () => ({ useWorkspaceScope: () => ({ myTherapistId: 't1' }) }));
 let pickList: Exercise[] = [];
-vi.mock('./ExercisePicker', () => ({ ExercisePicker: ({ open, onAdd, onClose }: { open: boolean; onAdd: (e: Exercise[]) => void; onClose: () => void }) => (open ? <button type="button" onClick={() => { onAdd(pickList); onClose(); }}>pick from library</button> : null) }));
+vi.mock('./ExercisePicker', () => ({ ExercisePicker: ({ open, onAdd, onClose }: { open: boolean; onAdd: (e: HepItemInput[]) => void; onClose: () => void }) => (open ? <button type="button" onClick={() => { onAdd(pickList.map(exerciseToItem)); onClose(); }}>pick from library</button> : null) }));
 vi.mock('./HandOverPanel', () => ({ HandOverPanel: (p: { open: boolean; pin: string | null; token: string; patientName: string; fromTemplate: boolean; onClose: () => void }) => (p.open ? <div role="dialog" aria-label="hand over"><span>pin {p.pin ?? 'none'}</span><span>token {p.token}</span><span>for {p.patientName}</span><span>{p.fromTemplate ? 'from template' : 'not from template'}</span><button type="button" onClick={p.onClose}>close hand over</button></div> : null) }));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;

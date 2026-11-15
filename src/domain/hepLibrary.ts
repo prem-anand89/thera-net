@@ -9,6 +9,7 @@ import {
   canonicalEquipment,
   canonicalRegion,
   matchesExerciseSearch,
+  regionTree,
   positionsOf,
   type Exercise,
   type ExercisePhase,
@@ -69,12 +70,12 @@ export function filterLibrary<T extends LibraryExercise>(
 
 export type LibrarySort = 'used' | 'az' | 'recent';
 
-/** Most used first (ties A to Z), A to Z, or newest first. Returns a new list. */
+/** Most used first (ties A to Z), A to Z, or newest first (ties A to Z). Returns a new list. */
 export function sortLibrary<T extends LibraryExercise>(list: T[], sort: LibrarySort, useCounts: Record<string, number>): T[] {
   const az = (a: T, b: T) => a.title.localeCompare(b.title);
   const out = [...list];
   if (sort === 'az') return out.sort(az);
-  if (sort === 'recent') return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (sort === 'recent') return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || az(a, b));
   return out.sort((a, b) => (useCounts[b.id] ?? 0) - (useCounts[a.id] ?? 0) || az(a, b));
 }
 
@@ -149,4 +150,38 @@ export function similarExercise<T extends Pick<Exercise, 'id' | 'title' | 'bodyR
       return theirs === mine || (Math.min(theirs.length, mine.length) >= 5 && (theirs.startsWith(mine) || mine.startsWith(theirs)));
     }) ?? null
   );
+}
+
+/** The numbers beside each filter value. Each facet is counted with the other filters applied but not its own, so a
+ *  value shows how many results choosing it would give. */
+export interface FacetCounts {
+  fav: number;
+  used: number;
+  all: number;
+  regions: Array<{ region: string; n: number }>;
+  types: Array<{ phase: ExercisePhase; n: number }>;
+  positions: Array<{ position: string; n: number }>;
+  equipment: Array<{ name: string; n: number }>;
+}
+
+export function facetCounts<T extends LibraryExercise>(live: T[], filter: LibraryFilter, opts: { usedIds?: ReadonlySet<string>; includeArchived?: boolean } = {}): FacetCounts {
+  const without = (patch: Partial<LibraryFilter>) => filterLibrary(live, { ...filter, ...patch }, opts);
+  const byRegion = without({ region: 'All' });
+  const byType = without({ phase: 'All' });
+  const byPosition = without({ position: 'All' });
+  const byEquipment = without({ equipment: [] });
+  const regionNames = regionTree(live, { includeArchived: opts.includeArchived }).filter((n) => n.count > 0).map((n) => n.region);
+  const phases = [...EXERCISE_PHASES];
+  return {
+    fav: byRegion.filter((e) => e.isFavorite).length,
+    used: byRegion.filter((e) => opts.usedIds?.has(e.id)).length,
+    all: byRegion.length,
+    regions: regionNames.map((region) => ({ region, n: byRegion.filter((e) => exerciseInRegion(e, region)).length })),
+    types: phases.map((phase) => ({ phase, n: byType.filter((e) => e.phase === phase).length })),
+    positions: [...new Set(byPosition.flatMap((e) => positionsOf(e)))].map((position) => ({ position, n: byPosition.filter((e) => positionsOf(e).includes(position)).length })),
+    equipment: ['None', ...equipmentInUse(live)].map((name) => {
+      const n = byEquipment.filter((e) => (name === 'None' ? e.equipment.length === 0 || e.equipment.map(canonicalEquipment).includes('None') : e.equipment.map(canonicalEquipment).includes(name))).length;
+      return { name, n };
+    }),
+  };
 }

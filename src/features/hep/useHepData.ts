@@ -43,6 +43,20 @@ export function useUsedThisWeek(): ReadonlySet<string> {
   return ids;
 }
 
+/** How many times each exercise has been prescribed. {} while offline or loading (sorting then falls back to A to Z). */
+export function useExerciseUseCounts(): Record<string, number> {
+  const clinic = useClinic();
+  const online = useOnline();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!online) { setCounts({}); return; }
+    let live = true;
+    Promise.resolve().then(() => hepService.exerciseUseCounts(clinic.id)).then((c) => { if (live) setCounts(c ?? {}); }).catch(() => {});
+    return () => { live = false; };
+  }, [clinic.id, online]);
+  return counts;
+}
+
 const THUMB_TTL_MS = 20 * 60 * 1000; // the signer keeps one link for 30 minutes and it is valid for 60
 const thumbCache = new Map<string, { url: string; at: number }>();
 

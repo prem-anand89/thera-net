@@ -157,6 +157,14 @@ describe('exercises', () => {
     delete tables.program_items;
   });
 
+  it('counts uses per exercise through the grouped-count RPC, and gives {} on any error', async () => {
+    mockRpc.mockResolvedValueOnce({ data: [{ exercise_id: 'e1', uses: 4 }, { exercise_id: 'e2', uses: 1 }], error: null });
+    expect(await hepService.exerciseUseCounts('c-1')).toEqual({ e1: 4, e2: 1 });
+    expect(mockRpc).toHaveBeenCalledWith('exercise_use_counts', { p_clinic_id: 'c-1' });
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+    expect(await hepService.exerciseUseCounts('c-1')).toEqual({});
+  });
+
   it('counts the programs and templates that carry a copy of an exercise', async () => {
     tables.program_items = { data: null, error: null, count: 3 } as never;
     tables.exercise_template_items = { data: null, error: null, count: 1 } as never;
