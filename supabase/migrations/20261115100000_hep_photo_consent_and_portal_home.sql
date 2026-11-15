@@ -52,6 +52,7 @@ declare
   v_has_media boolean := cardinality(coalesce(p_media_keys, '{}'::text[])) > 0;
   v_old_consent_at timestamptz;
   v_old_keys text[];
+  v_new_pictures boolean;
   v_record_consent boolean;
 begin
   if not public.is_hep_staff(p_clinic_id) then
@@ -69,20 +70,26 @@ begin
   select exists (select 1 from public.exercises where id = v_id and clinic_id = p_clinic_id)
     into v_exists;
 
-  -- Photo consent: a row that will show pictures needs consent, either already recorded or ticked now. Archive and
-  -- delete never ask (they only hide the row). Existing pictures without consent keep showing until the next save.
+  -- Photo consent is needed only when a save brings in pictures: a new row (Create, Duplicate, progression) with
+  -- pictures, or an existing row whose pictures change to a different non-empty set (the old consent does not cover
+  -- them). Every other save (Restore, Archive, Delete, edits that keep the same pictures, older pictured rows with no
+  -- consent recorded) needs none and leaves the consent columns as they are.
   if v_exists then
     select e.picture_consent_at, e.media_keys into v_old_consent_at, v_old_keys
       from public.exercises e
      where e.id = v_id and e.clinic_id = p_clinic_id;
   end if;
-  if v_has_media and not coalesce(p_deleted, false) and coalesce(p_active, true)
-     and v_old_consent_at is null and not coalesce(p_picture_consent, false) then
+  v_new_pictures := v_has_media
+                    and not coalesce(p_deleted, false)
+                    and (not v_exists
+                         or not (v_old_keys @> coalesce(p_media_keys, '{}'::text[])
+                                 and v_old_keys <@ coalesce(p_media_keys, '{}'::text[])));
+  if v_new_pictures and not coalesce(p_picture_consent, false) then
     raise exception 'Consent is needed for these pictures.';
   end if;
-  -- Recorded when ticked and not yet recorded, or when the pictures themselves changed.
-  v_record_consent := v_has_media and coalesce(p_picture_consent, false)
-                      and (v_old_consent_at is null or v_old_keys is distinct from coalesce(p_media_keys, '{}'::text[]));
+  -- Recorded fresh for new pictures; a tick on unchanged pictures with none recorded yet also records it.
+  v_record_consent := coalesce(p_picture_consent, false)
+                      and (v_new_pictures or (v_has_media and v_old_consent_at is null));
 
   if not v_exists and not p_deleted then
     if not public.clinic_has_unlimited_hep(p_clinic_id) then

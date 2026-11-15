@@ -52,6 +52,14 @@ describe('HEP photo consent and portal home migration contract', () => {
     expect(s).toContain('p_hide_pictures_in_lists boolean default false');
     expect(s).toContain("raise exception 'Consent is needed for these pictures.';");
     expect(s).toContain('picture_consent_by = auth.uid()');
+    // Consent only when a save brings in pictures (new row, or a changed non-empty set); no archive-only exemption.
+    const fnS = fnBody(s, 'save_exercise');
+    expect(fnS).toContain('v_new_pictures := v_has_media');
+    expect(fnS).toContain('(not v_exists');
+    expect(fnS).toContain("v_old_keys @> coalesce(p_media_keys, '{}'::text[])");
+    expect(fnS).toContain('if v_new_pictures and not coalesce(p_picture_consent, false) then');
+    expect(fnS).not.toContain('coalesce(p_active, true)\n     and v_old_consent_at is null');
+    expect(fnS).not.toMatch(/and coalesce\(p_active, true\)\s+and v_old_consent_at is null/);
     expect(s).toContain(`grant execute on function public.save_exercise(${SIG_27}) to authenticated;`);
     expect(s).toContain(`revoke all on function public.save_exercise(${SIG_27}) from public, anon;`);
     // Same guards as before.
