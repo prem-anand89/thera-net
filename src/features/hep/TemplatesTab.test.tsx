@@ -234,8 +234,7 @@ describe('TemplateEditor (through the tab)', () => {
   it('moves and removes rows inside a section', async () => {
     const user = userEvent.setup();
     const dlg = await openEditor(user);
-    await user.click(within(dlg).getByRole('button', { name: 'More for Squat' }));
-    await user.click(screen.getByRole('button', { name: 'Move down' }));
+    await user.click(within(dlg).getByRole('button', { name: 'Move Squat down' }));
     await user.click(within(dlg).getByRole('button', { name: 'Remove Calf stretch' }));
     await user.click(within(dlg).getByRole('button', { name: 'Save template' }));
     await waitFor(() => expect(saveTemplate).toHaveBeenCalled());

@@ -146,42 +146,42 @@ function ItemRow({ row, first, last, items, sessionsPerDay, library, editingLive
 
   return (
     <li className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex items-center gap-2 p-2">
+      <div className="flex min-w-0 items-center gap-1 p-2 sm:gap-2">
         {src && !src.hidePicturesInLists && <Thumb ex={src} url={src.thumbKey ? thumbs[src.thumbKey] : undefined} size={40} />}
-        <button type="button" aria-expanded={open} className="min-w-0 flex-1 text-left" onClick={() => setOpenRow(open ? null : index)}>
+        <button type="button" aria-expanded={open} className="min-w-0 flex-1 overflow-hidden text-left" onClick={() => setOpenRow(open ? null : index)}>
           <span className="block truncate text-sm font-semibold text-[var(--ink)]">{item.title}{item.optional && <span className="ml-2 text-xs font-medium text-[var(--muted)]">Optional</span>}</span>
           <span className="block truncate text-xs text-[var(--muted)]">{describeDose(itemDose(item), forTemplate ? 1 : sessionsPerDay)}{override && ` · Only this one: ${SESSION_LABEL[item.sessionsPerDay]}`}</span>
         </button>
-        <Button
-          type="button"
-          aria-label={`Move ${item.title} up`}
-          disabled={first}
-          className="min-h-9 min-w-8 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-30"
-          onClick={() => change(moveWithinSection(items, index, -1))}
-        >
-          ↑
-        </Button>
-        <Button
-          type="button"
-          aria-label={`Move ${item.title} down`}
-          disabled={last}
-          className="min-h-9 min-w-8 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-30"
-          onClick={() => change(moveWithinSection(items, index, 1))}
-        >
-          ↓
-        </Button>
-        <KebabMenu ariaLabel={`More for ${item.title}`}>
-          {(close) => (
-            <div data-row-menu className="py-1">
-              {moves.map(([to, label]) => (
-                <button key={to} type="button" className={menuItem} onClick={() => { close(); change(moveToBlock(items, index, to, mainPhaseFor(item, library))); }}>{label}</button>
-              ))}
-              <button type="button" className={`${menuItem} disabled:opacity-40`} disabled={first} onClick={() => { close(); change(moveWithinSection(items, index, -1)); }}>Move up</button>
-              <button type="button" className={`${menuItem} disabled:opacity-40`} disabled={last} onClick={() => { close(); change(moveWithinSection(items, index, 1)); }}>Move down</button>
-            </div>
-          )}
-        </KebabMenu>
-        <Button type="button" aria-label={`Remove ${item.title}`} className="min-h-9 min-w-9 text-[var(--rust)]" onClick={() => change(items.filter((_, i) => i !== index))}>✕</Button>
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+          <Button
+            type="button"
+            aria-label={`Move ${item.title} up`}
+            disabled={first}
+            className="min-h-9 min-w-7 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-30 sm:min-w-8"
+            onClick={() => change(moveWithinSection(items, index, -1))}
+          >
+            ↑
+          </Button>
+          <Button
+            type="button"
+            aria-label={`Move ${item.title} down`}
+            disabled={last}
+            className="min-h-9 min-w-7 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-30 sm:min-w-8"
+            onClick={() => change(moveWithinSection(items, index, 1))}
+          >
+            ↓
+          </Button>
+          <KebabMenu ariaLabel={`More for ${item.title}`}>
+            {(close) => (
+              <div data-row-menu className="py-1">
+                {moves.map(([to, label]) => (
+                  <button key={to} type="button" className={menuItem} onClick={() => { close(); change(moveToBlock(items, index, to, mainPhaseFor(item, library))); }}>{label}</button>
+                ))}
+              </div>
+            )}
+          </KebabMenu>
+          <Button type="button" aria-label={`Remove ${item.title}`} className="min-h-9 min-w-8 text-[var(--rust)] sm:min-w-9" onClick={() => change(items.filter((_, i) => i !== index))}>✕</Button>
+        </div>
       </div>
       {open && (
         <div className="space-y-3 border-t border-[var(--border)] p-3">

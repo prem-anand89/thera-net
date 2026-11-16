@@ -16,7 +16,7 @@ import { TypeTag } from './LibraryParts';
 import { exerciseToItem, intoBlock, itemsMinutes, programItemToInput, templateItemToInput, type ItemBlock } from './hepItems';
 import { PackList, type Pack } from './PickerPacks';
 import { StarterSetSheet } from './StarterSetSheet';
-import { clinicToday, useExerciseUseCounts, useExercises, useOnline, useUsedThisWeek } from './useHepData';
+import { clinicToday, useExerciseUseCounts, useExercises, useOnline, useThumbUrls, useUsedThisWeek } from './useHepData';
 
 export type PickerTab = 'exercises' | 'templates' | 'earlier';
 export interface AddMeta { templateId?: string; suggestedTitle?: string }
@@ -77,6 +77,15 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
 
   const block = target ?? 'main';
   const byId = new Map((exercises ?? []).map((e) => [e.id, e]));
+  const detailThumbSrc = useMemo(
+    () =>
+      detailEx && (detailEx.thumbKey || detailEx.mediaKeys[0])
+        ? [{ ...detailEx, thumbKey: detailEx.thumbKey ?? detailEx.mediaKeys[0], hidePicturesInLists: false }]
+        : [],
+    [detailEx],
+  );
+  const detailThumbs = useThumbUrls(clinic.id, detailThumbSrc);
+  const detailPhotoUrl = detailThumbSrc[0]?.thumbKey ? detailThumbs[detailThumbSrc[0].thumbKey] : undefined;
   const chosen = ticked.map((id) => byId.get(id)).filter((e): e is Exercise => !!e);
   const chosenItems = useMemo(() => chosen.map(exerciseToItem), [chosen]);
   const toggle = (ex: Exercise) => setTicked((cur) => (cur.includes(ex.id) ? cur.filter((x) => x !== ex.id) : [...cur, ex.id]));
@@ -209,6 +218,11 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
           )}
         >
           <div className="space-y-3 text-sm text-[var(--ink)]">
+            {detailPhotoUrl && (
+              <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--paper)]">
+                <img src={detailPhotoUrl} alt={detailEx.mediaCaptions[0] || detailEx.title} className="max-h-56 w-full object-contain" />
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
               <TypeTag phase={detailEx.phase} />
               <span>·</span>

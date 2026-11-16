@@ -24,7 +24,13 @@ vi.mock('@/services/hepService', async (orig) => ({
   },
 }));
 vi.mock('./StarterSetSheet', () => ({ StarterSetSheet: ({ open }: { open: boolean }) => (open ? <div>starter sheet</div> : null) }));
-vi.mock('@/services/hepMediaService', () => ({ hepMediaService: { mintViewUrls: async () => ({}), mintUploadUrls: vi.fn(), putBlob: vi.fn() } }));
+vi.mock('@/services/hepMediaService', () => ({
+  hepMediaService: {
+    mintViewUrls: async (_c: string, keys: string[]) => Object.fromEntries(keys.map((k) => [k, `https://img.test/${k}`])),
+    mintUploadUrls: vi.fn(),
+    putBlob: vi.fn(),
+  },
+}));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'Asia/Kolkata' } as unknown as Clinic;
 const ex = (id: string, title: string, over: Partial<Exercise> = {}): Exercise => ({
@@ -233,5 +239,29 @@ describe('ExercisePicker', () => {
     const reopened = screen.getByRole('dialog', { name: 'Quad Sets' });
     await user.click(within(reopened).getByRole('button', { name: 'Remove' }));
     expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('Nothing chosen yet');
+  });
+
+  it('Details dialog shows the exercise first photo even when hidePicturesInLists is on, and shows none when it has no photo', async () => {
+    await db.exercises.bulkPut([
+      ex('4', 'Pelvic Tilt', {
+        thumbKey: 'clinics/c1/ex/4/thumb.jpg',
+        mediaType: 'stills',
+        mediaKeys: ['clinics/c1/ex/4/0.jpg'],
+        mediaCaptions: ['Start position'],
+        hidePicturesInLists: true,
+      }),
+      ex('5', 'No Photo Stretch'),
+    ]);
+    const user = userEvent.setup();
+    renderPicker();
+    await user.click(await screen.findByRole('button', { name: 'Details for Pelvic Tilt' }));
+    const dlg = screen.getByRole('dialog', { name: 'Pelvic Tilt' });
+    const img = await within(dlg).findByRole('img');
+    expect(img).toHaveAttribute('src', 'https://img.test/clinics/c1/ex/4/thumb.jpg');
+    await user.click(within(dlg).getByRole('button', { name: 'Close' }));
+
+    await user.click(screen.getByRole('button', { name: 'Details for No Photo Stretch' }));
+    const noPhotoDlg = screen.getByRole('dialog', { name: 'No Photo Stretch' });
+    expect(within(noPhotoDlg).queryByRole('img')).toBeNull();
   });
 });

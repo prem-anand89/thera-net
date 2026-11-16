@@ -70,13 +70,11 @@ describe('ProgramItemsEditor: the three blocks', () => {
 });
 
 describe('ProgramItemsEditor: the ⋯ menu', () => {
-  it('a main row offers Move to warm-up / Move to cool-down, Move up / Move down; moving to the cool-down puts it there', async () => {
+  it('a main row offers Move to warm-up / Move to cool-down (no duplicate Move up/down); moving to the cool-down puts it there', async () => {
     const user = userEvent.setup();
     render(<Harness start={[item(squat), item(bridge)]} />);
     await openMenu(user, 'Squat');
-    expect(menuNames()).toEqual(['Move to warm-up', 'Move to cool-down', 'Move up', 'Move down']);
-    expect(screen.getByRole('button', { name: 'Move up' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Move down' })).toBeEnabled();
+    expect(menuNames()).toEqual(['Move to warm-up', 'Move to cool-down']);
     await user.click(screen.getByRole('button', { name: 'Move to cool-down' }));
     expect(within(screen.getByRole('region', { name: 'Cool-down' })).getByText('Squat')).toBeInTheDocument();
     expect(saved.map((i) => [i.title, i.phase])).toEqual([['Bridge', 'strengthening'], ['Squat', 'cool_down']]);
@@ -86,7 +84,7 @@ describe('ProgramItemsEditor: the ⋯ menu', () => {
     const user = userEvent.setup();
     render(<Harness start={[item(quad, { phase: 'warm_up' }), item(ex('gone', 'Deleted one'), { phase: 'cool_down' })]} />);
     await openMenu(user, 'Quad Sets');
-    expect(menuNames()).toEqual(['Move to main exercises', 'Move up', 'Move down']);
+    expect(menuNames()).toEqual(['Move to main exercises']);
     await user.click(screen.getByRole('button', { name: 'Move to main exercises' }));
     expect(within(screen.getByRole('region', { name: 'Activation' })).getByText('Quad Sets')).toBeInTheDocument();
     await openMenu(user, 'Deleted one');
@@ -94,14 +92,21 @@ describe('ProgramItemsEditor: the ⋯ menu', () => {
     expect(within(screen.getByRole('region', { name: 'Other' })).getByText('Deleted one')).toBeInTheDocument();
   });
 
-  it('Move down swaps within the section, and ✕ removes the row', async () => {
+  it('✕ removes the row', async () => {
     const user = userEvent.setup();
     render(<Harness start={[item(squat), item(bridge), item(quad)]} />);
-    await openMenu(user, 'Squat');
-    await user.click(screen.getByRole('button', { name: 'Move down' }));
-    expect(saved.map((i) => i.title)).toEqual(['Bridge', 'Squat', 'Quad Sets']);
     await user.click(screen.getByRole('button', { name: 'Remove Quad Sets' }));
-    expect(saved.map((i) => i.title)).toEqual(['Bridge', 'Squat']);
+    expect(saved.map((i) => i.title)).toEqual(['Squat', 'Bridge']);
+  });
+
+  it('keeps narrow 360px row layout with truncating title and shrink-0 controls', () => {
+    render(<Harness start={[item(ex('long', 'Very Long Physiotherapy Exercise Title For Narrow Phone'))]} />);
+    const titleBtn = screen.getByRole('button', { name: /^Very Long Physiotherapy/ });
+    expect(titleBtn.className).toContain('min-w-0');
+    expect(titleBtn.className).toContain('overflow-hidden');
+    expect(titleBtn.parentElement!.className).toContain('min-w-0');
+    const upBtn = screen.getByRole('button', { name: /Move Very Long Physiotherapy.* up/ });
+    expect(upBtn.parentElement!.className).toContain('shrink-0');
   });
 
   it('"Optional" on a type section marks only that section', async () => {

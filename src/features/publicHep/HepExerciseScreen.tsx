@@ -100,14 +100,43 @@ function PhotoLightbox({
 }) {
   const total = item.mediaUrls.length;
   const swipeX = useRef<number | null>(null);
+  const lastTouchTap = useRef(0);
+  const skipNextDblClick = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
+    setZoomed(false);
+  }, [index]);
+
+  useEffect(() => {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeBtn.current?.focus();
+    return () => {
+      trigger?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       else if (e.key === 'ArrowRight' && index < total - 1) onIndex(index + 1);
       else if (e.key === 'ArrowLeft' && index > 0) onIndex(index - 1);
+      else if (e.key === 'Tab') {
+        const focusables = Array.from(
+          dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ) ?? [],
+        );
+        if (focusables.length === 0) return;
+        e.preventDefault();
+        const cur = focusables.indexOf(document.activeElement as HTMLElement);
+        const next = e.shiftKey
+          ? (cur <= 0 ? focusables.length - 1 : cur - 1)
+          : (cur + 1) % focusables.length;
+        focusables[next]?.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -116,6 +145,7 @@ function PhotoLightbox({
   const caption = item.mediaCaptions[index] || '';
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Full screen picture"
@@ -133,21 +163,46 @@ function PhotoLightbox({
         </button>
       </div>
       <div
-        className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2 touch-pan-y"
-        onPointerDown={(e) => { swipeX.current = e.clientX; }}
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto px-3 py-2"
+        style={{ touchAction: 'pinch-zoom' }}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest('button')) return;
+          swipeX.current = e.clientX;
+        }}
         onPointerUp={(e) => {
-          if (swipeX.current == null || total <= 1) return;
-          const dx = e.clientX - swipeX.current;
+          if ((e.target as HTMLElement).closest('button')) return;
+          const startX = swipeX.current;
           swipeX.current = null;
-          if (dx <= -40 && index < total - 1) onIndex(index + 1);
-          else if (dx >= 40 && index > 0) onIndex(index - 1);
+          const dx = startX == null ? 0 : e.clientX - startX;
+          if (!zoomed && total > 1 && startX != null) {
+            if (dx <= -40 && index < total - 1) { onIndex(index + 1); return; }
+            if (dx >= 40 && index > 0) { onIndex(index - 1); return; }
+          }
+          if (e.pointerType === 'touch' && Math.abs(dx) < 15) {
+            const now = Date.now();
+            if (now - lastTouchTap.current < 300) {
+              lastTouchTap.current = 0;
+              skipNextDblClick.current = true;
+              setZoomed((z) => !z);
+            } else {
+              lastTouchTap.current = now;
+            }
+          }
         }}
       >
         <img
           src={item.mediaUrls[index]}
           alt={caption || (total > 1 ? `${item.title}, picture ${index + 1}` : item.title)}
           onError={onImageError}
-          className="max-h-full max-w-full object-contain"
+          onDoubleClick={() => {
+            if (skipNextDblClick.current) {
+              skipNextDblClick.current = false;
+              return;
+            }
+            setZoomed((z) => !z);
+          }}
+          style={{ transform: zoomed ? 'scale(2)' : 'scale(1)', touchAction: 'pinch-zoom' }}
+          className={`max-h-full max-w-full object-contain transition-transform duration-150 ${zoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
         />
         {total > 1 && (
           <>
@@ -248,10 +303,13 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
     [item.sets, onSetsDoneChange],
   );
   const startKind = useRef<'hold' | 'timed' | 'rest'>('hold');
+  const setsAtRunStart = useRef(0);
   const onTimerFinish = useCallback(() => {
     if (startKind.current === 'rest') return;
-    const next = Math.min(item.sets, setsDoneRef.current + 1);
-    setSetsDone(next);
+    const current = setsDoneRef.current;
+    const tickedDuringRun = current > setsAtRunStart.current;
+    const next = tickedDuringRun ? current : Math.min(item.sets, current + 1);
+    if (!tickedDuringRun) setSetsDone(next);
     if (next < item.sets) {
       const restPart = item.restSeconds > 0 ? ` Rest ${item.restSeconds} s, then start set ${next + 1}.` : ` Start set ${next + 1}.`;
       setFinishMessage(`Set ${next} of ${item.sets} done.${restPart}`);
@@ -309,7 +367,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
                 <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); }} className="min-h-12 flex-1 rounded-full border-2 border-rose-600 px-5 text-lg font-semibold text-rose-700">Stop</button>
               ) : (
                 starts.map((s) => (
-                  <button key={s.label} type="button" onClick={() => { setFinishMessage(null); startKind.current = s.kind; timer.start(s.phases); }} className="min-h-12 flex-1 rounded-full bg-slate-900 px-5 text-lg font-semibold text-white">{s.label}</button>
+                  <button key={s.label} type="button" onClick={() => { setFinishMessage(null); startKind.current = s.kind; setsAtRunStart.current = setsDoneRef.current; timer.start(s.phases); }} className="min-h-12 flex-1 rounded-full bg-slate-900 px-5 text-lg font-semibold text-white">{s.label}</button>
                 ))
               )}
             </div>
@@ -357,7 +415,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
           {done || skipped ? (
             <div className="flex items-center gap-3">
               <p className="flex-1 text-base font-semibold text-slate-700">{done ? '✓ Done' : `Skipped${p.skipReason ? ` (${SKIP_REASONS.find((r) => r.value === p.skipReason)?.label.toLowerCase() ?? ''})` : ''}`}</p>
-              <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); p.onUndo(); }} className="min-h-12 rounded-full border border-slate-300 px-5 text-base font-semibold">Undo</button>
+              <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); setSetsDone(0); p.onUndo(); }} className="min-h-12 rounded-full border border-slate-300 px-5 text-base font-semibold">Undo</button>
               {p.onNext && <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); p.onNext?.(); }} className="min-h-12 rounded-full bg-teal-700 px-6 text-base font-semibold text-white">Next ›</button>}
             </div>
           ) : (

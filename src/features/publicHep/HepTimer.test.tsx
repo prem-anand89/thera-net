@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildHoldPhases, buildTimedPhases, type TimerPhase } from '@/domain/hepTimers';
@@ -77,17 +77,17 @@ describe('the timer layer', () => {
     expect(phases.filter((p) => p.kind === 'ready')).toHaveLength(1);
     const firstOfSide2 = phases.find((p) => p.side === 2 && p.kind === 'hold');
     expect(firstOfSide2?.rep).toBe(1);
-    render(<HepTimerLayer view={view(firstOfSide2!)} repsTotal={3} onSkip={() => {}} onStop={() => {}} />);
+    render(<HepTimerLayer view={view(firstOfSide2!)} repsTotal={3} onSkip={() => { }} onStop={() => { }} />);
     expect(screen.getByText('Side 2 · Rep 1 of 3')).toBeInTheDocument();
   });
 
   it('the Hold ring has no Skip, only Stop; the short phases have Skip', async () => {
     const onSkip = vi.fn();
-    const { rerender } = render(<HepTimerLayer view={view({ kind: 'hold', label: 'Hold', seconds: 5, rep: 1 })} repsTotal={10} onSkip={onSkip} onStop={() => {}} />);
+    const { rerender } = render(<HepTimerLayer view={view({ kind: 'hold', label: 'Hold', seconds: 5, rep: 1 })} repsTotal={10} onSkip={onSkip} onStop={() => { }} />);
     expect(screen.queryByRole('button', { name: /Skip/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
     expect(screen.getByText('HOLD')).toBeInTheDocument();
-    rerender(<HepTimerLayer view={view({ kind: 'relax', label: 'Relax', seconds: 3 }, 2)} repsTotal={10} onSkip={onSkip} onStop={() => {}} />);
+    rerender(<HepTimerLayer view={view({ kind: 'relax', label: 'Relax', seconds: 3 }, 2)} repsTotal={10} onSkip={onSkip} onStop={() => { }} />);
     await userEvent.setup().click(screen.getByRole('button', { name: /Skip/ }));
     expect(onSkip).toHaveBeenCalled();
     expect(screen.getByText('Relax')).toBeInTheDocument();
@@ -104,13 +104,13 @@ describe('the sound', () => {
     oscillators = 0;
     contexts = 0;
     vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn() });
-    vi.stubGlobal('SpeechSynthesisUtterance', class { lang = ''; constructor(public text: string) {} });
+    vi.stubGlobal('SpeechSynthesisUtterance', class { lang = ''; constructor(public text: string) { } });
     vi.stubGlobal('AudioContext', class {
       state = 'running'; currentTime = 0; destination = {};
       constructor() { contexts += 1; }
       resume() { return Promise.resolve(); }
-      createOscillator() { oscillators += 1; return { frequency: { value: 0 }, connect() {}, start() {}, stop() {} }; }
-      createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
+      createOscillator() { oscillators += 1; return { frequency: { value: 0 }, connect() { }, start() { }, stop() { } }; }
+      createGain() { return { gain: { setValueAtTime() { }, exponentialRampToValueAtTime() { } }, connect() { } }; }
     });
   });
   afterEach(() => { vi.unstubAllGlobals(); });
@@ -163,8 +163,8 @@ describe('the exercise screen with a timer', () => {
       <HepExerciseScreen
         item={makeItem({ mediaType: 'gif', mediaUrls: ['a.gif'], ...over })}
         position={1} total={1} session={1} sessionCount={1} status="open" firstVisit={false}
-        soundMode="off" sound={fakeSound()} onSoundMode={() => {}} onBack={() => {}} onPrev={null} onNext={null}
-        onDone={onDone} onSkip={() => {}} onUndo={onUndo} onImageError={() => {}} {...extra}
+        soundMode="off" sound={fakeSound()} onSoundMode={() => { }} onBack={() => { }} onPrev={null} onNext={null}
+        onDone={onDone} onSkip={() => { }} onUndo={onUndo} onImageError={() => { }} {...extra}
       />,
     );
     return { onDone, onUndo };
@@ -234,5 +234,92 @@ describe('the exercise screen with a timer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom Start' }));
     expect(screen.getByRole('dialog', { name: 'Full screen picture' })).toHaveClass('absolute');
     expect(document.querySelector('.fixed')).toBeNull();
+  });
+
+  it('resets set circles to 0 on Undo, and skips auto-tick when the patient already ticked a set during the run', () => {
+    const onUndo = vi.fn();
+    const onSetsDoneChange = vi.fn();
+    const sound = fakeSound();
+    const onSoundMode = vi.fn();
+    const onBack = vi.fn();
+    const onNext = vi.fn();
+    const onDone = vi.fn();
+    const onSkip = vi.fn();
+    const onImageError = vi.fn();
+    const itemProp = makeItem({ doseType: 'hold', sets: 3, reps: 2, holdSeconds: 2, restSeconds: 10 });
+    const commonProps = {
+      item: itemProp,
+      position: 1,
+      total: 2,
+      session: 1,
+      sessionCount: 1,
+      firstVisit: true,
+      soundMode: 'beeps' as SoundMode,
+      sound,
+      onSoundMode,
+      onBack,
+      onPrev: null,
+      onNext,
+      onDone,
+      onSkip,
+      onUndo,
+      onImageError,
+      onSetsDoneChange,
+    };
+    const { rerender } = render(<HepExerciseScreen {...commonProps} status="open" setsDone={0} />);
+
+    // Patient starts the run, then hand-ticks Set 1 mid-run before timer ends.
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 holds' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set 1' }));
+    expect(onSetsDoneChange).toHaveBeenCalledWith(1);
+
+    rerender(<HepExerciseScreen {...commonProps} status="open" setsDone={1} />);
+
+    onSetsDoneChange.mockClear();
+    act(() => { vi.advanceTimersByTime(120_000); });
+    // Timer must NOT advance from 1 to 2 because patient ticked during the run.
+    expect(onSetsDoneChange).not.toHaveBeenCalled();
+    expect(screen.getByText('Set 1 of 3 done. Rest 10 s, then start set 2.')).toBeInTheDocument();
+
+    // When status is done and patient clicks Undo, set ticks reset to 0.
+    rerender(<HepExerciseScreen {...commonProps} status="done" setsDone={2} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onSetsDoneChange).toHaveBeenCalledWith(0);
+    expect(onUndo).toHaveBeenCalledTimes(1);
+  });
+
+  it('PhotoLightbox traps Tab focus, restores focus to the photo button on close, allows pinch-zoom, and toggles 1x/2x on double-tap', () => {
+    screenFor({ mediaType: 'stills', mediaUrls: ['https://img/a.jpg', 'https://img/b.jpg'], mediaCaptions: ['Start', 'End'] });
+    const zoomBtn = screen.getByRole('button', { name: 'Zoom Start' });
+    zoomBtn.focus();
+    fireEvent.click(zoomBtn);
+
+    const dialog = screen.getByRole('dialog', { name: 'Full screen picture' });
+    const closeBtn = within(dialog).getByRole('button', { name: 'Close' });
+    const nextBtn = within(dialog).getByRole('button', { name: 'Next picture' });
+    expect(document.activeElement).toBe(closeBtn);
+
+    // Tab moves within dialog (Previous is disabled at index 0, so skips to Next, then wraps back to Close)
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(nextBtn);
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeBtn);
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(nextBtn);
+
+    // Image stage supports pinch-zoom without touch-pan-y and toggles 1x/2x zoom on double-click/tap
+    const img = within(dialog).getByRole('img');
+    expect(img.parentElement!.className).not.toContain('touch-pan-y');
+    expect(img.parentElement!.style.touchAction).toBe('pinch-zoom');
+    expect(img.style.transform).toBe('scale(1)');
+    fireEvent.dblClick(img);
+    expect(img.style.transform).toBe('scale(2)');
+    fireEvent.dblClick(img);
+    expect(img.style.transform).toBe('scale(1)');
+
+    // Closing restores focus to the trigger button
+    fireEvent.click(closeBtn);
+    expect(screen.queryByRole('dialog', { name: 'Full screen picture' })).toBeNull();
+    expect(document.activeElement).toBe(zoomBtn);
   });
 });
