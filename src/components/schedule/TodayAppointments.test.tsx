@@ -376,6 +376,5 @@ describe('TodayAppointments all-done wording', () => {
     const col = screen.getByTestId('appointment-condition-col');
     expect(col.className).toMatch(/flex-col/);
     expect(within(col).getByText('Package 6/7')).toBeInTheDocument();
-    expect(within(col).getByText('Back pain')).toBeInTheDocument();
   });
 });

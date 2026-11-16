@@ -22,14 +22,28 @@ const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
 /** Flat divided rows bleeding to the card edge — the same density as the
  *  Visits tab's list (`ResponsiveVisitList`), and the Schedule grid's colour
  *  code (`appointmentFill`): therapist-colour edge, status fill. */
-const listCls = '-mx-5 divide-y divide-[var(--border)] border-y tab:border-t-0 border-[var(--border)]';
+const listCls = 'divide-y divide-[var(--border)] border-y tab:border-t-0 border-[var(--border)]';
+
+/** Tighter columns on iPad portrait (`tab:` only); roomier from `desktop:`. */
+function appointmentGridCols(showTherapist: boolean) {
+  return showTherapist
+    ? 'tab:grid tab:grid-cols-[3.25rem_minmax(5.5rem,7.5rem)_minmax(0,1fr)_6.5rem_minmax(0,7.5rem)_4.75rem] tab:items-center tab:gap-x-1.5 tab:gap-y-1 desktop:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_7.25rem] desktop:gap-x-2.5 desktop:gap-y-0'
+    : 'tab:grid tab:grid-cols-[3.25rem_minmax(6rem,8rem)_minmax(0,1fr)_6.5rem_4.75rem] tab:items-center tab:gap-x-1.5 desktop:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_7.25rem] desktop:gap-x-2.5';
+}
+
+function TabAppointmentTable({ children }: { children: ReactNode }) {
+  return (
+    <div className="tab:-mx-5 tab:overflow-x-auto tab:px-5">
+      <div className="tab:min-w-[36rem] desktop:min-w-0">{children}</div>
+    </div>
+  );
+}
 
 function AppointmentListHeader({ showTherapist }: { showTherapist: boolean }) {
-  const gridCols = showTherapist
-    ? 'tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_8rem]'
-    : 'tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem]';
   return (
-    <div className={`-mx-5 hidden tab:grid ${gridCols} tab:items-center tab:gap-2.5 desktop:gap-3 px-4 py-2 border-y border-[var(--border)] bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}>
+    <div
+      className={`hidden ${appointmentGridCols(showTherapist)} px-4 py-2 border-y border-[var(--border)] bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]`}
+    >
       <div>Time</div>
       <div>Patient</div>
       <div>Condition / Notes</div>
@@ -153,16 +167,12 @@ export function TodayAppointments({
           : note === 'Walk-in' || note === 'Arrived'
             ? 'font-medium text-[var(--ink)]'
             : 'font-medium';
-    const gridCols = showTherapist
-      ? 'tab:grid tab:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3'
-      : 'tab:grid tab:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_8rem] tab:items-center tab:gap-2.5 desktop:gap-3';
-
     return (
       <li
         key={a.id}
         // Phone: patient on the left, the action pill on the same line (it wraps below only when it cannot fit, e.g.
         // Undo + Complete on a 320px screen), so a row is two lines tall instead of three.
-        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:min-w-0 tab:overflow-hidden tab:px-4 ${gridCols} hover:bg-[var(--teal-light)] transition-colors`}
+        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:min-w-0 tab:overflow-hidden tab:px-4 ${appointmentGridCols(showTherapist)} hover:bg-[var(--teal-light)] transition-colors`}
         style={{ borderLeftColor: color, background: fill.background }}
       >
         {/* Col 1: Time & duration */}
@@ -210,9 +220,7 @@ export function TodayAppointments({
           )}
         </button>
 
-        {/* Col 3: Condition / Notes — stack flags below text on tab so
-            "Package 6/7" pills don't bleed into the Contact column on
-            iPad portrait (grid min-content default was pushing into Call). */}
+        {/* Col 3: Condition / Notes */}
         <div
           className="hidden tab:flex min-w-0 flex-col justify-center gap-0.5 overflow-hidden text-sm text-[var(--ink)]"
           data-testid="appointment-condition-col"
@@ -234,7 +242,7 @@ export function TodayAppointments({
         {/* Col 4: Contact: the number is not shown, only the two ways to reach the patient */}
         <div className="relative z-[1] hidden tab:block min-w-0 shrink-0 text-xs">
           {a.patientPhone ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-col items-start gap-0.5 desktop:flex-row desktop:items-center desktop:gap-1.5">
               <a
                 href={telHref(a.patientPhone)}
                 aria-label={`Call ${a.patientName}`}
@@ -251,7 +259,8 @@ export function TodayAppointments({
                 className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs font-medium text-[var(--moss)] hover:border-[var(--moss)]"
                 onClick={(e) => e.stopPropagation()}
               >
-                WhatsApp
+                <span className="desktop:inline hidden">WhatsApp</span>
+                <span className="desktop:hidden">WA</span>
               </a>
             </div>
           ) : (
@@ -261,7 +270,7 @@ export function TodayAppointments({
 
         {/* Col 5: Therapist */}
         {showTherapist && (
-          <div className="hidden tab:block min-w-0 truncate">
+          <div className="hidden tab:block min-w-0 max-w-full overflow-hidden">
             {therapistNameFor(a) ? (
               <TherapistPill>{therapistNameFor(a)}</TherapistPill>
             ) : (
@@ -272,7 +281,9 @@ export function TodayAppointments({
 
         {/* Col 6: Action */}
         {end && (
-          <div className={`tab:flex tab:justify-end ${showEndOnMobile ? 'ml-auto flex shrink-0 justify-end tab:ml-0' : 'hidden tab:flex'}`}>
+          <div
+            className={`tab:flex tab:min-w-0 tab:max-w-[4.75rem] tab:shrink-0 tab:justify-end tab:overflow-visible desktop:max-w-none ${showEndOnMobile ? 'ml-auto flex shrink-0 justify-end tab:ml-0' : 'hidden tab:flex'}`}
+          >
             {end}
           </div>
         )}
@@ -368,8 +379,9 @@ export function TodayAppointments({
       {inProgress.length > 0 && (
         <section aria-label="In progress">
           <h3 className={sectionHeading}>In progress, add the service and payment</h3>
-          <AppointmentListHeader showTherapist={showTherapist} />
-          <ul className={listCls}>
+          <TabAppointmentTable>
+            <AppointmentListHeader showTherapist={showTherapist} />
+            <ul className={listCls}>
             {inProgress.map((a) =>
               row(
                 a,
@@ -404,15 +416,17 @@ export function TodayAppointments({
                 true
               )
             )}
-          </ul>
+            </ul>
+          </TabAppointmentTable>
         </section>
       )}
 
       {upcoming.length > 0 && (
         <section aria-label="Upcoming">
           {sectionCount > 1 && <h3 className={sectionHeading}>Upcoming</h3>}
-          <AppointmentListHeader showTherapist={showTherapist} />
-          <ul className={listCls}>
+          <TabAppointmentTable>
+            <AppointmentListHeader showTherapist={showTherapist} />
+            <ul className={listCls}>
             {shownUpcoming.map((a) =>
               row(
                 a,
@@ -433,7 +447,8 @@ export function TodayAppointments({
                 Boolean(onMarkArrived)
               )
             )}
-          </ul>
+            </ul>
+          </TabAppointmentTable>
           {upcoming.length > UPCOMING_LIMIT && (
             <button type="button" className="mt-2 min-h-9 text-sm font-medium text-[var(--teal)]" onClick={() => setShowAll((current) => !current)}>
               {showAll ? 'Show fewer' : `Show all ${upcoming.length} upcoming`}
