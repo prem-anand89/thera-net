@@ -1,12 +1,12 @@
 // HEP (home exercise programs): the clinic's exercises, templates and the patients' programs. Clinical staff only:
 // front desk is sent back to Workspace. The URL keeps the tab (?tab=library|templates|programs).
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearch } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { ChipCount, LoadingRows } from '@/components/ui';
 import { addDaysISO, type ExerciseTemplate } from '@/domain/hep';
-import { hepService, type ProgramBundle } from '@/services/hepService';
+import type { ProgramBundle } from '@/services/hepService';
 import { HEP_TABS, type HepSearch, type HepTab } from './hepSearch';
 import { LibraryTab } from './LibraryTab';
 import { MessagePatientSheet } from './MessagePatientSheet';
@@ -15,7 +15,7 @@ import { countAttentionPrograms } from './programRows';
 import { StarterSetSheet } from './StarterSetSheet';
 import { ProgramsTab } from './ProgramsTab';
 import { TemplatesTab } from './TemplatesTab';
-import { clinicToday, useExercises, useOnline } from './useHepData';
+import { clinicToday, useClinicPrograms, useExercises, useOnline } from './useHepData';
 
 const LABELS: Record<HepTab, string> = { library: 'Library', templates: 'Templates', programs: 'Programs' };
 const WINDOW_DAYS = 14;
@@ -32,33 +32,17 @@ export function HepPage() {
   const [sheet, setSheet] = useState<{ template?: ExerciseTemplate; program?: ProgramBundle; patientId?: string } | null>(null);
   const [messaging, setMessaging] = useState<{ patientId: string; token: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [attentionCount, setAttentionCount] = useState<number | null>(null);
-  const [painVersion, setPainVersion] = useState(0);
+  const programs = useClinicPrograms(clinic, { enabled: canUseExercises, reloadKey });
 
-  useEffect(() => {
-    const onReviewed = () => setPainVersion((v) => v + 1);
-    window.addEventListener('hep:pain-reviewed', onReviewed);
-    return () => window.removeEventListener('hep:pain-reviewed', onReviewed);
-  }, []);
-
-  useEffect(() => {
-    if (!canUseExercises || !online) {
-      setAttentionCount(null);
-      return;
-    }
-    let live = true;
-    const today = clinicToday(clinic);
-    const windowStart = addDaysISO(today, -WINDOW_DAYS);
-    Promise.resolve()
-      .then(() => hepService.listClinicPrograms(clinic.id, windowStart))
-      .then((bundles) => {
-        if (live) setAttentionCount(countAttentionPrograms(bundles, { today, windowStart }));
-      })
-      .catch(() => {
-        if (live) setAttentionCount(null);
-      });
-    return () => { live = false; };
-  }, [clinic, canUseExercises, online, reloadKey, painVersion]);
+  const today = clinicToday(clinic);
+  const windowStart = addDaysISO(today, -WINDOW_DAYS);
+  const attentionCount = useMemo(
+    () =>
+      !canUseExercises || !online || programs.bundles === null || programs.error !== null
+        ? null
+        : countAttentionPrograms(programs.bundles, { today, windowStart }),
+    [canUseExercises, online, programs.bundles, programs.error, today, windowStart],
+  );
 
   if (role === 'unknown') return <LoadingRows rows={3} label="Loading" />;
   if (!canUseExercises) return <Navigate to="/workspace" replace />;
@@ -79,8 +63,10 @@ export function HepPage() {
       {tab === 'programs' && (
         <ProgramsTab
           reloadKey={reloadKey}
+          programs={programs.bundles}
+          programsError={programs.error}
+          onReload={programs.reload}
           onNewProgram={() => setSheet({})}
-          onAttentionCount={setAttentionCount}
           onPrescribeNext={(row, bundle) => setSheet({ patientId: row.patientId, program: bundle })}
           onMessage={(row, bundle) => { if (bundle.access && !bundle.access.linkRevoked) setMessaging({ patientId: row.patientId, token: bundle.access.token }); }}
         />

@@ -299,4 +299,18 @@ describe('ProgramsTab', () => {
     window.dispatchEvent(new Event('offline'));
     expect(await screen.findByRole('button', { name: 'Needs a connection' })).toBeDisabled();
   });
+
+  it('reuses shared programs props without fetching again, and calls onReload after an action', async () => {
+    const user = userEvent.setup();
+    const onReload = vi.fn().mockResolvedValue(undefined);
+    listClinicPrograms.mockClear();
+    renderTab({ programs: BUNDLES, programsError: null, onReload });
+    expect(screen.getByText('Asha Pillai')).toBeInTheDocument();
+    expect(listClinicPrograms).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Asha Pillai, Program p1' }));
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+    await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
+    expect(listClinicPrograms).not.toHaveBeenCalled();
+  });
 });

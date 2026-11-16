@@ -1,13 +1,15 @@
 // Small data hooks shared by the HEP screens. Reading the Library works offline (Dexie); everything that needs the
 // server (thumbnails, "used this week", templates, programs) fails quietly or says "needs a connection".
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { clinicTimezone } from '@/domain/clinicRegion';
 import { addDaysISO, type Exercise } from '@/domain/hep';
 import { db } from '@/lib/db';
 import { hepMediaService } from '@/services/hepMediaService';
-import { hepService } from '@/services/hepService';
+import { hepService, type ProgramBundle } from '@/services/hepService';
+
+const PROGRAMS_WINDOW_DAYS = 14;
 
 function subscribeOnline(cb: () => void) {
   window.addEventListener('online', cb);
@@ -84,4 +86,50 @@ export function useThumbUrls(clinicId: string, exercises: Exercise[]): Record<st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinicId, wanted, online]);
   return urls;
+}
+
+/** Shared clinic-wide HEP programs load for HepPage pill counts and ProgramsTab. */
+export function useClinicPrograms(
+  clinic: { id: string; timezone?: string | null },
+  { enabled, reloadKey = 0 }: { enabled: boolean; reloadKey?: number },
+): { bundles: ProgramBundle[] | null; error: string | null; reload: () => Promise<void> } {
+  const online = useOnline();
+  const [bundles, setBundles] = useState<ProgramBundle[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [painVersion, setPainVersion] = useState(0);
+  const reqIdRef = useRef(0);
+
+  useEffect(() => {
+    const onReviewed = () => setPainVersion((v) => v + 1);
+    window.addEventListener('hep:pain-reviewed', onReviewed);
+    return () => window.removeEventListener('hep:pain-reviewed', onReviewed);
+  }, []);
+
+  const reload = useCallback(async () => {
+    if (!enabled || !online) return;
+    const id = ++reqIdRef.current;
+    const windowStart = addDaysISO(clinicToday(clinic), -PROGRAMS_WINDOW_DAYS);
+    try {
+      setError(null);
+      const list = await Promise.resolve().then(() => hepService.listClinicPrograms(clinic.id, windowStart));
+      if (reqIdRef.current === id) setBundles(list);
+    } catch (e) {
+      if (reqIdRef.current !== id) return;
+      setError(e instanceof Error ? e.message : 'Could not load the programs.');
+      setBundles((cur) => cur ?? []);
+    }
+  }, [clinic, enabled, online]);
+
+  useEffect(() => {
+    if (!enabled) {
+      reqIdRef.current += 1;
+      setBundles(null);
+      setError(null);
+      return;
+    }
+    if (!online) return;
+    void reload();
+  }, [enabled, online, reload, reloadKey, painVersion]);
+
+  return { bundles, error, reload };
 }

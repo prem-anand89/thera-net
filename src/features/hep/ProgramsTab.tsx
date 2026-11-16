@@ -37,10 +37,14 @@ export interface ProgramsTabProps {
   onPrescribeNext?: (row: ProgramRow, bundle: ProgramBundle) => void;
   /** "+ New program" button in the top row: opens the program sheet with patient optional. */
   onNewProgram?: () => void;
-  /** Notifies parent when the list finishes loading so tab pills stay in sync. */
-  onAttentionCount?: (n: number) => void;
-  /** Change this number to load the list again (after a program was saved elsewhere). */
+  /** Change this number to load the list again when ProgramsTab manages its own fetch. */
   reloadKey?: number;
+  /** Preloaded program bundles from HepPage so ProgramsTab reuses one fetch. */
+  programs?: ProgramBundle[] | null;
+  /** Load error from the parent's shared fetch when controlled. */
+  programsError?: string | null;
+  /** Refreshes the parent's shared programs list after an action when controlled. */
+  onReload?: () => Promise<void>;
 }
 
 function Alerts({ row }: { row: ProgramRow }) {
@@ -65,13 +69,15 @@ function Adherence({ row }: { row: ProgramRow }) {
 }
 const programLine = (r: ProgramRow) => `${r.exerciseCount} ${r.exerciseCount === 1 ? 'exercise' : 'exercises'} · ${r.dayLabel}`;
 
-export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, onAttentionCount, reloadKey = 0 }: ProgramsTabProps) {
+export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, reloadKey = 0, programs, programsError, onReload }: ProgramsTabProps) {
   const clinic = useClinic();
   const online = useOnline();
   const scope = useWorkspaceScope();
   const wide = useMediaQuery(TAB_MEDIA_QUERY);
-  const [bundles, setBundles] = useState<ProgramBundle[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const controlled = programs !== undefined;
+  const [ownBundles, setOwnBundles] = useState<ProgramBundle[] | null>(null);
+  const [ownError, setOwnError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [owner, setOwner] = useState<'mine' | 'all' | null>(null);
   const [filter, setFilter] = useState<ProgramBucket>('attention');
   const [query, setQuery] = useState('');
@@ -85,28 +91,35 @@ export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, onAttent
 
   const load = useCallback(async () => {
     try {
-      setError(null);
-      setBundles(await hepService.listClinicPrograms(clinic.id, addDaysISO(clinicToday(clinic), -WINDOW_DAYS)));
+      setOwnError(null);
+      setOwnBundles(await hepService.listClinicPrograms(clinic.id, addDaysISO(clinicToday(clinic), -WINDOW_DAYS)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load the programs.');
-      setBundles((cur) => cur ?? []);
+      setOwnError(e instanceof Error ? e.message : 'Could not load the programs.');
+      setOwnBundles((cur) => cur ?? []);
     }
   }, [clinic]);
-  useEffect(() => { if (online) void load(); }, [online, load, reloadKey]);
+  useEffect(() => { if (!controlled && online) void load(); }, [controlled, online, load, reloadKey]);
+
+  const bundles = controlled ? programs : ownBundles;
+  const error = actionError ?? (controlled ? (programsError ?? null) : ownError);
 
   const bundleOf = useCallback((id: string) => (bundles ?? []).find((b) => b.program.id === id) as ProgramBundle, [bundles]);
   const allRows = useMemo(() => (bundles ?? []).map((b) => buildProgramRow(b, { today, windowStart })), [bundles, today, windowStart]);
   const ownedRows = useMemo(() => (showOwner === 'mine' ? allRows.filter((r) => r.therapistId != null && r.therapistId === scope.myTherapistId) : allRows), [allRows, showOwner, scope.myTherapistId]);
   const counts = useMemo(() => countBuckets(ownedRows), [ownedRows]);
-  const clinicAttention = useMemo(() => countBuckets(allRows).attention, [allRows]);
-  useEffect(() => {
-    if (bundles !== null) onAttentionCount?.(clinicAttention);
-  }, [bundles, clinicAttention, onAttentionCount]);
   const shown = useMemo(() => sortRows(filterRows(ownedRows, filter).filter((r) => matchesProgramSearch(r, query))), [ownedRows, filter, query]);
 
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
-    try { setError(null); await fn(); await load(); } catch (e) { setError(e instanceof Error ? e.message : 'That did not work. Try again.'); } finally { setBusy(false); }
+    try {
+      setActionError(null);
+      await fn();
+      await (controlled ? onReload?.() : load());
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'That did not work. Try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const menu = (r: ProgramRow) => (
