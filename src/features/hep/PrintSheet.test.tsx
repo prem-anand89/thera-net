@@ -32,6 +32,19 @@ describe('PrintSheet', () => {
     expect(text).toContain('Stop if: Sharp pain');
     expect(text).toContain('3 sets × 10 reps');
     expect(document.querySelector('.hep-print img')?.getAttribute('src')).toBe('https://img.test/clinics/c1/exercises/e/0-aaaaaaaa');
+    const qr = document.querySelector('.hep-print svg[role="img"]');
+    expect(qr).not.toBeNull();
+    expect(qr?.querySelector('path')?.getAttribute('d')).toBeTruthy();
+  });
+
+  it('encodes only the link (never the PIN) into the QR code', async () => {
+    const qrcode = await import('qrcode');
+    const spy = vi.spyOn(qrcode.default, 'create');
+    renderSheet('4821');
+    await waitFor(() => expect(window.print).toHaveBeenCalled());
+    expect(spy).toHaveBeenCalledWith('https://app.test/p/tok123', expect.any(Object));
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('4821');
+    spy.mockRestore();
   });
 
   it('leaves the PIN off the paper when it was not just created or reset', async () => {
