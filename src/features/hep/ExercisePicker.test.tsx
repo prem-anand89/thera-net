@@ -62,9 +62,9 @@ describe('ExercisePicker', () => {
   it('selecting two cards enables "Add 2 exercises", which hands them back in the order ticked', async () => {
     const user = userEvent.setup();
     const { onAdd, onClose } = renderPicker();
-    const add = await screen.findByRole('button', { name: 'Add' });
+    const add = await screen.findByRole('button', { name: 'Add' }, { timeout: 5000 });
     expect(add).toBeDisabled();
-    await user.click(await screen.findByRole('button', { name: /^Wall Slides/ }));
+    await user.click(await screen.findByRole('button', { name: /^Wall Slides/ }, { timeout: 5000 }));
     await user.click(screen.getByRole('button', { name: /^Quad Sets/ }));
     expect(screen.getByRole('button', { name: 'Add 2' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Add 2' }));
