@@ -388,15 +388,27 @@ describe('how did this session feel', () => {
     }
   });
 
-  it('shows anchor labels for Pain (0 No pain / 10 Worst pain) and Effort (0 Very easy / 10 Hardest) around the 0–10 buttons', async () => {
+  it('shows anchor labels directly under each row on phones (text-sm text-slate-700) and under the 0–10 strip from sm:', async () => {
     const u = await signInWith(hepData([wall], { logs: [log('i1')] }));
     const card = await screen.findByRole('region', { name: 'How did this session feel?' });
-    expect(within(card).getByRole('group', { name: 'Pain from 0 to 10' })).toBeInTheDocument();
-    expect(within(card).getByText('0 No pain')).toBeInTheDocument();
-    expect(within(card).getByText('10 Worst pain')).toBeInTheDocument();
+    const group = within(card).getByRole('group', { name: 'Pain from 0 to 10' });
+    const row1Anchor = within(group).getByText('0 No pain');
+    const row2Anchor = within(group).getByText('10 Worst pain');
+    expect(row1Anchor).toHaveClass('text-sm', 'text-slate-700');
+    expect(row2Anchor).toHaveClass('text-sm', 'text-slate-700');
+    // Row 1 wrapper holds buttons 0..5 + row1Anchor; Row 2 wrapper holds buttons 6..10 + row2Anchor
+    const row1Wrap = row1Anchor.parentElement!;
+    const row2Wrap = row2Anchor.parentElement!;
+    expect(within(row1Wrap).getByRole('button', { name: '0' })).toBeInTheDocument();
+    expect(within(row1Wrap).getByRole('button', { name: '5' })).toBeInTheDocument();
+    expect(within(row1Wrap).queryByRole('button', { name: '6' })).toBeNull();
+    expect(within(row2Wrap).getByRole('button', { name: '6' })).toBeInTheDocument();
+    expect(within(row2Wrap).getByRole('button', { name: '10' })).toBeInTheDocument();
+    expect(within(row2Wrap).queryByRole('button', { name: '5' })).toBeNull();
+
     await u.click(within(card).getByRole('button', { name: 'Effort' }));
-    expect(within(card).getByRole('group', { name: 'Effort from 0 to 10' })).toBeInTheDocument();
-    expect(within(card).getByText('0 Very easy')).toBeInTheDocument();
-    expect(within(card).getByText('10 Hardest')).toBeInTheDocument();
+    const effortGroup = within(card).getByRole('group', { name: 'Effort from 0 to 10' });
+    expect(within(effortGroup).getByText('0 Very easy')).toHaveClass('text-sm', 'text-slate-700');
+    expect(within(effortGroup).getByText('10 Hardest')).toHaveClass('text-sm', 'text-slate-700');
   });
 });
