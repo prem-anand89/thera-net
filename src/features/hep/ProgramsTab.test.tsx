@@ -286,4 +286,17 @@ describe('ProgramsTab', () => {
     await user.click(chip(/^Active/));
     expect(within(screen.getByText('Sunil Rao').closest('tr')!).getByRole('link', { name: 'Open' })).toBeInTheDocument();
   });
+
+  it('offers "+ New program" in the top row when wired, and disables it when offline', async () => {
+    const user = userEvent.setup();
+    const onNewProgram = vi.fn();
+    renderTab({ onNewProgram });
+    await screen.findByText('Asha Pillai');
+    await user.click(screen.getByRole('button', { name: '+ New program' }));
+    expect(onNewProgram).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    window.dispatchEvent(new Event('offline'));
+    expect(await screen.findByRole('button', { name: 'Needs a connection' })).toBeDisabled();
+  });
 });

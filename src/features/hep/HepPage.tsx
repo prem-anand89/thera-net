@@ -1,30 +1,64 @@
 // HEP (home exercise programs): the clinic's exercises, templates and the patients' programs. Clinical staff only:
 // front desk is sent back to Workspace. The URL keeps the tab (?tab=library|templates|programs).
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useSearch } from '@tanstack/react-router';
+import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
-import { LoadingRows } from '@/components/ui';
+import { ChipCount, LoadingRows } from '@/components/ui';
+import { addDaysISO, type ExerciseTemplate } from '@/domain/hep';
+import { hepService, type ProgramBundle } from '@/services/hepService';
 import { HEP_TABS, type HepSearch, type HepTab } from './hepSearch';
-import { useState } from 'react';
-import type { ExerciseTemplate } from '@/domain/hep';
-import type { ProgramBundle } from '@/services/hepService';
 import { LibraryTab } from './LibraryTab';
 import { MessagePatientSheet } from './MessagePatientSheet';
 import { ProgramSheet } from './ProgramSheet';
+import { countAttentionPrograms } from './programRows';
 import { StarterSetSheet } from './StarterSetSheet';
 import { ProgramsTab } from './ProgramsTab';
 import { TemplatesTab } from './TemplatesTab';
+import { clinicToday, useExercises, useOnline } from './useHepData';
 
 const LABELS: Record<HepTab, string> = { library: 'Library', templates: 'Templates', programs: 'Programs' };
+const WINDOW_DAYS = 14;
 
 export function HepPage() {
+  const clinic = useClinic();
+  const online = useOnline();
   const { canUseExercises, role } = usePermissions();
   const search = useSearch({ strict: false }) as HepSearch;
   const navigate = useNavigate();
-  const tab: HepTab = search.tab ?? 'library';
+  const exercises = useExercises(clinic.id);
+  const tab: HepTab = search.tab ?? (exercises && exercises.length > 0 ? 'programs' : 'library');
   const [starterOpen, setStarterOpen] = useState(false);
   const [sheet, setSheet] = useState<{ template?: ExerciseTemplate; program?: ProgramBundle; patientId?: string } | null>(null);
   const [messaging, setMessaging] = useState<{ patientId: string; token: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [attentionCount, setAttentionCount] = useState<number | null>(null);
+  const [painVersion, setPainVersion] = useState(0);
+
+  useEffect(() => {
+    const onReviewed = () => setPainVersion((v) => v + 1);
+    window.addEventListener('hep:pain-reviewed', onReviewed);
+    return () => window.removeEventListener('hep:pain-reviewed', onReviewed);
+  }, []);
+
+  useEffect(() => {
+    if (!canUseExercises || !online) {
+      setAttentionCount(null);
+      return;
+    }
+    let live = true;
+    const today = clinicToday(clinic);
+    const windowStart = addDaysISO(today, -WINDOW_DAYS);
+    Promise.resolve()
+      .then(() => hepService.listClinicPrograms(clinic.id, windowStart))
+      .then((bundles) => {
+        if (live) setAttentionCount(countAttentionPrograms(bundles, { today, windowStart }));
+      })
+      .catch(() => {
+        if (live) setAttentionCount(null);
+      });
+    return () => { live = false; };
+  }, [clinic, canUseExercises, online, reloadKey, painVersion]);
 
   if (role === 'unknown') return <LoadingRows rows={3} label="Loading" />;
   if (!canUseExercises) return <Navigate to="/workspace" replace />;
@@ -36,6 +70,7 @@ export function HepPage() {
         {HEP_TABS.map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors sm:px-4 sm:py-1.5 sm:text-sm ${tab === t ? 'bg-[var(--teal)] text-white shadow-sm' : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'}`} onClick={() => void navigate({ to: '/hep', search: { tab: t } })}>
             {LABELS[t]}
+            {t === 'programs' && attentionCount != null && attentionCount > 0 && <ChipCount n={attentionCount} />}
           </button>
         ))}
       </div>
@@ -44,6 +79,8 @@ export function HepPage() {
       {tab === 'programs' && (
         <ProgramsTab
           reloadKey={reloadKey}
+          onNewProgram={() => setSheet({})}
+          onAttentionCount={setAttentionCount}
           onPrescribeNext={(row, bundle) => setSheet({ patientId: row.patientId, program: bundle })}
           onMessage={(row, bundle) => { if (bundle.access && !bundle.access.linkRevoked) setMessaging({ patientId: row.patientId, token: bundle.access.token }); }}
         />

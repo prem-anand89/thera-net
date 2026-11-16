@@ -57,6 +57,7 @@ import { UpdateBanner } from '@/components/UpdateBanner';
 import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
 import { DepartmentSwitch } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
+import { useHepPainDot } from '@/features/hep/hepSignals';
 
 
 
@@ -166,6 +167,7 @@ export function Shell() {
     pathname.startsWith(p)
   );
   const nav = useMemo(() => filterNavItems(role), [role]);
+  const hepPainDot = useHepPainDot(clinic?.id, role === 'admin' || role === 'therapist');
 
   const prevUserId = useRef<string | null>(null);
 
@@ -453,33 +455,7 @@ export function Shell() {
                 <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
               </Link>
               {shouldShowDesktopNav(pathname) && (
-                <nav className="hidden shrink-0 gap-1 sm:flex">
-                  {nav.map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      // Icon-only below tab:, so the accessible name has to
-                      // come from the attribute rather than the hidden span —
-                      // `hidden` is display:none, which screen readers skip.
-                      aria-label={item.label}
-                      aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
-                      title={item.label}
-                      activeProps={{}}
-                      className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${isNavActive(pathname, item.to)
-                        ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
-                        : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                        }`}
-                    >
-                      <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
-                      <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
-                      {item.to === '/schedule' && pendingRequestsCount > 0 && (
-                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
-                          {pendingRequestsCount}
-                        </span>
-                      )}
-                    </Link>
-                  ))}
-                </nav>
+                <DesktopNav nav={nav} pathname={pathname} pendingRequestsCount={pendingRequestsCount} hepPainDot={hepPainDot} />
               )}
               <div className="ml-auto flex min-w-0 max-w-full items-center gap-1 min-[400px]:gap-1.5 sm:gap-2 tab:gap-3">
                 <ClinicSwitcher
@@ -590,6 +566,54 @@ export function Shell() {
         </div>
       </DepartmentProvider>
     </ClinicContext.Provider>
+  );
+}
+
+export function DesktopNav({
+  nav,
+  pathname,
+  pendingRequestsCount,
+  hepPainDot,
+}: {
+  nav: ReadonlyArray<(typeof NAV)[number]>;
+  pathname: string;
+  pendingRequestsCount: number;
+  hepPainDot: boolean;
+}) {
+  return (
+    <nav className="hidden shrink-0 gap-1 sm:flex">
+      {nav.map((item) => {
+        const showHepDot = item.to === '/hep' && hepPainDot;
+        return (
+          <Link
+            key={item.to}
+            to={item.to}
+            // Icon-only below tab:, so the accessible name has to
+            // come from the attribute rather than the hidden span —
+            // `hidden` is display:none, which screen readers skip.
+            aria-label={showHepDot ? `${item.label}, pain report waiting` : item.label}
+            aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
+            title={item.label}
+            activeProps={{}}
+            className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${isNavActive(pathname, item.to)
+              ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
+              : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+              }`}
+          >
+            <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
+            <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
+            {item.to === '/schedule' && pendingRequestsCount > 0 && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
+                {pendingRequestsCount}
+              </span>
+            )}
+            {showHepDot && (
+              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[var(--rust)]" />
+            )}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 

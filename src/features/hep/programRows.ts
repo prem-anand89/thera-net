@@ -174,6 +174,26 @@ export function countBuckets(rows: ProgramRow[]): ProgramFilterCounts {
   };
 }
 
+/** Count of clinic programs needing attention (pain 7+ unreviewed, idle, ended, check-in due, link unopened). */
+export function countAttentionPrograms(bundles: ProgramBundle[], opts: { today: string; windowStart: string }): number {
+  return countBuckets(bundles.map((b) => buildProgramRow(b, opts))).attention;
+}
+
+/** True when any non-completed program has a pain 7+ feedback report newer than `painReviewedThrough`. */
+export function hasClinicPainAlert(
+  programs: ReadonlyArray<{
+    status: string;
+    painReviewedThrough: string | null;
+    feedback: ReadonlyArray<{ painScore: number | null; createdAt: string }>;
+  }>,
+): boolean {
+  return programs.some(
+    (p) =>
+      p.status !== 'completed' &&
+      p.feedback.some((f) => f.painScore != null && f.painScore >= 7 && (p.painReviewedThrough == null || f.createdAt > p.painReviewedThrough)),
+  );
+}
+
 export function filterRows(rows: ProgramRow[], bucket: ProgramBucket): ProgramRow[] {
   if (bucket === 'attention') return rows.filter((r) => r.needsAttention);
   if (bucket === 'ending') return rows.filter((r) => r.ending);

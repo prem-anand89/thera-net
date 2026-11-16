@@ -35,6 +35,10 @@ export interface ProgramsTabProps {
   onMessage?: (row: ProgramRow, bundle: ProgramBundle) => void;
   /** "Prescribe next" (ended) and "Prescribe again" (past): the program sheet for the same patient, starting from this program. Hidden when absent. */
   onPrescribeNext?: (row: ProgramRow, bundle: ProgramBundle) => void;
+  /** "+ New program" button in the top row: opens the program sheet with patient optional. */
+  onNewProgram?: () => void;
+  /** Notifies parent when the list finishes loading so tab pills stay in sync. */
+  onAttentionCount?: (n: number) => void;
   /** Change this number to load the list again (after a program was saved elsewhere). */
   reloadKey?: number;
 }
@@ -61,7 +65,7 @@ function Adherence({ row }: { row: ProgramRow }) {
 }
 const programLine = (r: ProgramRow) => `${r.exerciseCount} ${r.exerciseCount === 1 ? 'exercise' : 'exercises'} · ${r.dayLabel}`;
 
-export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: ProgramsTabProps) {
+export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, onAttentionCount, reloadKey = 0 }: ProgramsTabProps) {
   const clinic = useClinic();
   const online = useOnline();
   const scope = useWorkspaceScope();
@@ -94,6 +98,10 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
   const allRows = useMemo(() => (bundles ?? []).map((b) => buildProgramRow(b, { today, windowStart })), [bundles, today, windowStart]);
   const ownedRows = useMemo(() => (showOwner === 'mine' ? allRows.filter((r) => r.therapistId != null && r.therapistId === scope.myTherapistId) : allRows), [allRows, showOwner, scope.myTherapistId]);
   const counts = useMemo(() => countBuckets(ownedRows), [ownedRows]);
+  const clinicAttention = useMemo(() => countBuckets(allRows).attention, [allRows]);
+  useEffect(() => {
+    if (bundles !== null) onAttentionCount?.(clinicAttention);
+  }, [bundles, clinicAttention, onAttentionCount]);
   const shown = useMemo(() => sortRows(filterRows(ownedRows, filter).filter((r) => matchesProgramSearch(r, query))), [ownedRows, filter, query]);
 
   async function act(fn: () => Promise<unknown>) {
@@ -139,6 +147,14 @@ export function ProgramsTab({ onMessage, onPrescribeNext, reloadKey = 0 }: Progr
           <button type="button" aria-pressed={showOwner === 'all'} className={segOption(showOwner === 'all')} onClick={() => setOwner('all')}>All therapists</button>
         </div>
         <input type="search" aria-label="Search programs" placeholder="Search patient or program" className={`${inputCls} max-w-xs`} value={query} onChange={(e) => setQuery(e.target.value)} />
+        {onNewProgram && (
+          <>
+            <div className="flex-1" />
+            <Button type="button" className={btnPrimary} disabled={!online} onClick={onNewProgram}>
+              {online ? '+ New program' : 'Needs a connection'}
+            </Button>
+          </>
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter programs">
         {FILTERS.map((f) => (

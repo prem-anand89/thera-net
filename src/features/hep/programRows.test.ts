@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Program, ProgramItem, ProgramLog, SessionsPerDay } from '@/domain/hep';
 import type { ProgramBundle, SessionFeedback } from '@/services/hepService';
-import { buildProgramRow, countBuckets, filterRows, lastActiveLabel, matchesProgramSearch, sortRows } from './programRows';
+import { buildProgramRow, countAttentionPrograms, countBuckets, filterRows, hasClinicPainAlert, lastActiveLabel, matchesProgramSearch, sortRows } from './programRows';
 
 const TODAY = '2026-11-13';
 const item = (id: string, over: Partial<ProgramItem> = {}): ProgramItem => ({
@@ -159,5 +159,24 @@ describe('ending this week, strip and phone', () => {
     expect(r.days).toHaveLength(14);
     expect(r.days.at(-1)?.date).toBe(TODAY);
     expect(r.patientPhone).toBe('+91 98765 43210');
+  });
+
+  it('countAttentionPrograms counts attention bundles via buildProgramRow + countBuckets', () => {
+    const bundles = [
+      bundle({ sessionFeedback: [fb()] }),
+      bundle({ logs: [log('a', '2026-11-10')] }, { id: 'p2' }),
+      bundle({ logs: doneEveryDay([TODAY]) }, { id: 'p3' }),
+      bundle({}, { id: 'p4', status: 'completed' }),
+    ];
+    expect(countAttentionPrograms(bundles, { today: TODAY, windowStart: '2026-10-31' })).toBe(2);
+    expect(countAttentionPrograms([bundle({ logs: doneEveryDay([TODAY]) })], { today: TODAY, windowStart: '2026-10-31' })).toBe(0);
+  });
+
+  it('hasClinicPainAlert detects unreviewed high pain on non-completed programs only', () => {
+    expect(hasClinicPainAlert([{ status: 'active', painReviewedThrough: null, feedback: [{ painScore: 7, createdAt: '2026-11-13T09:00:00Z' }] }])).toBe(true);
+    expect(hasClinicPainAlert([{ status: 'active', painReviewedThrough: '2026-11-13T10:00:00Z', feedback: [{ painScore: 9, createdAt: '2026-11-13T09:00:00Z' }] }])).toBe(false);
+    expect(hasClinicPainAlert([{ status: 'active', painReviewedThrough: '2026-11-13T10:00:00Z', feedback: [{ painScore: 8, createdAt: '2026-11-13T11:00:00Z' }] }])).toBe(true);
+    expect(hasClinicPainAlert([{ status: 'completed', painReviewedThrough: null, feedback: [{ painScore: 10, createdAt: '2026-11-13T09:00:00Z' }] }])).toBe(false);
+    expect(hasClinicPainAlert([{ status: 'active', painReviewedThrough: null, feedback: [{ painScore: 6, createdAt: '2026-11-13T09:00:00Z' }] }])).toBe(false);
   });
 });

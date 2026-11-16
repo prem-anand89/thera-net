@@ -504,6 +504,29 @@ export const hepService = {
   async listPatientPrograms(patientId: string, since: string): Promise<ProgramBundle[]> {
     return fetchBundles((q) => q.eq('patient_id', patientId), since);
   },
+
+  /** Light clinic-wide check for unreviewed high-pain reports (7+) on live programs. */
+  async listPainAlerts(
+    clinicId: string,
+  ): Promise<Array<{ id: string; status: string; painReviewedThrough: string | null; feedback: Array<{ painScore: number | null; createdAt: string }> }>> {
+    const supabase = requireOnline();
+    const { data, error } = await supabase
+      .from('programs')
+      .select('id, status, pain_reviewed_through, program_session_feedback!inner(pain_score, created_at)')
+      .eq('clinic_id', clinicId)
+      .neq('status', 'completed')
+      .gte('program_session_feedback.pain_score', 7);
+    if (error) fail(error);
+    return ((data ?? []) as Row[]).map((r) => ({
+      id: String(r.id),
+      status: String(r.status),
+      painReviewedThrough: (r.pain_reviewed_through as string | null) ?? null,
+      feedback: rows<Row>(r.program_session_feedback).map((f) => ({
+        painScore: (f.pain_score as number | null) ?? null,
+        createdAt: String(f.created_at),
+      })),
+    }));
+  },
 };
 
 // The filter receives the PostgREST query builder (its type depends on the select string, so it is left loose here).
