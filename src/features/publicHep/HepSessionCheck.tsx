@@ -1,6 +1,6 @@
 // "How did this session feel?": a Pain | Effort switch, eleven large 0 to 10 buttons with words, and chips for the
 // exercises that hurt or were hardest (amendment 53). Both sides are optional, both can be filled, and "Not now" is always there.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PublicHepItem } from '@/services/publicHepService';
 import { effortWords, painWords } from './hepSession';
 
@@ -33,6 +33,13 @@ export function HepSessionCheck({ items, defaultSide, initial, clinicPhone, sess
   const [hardItemIds, setHardItemIds] = useState<string[]>(initial?.hardItemIds ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    headingRef.current?.focus({ preventScroll: true });
+  }, []);
 
   const value = side === 'pain' ? pain : effort;
   const setValue = side === 'pain' ? setPain : setEffort;
@@ -57,9 +64,9 @@ export function HepSessionCheck({ items, defaultSide, initial, clinicPhone, sess
   );
 
   return (
-    <section aria-label="How did this session feel?" className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section ref={sectionRef} aria-label="How did this session feel?" className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">How did {sessionName ? `${sessionName.toLowerCase()} ` : 'this '}session feel?</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="text-lg font-bold text-slate-900 outline-none">How did {sessionName ? `${sessionName.toLowerCase()} ` : 'this '}session feel?</h2>
         <p className="text-base text-slate-600">Optional. It helps your therapist plan your next steps.</p>
       </div>
 

@@ -363,4 +363,25 @@ describe('how did this session feel', () => {
     await u.click(screen.getByRole('button', { name: 'Rate this session' }));
     expect(screen.getByRole('region', { name: 'How did this session feel?' })).toBeInTheDocument();
   });
+
+  it('scrolls into view smoothly and moves focus to its heading when opening automatically or from "Rate this session"', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true });
+    try {
+      const u = await signInWith(hepData([wall, clam], { logs: [log('i2')] }));
+      await u.click(screen.getByRole('button', { name: 'Mark Wall Slides as done' }));
+      const card = await screen.findByRole('region', { name: 'How did this session feel?' });
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
+      expect(within(card).getByRole('heading', { name: 'How did this session feel?' })).toHaveFocus();
+
+      scrollIntoView.mockClear();
+      await u.click(within(card).getByRole('button', { name: 'Not now' }));
+      await u.click(screen.getByRole('button', { name: 'Rate this session' }));
+      const reopened = screen.getByRole('region', { name: 'How did this session feel?' });
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
+      expect(within(reopened).getByRole('heading', { name: 'How did this session feel?' })).toHaveFocus();
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
 });
