@@ -35,19 +35,20 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('PictureField', () => {
   it('says up front which types and sizes work', () => {
     render(<Harness />);
-    expect(screen.getByText(/JPG, PNG or WebP, up to 25 MB each.*GIF: up to 1 MB.*2 to 4 photos, or one GIF/)).toBeInTheDocument();
+    expect(screen.getByText(/JPG, PNG or WebP, up to 25 MB each.*GIF: up to 1 MB.*1 to 4 photos, or one GIF/)).toBeInTheDocument();
     expect(chooser()).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp,image/gif');
   });
 
-  it('adds chosen photos with their size, and asks for at least 2', async () => {
+  it('adds chosen photos with their size, shows a non-blocking hint at 1 photo, and clears it at 2', async () => {
     const user = userEvent.setup();
     render(<Harness />);
     await user.upload(chooser(), jpg('start.jpg', 2 * 1024 * 1024));
     expect(latest).toHaveLength(1);
     expect(screen.getByText('New photo · 2.0 MB')).toBeInTheDocument();
-    expect(screen.getByText(/Add at least 2 photos/)).toBeInTheDocument();
+    expect(screen.getByText('Two or more photos show the movement better.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
     await user.upload(chooser(), jpg('end.jpg'));
-    expect(screen.queryByText(/Add at least 2 photos/)).toBeNull();
+    expect(screen.queryByText('Two or more photos show the movement better.')).toBeNull();
   });
 
   it('turns away a file of the wrong type or size with a plain reason, and still adds the good ones', () => {

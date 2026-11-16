@@ -50,7 +50,7 @@ export function isKeyForClinic(clinicId: string, key: string): boolean {
 }
 
 /**
- * The keys of one exercise: none (0 keys), one GIF (1), or 2 to 4 photos. Every key must be in this clinic's prefix,
+ * The keys of one exercise: none (0 keys), one GIF (1), or 1 to 4 photos. Every key must be in this clinic's prefix,
  * in one exercise folder, and photo number n must sit at position n.
  */
 export function validateMediaKeysForClinic(
@@ -60,7 +60,7 @@ export function validateMediaKeysForClinic(
 ): boolean {
   if (mediaType === 'none') return keys.length === 0;
   if (mediaType === 'gif' && keys.length !== 1) return false;
-  if (mediaType === 'stills' && (keys.length < 2 || keys.length > 4)) return false;
+  if (mediaType === 'stills' && (keys.length < 1 || keys.length > 4)) return false;
   const parsed = keys.map(parseExerciseMediaKey);
   if (parsed.some((p) => p === null || p.clinicId !== clinicId || p.slot === 'thumb')) return false;
   const exercise = parsed[0]!.exerciseId;

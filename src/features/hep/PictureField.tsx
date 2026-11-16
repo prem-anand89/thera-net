@@ -35,7 +35,8 @@ export function PictureField({ pictures, setPictures, onProblem, disabled = fals
   useEffect(() => () => { urls.current.forEach((u) => URL.revokeObjectURL(u)); }, []);
 
   const hasGif = pictures.some((p) => p.isGif);
-  const enough = pictures.length === 0 || (hasGif ? pictures.length === 1 : pictures.length >= 2 && pictures.length <= MAX_PICTURES);
+  const tooMany = hasGif ? pictures.length > 1 : pictures.length > MAX_PICTURES;
+  const singleStillHint = !hasGif && pictures.length === 1;
 
   function addFiles(list: FileList | File[] | null) {
     if (!list || disabled) return;
@@ -114,7 +115,8 @@ export function PictureField({ pictures, setPictures, onProblem, disabled = fals
         <p className="text-hint text-[var(--muted)]">Do not include a patient&apos;s face: use the Blur tool on any photo that shows one.</p>
       </div>
 
-      {!enough && <ErrorNote message={hasGif ? 'A GIF is a single picture.' : 'Add at least 2 photos (start and end position), or use one GIF.'} />}
+      {tooMany && <ErrorNote message={hasGif ? 'A GIF is a single picture.' : `Up to ${MAX_PICTURES} photos for one exercise.`} />}
+      {singleStillHint && <p className="text-hint text-[var(--muted)]">Two or more photos show the movement better.</p>}
 
       {pictures.length > 0 && (
         <ul className="grid gap-2 tab:grid-cols-2">

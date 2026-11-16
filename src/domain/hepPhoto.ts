@@ -7,7 +7,7 @@ export const MAX_HEP_GIF_BYTES = 1024 * 1024;
 export const HEP_PHOTO_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
 /** What the file pickers offer. Listing the types (not image/*) makes iPhones hand over a JPEG instead of a HEIC. */
 export const HEP_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
-export const HEP_UPLOAD_RULES = 'Photos: JPG, PNG or WebP, up to 25 MB each (we shrink them for you). GIF: up to 1 MB. 2 to 4 photos, or one GIF.';
+export const HEP_UPLOAD_RULES = 'Photos: JPG, PNG or WebP, up to 25 MB each (we shrink them for you). GIF: up to 1 MB. 1 to 4 photos, or one GIF.';
 
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

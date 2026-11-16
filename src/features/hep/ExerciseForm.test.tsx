@@ -317,7 +317,7 @@ describe('ExerciseForm: saving and managing', () => {
     expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ id: 'e1', active: true }));
   });
 
-  it('one photo is not enough; two photos upload through signed links and the keys and thumbnail are saved', async () => {
+  it('one photo is valid with a non-blocking hint; photos upload through signed links and the keys and thumbnail are saved', async () => {
     const user = userEvent.setup();
     mintUploadUrls.mockImplementation(async (_c: string, id: string, slots: Array<number | 'thumb'>) =>
       slots.map((s) => ({ slot: s, key: `clinics/c1/exercises/${id}/${s}-abcdefgh`, url: `https://r2.test/${s}`, headers: { 'Cache-Control': 'private, max-age=604800' } })));
@@ -326,9 +326,10 @@ describe('ExerciseForm: saving and managing', () => {
     await openSection(user, 'Media and instructions');
     const input = screen.getByLabelText('Choose photos or a GIF', { selector: 'input' });
     await user.upload(input, new File(['a'], 'start.jpg', { type: 'image/jpeg' }));
-    expect(screen.getByText(/Add at least 2 photos/)).toBeInTheDocument();
-    expect(saveButton()).toBeDisabled();
+    expect(screen.getByText('Two or more photos show the movement better.')).toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
     await user.upload(input, new File(['b'], 'end.jpg', { type: 'image/jpeg' }));
+    expect(screen.queryByText('Two or more photos show the movement better.')).toBeNull();
     await user.type(screen.getByLabelText('Caption for picture 1'), 'Start');
     expect(saveButton()).toBeEnabled();
     await user.click(screen.getByRole('checkbox', { name: /I have consent from the person shown/ }));

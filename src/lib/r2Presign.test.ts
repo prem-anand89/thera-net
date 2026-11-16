@@ -115,13 +115,13 @@ describe('HEP picture keys', () => {
     expect(newKeySuffix()).not.toBe(newKeySuffix());
   });
 
-  it('accepts none, one GIF or 2 to 4 photos in order, and rejects another clinic, another exercise or a wrong order', () => {
+  it('accepts none, one GIF or 1 to 4 photos in order, and rejects another clinic, another exercise or a wrong order', () => {
     const k = (i: number, e = 'ex-1', c = 'c-1') => `clinics/${c}/exercises/${e}/${i}`;
     expect(validateMediaKeysForClinic('c-1', 'none', [])).toBe(true);
     expect(validateMediaKeysForClinic('c-1', 'none', [k(0)])).toBe(false);
     expect(validateMediaKeysForClinic('c-1', 'gif', [k(0)])).toBe(true);
     expect(validateMediaKeysForClinic('c-1', 'gif', [k(0, 'ex-1', 'c-2')])).toBe(false);
-    expect(validateMediaKeysForClinic('c-1', 'stills', [k(0)])).toBe(false);
+    expect(validateMediaKeysForClinic('c-1', 'stills', [k(0)])).toBe(true);
     expect(validateMediaKeysForClinic('c-1', 'stills', [k(0), k(1), k(2)])).toBe(true);
     expect(validateMediaKeysForClinic('c-1', 'stills', [k(0), k(2)])).toBe(false);
     expect(validateMediaKeysForClinic('c-1', 'stills', [k(0), k(1, 'ex-2')])).toBe(false);

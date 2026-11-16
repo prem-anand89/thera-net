@@ -184,7 +184,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
   const hasGif = pictures.some((p) => p.isGif);
   const mediaType: ExerciseMediaType = pictures.length === 0 ? 'none' : hasGif ? 'gif' : 'stills';
-  const picturesOk = pictures.length === 0 || (hasGif ? pictures.length === 1 : pictures.length >= 2 && pictures.length <= MAX_PICTURES);
+  const picturesOk = pictures.length === 0 || (hasGif ? pictures.length === 1 : pictures.length >= 1 && pictures.length <= MAX_PICTURES);
   // Position is not needed to save (older exercises have none); only Classification's ✓ waits for it.
   const valid = title.trim().length > 0 && effectiveRegion.length > 0 && isDoseValid(dose) && picturesOk;
   const dirty = snapshot({ title, region, customRegion, also, phase, equipment, customEquipment, steps, stopIf, dose, otherNames, otherNameDraft, positions, hidePictures, pictures }) !== baseline;
