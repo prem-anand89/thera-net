@@ -179,24 +179,53 @@ describe('the exercise screen with a timer', () => {
     expect(picture.parentElement?.contains(timer)).toBe(false);
   });
 
-  it('says the holds are done when the run ends, and the message goes away on Done', () => {
-    const { onDone } = screenFor({ doseType: 'hold', reps: 2, holdSeconds: 2 });
+  it('ticks set circles as runs finish, prompts to rest between sets, and only prompts Done on the final set', () => {
+    const { onDone } = screenFor({ doseType: 'hold', sets: 3, reps: 2, holdSeconds: 2, restSeconds: 30 });
     fireEvent.click(screen.getByRole('button', { name: 'Start 2 holds' }));
     act(() => { vi.advanceTimersByTime(120_000); });
-    expect(screen.getByText("All 2 holds done. Tap ✓ Done when you're ready.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('Set 1 of 3 done. Rest 30 s, then start set 2.')).toBeInTheDocument();
+
+    // A Rest-only run shows nothing new and does not tick another set.
+    fireEvent.click(screen.getByRole('button', { name: 'Rest 30 s' }));
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/done\./)).toBeNull();
+
+    // Set 2 finishes -> Set 2 ticked, asks to rest and start set 3.
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 holds' }));
+    act(() => { vi.advanceTimersByTime(120_000); });
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Set 2 of 3 done. Rest 30 s, then start set 3.')).toBeInTheDocument();
+
+    // Set 3 (last set) finishes -> Set 3 ticked, shows final Done prompt.
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 holds' }));
+    act(() => { vi.advanceTimersByTime(120_000); });
+    expect(screen.getByRole('button', { name: 'Set 3' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText("All sets done. Tap ✓ Done when you're ready.")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: /✓ Done/ }));
     expect(onDone).toHaveBeenCalled();
-    expect(screen.queryByText(/holds done/)).toBeNull();
+    expect(screen.queryByText(/All sets done/)).toBeNull();
   });
 
-  it('says "Time\'s up" after a timed run, and stopping early shows no message', () => {
-    screenFor({ doseType: 'timed', durationSeconds: 5 });
+  it('omits the rest part when restSeconds is 0, and stopping a timed run early shows no message or set tick', () => {
+    screenFor({ doseType: 'timed', sets: 2, durationSeconds: 5, restSeconds: 0 });
     fireEvent.click(screen.getByRole('button', { name: 'Start 5 s' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Stop' })[0]);
-    expect(screen.queryByText(/Time's up/)).toBeNull();
+    expect(screen.queryByText(/done\./)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Set 1' })).toHaveAttribute('aria-pressed', 'false');
+
     fireEvent.click(screen.getByRole('button', { name: 'Start 5 s' }));
     act(() => { vi.advanceTimersByTime(60_000); });
-    expect(screen.getByText("Time's up. Tap ✓ Done when you're ready.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Set 1 of 2 done. Start set 2.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start 5 s' }));
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText("All sets done. Tap ✓ Done when you're ready.")).toBeInTheDocument();
   });
 
   it('framed fills its parent instead of the window', () => {

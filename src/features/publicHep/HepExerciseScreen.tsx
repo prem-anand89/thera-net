@@ -3,7 +3,7 @@
 // each set (local to this visit of the screen: not logged, not saved), the steps (open the first time, then collapsed),
 // the therapist's note, the Stop-if line, and a fixed bar with Skip and ✓ Done · Next ›.
 // "Preview as patient" renders this same screen read-only.
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { SkipReason } from '@/domain/hep';
 import { buildHoldPhases, buildRestPhases, buildTimedPhases } from '@/domain/hepTimers';
 import type { PublicHepItem } from '@/services/publicHepService';
@@ -32,6 +32,9 @@ export interface HepExerciseScreenProps {
   onSkip: (reason: SkipReason) => void;
   onUndo: () => void;
   onImageError: () => void;
+  /** Completed sets for this item today (held in memory by parent). Uncontrolled when omitted. */
+  setsDone?: number;
+  onSetsDoneChange?: (done: number) => void;
   /** Preview as patient: the buttons that change data are hidden. */
   readOnly?: boolean;
   /** Fill the nearest positioned parent (a phone frame) instead of the whole window. */
@@ -94,8 +97,7 @@ function DoseBoxes({ item }: { item: PublicHepItem }) {
 }
 
 /** One circle per set. Tapping set n marks sets 1..n; tapping the last marked one takes it back. Nothing is saved. */
-function SetCircles({ sets }: { sets: number }) {
-  const [done, setDone] = useState(0);
+function SetCircles({ sets, done, onChange }: { sets: number; done: number; onChange: (next: number) => void }) {
   const title = 'Sets · tap each one when done';
   return (
     <div>
@@ -107,7 +109,7 @@ function SetCircles({ sets }: { sets: number }) {
             type="button"
             aria-label={`Set ${n}`}
             aria-pressed={n <= done}
-            onClick={() => setDone((d) => (d === n ? n - 1 : n))}
+            onClick={() => onChange(done === n ? n - 1 : n)}
             className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-lg font-bold ${n <= done ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
           >
             {n <= done ? '✓' : n}
@@ -119,11 +121,36 @@ function SetCircles({ sets }: { sets: number }) {
 }
 
 export function HepExerciseScreen(p: HepExerciseScreenProps) {
-  const { item } = p;
+  const { item, onSetsDoneChange } = p;
   const [stepsOpen, setStepsOpen] = useState(p.firstVisit);
   const [asking, setAsking] = useState(false);
-  const timer = useHepTimer(p.sound);
+  const [localSetsDone, setLocalSetsDone] = useState(0);
+  const [finishMessage, setFinishMessage] = useState<string | null>(null);
+  const setsDone = Math.max(0, Math.min(item.sets, p.setsDone ?? localSetsDone));
+  const setsDoneRef = useRef(setsDone);
+  setsDoneRef.current = setsDone;
+  const setSetsDone = useCallback(
+    (next: number) => {
+      const clamped = Math.max(0, Math.min(item.sets, next));
+      setsDoneRef.current = clamped;
+      if (onSetsDoneChange) onSetsDoneChange(clamped);
+      else setLocalSetsDone(clamped);
+    },
+    [item.sets, onSetsDoneChange],
+  );
   const startKind = useRef<'hold' | 'timed' | 'rest'>('hold');
+  const onTimerFinish = useCallback(() => {
+    if (startKind.current === 'rest') return;
+    const next = Math.min(item.sets, setsDoneRef.current + 1);
+    setSetsDone(next);
+    if (next < item.sets) {
+      const restPart = item.restSeconds > 0 ? ` Rest ${item.restSeconds} s, then start set ${next + 1}.` : ` Start set ${next + 1}.`;
+      setFinishMessage(`Set ${next} of ${item.sets} done.${restPart}`);
+    } else {
+      setFinishMessage("All sets done. Tap ✓ Done when you're ready.");
+    }
+  }, [item.sets, item.restSeconds, setSetsDone]);
+  const timer = useHepTimer(p.sound, onTimerFinish);
   const steps = useMemo(() => stepsOf(item.instructions), [item.instructions]);
   const eachSide = item.side === 'both';
   const notes = doseNotes(item, p.sessionCount, p.session);
@@ -134,7 +161,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
   if (item.doseType === 'hold') starts.push({ label: `Start ${item.reps ?? 1} holds`, kind: 'hold', phases: buildHoldPhases(item.reps ?? 1, item.holdSeconds ?? 1, eachSide) });
   if (item.doseType === 'timed') starts.push({ label: `Start ${item.durationSeconds ?? 1} s`, kind: 'timed', phases: buildTimedPhases(item.durationSeconds ?? 1, eachSide) });
   if (item.restSeconds > 0) starts.push({ label: `Rest ${item.restSeconds} s`, kind: 'rest', phases: buildRestPhases(item.restSeconds) });
-  const finishedText = timer.finished && startKind.current !== 'rest' ? (startKind.current === 'hold' ? `All ${item.reps ?? 1} holds done. Tap ✓ Done when you're ready.` : "Time's up. Tap ✓ Done when you're ready.") : null;
+  const finishedText = finishMessage;
   const place = p.framed ? 'absolute' : 'fixed';
   return (
     <div className={`${place} inset-0 z-30 flex flex-col bg-slate-50 text-slate-900`}>
@@ -170,16 +197,16 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
           {!p.readOnly && starts.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {timer.running ? (
-                <button type="button" onClick={timer.stop} className="min-h-12 flex-1 rounded-full border-2 border-rose-600 px-5 text-lg font-semibold text-rose-700">Stop</button>
+                <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); }} className="min-h-12 flex-1 rounded-full border-2 border-rose-600 px-5 text-lg font-semibold text-rose-700">Stop</button>
               ) : (
                 starts.map((s) => (
-                  <button key={s.label} type="button" onClick={() => { startKind.current = s.kind; timer.start(s.phases); }} className="min-h-12 flex-1 rounded-full bg-slate-900 px-5 text-lg font-semibold text-white">{s.label}</button>
+                  <button key={s.label} type="button" onClick={() => { setFinishMessage(null); startKind.current = s.kind; timer.start(s.phases); }} className="min-h-12 flex-1 rounded-full bg-slate-900 px-5 text-lg font-semibold text-white">{s.label}</button>
                 ))
               )}
             </div>
           )}
 
-          {item.sets > 1 && <SetCircles sets={item.sets} />}
+          {item.sets > 1 && <SetCircles sets={item.sets} done={setsDone} onChange={setSetsDone} />}
 
           {steps.length > 0 && (
             <section aria-label="How to do it" className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -213,7 +240,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
               <p className="mb-2 text-base font-semibold">Why are you skipping this?</p>
               <div className="flex flex-wrap gap-2">
                 {SKIP_REASONS.map((r) => (
-                  <button key={r.value} type="button" onClick={() => { setAsking(false); timer.stop(); p.onSkip(r.value); }} className="min-h-11 rounded-full border border-slate-300 bg-white px-4 text-base">{r.label}</button>
+                  <button key={r.value} type="button" onClick={() => { setAsking(false); setFinishMessage(null); timer.stop(); p.onSkip(r.value); }} className="min-h-11 rounded-full border border-slate-300 bg-white px-4 text-base">{r.label}</button>
                 ))}
               </div>
             </div>
@@ -221,13 +248,13 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
           {done || skipped ? (
             <div className="flex items-center gap-3">
               <p className="flex-1 text-base font-semibold text-slate-700">{done ? '✓ Done' : `Skipped${p.skipReason ? ` (${SKIP_REASONS.find((r) => r.value === p.skipReason)?.label.toLowerCase() ?? ''})` : ''}`}</p>
-              <button type="button" onClick={() => { timer.stop(); p.onUndo(); }} className="min-h-12 rounded-full border border-slate-300 px-5 text-base font-semibold">Undo</button>
-              {p.onNext && <button type="button" onClick={() => { timer.stop(); p.onNext?.(); }} className="min-h-12 rounded-full bg-teal-700 px-6 text-base font-semibold text-white">Next ›</button>}
+              <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); p.onUndo(); }} className="min-h-12 rounded-full border border-slate-300 px-5 text-base font-semibold">Undo</button>
+              {p.onNext && <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); p.onNext?.(); }} className="min-h-12 rounded-full bg-teal-700 px-6 text-base font-semibold text-white">Next ›</button>}
             </div>
           ) : (
             <div className="flex items-center gap-3">
               <button type="button" onClick={() => setAsking((v) => !v)} aria-expanded={asking} className="min-h-12 rounded-full border border-slate-300 px-6 text-base font-semibold text-slate-800">Skip</button>
-              <button type="button" onClick={() => { timer.stop(); p.onDone(); }} className="min-h-12 flex-1 rounded-full bg-teal-700 px-6 text-lg font-bold text-white">✓ Done · Next ›</button>
+              <button type="button" onClick={() => { setFinishMessage(null); timer.stop(); p.onDone(); }} className="min-h-12 flex-1 rounded-full bg-teal-700 px-6 text-lg font-bold text-white">✓ Done · Next ›</button>
             </div>
           )}
         </div>

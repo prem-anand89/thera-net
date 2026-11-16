@@ -57,6 +57,10 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
   const [handled, setHandled] = useState<Set<number>>(() => new Set()); // sessions whose check was saved or dismissed on this page
   const [feedback, setFeedback] = useState(() => new Map(data.sessionFeedback.map((f) => [f.sessionIndex as number, f])));
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [setsDone, setSetsDone] = useState<{ date: string; byItem: Record<string, number> }>(() => ({ date: today, byItem: {} }));
+  const setsDoneFor = (id: string) => (setsDone.date === today ? (setsDone.byItem[id] ?? 0) : 0);
+  const updateSetsDone = (id: string, count: number) =>
+    setSetsDone((cur) => ({ date: today, byItem: { ...(cur.date === today ? cur.byItem : {}), [id]: count } }));
 
   const [soundMode, setSoundMode] = useState<SoundMode>(() => readSoundMode());
   const modeRef = useRef(soundMode);
@@ -288,6 +292,8 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
           }}
           onUndo={() => void undo(shown, activeSession)}
           onImageError={onImageError}
+          setsDone={setsDoneFor(shown.id)}
+          onSetsDoneChange={(n) => updateSetsDone(shown.id, n)}
         />
       )}
     </div>

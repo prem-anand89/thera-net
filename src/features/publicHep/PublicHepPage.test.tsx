@@ -268,6 +268,21 @@ describe('one exercise at a time', () => {
     expect(screen.getByRole('button', { name: 'Rest 30 s' })).toBeInTheDocument();
   });
 
+  it('keeps ticked sets in memory for the day when returning to the list and reopening the exercise without logging', async () => {
+    const u = await signInWith(hepData([rich]));
+    await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));
+    await u.click(screen.getByRole('button', { name: 'Set 2' }));
+    expect(screen.getByRole('button', { name: 'Set 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(svc.submitExerciseLog).not.toHaveBeenCalled();
+    await u.click(screen.getByRole('button', { name: '‹ List' }));
+    await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));
+    expect(screen.getByRole('button', { name: 'Set 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Set 3' })).toHaveAttribute('aria-pressed', 'false');
+    expect(svc.submitExerciseLog).not.toHaveBeenCalled();
+  });
+
   it('opens the steps the first time and collapses them to the first step afterwards', async () => {
     const u = await signInWith(hepData([rich]));
     await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));

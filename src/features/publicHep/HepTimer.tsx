@@ -15,13 +15,15 @@ export interface TimerView {
 
 const TICK_MS = 250;
 
-export function useHepTimer(sound: TimerSound) {
+export function useHepTimer(sound: TimerSound, onFinish?: () => void) {
   const run = useRef<{ phases: TimerPhase[]; index: number; endAt: number; lastBeep: number } | null>(null);
   const [view, setView] = useState<TimerView | null>(null);
   /** True after a run ended on its own (not Stop); cleared by the next start or a stop. */
   const [finished, setFinished] = useState(false);
   const running = view !== null;
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
 
   const releaseWake = () => {
     void wakeLock.current?.release().catch(() => {});
@@ -44,6 +46,7 @@ export function useHepTimer(sound: TimerSound) {
     setFinished(true);
     releaseWake();
     sound.cue('done');
+    onFinishRef.current?.();
   }, [sound]);
 
   const tick = useCallback(() => {
