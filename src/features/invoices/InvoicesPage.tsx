@@ -648,6 +648,7 @@ export function InvoicesPage({ canIssue = true }: { canIssue?: boolean } = {}) {
           visitDate={toLocalDateStr(new Date())}
           patientLabel={takingPayment.patientSnapshot.name}
           mrno={takingPayment.patientSnapshot.mrno}
+          patientId={patientIdByInvoiceId.get(takingPayment.id)}
           onClose={() => setTakingPayment(null)}
         />
       )}

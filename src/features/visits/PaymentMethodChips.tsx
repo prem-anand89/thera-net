@@ -6,11 +6,16 @@ export interface PaymentMethodOption {
   label: string;
 }
 
+/** Cash/UPI/etc., or drawing down a patient advance on save. */
+export type PaymentChipValue = PaymentMethod | 'advance';
+
 export interface PaymentMethodChipsProps {
-  value: PaymentMethod;
-  onChange: (method: PaymentMethod) => void;
+  value: PaymentChipValue;
+  onChange: (method: PaymentChipValue) => void;
   options: PaymentMethodOption[];
   disabled?: boolean;
+  /** When set, shows an "Advance" chip alongside UPI / Cash / Card. */
+  advanceBalancePaise?: number;
 }
 
 const PRIMARY_KEYS: PaymentMethod[] = ['upi', 'cash', 'card'];
@@ -25,7 +30,9 @@ export function PaymentMethodChips({
   onChange,
   options,
   disabled = false,
+  advanceBalancePaise,
 }: PaymentMethodChipsProps) {
+  const showAdvance = advanceBalancePaise != null && advanceBalancePaise > 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const otherButtonRef = useRef<HTMLButtonElement>(null);
@@ -34,7 +41,8 @@ export function PaymentMethodChips({
   const primaryOptions = options.filter((opt) => PRIMARY_KEYS.includes(opt.value));
   const otherOptions = options.filter((opt) => !PRIMARY_KEYS.includes(opt.value));
 
-  const selectedOther = otherOptions.find((opt) => opt.value === value);
+  const isAdvanceSelected = value === 'advance';
+  const selectedOther = value !== 'advance' ? otherOptions.find((opt) => opt.value === value) : undefined;
   const isOtherSelected = Boolean(selectedOther);
 
   const otherLabel = selectedOther ? selectedOther.label : 'Other';
@@ -63,16 +71,17 @@ export function PaymentMethodChips({
 
   // Combined radio items for arrow navigation: primary items followed by "other" (if otherOptions exist)
   type RadioItem =
-    | { kind: 'primary'; value: PaymentMethod; label: string }
-    | { kind: 'other'; value: PaymentMethod; label: string };
+    | { kind: 'primary'; value: PaymentChipValue; label: string }
+    | { kind: 'other'; value: PaymentChipValue; label: string };
 
   const radioItems: RadioItem[] = [
+    ...(showAdvance ? [{ kind: 'primary' as const, value: 'advance' as const, label: 'Advance' }] : []),
     ...primaryOptions.map((opt) => ({ kind: 'primary' as const, value: opt.value, label: opt.label })),
     ...(otherOptions.length > 0
       ? [
           {
             kind: 'other' as const,
-            value: isOtherSelected ? value : otherOptions[0].value,
+            value: (isOtherSelected ? value : otherOptions[0].value) as PaymentChipValue,
             label: otherLabel,
           },
         ]
@@ -115,8 +124,31 @@ export function PaymentMethodChips({
       aria-label="Payment method"
       className="relative flex flex-wrap items-center gap-2"
     >
+      {showAdvance && (
+        <button
+          id={`${groupId}-advance`}
+          type="button"
+          role="radio"
+          aria-checked={isAdvanceSelected}
+          tabIndex={activeIndex === 0 ? 0 : -1}
+          disabled={disabled}
+          onClick={() => {
+            onChange('advance');
+            setMenuOpen(false);
+          }}
+          onKeyDown={(e) => handleKeyDown(e, 0)}
+          className={`${baseChip} ${
+            isAdvanceSelected
+              ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
+              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+          }`}
+        >
+          Advance
+        </button>
+      )}
       {primaryOptions.map((opt, i) => {
         const isSelected = value === opt.value;
+        const radioIndex = (showAdvance ? 1 : 0) + i;
         return (
           <button
             key={opt.value}
@@ -124,13 +156,13 @@ export function PaymentMethodChips({
             type="button"
             role="radio"
             aria-checked={isSelected}
-            tabIndex={isSelected || (activeIndex === -1 && i === 0) ? 0 : -1}
+            tabIndex={activeIndex === radioIndex ? 0 : -1}
             disabled={disabled}
             onClick={() => {
               onChange(opt.value);
               setMenuOpen(false);
             }}
-            onKeyDown={(e) => handleKeyDown(e, i)}
+            onKeyDown={(e) => handleKeyDown(e, radioIndex)}
             className={`${baseChip} ${
               isSelected
                 ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'

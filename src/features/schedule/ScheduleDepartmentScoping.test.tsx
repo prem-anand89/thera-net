@@ -238,8 +238,8 @@ describe('ScheduleDepartmentScoping', () => {
     // Select therapist Dr Everywhere
     fireEvent.click(within(sheetDialog).getByRole('radio', { name: /Dr Everywhere/ }));
 
-    // Pick 9:00 AM slot
-    fireEvent.click(within(sheetDialog).getByRole('button', { name: '9:00 AM' }));
+    // Pick a slot free for Dr Everywhere (mock grid already has a ward visit at 9:00 AM).
+    fireEvent.click(within(sheetDialog).getByRole('button', { name: '9:30 AM' }));
 
     // Confirm booking
     fireEvent.click(within(sheetDialog).getByRole('button', { name: /^Confirm booking/ }));

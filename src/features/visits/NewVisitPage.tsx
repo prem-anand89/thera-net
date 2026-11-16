@@ -12,6 +12,7 @@ import {
   feedbackService,
   bookingService,
   consultationNoteService,
+  advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
@@ -42,7 +43,6 @@ import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import { rankServicesByUsage } from '@/domain/serviceUsage';
 import {
   type Patient,
-  type PaymentMethod,
   type TreatmentItem,
   type CatalogItem,
   type UUID,
@@ -89,7 +89,7 @@ import { therapistColor } from '@/components/schedule/scheduleColors';
 import { patientDue } from '@/domain/patientDue';
 import { formatAmount, currencySymbol } from '@/domain/money';
 import { treatmentsDisplayText } from '@/components/visit/formatters';
-import { PaymentMethodChips } from './PaymentMethodChips';
+import { PaymentMethodChips, type PaymentChipValue } from './PaymentMethodChips';
 import { VisitLoggedCard, type SavedVisitInfo } from './VisitLoggedCard';
 import { visitPermissions } from './visitPermissions';
 import { EditVisitModal } from './EditVisitModal';
@@ -343,9 +343,10 @@ export function NewVisitPage() {
   // Optional: a UTR, cheque number or receipt number for the payment, saved as its note and printed on the bill.
   const [paymentRef, setPaymentRef] = useState('');
   const paymentMethods = paymentMethodOptions(clinic);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
+  const [paymentMethod, setPaymentMethod] = useState<PaymentChipValue>(() =>
     defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id))
   );
+  const paymentMethodTouchedRef = useRef(false);
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   // On a phone the Save button is in the fixed bar, far from this message — bring it into view.
@@ -402,6 +403,26 @@ export function NewVisitPage() {
     () => (justSaved ? repos.payments.listByVisit(justSaved.visitId) : undefined),
     [justSaved?.visitId]
   );
+  const openAdvances = useLiveQuery(
+    () =>
+      patient?.id ? advanceService.openAdvancesWithBalance(clinic.id, patient.id) : undefined,
+    [clinic.id, patient?.id]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
+  const showAdvancePayment = canCollectPayment && advanceBalancePaise > 0;
+  useEffect(() => {
+    paymentMethodTouchedRef.current = false;
+  }, [patient?.id]);
+  useEffect(() => {
+    if (paymentChoice !== 'paid' || !showAdvancePayment || paymentMethodTouchedRef.current) return;
+    setPaymentMethod('advance');
+  }, [patient?.id, paymentChoice, showAdvancePayment, advanceBalancePaise]);
+  useEffect(() => {
+    if (paymentMethod !== 'advance') return;
+    if (!showAdvancePayment) {
+      setPaymentMethod(defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
+    }
+  }, [paymentMethod, showAdvancePayment, clinic]);
   // Patient Communications, Slice 1 — tracks whether the post-save "Ask
   // for feedback" button has already been clicked for this visit, so it
   // can't be double-fired (the RLS unique-pending-request-per-visit index
@@ -1144,18 +1165,38 @@ export function NewVisitPage() {
       // genuinely unbilled, for whoever does handle billing to collect
       // from later (same Workspace pending-list path).
       let paymentError: string | undefined;
+      let paidFromAdvancePaise = 0;
       if (billPaise > 0 && canCollectPayment && paymentChoice === 'paid') {
         try {
-          await directPaymentService.logPayment(
-            clinic.id,
-            visit.id,
-            billPaise,
-            paymentMethod,
-            // Cash taken at the visit; a future-dated visit can't have been paid yet.
-            receivedDateAtVisit(visitDate, today),
-            paymentReferenceField(paymentMethod) ? paymentRef.trim() || null : null
-          );
-          rememberPaymentMethod(clinic.id, paymentMethod);
+          if (paymentMethod === 'advance') {
+            const open = await advanceService.openAdvancesWithBalance(clinic.id, patient.id);
+            if (open.length === 0) throw new Error('No advance balance on file.');
+            const ordered = [...open].sort((a, b) =>
+              a.advance.receivedDate.localeCompare(b.advance.receivedDate)
+            );
+            const advanceOnFile = open.reduce((sum, a) => sum + a.remainingPaise, 0);
+            let toApply = Math.min(billPaise, advanceOnFile);
+            const received = receivedDateAtVisit(visitDate, today);
+            for (const { advance, remainingPaise } of ordered) {
+              if (toApply <= 0) break;
+              const slice = Math.min(remainingPaise, toApply);
+              await advanceService.applyAdvance(clinic.id, advance, [visit], slice, received);
+              paidFromAdvancePaise += slice;
+              toApply -= slice;
+            }
+            if (paidFromAdvancePaise <= 0) throw new Error('Could not apply advance.');
+          } else {
+            await directPaymentService.logPayment(
+              clinic.id,
+              visit.id,
+              billPaise,
+              paymentMethod,
+              // Cash taken at the visit; a future-dated visit can't have been paid yet.
+              receivedDateAtVisit(visitDate, today),
+              paymentReferenceField(paymentMethod) ? paymentRef.trim() || null : null
+            );
+            rememberPaymentMethod(clinic.id, paymentMethod);
+          }
         } catch (paymentFailure) {
           // The visit is already saved. Falling into the outer catch would keep
           // the form open and a second Save would log the same visit again.
@@ -1209,10 +1250,24 @@ export function NewVisitPage() {
         isPackage: Boolean(packageSessionNumber) || rows.some((r) => r.continuation),
         packageSessionNumber,
         packageTotalSessions,
-        alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
-        byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
+        alreadyCollected:
+          billPaise > 0 &&
+          canCollectPayment &&
+          paymentChoice === 'paid' &&
+          !paymentError &&
+          (paymentMethod !== 'advance' ||
+            paidFromAdvancePaise >= billPaise),
+        byPartner:
+          billPaise > 0 &&
+          canCollectPayment &&
+          paymentChoice === 'paid' &&
+          paymentMethod === 'partner' &&
+          !paymentError,
         paymentError,
-        collectedLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label,
+        collectedLabel:
+          paymentMethod === 'advance'
+            ? 'Patient advance'
+            : paymentMethods.find((m) => m.value === paymentMethod)?.label,
         therapistId,
         billPaise,
         visitDate,
@@ -2114,8 +2169,12 @@ export function NewVisitPage() {
                   {paymentChoice === 'paid' ? (
                     <PaymentMethodChips
                       value={paymentMethod}
-                      onChange={setPaymentMethod}
+                      onChange={(method) => {
+                        paymentMethodTouchedRef.current = true;
+                        setPaymentMethod(method);
+                      }}
                       options={paymentMethods}
+                      advanceBalancePaise={showAdvancePayment ? advanceBalancePaise : undefined}
                       disabled={busy}
                     />
                   ) : (
@@ -2128,7 +2187,18 @@ export function NewVisitPage() {
                   )}
                 </div>
 
-                {paymentChoice === 'paid' && paymentReferenceField(paymentMethod) && (
+                {showAdvancePayment && paymentChoice === 'paid' && (
+                  <p className="text-xs text-[var(--muted)]">
+                    {formatAmount(advanceBalancePaise)} advance on file
+                    {paymentMethod === 'advance' && billPaise > advanceBalancePaise
+                      ? ` · ${formatAmount(billPaise - advanceBalancePaise)} still due after save`
+                      : ''}
+                  </p>
+                )}
+
+                {paymentChoice === 'paid' &&
+                  paymentMethod !== 'advance' &&
+                  paymentReferenceField(paymentMethod) && (
                   <input
                     className={`${inputCls} w-full`}
                     aria-label={paymentReferenceField(paymentMethod)?.label}
@@ -2279,21 +2349,23 @@ export function NewVisitPage() {
         touchedRef.current = true;
       }}
     >
-      {/* Page navigational header: Back button, title beside it, and status on the right */}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <div className="flex items-center gap-3">
+      {/* Page navigational header — phones hide the Shell bar, so back needs a 44px
+          touch target and must not share one row with the title (Dynamic Island / narrow widths). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-3">
           <button
             type="button"
             disabled={busy}
             onClick={requestExit}
-            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 pl-1.5 pr-3 text-sm font-medium text-[var(--muted)] transition-colors hover:border-[var(--teal)]/40 hover:bg-[var(--paper)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] disabled:opacity-50 shadow-2xs"
+            aria-label={`Back to ${backLabel}`}
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-medium text-[var(--muted)] transition-colors hover:border-[var(--teal)]/40 hover:bg-[var(--paper)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] disabled:opacity-50 shadow-2xs sm:min-h-9 sm:min-w-0 sm:justify-start sm:py-1 sm:pl-1.5 sm:pr-3"
             title={`Back to ${backLabel}`}
           >
-            <IconChevronLeft className="h-4 w-4" aria-hidden="true" />
-            <span>{backLabel}</span>
+            <IconChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{backLabel}</span>
           </button>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="font-display text-xl font-semibold text-[var(--ink)] sm:text-2xl">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 sm:gap-2.5">
+            <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:text-2xl">
               New visit
             </h1>
             <DepartmentPill department={visitDept} full />
@@ -2301,7 +2373,7 @@ export function NewVisitPage() {
         </div>
 
         {isDirty && (
-          <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber-strong)]">
+          <div className="flex shrink-0 items-center gap-1.5 self-end rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber-strong)] sm:self-auto">
             <span
               role="img"
               aria-label="Unsaved changes"

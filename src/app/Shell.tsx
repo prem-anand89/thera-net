@@ -55,11 +55,13 @@ import {
 import { requestPersistentStorage } from '@/lib/persistStorage';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
+import { MAIN_SAFE_HORIZONTAL, mainContentTopPadding } from '@/lib/safeArea';
 import { DepartmentSwitch } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 import { useHepPainDot } from '@/features/hep/hepSignals';
+import { shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './phoneChrome';
 
-
+export { shouldShowPhoneAppHeader, shouldShowPhoneBottomNav };
 
 export const NAV = [
   { to: '/workspace', label: 'Workspace', Icon: IconWorkspace },
@@ -80,27 +82,10 @@ export function filterNavItems(role: string) {
 }
 
 /**
- * Bottom tab bar on phones is hidden on focused creation routes like `/visits/new`
- * so the page's own action bar can sit flush at the bottom.
- * It is also hidden on /onboarding* where navigation is locked until onboarding completes.
- */
-export function shouldShowPhoneBottomNav(pathname: string): boolean {
-  return pathname !== '/visits/new' && !pathname.startsWith('/onboarding');
-}
-
-/**
  * On desktop the navigation strip is hidden on /onboarding* because clicking app links redirects right back to onboarding.
  */
 export function shouldShowDesktopNav(pathname: string): boolean {
   return !pathname.startsWith('/onboarding');
-}
-
-/**
- * On phones the app header (brand, clinic, bell, account) is also hidden on `/visits/new`: the page brings its
- * own slim header with a back arrow, so the form gets the height and the way out is always in view.
- */
-export function shouldShowPhoneAppHeader(pathname: string): boolean {
-  return pathname !== '/visits/new';
 }
 
 // Serialises session-change work across effect runs (see the effect in Shell).
@@ -509,7 +494,7 @@ export function Shell() {
           <UpdateBanner />
           <SyncStatusBanners />
           <main
-            className={`mx-auto max-w-7xl px-[max(1rem,env(safe-area-inset-left))] pb-6 pt-3 sm:pt-6 ${shouldShowPhoneBottomNav(pathname)
+            className={`mx-auto max-w-7xl ${MAIN_SAFE_HORIZONTAL} pb-6 ${mainContentTopPadding(pathname)} ${shouldShowPhoneBottomNav(pathname)
               ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
               : 'pb-6'
               }`}
