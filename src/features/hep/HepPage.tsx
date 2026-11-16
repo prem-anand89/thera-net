@@ -46,6 +46,7 @@ export function HepPage() {
 
   if (role === 'unknown') return <LoadingRows rows={3} label="Loading" />;
   if (!canUseExercises) return <Navigate to="/workspace" replace />;
+  if (!search.tab && exercises === undefined) return <LoadingRows rows={3} label="Loading" />;
 
   return (
     <div className="space-y-5">

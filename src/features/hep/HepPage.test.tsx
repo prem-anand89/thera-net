@@ -110,10 +110,26 @@ describe('HepPage', () => {
   it('opens on Library when the library is empty and moves between tabs through the URL', async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(screen.getByRole('tab', { name: 'Library' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'Library' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('library tab')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Programs' }));
     expect(navigate).toHaveBeenCalledWith({ to: '/hep', search: { tab: 'programs' } });
+  });
+
+  it('waits for useExercises before picking default tab so Library does not flicker before Programs, while explicit ?tab= renders immediately', async () => {
+    await db.exercises.put(ex('e1'));
+    renderPage();
+    // Initial synchronous render before useLiveQuery resolves: shows loading, no Library tab flash
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(await screen.findByRole('tab', { name: /^Programs/ })).toHaveAttribute('aria-selected', 'true');
+
+    cleanup();
+    search = { tab: 'templates' };
+    renderPage();
+    // Explicit ?tab= renders immediately without waiting for useExercises
+    expect(screen.getByRole('tab', { name: 'Templates' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('templates tab')).toBeInTheDocument();
   });
 
   it('defaults to Programs once the library has at least one exercise, while still honouring an explicit ?tab=', async () => {
@@ -150,13 +166,13 @@ describe('HepPage', () => {
     listClinicPrograms.mockResolvedValue([makeBundle('p2')]);
     renderPage();
     await waitFor(() => expect(listClinicPrograms).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('tab', { name: 'Programs' })).not.toHaveTextContent(/\d/);
+    expect(await screen.findByRole('tab', { name: 'Programs' })).not.toHaveTextContent(/\d/);
 
     cleanup();
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     listClinicPrograms.mockReset();
     renderPage();
-    expect(screen.getByRole('tab', { name: 'Programs' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Programs' })).toBeInTheDocument();
     expect(listClinicPrograms).not.toHaveBeenCalled();
   });
 
