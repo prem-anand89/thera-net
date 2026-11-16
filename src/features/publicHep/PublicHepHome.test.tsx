@@ -269,14 +269,22 @@ describe('the exercise page', () => {
     expect(svc.submitExerciseLog).not.toHaveBeenCalled();
   });
 
-  it('has no set circles for a single set, and a timed exercise shows its seconds', async () => {
-    const timed = item({ id: 'i1', title: 'Plank', doseType: 'timed', sets: 1, reps: null, durationSeconds: 30 });
-    const u = await openWithDevice(hepData([timed]));
+  it('has no set circles for a single set, shows only 2 boxes when there is no hold or rest, and shows rest when restSeconds > 0', async () => {
+    const timed = item({ id: 'i1', title: 'Plank', doseType: 'timed', sets: 1, reps: null, durationSeconds: 30, restSeconds: 0 });
+    const repsRest = item({ id: 'i2', title: 'Mini Squats', doseType: 'reps', sets: 3, reps: 10, restSeconds: 45, sortOrder: 1 });
+    const u = await openWithDevice(hepData([timed, repsRest]));
     await u.click(screen.getByRole('tab', { name: 'Exercises' }));
     await u.click(screen.getByRole('button', { name: 'Open Plank' }));
     const dose = screen.getByRole('group', { name: '1 set · 30 s' });
     expect(within(dose).getByText('30 s')).toBeInTheDocument();
-    expect(within(dose).getByText('no hold')).toBeInTheDocument();
+    expect(within(dose).queryByText('no hold')).toBeNull();
+    expect(dose.children).toHaveLength(2);
     expect(screen.queryByRole('group', { name: 'Sets · tap each one when done' })).toBeNull();
+
+    await u.click(screen.getByRole('button', { name: 'Next exercise' }));
+    const dose2 = screen.getByRole('group', { name: '3 sets · 10 reps' });
+    expect(dose2.children).toHaveLength(3);
+    expect(within(dose2).getByText('45 s')).toBeInTheDocument();
+    expect(within(dose2).getByText('rest')).toBeInTheDocument();
   });
 });

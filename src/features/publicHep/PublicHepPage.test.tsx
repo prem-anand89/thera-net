@@ -114,12 +114,15 @@ describe('signing in', () => {
     expect(JSON.stringify({ ...localStorage })).not.toContain('1234');
   });
 
-  it('does not remember the phone when the box is unticked', async () => {
+  it('does not remember the phone when the box is unticked, and places the checkbox above the PIN field', async () => {
     svc.getPublicHep.mockResolvedValue({ ok: true, ...hepData([wall]) });
     render(<PublicHepPage />);
     const u = user();
-    await u.click(await screen.findByLabelText('Remember this phone for 30 days'));
-    await u.type(screen.getByLabelText('Your 4-digit PIN'), '1234');
+    const rememberBox = await screen.findByLabelText('Remember this phone for 30 days');
+    const pinInput = screen.getByLabelText('Your 4-digit PIN');
+    expect(rememberBox.compareDocumentPosition(pinInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await u.click(rememberBox);
+    await u.type(pinInput, '1234');
     await screen.findByRole('heading', { name: 'Knee program' });
     expect(svc.rememberDevice).not.toHaveBeenCalled();
     expect(localStorage.getItem('hep-device:tok')).toBeNull();

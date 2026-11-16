@@ -85,6 +85,15 @@ export function HepSignIn({ brand, onSubmit, notice }: HepSignInProps) {
           if (pin.length === 4 && !busy) void submit(pin);
         }}
       >
+        <label className="flex min-h-11 items-center gap-3 text-base">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-6 w-6 accent-teal-700" />
+          <span>Remember this phone for 30 days</span>
+        </label>
+        <p className="-mt-2 text-sm text-slate-500">Untick this on a shared or borrowed phone.</p>
+        {/iPhone|iPad|iPod/.test(navigator.userAgent) && (
+          <p className="-mt-2 text-sm text-slate-500">On iPhone, open this link in Safari so it remembers you. Links opened inside WhatsApp may forget.</p>
+        )}
+
         <div>
           <label htmlFor="hep-pin" className="mb-1 block text-base font-semibold">Your 4-digit PIN</label>
           <input
@@ -106,15 +115,6 @@ export function HepSignIn({ brand, onSubmit, notice }: HepSignInProps) {
             </p>
           )}
         </div>
-
-        <label className="flex min-h-11 items-center gap-3 text-base">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-6 w-6 accent-teal-700" />
-          <span>Remember this phone for 30 days</span>
-        </label>
-        <p className="-mt-2 text-sm text-slate-500">Untick this on a shared or borrowed phone.</p>
-        {/iPhone|iPad|iPod/.test(navigator.userAgent) && (
-          <p className="-mt-2 text-sm text-slate-500">On iPhone, open this link in Safari so it remembers you. Links opened inside WhatsApp may forget.</p>
-        )}
 
         <button type="submit" disabled={pin.length !== 4 || busy || locked} className="min-h-12 w-full rounded-full bg-teal-700 px-6 text-lg font-semibold text-white disabled:opacity-50">
           {busy ? 'Checking…' : 'Open my exercises'}

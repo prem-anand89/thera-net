@@ -75,17 +75,21 @@ function Picture({ item, onImageError }: { item: PublicHepItem; onImageError: ()
 
 const hasPictures = (item: PublicHepItem) => item.mediaUrls.length > 0;
 
-/** Sets, Reps (or seconds) and Hold as three boxes; the group's name is the dose in words for screen readers. */
+/** Sets, Reps (or seconds), and Hold or Rest boxes; the group's name is the dose in words for screen readers. */
 function DoseBoxes({ item }: { item: PublicHepItem }) {
   const timed = item.doseType === 'timed';
   const hold = item.doseType === 'hold';
   const boxes: Array<[string, string]> = [
     [String(item.sets), item.sets === 1 ? 'set' : 'sets'],
     timed ? [`${item.durationSeconds ?? 0} s`, 'each'] : [String(item.reps ?? 0), item.reps === 1 ? 'rep' : 'reps'],
-    hold ? [`${item.holdSeconds ?? 0} s`, 'hold'] : ['—', 'no hold'],
   ];
+  if (hold) {
+    boxes.push([`${item.holdSeconds ?? 0} s`, 'hold']);
+  } else if (item.restSeconds > 0) {
+    boxes.push([`${item.restSeconds} s`, 'rest']);
+  }
   return (
-    <div role="group" aria-label={doseInWords(item)} className="grid grid-cols-3 gap-2">
+    <div role="group" aria-label={doseInWords(item)} className={`grid gap-2 ${boxes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
       {boxes.map(([value, label], i) => (
         <div key={i} className="rounded-xl bg-white px-2 py-2 text-center ring-1 ring-slate-200">
           <span className="block text-2xl font-bold leading-tight">{value}</span>
