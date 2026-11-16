@@ -357,10 +357,21 @@ const PILL_TONES = {
 } as const;
 
 /** Status badge. Pair color with words/icons — never color alone. */
-export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; children: ReactNode }) {
+export function Pill({
+  tone,
+  children,
+  className = '',
+  title,
+}: {
+  tone: keyof typeof PILL_TONES;
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
   return (
     <span
-      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]}`}
+      title={title}
+      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]} ${className}`.trim()}
     >
       {children}
     </span>
@@ -368,8 +379,20 @@ export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; childr
 }
 
 /** Therapist name badge — teal fill so "who treated" stands out from condition/treatment text. */
-export function TherapistPill({ children }: { children: ReactNode }) {
-  return <Pill tone="teal">{children}</Pill>;
+export function TherapistPill({
+  children,
+  className,
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <Pill tone="teal" className={className} title={title}>
+      {children}
+    </Pill>
+  );
 }
 
 /**

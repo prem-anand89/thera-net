@@ -24,17 +24,17 @@ const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
  *  code (`appointmentFill`): therapist-colour edge, status fill. */
 const listCls = 'divide-y divide-[var(--border)] border-y tab:border-t-0 border-[var(--border)]';
 
-/** Tighter columns on iPad portrait (`tab:` only); roomier from `desktop:`. Action column matches sibling cards (`7.5rem` wrapping on `tab:`, `10rem` single-row on `desktop:`). */
+/** Tighter columns on iPad portrait (`tab:` only); roomier from `desktop:`. Action column matches sibling cards (`6.75rem` wrapping on `tab:`, `10rem` single-row on `desktop:`). */
 function appointmentGridCols(showTherapist: boolean) {
   return showTherapist
-    ? 'tab:grid tab:grid-cols-[3.5rem_minmax(6rem,8rem)_minmax(6rem,1fr)_6.25rem_minmax(0,7.5rem)_7.5rem] tab:items-center tab:gap-x-2 tab:gap-y-1 desktop:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_10rem] desktop:gap-x-2.5 desktop:gap-y-0'
-    : 'tab:grid tab:grid-cols-[3.5rem_minmax(6.5rem,9rem)_minmax(6rem,1fr)_6.5rem_7.5rem] tab:items-center tab:gap-x-2 desktop:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_10rem] desktop:gap-x-2.5';
+    ? 'tab:grid tab:grid-cols-[4.25rem_minmax(5.75rem,7rem)_minmax(7.25rem,1fr)_5.5rem_minmax(0,8.5rem)_6.75rem] tab:items-center tab:gap-x-2 tab:gap-y-1 desktop:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_10rem] desktop:gap-x-2.5 desktop:gap-y-0'
+    : 'tab:grid tab:grid-cols-[4.25rem_minmax(6.25rem,8.5rem)_minmax(7.25rem,1fr)_5.5rem_6.75rem] tab:items-center tab:gap-x-2 desktop:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_10rem] desktop:gap-x-2.5';
 }
 
 function TabAppointmentTable({ children }: { children: ReactNode }) {
   return (
-    <div className="tab:-mx-5 tab:overflow-x-auto tab:overflow-y-visible tab:px-5">
-      <div className="tab:min-w-[40rem] desktop:min-w-0">{children}</div>
+    <div className="tab:-mx-5 tab:overflow-x-auto tab:overflow-y-visible">
+      <div className="min-w-full tab:min-w-[41rem] desktop:min-w-0">{children}</div>
     </div>
   );
 }
@@ -177,7 +177,7 @@ export function TodayAppointments({
       >
         {/* Col 1: Time & duration */}
         <div className="hidden tab:block text-xs text-[var(--ink)]">
-          <div className="font-semibold tabular-nums text-sm font-num">
+          <div className="whitespace-nowrap font-semibold tabular-nums text-sm font-num">
             {minutesLabel(minutesOfDay(a.scheduledAt))}
           </div>
           <div className="text-[11px] font-normal text-[var(--muted)] font-num tabular-nums">{length}</div>
@@ -259,8 +259,7 @@ export function TodayAppointments({
                 className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs font-medium text-[var(--moss)] hover:border-[var(--moss)]"
                 onClick={(e) => e.stopPropagation()}
               >
-                <span className="desktop:inline hidden">WhatsApp</span>
-                <span className="desktop:hidden">WA</span>
+                WhatsApp
               </a>
             </div>
           ) : (
@@ -270,9 +269,11 @@ export function TodayAppointments({
 
         {/* Col 5: Therapist */}
         {showTherapist && (
-          <div className="hidden tab:block min-w-0 max-w-full overflow-hidden">
+          <div className="hidden tab:block min-w-0 max-w-full">
             {therapistNameFor(a) ? (
-              <TherapistPill>{therapistNameFor(a)}</TherapistPill>
+              <TherapistPill className="max-w-full truncate align-bottom" title={therapistNameFor(a)}>
+                {therapistNameFor(a)}
+              </TherapistPill>
             ) : (
               <span className="text-xs text-[var(--muted)]">—</span>
             )}

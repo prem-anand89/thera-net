@@ -378,16 +378,16 @@ describe('TodayAppointments all-done wording', () => {
     expect(within(col).getByText('Package 6/7')).toBeInTheDocument();
   });
 
-  it('wraps multi-button Action groups cleanly and keeps 7.5rem action track on tab layout', () => {
+  it('wraps multi-button Action groups cleanly and keeps full-bleed iPad Mini portrait proportions', () => {
     render(
       <TodayAppointments
         appointments={[
-          appt('09:00', { id: 'arr-1', status: 'arrived', source: 'booking', patientName: 'Rohan' }),
+          appt('09:00', { id: 'arr-1', status: 'arrived', source: 'booking', patientName: 'Rohan', patientPhone: '9876543210' }),
         ]}
         slotMinutes={30}
         nextUpId={null}
         colorFor={() => '#000'}
-        therapistNameFor={() => 'Prem'}
+        therapistNameFor={() => 'Dr Aishwarya R'}
         showTherapist
         onSelect={vi.fn()}
         onUndoArrived={vi.fn()}
@@ -399,7 +399,10 @@ describe('TodayAppointments all-done wording', () => {
     const actionCol = actionsSpan.parentElement!;
     expect(actionCol.className).not.toContain('max-w-[4.75rem]');
     const row = actionCol.closest('li')!;
-    expect(row.className).toContain('_7.5rem]');
+    expect(row.className).toContain('[4.25rem_');
+    expect(row.className).toContain('_6.75rem]');
     expect(row.className).not.toContain('tab:overflow-hidden');
+    expect(within(row).getByRole('link', { name: 'WhatsApp Rohan' })).toHaveTextContent('WhatsApp');
+    expect(within(row).queryByText('WA')).not.toBeInTheDocument();
   });
 });
