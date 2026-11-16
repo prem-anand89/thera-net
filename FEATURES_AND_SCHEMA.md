@@ -3897,5 +3897,277 @@ departments     text[] (NULLABLE) — care locations this login sees ('clinic', 
 title           text (NULLABLE)
 display_name    text (NULLABLE)
 last_active_at  timestamptz (NULLABLE) — set by touch_last_active(p_clinic_id) RPC,
-                called at most once per device per calendar d
+                called at most once per device per calendar day (Dexie db.meta
+                throttle keyed by BOTH clinic and user id, so a staff member's
+                ping on a shared/kiosk device never suppresses a second staff
+                member's ping that same day). Settings → Team shows a plain
+                "Active today" badge from it — no "N minutes ago" granularity,
+                since a once-daily write can't honestly support that precision.
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+PRIMARY KEY (clinic_id, user_id)
+```
+
+#### `therapists`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+active          boolean NOT NULL (default true)
+care_locations  text[] (NULLABLE) — care locations this therapist works in ('clinic', 'home', 'ward'). NULL = all clinic departments. Migration 20261108140000_departments_access.sql
+user_id         uuid (FOREIGN KEY → auth.users.id, NULLABLE) — linked login
+photo_path      text (NULLABLE)
+registration_no text (NULLABLE) — printed on invoices under the therapist's name
+email_appointment_updates boolean NOT NULL DEFAULT true — when false, `notify-therapist` skips the confirmation/reschedule/cancellation email (push and the manual WhatsApp button are unaffected). The linked therapist sets it from account menu → Notifications.
+email_daily_agenda boolean NOT NULL DEFAULT true — no longer read: the agenda is switched per clinic (`clinics.agenda_enabled`, migration `20261021130000_clinic_agenda_switch.sql`). Since `20261021120000_daily_agenda.sql` the DEFAULT of `email_appointment_updates` is false (new therapists get the agenda, not a mail per booking); existing rows keep their value
+phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
+                Business API instead of always falling back to the share sheet
+profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
+                `/onboarding/profile`; NULL triggers profile onboarding
+working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMin], …]},
+                gaps are breaks, a missing weekday is a day off, NULL = clinic
+                booking hours. Admin/front desk can still write it directly
+                via `set_therapist_working_hours` (a therapist can no longer
+                write their own — see Shift-based scheduling below). The
+                shift-template paths (`assign_shift`,
+                `approve_shift_assignment` on a shift request,
+                `set_break_placement`, `update_shift_template`'s cascade)
+                derive this same JSON shape via `derive_working_hours()`;
+                the custom-hours paths (`assign_custom_hours`,
+                `approve_shift_assignment` on a custom-hours request) write
+                the submitted `custom_hours` JSON verbatim, or NULL for
+                "Clinic hours". Either way it stays the single source of
+                truth every downstream consumer (TimeGrid, booking form,
+                slot generation) already reads — those never needed to
+                change. Always validated by `working_hours_valid`. CHECK
+                therapists_working_hours_valid (NOT VALID: new writes only)
+                guards the column too, and the sync push drops working_hours
+                from therapist upserts so a stale local row can't revert it
+                (`src/sync/engine.ts`). Client `workingIntervals` reads a
+                malformed day as "not working" instead of throwing
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+```
+
+#### Shift-based scheduling (`shift_templates`, `therapist_shift_assignments`)
+
+Replaces a therapist's own direct editing of `working_hours` with an admin-controlled model: admin assigns (immediately) a reusable shift template or custom hours; a therapist can request a change (admin-approved) and self-service move their break's placement within an already-approved shift, no approval needed (moving a fixed-duration break never changes total capacity). Both tables are RPC-gated like `appointment_requests` — reads sync normally, no insert/update/delete RLS policy exists on either, every write goes through a `security definer` RPC. A single `derive_working_hours()` function builds the exact same JSON shape `therapists.working_hours` already held, so every downstream consumer (TimeGrid, the booking form, slot generation) needed zero changes.
+
+```sql
+-- shift_templates: clinic-defined, reusable envelopes (admin CRUD, Settings → Team).
+id                          uuid PRIMARY KEY
+clinic_id                   uuid NOT NULL (FOREIGN KEY → clinics.id)
+name                        text NOT NULL
+start_minute                integer NOT NULL
+end_minute                  integer NOT NULL
+break_duration_minutes      integer NOT NULL (default 0)
+default_break_start_minute  integer (NULLABLE; required whenever break_duration_minutes > 0)
+active                      boolean NOT NULL (default true) — deactivated, not deleted
+created_at, updated_at      timestamptz NOT NULL
+
+-- therapist_shift_assignments: one row per "which shift (or custom hours) +
+-- which weekdays", request/approval history kept, not deleted.
+id                  uuid PRIMARY KEY
+clinic_id           uuid NOT NULL (FOREIGN KEY → clinics.id)
+therapist_id        uuid NOT NULL (FOREIGN KEY → therapists.id)
+shift_template_id   uuid (FOREIGN KEY → shift_templates.id, NULLABLE) — exactly one
+                    of this or custom_hours is set
+custom_hours        jsonb (NULLABLE) — same shape as therapists.working_hours;
+                    replaces it wholesale on approval (unlike a shift
+                    assignment, which merges by weekday). The JSON-null
+                    literal 'null'::jsonb is a sentinel used only on a
+                    *pending request* for "Clinic hours" (SQL NULL would
+                    violate the exactly-one-of check); the client sees it
+                    as `customHours === null` with `shiftTemplateId === null`
+                    and labels it "Reset to clinic hours"
+weekdays            integer[] (NULLABLE) — required iff shift_template_id is set;
+                    NULL on the custom_hours path (weekdays live inside that JSON)
+break_start_minute  integer (NULLABLE) — shift-template path only; NULL = the
+                    template's own default_break_start_minute
+status              text NOT NULL — 'pending' | 'approved' | 'declined' | 'superseded'
+                    (superseded: another approved assignment claimed some/all
+                    of this row's weekdays, or a custom-hours assignment
+                    replaced it entirely — kept as history, not deleted)
+note                text (NULLABLE)
+decision_note       text (NULLABLE) — admin note recorded when declining a request;
+                    decline RPC writes this without touching the therapist's request note
+requested_by, decided_by  uuid (FOREIGN KEY → auth.users.id, NULLABLE)
+decided_at          timestamptz (NULLABLE)
+created_at, updated_at  timestamptz NOT NULL
+```
+
+RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver; `assign_shift` takes an optional `p_replaces`, the approved shift row being edited, which is superseded whole so a day the admin unticked goes off, while a call without it only trims overlaps on the therapist's other rows; migration `20261104100000`), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (**admin only** since migration `20261025100000` — front desk can still assign shifts directly but cannot review a therapist's request; the Schedule "N shift requests pending · Review" banner and Settings → Team's pending strip are admin-only too; decline writes `decision_note` while leaving the therapist's `note` intact), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist (`supersede_all_assignments`), and assigning/approving a shift supersedes an approved custom-hours row (`apply_shift_hours` checks for one first; if found it is superseded and the shift's hours are derived from `'{}'` rather than merged into the old custom hours — safe because an approved custom-hours row can never coexist with an approved shift row) — custom hours and shift templates are mutually exclusive per therapist. **Days with no shift are days off:** otherwise `apply_shift_hours` builds `working_hours` from the therapist's remaining approved shift assignments only (`rebuild_working_hours_from_shifts`) plus the new shift, never from whatever was stored, so hours set before shifts existed can't linger on days an admin left out (migration `20261012100000`, which also rebuilt existing therapists once). The Team weekly-coverage grid mirrors the schedule: a day missing from stored hours reads as Off, and clinic default hours apply only when a therapist has no stored hours at all.
+
+**"Clinic hours" (NULL working hours).** `WorkingHoursSheet`'s "Clinic hours" option sends `null`. `assign_custom_hours(therapist, null)` inserts no assignment row: it supersedes every approved assignment and sets `therapists.working_hours = NULL` directly, returning NULL (a therapist with zero approved assignments simply uses whatever `working_hours` is). `request_custom_hours(therapist, null)` stores the `'null'::jsonb` sentinel on the pending row; approving it does the same supersede-all + `working_hours = NULL`, never passing the sentinel to `apply_custom_hours`.
+
+**Internal helpers are not callable by clients.** `derive_working_hours`, `supersede_overlapping_weekdays`, `supersede_all_assignments`, `apply_shift_hours`, `apply_custom_hours`, `rebuild_working_hours_from_shifts` have no authorization check of their own, so `execute` is revoked from `public`/`anon`/`authenticated`; the authorized `security definer` RPCs call them as the function owner. `set_break_placement` rejects a NULL break start (it would otherwise delete the break — a capacity increase with no approval).
+
+**Sync.** Both tables carry a `before update` trigger (`set_shift_scheduling_updated_at()` — updated_at only; the shared `set_updated_at()` also writes `updated_by`/`created_by`, which these tables don't have), and every RPC UPDATE also sets `updated_at = now()`, so the sync engine's `updated_at > cursor` pull sees approve/decline/supersede changes. Client mirror: Dexie `version(22)` adds `shift_templates` (`id, clinicId, active`) and `therapist_shift_assignments` (`id, clinicId, therapistId, status, shiftTemplateId`), read-only sync like `appointment_requests`.
+
+**UI.** Settings → Team: `ShiftTemplatesSection` (the **Shift types** card: one list, a row per type with its times and "Used by …"/"Not used yet", "+ Add" and a tap on a row open one `SheetDialog`; the name goes through `nameCheck` — an exact match blocks, a hidden match offers "Make it active again", a near match only notes; Make inactive / Make active in the sheet footer (a line says anyone on the type keeps their hours), inactive types in a `HiddenItemsFooter` "Inactive (N)", "Delete this shift type" at the bottom of the sheet and refused while anyone is on it; the chip colours are eight `--shift-n-bg/-ink/-line` tokens in `index.css`, picked by the type's id; the times are edited in `ShiftTimesEditor` as **Continuous** — start, end and an optional lunch, "7h working" — or **Split** — session 1 and session 2, "8h 30m working · 3h 30m gap"; `shiftDraft.ts` maps both to the same four fields, `start_minute` = session 1 start, `end_minute` = session 2 end, `default_break_start_minute` = session 1 end, `break_duration_minutes` = the gap, with no schema change; Split needs a gap of at least 2 hours and a Continuous lunch must be under 2 hours so the card's "SPLIT SHIFT" label (`formatShiftSummary`, break ≥ 120) always matches the mode it was edited in; a clinic with no templates is offered "Add suggested shifts" — Morning 8:00–4:30, Evening 12:30–9:00, Split 8:30–1:00 & 4:30–8:30 — once, except on a one-login plan; the Team card's schedule line names the source: assigned shift, custom hours or clinic default hours, and clinic default lists the clinic's own sessions when it closes at midday) and `ShiftAssignmentsSection` (per-therapist current assignment, a pending-request badge showing the requested shift + weekdays or the actual custom hours / "Reset to clinic hours", the therapist's note, Approve, and Decline with an optional reason). Team member cards display real schedule summaries (`describeSchedule`: template name and days or own intervals; headlines "Own hours" / "Clinic hours") and an "Edit hours" button. **One sheet sets hours** (`ShiftSheet.tsx`, on the shared `SheetDialog`, loads its own data): opened for one person (active or not) from the Team member card or a Weekly shifts row, or with `therapistId` null from "+ Assign shift" (people picker, several allowed). A `Segmented` **Shift type | Own hours | Clinic hours** (Own hours only for one person; Shift type only when active types exist): Shift type lists the types as radio rows with their times, then 7 day chips with Open days · Mon–Fri · Clear and an "Adds Sat · Removes Mon" line, and "Change lunch time" for a type with a lunch under 2 hours (checked to fit the shift); Own hours shows `WorkingHoursEditor` (`components/schedule/WorkingHoursEditor.tsx`, extracted from `WorkingHoursSheet`, which still uses it) inline, no second dialog; Clinic hours says which hours apply. Save is disabled until something changes and runs the outside-hours check first. Editing replaces the rows of the picked type, or, when switching to a type the person isn't on, the rows the sheet opened on (one `assign_shift` call per row, as the RPC takes one id); assigning to several people replaces nothing. Picking a second type the person is already on loads its own days. Someone on a hidden type opens with nothing picked and a note saying so. `AssignShiftDialog` and `SetWorkingHoursFlow` are gone. **One therapist:** a clinic with a single active therapist (10 of 15 live clinics) sees a **Working hours** card instead of the roster tools (`SoloWorkingHours`: their week, Monday to Sunday, "Clinic closed" on closed days, and "Edit hours" opening the same `ShiftSheet`), and no Shift types card until it has a shift type. **Weekly shifts card** (`ShiftCoverageGrid`, a `SectionCard` with "+ Assign shift"): from the tablet width (`tab:`, 744px) a table whose whole row opens the therapist's `ShiftSheet` (full names wrap, "Edit ›" on hover, footer **On shift** "3 people / 21h total" or amber "No one"); below it one card per therapist (full name, "40h / wk", the `describeSchedule` line, a Mon–Sun dot strip: on / off / clinic closed) that opens the same sheet. A clinic open in two sessions gets an amber "Evening gap"/"Morning gap" under the day (table) or a one-line note (phones) when no one on shift covers a session (`uncoveredSessions`). Cells show the span of intervals (e.g. `9–5`) rather than "Custom". A therapist on clinic hours is counted from the clinic's own sessions that weekday (`clinicSessionsOn` in `shiftUtils.ts`, shared with `describeSchedule`), so a clinic open 9–1 and 4–8 counts 8 hours, not 11, and the cell reads `9–1 & 4–8`. **Assigning warns first:** before `assign_shift`, own hours or a reset to clinic hours, `ShiftSheet` works out the therapist's hours after the save on the device (`hoursAfterShiftAssign`, mirroring `apply_shift_hours`) and, when upcoming appointments fall outside them (`appointmentsOutsideHours`), asks "N upcoming appointments fall outside these hours" with Save anyway / Cancel; it never blocks, and the appointments stay booked. Schedule view: admin/front desk see a "N pending shift request(s). Review" banner linking to Settings → Team whenever any request is pending. Therapist side: `ShiftRequestSheet` (account menu → My working hours), which displays a "Your current schedule" block (headline, change notice, Mon–Sun hours with breaks, pending request, declined request with note), break control, and the request form with `WorkingHoursSheet` fallback.
+
+#### `user_seen_markers`
+
+Per-user "I have seen X up to <time>" markers behind the notification bell's "new" counts, so they follow a person to every device (migration `20261018120000_user_seen_markers.sql`, Dexie `version(24)`). One row per (user, clinic, marker): `id text` (**deterministic** `"<user_id>:<clinic_id>:<marker_key>"`, enforced by a check constraint, so two devices write the same row), `user_id`, `clinic_id`, `marker_key` (`feedback` | `therapist_appointments`), `seen_at`, `created_at`, `updated_at`. RLS: a user selects/inserts/updates only their own rows (`user_id = auth.uid()` and `is_clinic_member`); no delete policy. A `before insert or update` trigger (`user_seen_markers_guard`) makes `seen_at` **only move forward** and never more than 5 minutes past `now()` (a stale device can't undo a newer look; a wrong clock can't silence the bell), and sets `updated_at`. In `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES` (outbox), published to realtime. **Client:** `repos.userSeenMarkers.markSeen/get`; `scheduleSignals.ts` hooks (`useNewFeedbackResponseCount`, `useNewLowRatingFeedbackCount`, `useNewTherapistAppointmentCount`) take the user id and count items newer than `effectiveSeenSince(marker, legacy)` (`domain/seenMarker.ts`): the newest of the synced marker and any old per-device `db.meta` value (carried over into the synced marker once, then deleted), or, with neither, only the **last 30 days** so a cold device never shows years of feedback as new. Counts read **0 until this device has synced once** (no flash). `SchedulePage` stamps the marker on open.
+
+#### `user_push_preferences`
+
+Per-person switches for push alerts (migration `20261018150000_user_push_preferences.sql`, Dexie `version(25)`). A fourth category, **`hide_patient_names`**, was added by `20261021110000_push_hide_patient_names.sql` and is the one switch that is **off by default** (a row with `enabled = true` means "hide"; `PUSH_CATEGORY_DEFAULT` in `send-push/preferences.ts`). **Everyone is on by default; a row exists only once someone has chosen**, so a new alert type needs no backfill. One row per (user, clinic, alert): `id text` (**deterministic** `"<user_id>:<clinic_id>:<category>"`, enforced by a check constraint), `user_id`, `clinic_id`, `category` (`booking_request` | `appointment_changes` | `low_rating_feedback`), `enabled`, `created_at`, `updated_at`. RLS: a user selects/inserts/updates only their own rows (`user_id = auth.uid()` and `is_clinic_member`); no delete policy (switch back on with `enabled = true`); a `before insert or update` trigger keeps `updated_at` server-authoritative. In `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES` (outbox), published to realtime; partial index on the "off" rows for the lookup below. **Server:** `send-push` resolves recipients as before, then `withoutSwitchedOff()` drops anyone with an explicit `enabled = false` row for that kind's category in that clinic (**fails open**: a lookup error sends the alert rather than losing it). **One shared mapping:** `supabase/functions/send-push/preferences.ts` (dependency-free) holds the categories, the `kind -> category` map (all four `appointment_*` kinds are `appointment_changes`), the screen copy and `pushCategoriesFor(role, hasTherapistProfile)`; the edge function and the app (`src/domain/pushPreferences.ts` re-exports it) both import it, and a typecheck guard in `pushPreferences.test.ts` fails if a `PushKind` has no switch. **Client:** `repos.userPushPreferences.listForUser/setEnabled`; `MyNotificationsSheet` shows the switches. Email (`therapists.email_appointment_updates`) is a separate switch.
+
+#### `service_catalog`
+```sql
+id               uuid PRIMARY KEY
+clinic_id        uuid NOT NULL (FOREIGN KEY → clinics.id)
+category         text NOT NULL — free text, autocompleted client-side
+name             text NOT NULL
+session_count    int NOT NULL (default 1, package pricing)
+base_price_paise bigint NOT NULL
+active           boolean NOT NULL (default true)
+default_location text NOT NULL DEFAULT 'clinic' — clinic, home or ward: where this service usually happens
+duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
+default_location  text NOT NULL (default 'clinic'; clinic|home|ward) — where the service usually happens: the starting Place on a booking, set in the service form's "Usually done at" (only shown when the clinic has more than one place)
+                 (per session for a package); snapshotted onto visit_items
+validity_days    smallint (NULLABLE, 1–730) — package only: optional "Valid for (days)"; null = no expiry
+departments      text[] (NULLABLE) — department ids (clinic, home, ward) offering this service; null or all = everywhere
+created_by, updated_by  uuid (NULLABLE)
+updated_at       timestamptz NOT NULL
+```
+
+#### `patients`
+```sql
+id                    uuid PRIMARY KEY
+address               text (NULLABLE) — one optional free-text address, for home visits
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+mrno                  text NOT NULL
+mrno_source           text NOT NULL — 'hospital' | 'auto'
+name                  text NOT NULL
+age                   int (NULLABLE)
+sex                   text (NULLABLE) — 'M' | 'F' | 'Other'
+phone                 text (NULLABLE) — searchable everywhere, but only
+                       *displayed* on Patient Profile, not the Patients list
+email                 text (NULLABLE) — "More details" section
+alt_phone             text (NULLABLE) — alternate phone; also matched by search
+address               text (NULLABLE) — one optional free-text address for home visits; asked and saved only while the clinic has Home visit on (`homeCareOn`)
+primary_condition     text (NULLABLE)
+referring_source      text (NULLABLE) — legacy fixed enum, kept only so
+                       patients tagged before referring_source_catalog
+                       existed keep displaying correctly; no longer written
+referring_source_id   uuid (FOREIGN KEY → referring_source_catalog.id, NULLABLE)
+                       — current source of truth for new/edited patients
+referring_source_detail text (NULLABLE)
+no_return_reason_id   uuid (FOREIGN KEY → no_return_reason_catalog.id, NULLABLE)
+follow_up_on          date (NULLABLE) — a review the patient was asked to come back for: a target date, not a held slot
+follow_up_note        text (NULLABLE, ≤ 200 chars)
+follow_up_therapist_id uuid (FOREIGN KEY → therapists.id ON DELETE SET NULL, NULLABLE) — who should see them
+follow_up_set_on      date (NULLABLE) — the day it was set; a visit or confirmed/rescheduled/arrived appointment strictly after it fulfils the follow-up (derived in `domain/followUp.ts`, never stored). Clearing the four columns dismisses it. Index `patients_follow_up_idx (clinic_id, follow_up_on) WHERE follow_up_on IS NOT NULL`.
+deleted_at            timestamptz (NULLABLE) — soft delete
+created_by, updated_by  uuid (NULLABLE)
+updated_at            timestamptz NOT NULL
+```
+
+#### `visits`
+```sql
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id            uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
+visit_date            date NOT NULL
+condition, treatment_notes  text (NULLABLE)
+treatment_ids         uuid[] NOT NULL (default '{}') — which treatment_catalog
+                       entries were performed this visit. The visit-entry
+                       picker (NewVisitPage, EditVisitModal) ranks a clinic's
+                       treatments by how often each was tagged in the last 90
+                       days (dashboardService.treatmentUsageCounts, via
+                       domain/treatmentUsage.ts's rankTreatmentsByUsage) into
+                       a "Frequently used" group plus an alphabetical "All
+                       treatments" rest — only once there are enough
+                       treatments (8+) and some usage history to rank by;
+                       otherwise it's a single alphabetical list as before.
+service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
+catalog_price_paise   bigint NOT NULL — snapshot at billing time
+actual_bill_paise     bigint NOT NULL
+adjustment_paise      bigint NOT NULL — actual − catalog
+adjustment_reason     text (NULLABLE)
+session_index, package_total  int (NULLABLE)
+package_group_id      uuid (NULLABLE)
+package_validity_days smallint (NULLABLE, 1–730) — copied onto every session; null = never expires (optional package expiry)
+shared_therapist_id   uuid (FOREIGN KEY → therapists.id, NULLABLE) — internal
+                       revenue-split assist, reporting only
+shared_pct            numeric (NULLABLE)
+bm_split_pct, tax_pct, tds_basis  NOT NULL — rate snapshot at billing
+bm_share_paise, post_tax_paise, tds_paise, hv_paise  bigint NOT NULL — computed
+invoice_id            uuid (FOREIGN KEY → invoices.id, NULLABLE)
+pending_payment_note  text (NULLABLE) — "collect later" reason
+patient_consent_confirmed  boolean NOT NULL
+patient_signature_url text (NULLABLE)
+clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
+consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
+reauthorization_required  boolean NOT NULL
+location              text (NULLABLE) — 'clinic' | 'home' | 'ward' (check `visits_location_check`); null, on most older visits, reads as clinic (`locationOf`). 'ward' only with an admission (check `visits_admission_ward_check`)
+admission_id          uuid NULL → admissions(id) — the inpatient stay this visit is a round of; set <=> location = 'ward'; must be the same patient's and clinic's (`check_visit_admission`)
+credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
+                       visit_credits rows follow the service lines or were edited by hand
+service_lines_count   smallint (NULLABLE, >= 0) — how many live visit_items the visit was saved
+                       with (set by visitService.create / updateLines); null = older visit, no
+                       check. Read by the invoice builder only (since 20261024100000)
+deleted               boolean NOT NULL (default false)
+created_by, updated_by  uuid (NULLABLE)
+updated_at            timestamptz NOT NULL
+INDEXES: clinic+date, patient, clinic+updated
+```
+RLS (since `20261023100000`): select/insert any clinic member; **update** admin, front desk or the
+visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`). The soft
+delete (an update setting `deleted = true`) follows the delete rule: trigger `visits_guard_soft_delete`
+(`guard_visit_soft_delete()`, since `20261024100000`) refuses it with 42501 unless the caller is an
+admin or the visit's own therapist (the therapist before the update), or there is no signed-in user.
+
+Triggers:
+- `visits_enforce_package_limit` (`enforce_package_session_limit()`): ensures a package cannot exceed its total session limit. Since `20261028210000`, excludes the row itself (`id != new.id`) so upserts (`INSERT ... ON CONFLICT DO UPDATE`) when editing an existing visit session never falsely count the row being updated.
+- `visits_enforce_plan` (`enforce_clinic_plan_on_visit_insert()`): checks monthly visit quotas per clinic plan; also excludes `id != new.id` so editing existing visits does not count against new-visit quotas.
+
+#### `admissions` (inpatient stays; migration `20261108120000`)
+
+```
+id, clinic_id, patient_id (→ patients, on delete cascade),
+ipd_no, ward_bed, admitting_doctor        text, all optional ("Ortho ward, bed 12" is one free-text field)
+admitted_on date NOT NULL, discharged_on date NULL (check: not before admitted_on; null = still admitted)
+notes, deleted, created_by, updated_by, updated_at
+```
+
+One OPEN stay per patient: partial unique index `admissions_one_open_per_patient` (clinic, patient) where `discharged_on is null and not deleted`, so two devices admitting the same patient offline cannot both win; the second push is refused. A bed move edits the row in place (no history). A stay can be soft-deleted only while it has no live visits (`check_admission`). **Plan gate (server):** adding a stay needs a plan with the `inpatient` feature (Clinic and Clinic+; `check_admission` refuses Lite and Solo and a read-only plan; the platform kill switch `tier_enforcement_enabled()` turns it off); editing or discharging an existing stay is never refused, and a re-put of an existing id (sync retry, backup restore) passes. RLS: any clinic member reads, adds and edits (like patients); only an admin hard-deletes. Synced like visits: soft delete, tombstone trigger, audit trail, realtime. Client: `Admission` type, Dexie table `admissions` (v27), `repos.admissions` (`get`, `listByClinic`, `listByPatient`, `listOpen`, `put`), in `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES`, in the backup (`admissions`, restored after patients and before visits so the outbox pushes a stay before its visits). **Plan feature `inpatient`** (`PlanFeature`; `minimumTierFor('inpatient')` = clinic) & **Clinic beta gate**: Settings → General → Places you see patients disables the Inpatient switch with a **Coming soon** badge for all clinics except `Physio Clinic` (`inpatientAvailableForClinic`); on `Physio Clinic`, it shows an Inpatient switch only on such a plan (a lower plan sees "Clinic plan and above"); a clinic already holding the setting keeps it and can only turn it off. `offersBookingChoice` (more than one *bookable* place) drives the Place pickers and filters, so Clinic + Inpatient alone is no choice. **Admit and discharge (I2).** `admissionService` (`admit`, `update`, `discharge`, `reopen`, `deleteMistaken`, `visitsOf`) writes through the outbox like a visit; pure rules are in `domain/admissions.ts` (`openAdmissionOf`, `dayOfStay` where the admission day is day 1, `admissionDateProblem`, `isDuplicateOpenAdmission`, `repointVisits`). `admit` refuses a patient who already has an open stay on this device; `discharge` refuses a date before the admission or before the stay's last session and a second discharge; `reopen` undoes a discharge unless the patient was admitted again; `deleteMistaken` soft-deletes only while no live visit is on the stay. The patient profile has a **ward stay bar** (`PatientAdmissionBar`): "Admitted · IPD no · ward/bed · Day N" with Edit stay (`AdmissionSheet`, which also holds the quiet "Delete this stay (entered by mistake)" link, shown only with no sessions) and Discharge (`DischargeSheet`); when not admitted, "Admit to ward" (needs Inpatient on and a plan with `inpatient`; an already open stay can always be edited or discharged) and a "Last stay … Reopen" line. **Offline double-admit:** the server's one-open-stay index refuses the second push (`23505`, `admissions_one_open_per_patient`); `sync/engine.ts` then fetches the patient's open stay from the server and `sync/admissionMerge.ts` moves this device's visits onto it (queued to sync, so the foreign key holds), drops the losing stay and its queued pushes in one transaction, and tells staff. A server refusal for the plan (`42501`) reads as a friendly message (`lib/errors.ts`). **Ward rounds (I3).** Workspace → **Inpatients** (`InpatientsCard`, between Appointments and Today's visits) shows only when Inpatient is on (and, on a plan without the feature, only while someone is still admitted): open stays grouped by ward (`wardOf`: the text before the first comma or a trailing "bed 12", case-insensitive; none reads "No ward set"), each with the patient (linked to the profile), bed, IPD no, "Day N", a "Seen today (N sessions)" badge and **+ Log session** / **+ Log another session**. It lists everyone on the ward, not narrowed by All | Mine or Place; it shows loading rows until its data is in. **+ Admit patient** (plans with `inpatient` only) opens `AdmitPatientPicker` (search; a patient already admitted is listed but not pickable) or the Add patient sheet, then the same `AdmissionSheet` as the profile. **Log session** opens `/visits/new?patientId=&admissionId=&repeatVisitId=` (the repeat is the stay's last session): New Visit loads the stay (`activeAdmission`, only while the chosen patient is the stay's own), shows an "Inpatient · ward/bed" tag instead of the Clinic / Home toggle, starts on "Collect later" (inpatient sessions are billed at discharge), and saves with `visitService.create({ admissionId })`, which makes the visit `location = 'ward'` with that `admission_id`; Inpatient without a stay, or a stay of another patient or clinic, is refused there as it is on the server. **Billing a stay (I4; no migration: the clinical snapshot is free-form jsonb).** The ward stay bar's **Bill this stay** (billing access only; while admitted, and after discharge from the last-stay line) opens `IssueInvoiceDialog` with the stay's live sessions that are not on a bill (`visitIds`; refused with "nothing to bill" when they total ₹0; `alreadyCollected` false, so settlement is chosen when issuing: the normal methods, advances, or "Collected by {partner}" when the clinic has a partner that collects). Discharging then asks "Generate bill now / Bill later" when billing access and billable sessions exist. When every billed visit is on one stay the issued invoice's `clinicalSnapshot.admission` (`InvoiceAdmissionBlock`: IPD no, ward/bed, admitting doctor, admitted and discharged dates; `admissionBlockFor`) is a frozen copy, so editing the stay later never changes an issued bill; Edit details keeps it (`EditInvoiceDetailsDialog`) and amend carries the original snapshot. The printed bill's clinical header shows those rows (`admissionRows`) after Place of service, which now reads **Inpatient** (was "Ward"); a bill mixing places names them ("Clinic and Home and Inpatient"). **Hospital slip** (`/invoices/$invoiceId/slip`, `HospitalSlipPrintPage`, `domain/hospitalSlip.ts`): shown as a "Hospital slip" button on a bill with a stay or Inpatient place (`hasHospitalSlip`); an A5 voucher built only from the issued bill (one row per bill line: dates, service × sessions, therapists, charge; total; stay rows; a signature line per therapist and one for the hospital counter), so it always equals the bill. Admit, discharge and ward rounds are built on this in later steps (I2 to I4).
+
+**Inpatient billing rules (I5; migration `20261110010000_inpatient_wards_and_billing.sql`).** Inpatient sessions (`v.location === 'ward'` or `v.admissionId`) are never collected or invoiced individually per session:
+- **Zero per-session collection:** in `VisitPaymentDisplay`, `SharedVisitCard`, `NewVisitPage`, and `LedgerPage`, inpatient sessions suppress the `Collect ₹X` button, `Ask billing` chip, `Give bill` kebab option, and WhatsApp payment reminders. In `NewVisitPage`, inpatient rounds force `paymentDue = 0` and `showBill = false`, rendering `✓ Added to IP bill · ₹X` (clinic stay billing) or `✓ Session logged · ₹X` (hospital partner billing).
+- **Hospital-billed vs Clinic stay-billed:** when `clinics.ip_billed_by_partner` is true (or clinic has a partner that collects and `ip_billed_by_partner !== false`), the hospital partner handles all inpatient billing. TheraNet only logs sessions and charges for therapist split and clinical documentation: status renders `Logged`, stay billing actions (`Bill this stay`, discharge bill prompt) are hidden, and the Ledger hides Invoices and Daybook tabs in ward view and omits unpaid invoice cards. When `canBillInpatientStay` is true (clinic/rehab centre bills the stay), sessions accumulate as running charges, status renders `IP Bill`, and the stay is invoiced as a batch at discharge or interim. On the Ledger Visits tab, the Unpaid Invoices card is hidden in ward mode (stay bills are managed under the Invoices tab), and the totals bar de-duplicates IP totals to display `IP Bill ₹X` (or `Logged ₹X`).
+- **Workspace department scoping:** in ward mode (`department === 'ward'`), outpatient follow-up reviews and multi-session package tracking are hidden on the Workspace.
+- **Preset wards:** `clinics.wards` (`text[]`) defines preset wards/units in Settings → Care locations (e.g. ICU, HDU, Neuro, Ortho, General Ward). Admission sheet splits entry into structured Ward / Unit (select preset or type custom) + Bed / Room (input).
+
+#### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
+
+Migration `20261023100000_visit_items_and_credits.sql`, Dexie `version(26)`. Both hang off a visit
+(`visit_id → visits.id ON DELETE CASCADE`), sync through the outbox like visits (in `ALL_SYNCED_TABLES`
+and `CLIENT_WRITABLE_TABLES`, published to realtime), soft-delete with `deleted`, carry
+`created_by/updated_by/updated_at` set by `set_updated_at()`, and have the sync tombstone and audit
+(`audit_row_change`) triggers. A visit with no `visit_items` rows (all older visits) is read as one
+implicit line built from its own columns; no backfill.
+```sql
+-- visit_items: one row per service on a visit
+id, clinic_id, visit_id   uuid NOT NULL
+position                  int NOT NULL — display order; position 0 = the visit's main service
+service_catalog_id        uuid NOT NULL (FOREIGN KEY → service_catalog.id)
+service_name              text NOT NULL — snapshot at entry
+catalog_price_paise       bigint NOT NULL — snapshot at entry
+price_paise               bigint NOT NULL — the line's price before the visit-level adjustment
+assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — null = the visit's
+                           primary delivered it; set = assistant tagged on this service
+duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
+is_package_line           boolean NOT NULL (default false)
+session_share_therapist_id uuid (FOREIGN KEY → therapists.id, NULLABLE) — "Share": a colleague who helped
+                           with this service (never the one who did it = assisting_therapist_id ?? visit therapist)
+session_share_pct         smallint (NULLABLE, 1–99) — their % of this service; whoever did it keeps the rest. Both
+                           set or both null. On a PACKAGE line the money moves through package attribution (payBase);
+                           on any other line through the visit's revenue shares (autoCredits). Migrations
+                           20261026100000 (package lines), 20261026110000 (any service). Names kept for sync
+deleted                   boolean NOT NULL (default false)
+INDEXES: visit_id; (clinic_id, updat
 ... [truncated for diff preview]
