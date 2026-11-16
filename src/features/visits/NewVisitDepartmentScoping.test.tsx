@@ -172,6 +172,9 @@ vi.mock('@/services', () => ({
   feedbackService: { requestFeedback: vi.fn() },
   bookingService: { markArrived: vi.fn() },
   consultationNoteService: { linkAppointmentNotesToVisit: vi.fn() },
+  advanceService: {
+    openAdvancesWithBalance: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 vi.mock('dexie-react-hooks', async () => {

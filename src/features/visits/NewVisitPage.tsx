@@ -2349,21 +2349,23 @@ export function NewVisitPage() {
         touchedRef.current = true;
       }}
     >
-      {/* Page navigational header: Back button, title beside it, and status on the right */}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <div className="flex items-center gap-3">
+      {/* Page navigational header — phones hide the Shell bar, so back needs a 44px
+          touch target and must not share one row with the title (Dynamic Island / narrow widths). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-3">
           <button
             type="button"
             disabled={busy}
             onClick={requestExit}
-            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 pl-1.5 pr-3 text-sm font-medium text-[var(--muted)] transition-colors hover:border-[var(--teal)]/40 hover:bg-[var(--paper)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] disabled:opacity-50 shadow-2xs"
+            aria-label={`Back to ${backLabel}`}
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-medium text-[var(--muted)] transition-colors hover:border-[var(--teal)]/40 hover:bg-[var(--paper)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] disabled:opacity-50 shadow-2xs sm:min-h-9 sm:min-w-0 sm:justify-start sm:py-1 sm:pl-1.5 sm:pr-3"
             title={`Back to ${backLabel}`}
           >
-            <IconChevronLeft className="h-4 w-4" aria-hidden="true" />
-            <span>{backLabel}</span>
+            <IconChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{backLabel}</span>
           </button>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="font-display text-xl font-semibold text-[var(--ink)] sm:text-2xl">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 sm:gap-2.5">
+            <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:text-2xl">
               New visit
             </h1>
             <DepartmentPill department={visitDept} full />
@@ -2371,7 +2373,7 @@ export function NewVisitPage() {
         </div>
 
         {isDirty && (
-          <div className="flex items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber-strong)]">
+          <div className="flex shrink-0 items-center gap-1.5 self-end rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber-strong)] sm:self-auto">
             <span
               role="img"
               aria-label="Unsaved changes"
