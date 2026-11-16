@@ -152,6 +152,24 @@ function ItemRow({ row, first, last, items, sessionsPerDay, library, editingLive
           <span className="block truncate text-sm font-semibold text-[var(--ink)]">{item.title}{item.optional && <span className="ml-2 text-xs font-medium text-[var(--muted)]">Optional</span>}</span>
           <span className="block truncate text-xs text-[var(--muted)]">{describeDose(itemDose(item), forTemplate ? 1 : sessionsPerDay)}{override && ` · Only this one: ${SESSION_LABEL[item.sessionsPerDay]}`}</span>
         </button>
+        <Button
+          type="button"
+          aria-label={`Move ${item.title} up`}
+          disabled={first}
+          className="min-h-9 min-w-8 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-30"
+          onClick={() => change(moveWithinSection(items, index, -1))}
+        >
+          ↑
+        </Button>
+        <Button
+          type="button"
+          aria-label={`Move ${item.title} down`}
+          disabled={last}
+          className="min-h-9 min-w-8 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)] disabled:opacity-30"
+          onClick={() => change(moveWithinSection(items, index, 1))}
+        >
+          ↓
+        </Button>
         <KebabMenu ariaLabel={`More for ${item.title}`}>
           {(close) => (
             <div data-row-menu className="py-1">

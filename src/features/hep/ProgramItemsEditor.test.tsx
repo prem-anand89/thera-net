@@ -130,6 +130,24 @@ describe('ProgramItemsEditor: rows', () => {
     await vi.waitFor(() => expect(row.querySelector('img')).not.toBeNull());
   });
 
+  it('offers direct Move up / down icon buttons on each row, disabled at section ends', async () => {
+    const user = userEvent.setup();
+    render(<Harness start={[item(squat), item(bridge), item(quad)]} />);
+    const upSquat = screen.getByRole('button', { name: 'Move Squat up' });
+    const downSquat = screen.getByRole('button', { name: 'Move Squat down' });
+    const upBridge = screen.getByRole('button', { name: 'Move Bridge up' });
+    const downBridge = screen.getByRole('button', { name: 'Move Bridge down' });
+    expect(upSquat).toBeDisabled();
+    expect(downSquat).toBeEnabled();
+    expect(upBridge).toBeEnabled();
+    expect(downBridge).toBeDisabled();
+
+    await user.click(downSquat);
+    expect(saved.map((i) => i.title)).toEqual(['Bridge', 'Squat', 'Quad Sets']);
+    await user.click(screen.getByRole('button', { name: 'Move Squat up' }));
+    expect(saved.map((i) => i.title)).toEqual(['Squat', 'Bridge', 'Quad Sets']);
+  });
+
   it('the template editor has no note to patient', async () => {
     const user = userEvent.setup();
     render(<Harness start={[item(squat)]} forTemplate />);
