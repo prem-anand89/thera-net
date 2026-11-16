@@ -252,6 +252,32 @@ describe('pictures in the list and on the exercise page', () => {
     expect(screen.getAllByRole('img').map((i) => i.getAttribute('src'))).toEqual(['https://signed/a', 'https://signed/b']);
   });
 
+  it('tapping a photo opens a full-screen lightbox with Close, Escape and next/prev between multiple photos', async () => {
+    const u = await openWithDevice(hepData([pic({ mediaCaptions: ['Start', 'End'] })]));
+    await u.click(screen.getByRole('tab', { name: 'Exercises' }));
+    await u.click(screen.getByRole('button', { name: 'Open Heel Raises' }));
+
+    await u.click(screen.getByRole('button', { name: 'Zoom Start' }));
+    const dlg = screen.getByRole('dialog', { name: 'Full screen picture' });
+    expect(dlg).toBeInTheDocument();
+    expect(within(dlg).getByRole('img')).toHaveAttribute('src', 'https://signed/a');
+    expect(within(dlg).getByText('1 of 2')).toBeInTheDocument();
+
+    await u.click(within(dlg).getByRole('button', { name: 'Next picture' }));
+    expect(within(dlg).getByRole('img')).toHaveAttribute('src', 'https://signed/b');
+    expect(within(dlg).getByText('2 of 2')).toBeInTheDocument();
+
+    await u.click(within(dlg).getByRole('button', { name: 'Previous picture' }));
+    expect(within(dlg).getByRole('img')).toHaveAttribute('src', 'https://signed/a');
+
+    await u.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Full screen picture' })).toBeNull();
+
+    await u.click(screen.getByRole('button', { name: 'Zoom Start' }));
+    await u.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Full screen picture' })).toBeNull();
+  });
+
   it('an exercise page without pictures has no picture box and no title tile', async () => {
     const u = await openWithDevice(hepData([wall]));
     await u.click(screen.getByRole('tab', { name: 'Exercises' }));

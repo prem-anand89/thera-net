@@ -228,9 +228,11 @@ describe('the exercise screen with a timer', () => {
     expect(screen.getByText("All sets done. Tap ✓ Done when you're ready.")).toBeInTheDocument();
   });
 
-  it('framed fills its parent instead of the window', () => {
-    screenFor({}, { framed: true });
+  it('framed fills its parent instead of the window, including its picture lightbox', () => {
+    screenFor({ mediaType: 'stills', mediaUrls: ['https://img/a.jpg', 'https://img/b.jpg'], mediaCaptions: ['Start', 'End'] }, { framed: true });
     expect(screen.getByRole('button', { name: '✓ Done · Next ›' }).closest('.absolute')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom Start' }));
+    expect(screen.getByRole('dialog', { name: 'Full screen picture' })).toHaveClass('absolute');
     expect(document.querySelector('.fixed')).toBeNull();
   });
 });

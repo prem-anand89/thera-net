@@ -3,7 +3,7 @@
 // each set (local to this visit of the screen: not logged, not saved), the steps (open the first time, then collapsed),
 // the therapist's note, the Stop-if line, and a fixed bar with Skip and ✓ Done · Next ›.
 // "Preview as patient" renders this same screen read-only.
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SkipReason } from '@/domain/hep';
 import { buildHoldPhases, buildRestPhases, buildTimedPhases } from '@/domain/hepTimers';
 import type { PublicHepItem } from '@/services/publicHepService';
@@ -41,11 +41,16 @@ export interface HepExerciseScreenProps {
   framed?: boolean;
 }
 
-function Picture({ item, onImageError }: { item: PublicHepItem; onImageError: () => void }) {
+function Picture({ item, onImageError, onZoom }: { item: PublicHepItem; onImageError: () => void; onZoom: (index: number) => void }) {
   const [at, setAt] = useState(0);
   const strip = useRef<HTMLDivElement>(null);
   if (item.mediaType === 'gif' || item.mediaUrls.length === 1) {
-    return <img src={item.mediaUrls[0]} alt={item.mediaCaptions[0] || item.title} onError={onImageError} className="h-full w-full object-contain" />;
+    const label = item.mediaCaptions[0] || item.title;
+    return (
+      <button type="button" onClick={() => onZoom(0)} aria-label={`Zoom ${label}`} className="block h-full w-full cursor-zoom-in">
+        <img src={item.mediaUrls[0]} alt={label} onError={onImageError} className="h-full w-full object-contain" />
+      </button>
+    );
   }
   return (
     <div className="relative h-full w-full">
@@ -57,18 +62,117 @@ function Picture({ item, onImageError }: { item: PublicHepItem; onImageError: ()
           setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
         }}
       >
-        {item.mediaUrls.map((url, i) => (
-          <figure key={url} className="relative h-full w-full shrink-0 snap-center">
-            <img src={url} alt={item.mediaCaptions[i] || `${item.title}, picture ${i + 1}`} onError={onImageError} className="h-full w-full object-contain" />
-            {item.mediaCaptions[i] && <figcaption className="absolute inset-x-0 top-0 bg-black/55 px-3 py-1 text-center text-base text-white">{item.mediaCaptions[i]}</figcaption>}
-          </figure>
-        ))}
+        {item.mediaUrls.map((url, i) => {
+          const label = item.mediaCaptions[i] || `${item.title}, picture ${i + 1}`;
+          return (
+            <figure key={url} className="relative h-full w-full shrink-0 snap-center">
+              <button type="button" onClick={() => onZoom(i)} aria-label={`Zoom ${label}`} className="block h-full w-full cursor-zoom-in">
+                <img src={url} alt={label} onError={onImageError} className="h-full w-full object-contain" />
+              </button>
+              {item.mediaCaptions[i] && <figcaption className="pointer-events-none absolute inset-x-0 top-0 bg-black/55 px-3 py-1 text-center text-base text-white">{item.mediaCaptions[i]}</figcaption>}
+            </figure>
+          );
+        })}
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5" aria-hidden>
         {item.mediaUrls.map((url, i) => (
           <span key={url} className={`h-2 w-2 rounded-full ${i === at ? 'bg-teal-600' : 'bg-white/80 ring-1 ring-slate-400'}`} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function PhotoLightbox({
+  item,
+  index,
+  place,
+  onIndex,
+  onClose,
+  onImageError,
+}: {
+  item: PublicHepItem;
+  index: number;
+  place: 'absolute' | 'fixed';
+  onIndex: (next: number) => void;
+  onClose: () => void;
+  onImageError: () => void;
+}) {
+  const total = item.mediaUrls.length;
+  const swipeX = useRef<number | null>(null);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeBtn.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      else if (e.key === 'ArrowRight' && index < total - 1) onIndex(index + 1);
+      else if (e.key === 'ArrowLeft' && index > 0) onIndex(index - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [index, total, onClose, onIndex]);
+
+  const caption = item.mediaCaptions[index] || '';
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Full screen picture"
+      className={`${place} inset-0 z-50 flex flex-col bg-black/95 text-white`}
+    >
+      <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <span className="text-base font-medium text-white/80">{total > 1 ? `${index + 1} of ${total}` : item.title}</span>
+        <button
+          ref={closeBtn}
+          type="button"
+          onClick={onClose}
+          className="min-h-11 rounded-full bg-white/15 px-4 text-base font-semibold text-white hover:bg-white/25"
+        >
+          Close
+        </button>
+      </div>
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-2 touch-pan-y"
+        onPointerDown={(e) => { swipeX.current = e.clientX; }}
+        onPointerUp={(e) => {
+          if (swipeX.current == null || total <= 1) return;
+          const dx = e.clientX - swipeX.current;
+          swipeX.current = null;
+          if (dx <= -40 && index < total - 1) onIndex(index + 1);
+          else if (dx >= 40 && index > 0) onIndex(index - 1);
+        }}
+      >
+        <img
+          src={item.mediaUrls[index]}
+          alt={caption || (total > 1 ? `${item.title}, picture ${index + 1}` : item.title)}
+          onError={onImageError}
+          className="max-h-full max-w-full object-contain"
+        />
+        {total > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Previous picture"
+              disabled={index === 0}
+              onClick={() => onIndex(index - 1)}
+              className="absolute left-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-2xl text-white disabled:opacity-25"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              aria-label="Next picture"
+              disabled={index === total - 1}
+              onClick={() => onIndex(index + 1)}
+              className="absolute right-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-2xl text-white disabled:opacity-25"
+            >
+              ›
+            </button>
+          </>
+        )}
+      </div>
+      {caption && <p className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 text-center text-base text-white/90">{caption}</p>}
     </div>
   );
 }
@@ -130,6 +234,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
   const [asking, setAsking] = useState(false);
   const [localSetsDone, setLocalSetsDone] = useState(0);
   const [finishMessage, setFinishMessage] = useState<string | null>(null);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const setsDone = Math.max(0, Math.min(item.sets, p.setsDone ?? localSetsDone));
   const setsDoneRef = useRef(setsDone);
   setsDoneRef.current = setsDone;
@@ -182,7 +287,7 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
       <div className="flex-1 overflow-y-auto pb-40">
         {hasPictures(item) && (
           <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
-            <Picture item={item} onImageError={p.onImageError} />
+            <Picture item={item} onImageError={p.onImageError} onZoom={setZoomIndex} />
           </div>
         )}
         {timer.view && <HepTimerLayer view={timer.view} repsTotal={item.doseType === 'hold' ? item.reps : null} onSkip={timer.skip} onStop={timer.stop} />}
@@ -262,6 +367,16 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
             </div>
           )}
         </div>
+      )}
+      {zoomIndex !== null && hasPictures(item) && (
+        <PhotoLightbox
+          item={item}
+          index={Math.min(zoomIndex, item.mediaUrls.length - 1)}
+          place={place}
+          onIndex={setZoomIndex}
+          onClose={() => setZoomIndex(null)}
+          onImageError={p.onImageError}
+        />
       )}
     </div>
   );
