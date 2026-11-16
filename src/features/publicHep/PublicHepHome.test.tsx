@@ -126,11 +126,25 @@ describe('Home', () => {
     expect(screen.getByRole('button', { name: 'Open Wall Slides' })).toBeInTheDocument();
   });
 
-  it('Start my exercises switches to the Exercises tab', async () => {
+  it('Start my exercises opens the first unfinished exercise directly, See exercise list opens the checklist, and when everything is done it opens Exercises', async () => {
     const u = await openWithDevice();
     await u.click(screen.getByRole('button', { name: 'Start my exercises' }));
     expect(screen.getByRole('tab', { name: 'Exercises' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Wall Slides' })).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: '‹ List' }));
     expect(screen.getByRole('button', { name: /Start: Wall Slides/ })).toBeInTheDocument();
+
+    await u.click(screen.getByRole('tab', { name: 'Home' }));
+    await u.click(screen.getByRole('button', { name: 'See exercise list' }));
+    expect(screen.getByRole('tab', { name: 'Exercises' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('heading', { name: 'Wall Slides' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Start: Wall Slides/ })).toBeInTheDocument();
+
+    cleanup();
+    const u2 = await openWithDevice(hepData([wall, clam], { logs: [log('i1'), log('i2')] }));
+    await u2.click(screen.getByRole('button', { name: 'Continue my exercises' }));
+    expect(screen.getByRole('tab', { name: 'Exercises' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('heading', { name: 'Wall Slides' })).toBeNull();
   });
 
   it('Open on another program switches the shown program', async () => {

@@ -131,7 +131,20 @@ function ProgramPreviewBody(p: ProgramPreviewDialogProps) {
           <p className="text-sm font-medium text-slate-600">{p.clinicName}</p>
           {tab === 'home' ? (
             <div className="mt-2">
-              <HepHome data={homeData} program={homeData.programs[0]} logs={logs} today={today} home={null} onStart={() => setTab('exercises')} onOpenProgram={() => {}} />
+              <HepHome
+                data={homeData}
+                program={homeData.programs[0]}
+                logs={logs}
+                today={today}
+                home={null}
+                onStart={() => {
+                  const firstOpen = nextToDo(mine, logs, today, session);
+                  setTab('exercises');
+                  if (firstOpen) setOpenId(firstOpen.id);
+                }}
+                onSeeList={() => setTab('exercises')}
+                onOpenProgram={() => {}}
+              />
             </div>
           ) : (
             <>

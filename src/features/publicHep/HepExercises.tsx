@@ -211,7 +211,20 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
         )}
 
         {tab === 'home' ? (
-          <HepHome data={data} program={program} logs={logs} today={today} home={home} onStart={() => onTab('exercises')} onOpenProgram={onSwitchProgram} />
+          <HepHome
+            data={data}
+            program={program}
+            logs={logs}
+            today={today}
+            home={home}
+            onStart={() => {
+              const firstOpen = nextToDo(mine, logs, today, activeSession);
+              onTab('exercises');
+              if (firstOpen) openExercise(firstOpen);
+            }}
+            onSeeList={() => onTab('exercises')}
+            onOpenProgram={onSwitchProgram}
+          />
         ) : (
           <>
             <div>

@@ -20,6 +20,7 @@ export interface HepHomeProps {
   /** The Home RPC's answer; null while loading, when it failed, or in the therapist's preview. */
   home: HepHomeData | null;
   onStart: () => void;
+  onSeeList?: () => void;
   onOpenProgram: (programId: string) => void;
 }
 
@@ -47,7 +48,7 @@ function Bar({ fraction, label }: { fraction: number; label: string }) {
 
 const endOf = (p: { startDate: string; durationDays: number | null }) => (p.durationDays ? addDaysISO(p.startDate, p.durationDays - 1) : null);
 
-export function HepHome({ data, program, logs, today, home, onStart, onOpenProgram }: HepHomeProps) {
+export function HepHome({ data, program, logs, today, home, onStart, onSeeList, onOpenProgram }: HepHomeProps) {
   const counts = todayCounts(data.items, logs, today);
   const started = logs.some((l) => l.logDate === today);
   const day = dayNumber(program.startDate, today);
@@ -84,6 +85,11 @@ export function HepHome({ data, program, logs, today, home, onStart, onOpenProgr
         <button type="button" onClick={onStart} className="mt-1 min-h-12 w-full rounded-xl bg-teal-700 px-6 text-lg font-bold text-white">
           {started ? 'Continue my exercises' : 'Start my exercises'}
         </button>
+        {onSeeList && (
+          <button type="button" onClick={onSeeList} className="min-h-11 w-full text-center text-base font-semibold text-teal-800 underline">
+            See exercise list
+          </button>
+        )}
       </section>
 
       {home && (
