@@ -3,7 +3,6 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
-import type { PatientFlagContext } from '@/domain/patientFlags';
 import { localDateTime } from '@/domain/schedule';
 import { formatDateDM } from '@/domain/fiscalYear';
 
@@ -349,33 +348,5 @@ describe('TodayAppointments all-done wording', () => {
     expect(screen.getByText(/1 no-show/)).toBeInTheDocument();
     expect(screen.queryByText(/0 seen/)).not.toBeInTheDocument();
     expect(screen.queryByText(/No appointments today/)).not.toBeInTheDocument();
-  });
-
-  it('stacks package flags in the condition column (tab layout)', () => {
-    const flagContext: PatientFlagContext = {
-      patientIdsWithVisits: new Set(['p1']),
-      packages: new Map([['p1', { logged: 5, total: 7 }]]),
-      balanceDue: new Set(),
-      noShows: new Map(),
-      conditionByPatient: new Map([['p1', 'Back pain']]),
-      requestNotes: new Map(),
-    };
-    render(
-      <TodayAppointments
-        appointments={[appt('10:00', { patientId: 'p1', patientName: 'Mukesh' })]}
-        slotMinutes={30}
-        nextUpId={null}
-        colorFor={() => '#000'}
-        therapistNameFor={() => 'Prem'}
-        showTherapist
-        onSelect={vi.fn()}
-        flagContext={flagContext}
-        onMarkArrived={vi.fn()}
-      />
-    );
-    const col = screen.getByTestId('appointment-condition-col');
-    expect(col.className).toMatch(/flex-col/);
-    expect(within(col).getByText('Package 6/7')).toBeInTheDocument();
-    expect(within(col).getByText('Back pain')).toBeInTheDocument();
   });
 });

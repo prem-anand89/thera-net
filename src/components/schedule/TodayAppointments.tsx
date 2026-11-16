@@ -162,7 +162,7 @@ export function TodayAppointments({
         key={a.id}
         // Phone: patient on the left, the action pill on the same line (it wraps below only when it cannot fit, e.g.
         // Undo + Complete on a 320px screen), so a row is two lines tall instead of three.
-        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:min-w-0 tab:overflow-hidden tab:px-4 ${gridCols} hover:bg-[var(--teal-light)] transition-colors`}
+        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:px-4 ${gridCols} hover:bg-[var(--teal-light)] transition-colors`}
         style={{ borderLeftColor: color, background: fill.background }}
       >
         {/* Col 1: Time & duration */}
@@ -210,29 +210,19 @@ export function TodayAppointments({
           )}
         </button>
 
-        {/* Col 3: Condition / Notes — stack flags below text on tab so
-            "Package 6/7" pills don't bleed into the Contact column on
-            iPad portrait (grid min-content default was pushing into Call). */}
-        <div
-          className="hidden tab:flex min-w-0 flex-col justify-center gap-0.5 overflow-hidden text-sm text-[var(--ink)]"
-          data-testid="appointment-condition-col"
-        >
+        {/* Col 3: Condition / Notes */}
+        <div className="hidden tab:flex min-w-0 items-center gap-1.5 text-sm text-[var(--ink)]">
           {wideDetail ? (
-            <span className="min-w-0 truncate" title={wideDetail}>
-              {wideDetail}
-            </span>
-          ) : flags.length === 0 ? (
+            <span className="truncate" title={wideDetail}>{wideDetail}</span>
+          ) : (
             <span className="text-[var(--muted)]">—</span>
-          ) : null}
-          {flags.length > 0 && (
-            <div className="min-w-0">
-              <PatientFlagPills flags={flags} max={2} />
-            </div>
           )}
+          {wideDetail && flags.length > 0 && <span className="text-[var(--muted)]">·</span>}
+          <PatientFlagPills flags={flags} max={2} />
         </div>
 
         {/* Col 4: Contact: the number is not shown, only the two ways to reach the patient */}
-        <div className="relative z-[1] hidden tab:block min-w-0 shrink-0 text-xs">
+        <div className="hidden tab:block text-xs">
           {a.patientPhone ? (
             <div className="flex items-center gap-1.5">
               <a

@@ -12,7 +12,6 @@ import {
   feedbackService,
   bookingService,
   consultationNoteService,
-  advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
@@ -340,7 +339,7 @@ export function NewVisitPage() {
   const [showAllTreatments, setShowAllTreatments] = useState(false);
   const foldedOnceRef = useRef(false);
   const prevServicesRef = useRef(0);
-  const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending' | 'advance'>('paid');
+  const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   // Optional: a UTR, cheque number or receipt number for the payment, saved as its note and printed on the bill.
   const [paymentRef, setPaymentRef] = useState('');
   const paymentMethods = paymentMethodOptions(clinic);
@@ -403,16 +402,6 @@ export function NewVisitPage() {
     () => (justSaved ? repos.payments.listByVisit(justSaved.visitId) : undefined),
     [justSaved?.visitId]
   );
-  const openAdvances = useLiveQuery(
-    () =>
-      patient?.id ? advanceService.openAdvancesWithBalance(clinic.id, patient.id) : undefined,
-    [clinic.id, patient?.id]
-  );
-  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
-  const showAdvancePayment = canCollectPayment && advanceBalancePaise > 0;
-  useEffect(() => {
-    if (paymentChoice === 'advance' && !showAdvancePayment) setPaymentChoice('paid');
-  }, [paymentChoice, showAdvancePayment]);
   // Patient Communications, Slice 1 — tracks whether the post-save "Ask
   // for feedback" button has already been clicked for this visit, so it
   // can't be double-fired (the RLS unique-pending-request-per-visit index
@@ -1155,7 +1144,6 @@ export function NewVisitPage() {
       // genuinely unbilled, for whoever does handle billing to collect
       // from later (same Workspace pending-list path).
       let paymentError: string | undefined;
-      let paidFromAdvancePaise = 0;
       if (billPaise > 0 && canCollectPayment && paymentChoice === 'paid') {
         try {
           await directPaymentService.logPayment(
@@ -1171,27 +1159,6 @@ export function NewVisitPage() {
         } catch (paymentFailure) {
           // The visit is already saved. Falling into the outer catch would keep
           // the form open and a second Save would log the same visit again.
-          paymentError = toFriendlyMessage(paymentFailure);
-        }
-      } else if (billPaise > 0 && canCollectPayment && paymentChoice === 'advance') {
-        try {
-          const open = await advanceService.openAdvancesWithBalance(clinic.id, patient.id);
-          if (open.length === 0) throw new Error('No advance balance on file.');
-          const ordered = [...open].sort((a, b) =>
-            a.advance.receivedDate.localeCompare(b.advance.receivedDate)
-          );
-          const advanceOnFile = open.reduce((sum, a) => sum + a.remainingPaise, 0);
-          let toApply = Math.min(billPaise, advanceOnFile);
-          const received = receivedDateAtVisit(visitDate, today);
-          for (const { advance, remainingPaise } of ordered) {
-            if (toApply <= 0) break;
-            const slice = Math.min(remainingPaise, toApply);
-            await advanceService.applyAdvance(clinic.id, advance, [visit], slice, received);
-            paidFromAdvancePaise += slice;
-            toApply -= slice;
-          }
-          if (paidFromAdvancePaise <= 0) throw new Error('Could not apply advance.');
-        } catch (paymentFailure) {
           paymentError = toFriendlyMessage(paymentFailure);
         }
       }
@@ -1242,18 +1209,10 @@ export function NewVisitPage() {
         isPackage: Boolean(packageSessionNumber) || rows.some((r) => r.continuation),
         packageSessionNumber,
         packageTotalSessions,
-        alreadyCollected:
-          billPaise > 0 &&
-          canCollectPayment &&
-          !paymentError &&
-          (paymentChoice === 'paid' ||
-            (paymentChoice === 'advance' && paidFromAdvancePaise >= billPaise)),
+        alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
         byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
         paymentError,
-        collectedLabel:
-          paymentChoice === 'advance'
-            ? 'Patient advance'
-            : paymentMethods.find((m) => m.value === paymentMethod)?.label,
+        collectedLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label,
         therapistId,
         billPaise,
         visitDate,
@@ -2149,20 +2108,10 @@ export function NewVisitPage() {
                     onChange={setPaymentChoice}
                     options={[
                       { value: 'paid', label: 'Collected now' },
-                      ...(showAdvancePayment
-                        ? [{ value: 'advance' as const, label: 'From advance' }]
-                        : []),
                       { value: 'pending', label: 'Take payment later' },
                     ]}
                   />
-                  {paymentChoice === 'advance' ? (
-                    <p className="text-xs text-[var(--muted)]">
-                      {formatAmount(Math.min(billPaise, advanceBalancePaise))} from advance on file
-                      {billPaise > advanceBalancePaise
-                        ? ` · ${formatAmount(billPaise - advanceBalancePaise)} still due after save`
-                        : ''}
-                    </p>
-                  ) : paymentChoice === 'paid' ? (
+                  {paymentChoice === 'paid' ? (
                     <PaymentMethodChips
                       value={paymentMethod}
                       onChange={setPaymentMethod}
