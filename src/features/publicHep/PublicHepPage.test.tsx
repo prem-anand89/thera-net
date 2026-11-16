@@ -387,4 +387,16 @@ describe('how did this session feel', () => {
       Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
     }
   });
+
+  it('shows anchor labels for Pain (0 No pain / 10 Worst pain) and Effort (0 Very easy / 10 Hardest) around the 0–10 buttons', async () => {
+    const u = await signInWith(hepData([wall], { logs: [log('i1')] }));
+    const card = await screen.findByRole('region', { name: 'How did this session feel?' });
+    expect(within(card).getByRole('group', { name: 'Pain from 0 to 10' })).toBeInTheDocument();
+    expect(within(card).getByText('0 No pain')).toBeInTheDocument();
+    expect(within(card).getByText('10 Worst pain')).toBeInTheDocument();
+    await u.click(within(card).getByRole('button', { name: 'Effort' }));
+    expect(within(card).getByRole('group', { name: 'Effort from 0 to 10' })).toBeInTheDocument();
+    expect(within(card).getByText('0 Very easy')).toBeInTheDocument();
+    expect(within(card).getByText('10 Hardest')).toBeInTheDocument();
+  });
 });

@@ -76,19 +76,31 @@ export function HepSessionCheck({ items, defaultSide, initial, clinicPhone, sess
       </div>
 
       <div>
-        <div role="group" aria-label={side === 'pain' ? 'Pain from 0 to 10' : 'Effort from 0 to 10'} className="grid grid-cols-6 gap-2 sm:grid-cols-11">
-          {SCALE.map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-pressed={value === n}
-              aria-label={String(n)}
-              onClick={() => setValue(value === n ? null : n)}
-              className={`min-h-11 rounded-xl border text-lg font-bold tabular-nums ${value === n ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-800'}`}
-            >
-              {n}
-            </button>
+        <div
+          role="group"
+          aria-label={side === 'pain' ? 'Pain from 0 to 10' : 'Effort from 0 to 10'}
+          className="space-y-2 sm:grid sm:grid-cols-11 sm:gap-1.5 sm:space-y-0"
+        >
+          {[SCALE.slice(0, 6), SCALE.slice(6)].map((row, idx) => (
+            <div key={idx} className={`grid gap-2 sm:contents ${idx === 0 ? 'grid-cols-6' : 'grid-cols-5'}`}>
+              {row.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={value === n}
+                  aria-label={String(n)}
+                  onClick={() => setValue(value === n ? null : n)}
+                  className={`min-h-11 rounded-xl border text-lg font-bold tabular-nums ${value === n ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-800'}`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           ))}
+        </div>
+        <div className="mt-1.5 flex justify-between text-xs text-slate-600">
+          <span>{side === 'pain' ? '0 No pain' : '0 Very easy'}</span>
+          <span>{side === 'pain' ? '10 Worst pain' : '10 Hardest'}</span>
         </div>
         <p className="mt-2 min-h-6 text-base font-semibold text-slate-800" aria-live="polite">{words}</p>
         {side === 'pain' && <p className="text-base text-slate-600">Mild discomfort is okay. If it feels sharp or gets worse, stop and let us know.</p>}
