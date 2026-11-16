@@ -8,9 +8,11 @@ import { Button } from '@/components/Button';
 import { LoadingRows, SheetDialog, btnPrimary, btnSecondary } from '@/components/ui';
 import type { Exercise, ExerciseTemplate } from '@/domain/hep';
 import { formatDateDM } from '@/domain/fiscalYear';
+import { describeDose, exerciseToDose } from '@/domain/hepDose';
 import { hepService, type HepItemInput, type ProgramBundle } from '@/services/hepService';
 import { ExerciseForm } from './ExerciseForm';
 import { LibraryBrowser } from './LibraryBrowser';
+import { TypeTag } from './LibraryParts';
 import { exerciseToItem, intoBlock, itemsMinutes, programItemToInput, templateItemToInput, type ItemBlock } from './hepItems';
 import { PackList, type Pack } from './PickerPacks';
 import { StarterSetSheet } from './StarterSetSheet';
@@ -52,10 +54,11 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
   const [templates, setTemplates] = useState<TemplateRow[] | null>(null);
   const [earlier, setEarlier] = useState<ProgramBundle[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailEx, setDetailEx] = useState<Exercise | null>(null);
 
   const withPatient = !!patientId && !!patientName;
   const startTab: PickerTab = initialTab === 'earlier' && !withPatient ? 'exercises' : initialTab ?? 'exercises';
-  useEffect(() => { if (open) { setTicked([]); setNewName(null); setTab(startTab); setLoadError(null); setEarlier(null); setTemplates(null); } }, [open, startTab]);
+  useEffect(() => { if (open) { setTicked([]); setNewName(null); setDetailEx(null); setTab(startTab); setLoadError(null); setEarlier(null); setTemplates(null); } }, [open, startTab]);
   // A different patient (or program being edited) must never see the previous patient's programs while theirs load.
   useEffect(() => { setEarlier(null); }, [patientId, excludeProgramId]);
   useEffect(() => {
@@ -163,6 +166,7 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
                   disabledIds={disabledIds}
                   fixedView="grid"
                   onActivate={toggle}
+                  onDetails={setDetailEx}
                   emptyState={empty}
                   renderNoMatches={(q) => (
                     <Button type="button" className={`${btnSecondary} mt-3`} disabled={!online} onClick={() => setNewName(q)}>
@@ -184,6 +188,55 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
         )}
       </SheetDialog>
       <StarterSetSheet open={open && starterOpen} onClose={() => setStarterOpen(false)} />
+      {detailEx && (
+        <SheetDialog
+          open={open}
+          title={detailEx.title}
+          onClose={() => setDetailEx(null)}
+          footer={(
+            <>
+              <Button type="button" className={btnSecondary} onClick={() => setDetailEx(null)}>Close</Button>
+              {!disabledIds?.has(detailEx.id) && (
+                <Button
+                  type="button"
+                  className={ticked.includes(detailEx.id) ? btnSecondary : btnPrimary}
+                  onClick={() => { toggle(detailEx); setDetailEx(null); }}
+                >
+                  {ticked.includes(detailEx.id) ? 'Remove' : 'Add'}
+                </Button>
+              )}
+            </>
+          )}
+        >
+          <div className="space-y-3 text-sm text-[var(--ink)]">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+              <TypeTag phase={detailEx.phase} />
+              <span>·</span>
+              <span>{detailEx.bodyRegion}</span>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Default dose</div>
+              <p className="mt-0.5">{describeDose(exerciseToDose(detailEx))}</p>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Equipment</div>
+              <p className="mt-0.5">{detailEx.equipment.filter((e) => e && e !== 'None').join(', ') || 'No equipment'}</p>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Steps</div>
+              {detailEx.instructions.trim() ? (
+                <ol className="mt-1 list-decimal space-y-1 pl-5">
+                  {detailEx.instructions.split('\n').map((s) => s.trim()).filter(Boolean).map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="mt-0.5 text-[var(--muted)]">No instructions added.</p>
+              )}
+            </div>
+          </div>
+        </SheetDialog>
+      )}
       <ExerciseForm
         open={open && newName !== null}
         clinicId={clinic.id}

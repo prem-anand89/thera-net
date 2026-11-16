@@ -46,6 +46,8 @@ export interface LibraryBrowserProps {
   fixedView?: 'grid';
   /** Library mode: a star on every card and row. Absent in the picker. */
   onToggleFavorite?: (ex: Exercise) => void;
+  /** Picker mode: info button on each card opening exercise details without activating the card. */
+  onDetails?: (ex: Exercise) => void;
   /** Library only: turns on the Delete / archive button (bulk archive / delete). Absent in the picker. */
   selectable?: { online: boolean; onResult: (message: string) => void };
   /** What to show when the clinic has no exercises at all. */
@@ -57,7 +59,7 @@ export interface LibraryBrowserProps {
 const NO_COUNTS: Record<string, number> = {};
 const phaseRank = (p: string) => { const i = (EXERCISE_TYPES as readonly string[]).indexOf(p); return i === -1 ? EXERCISE_TYPES.length : i; };
 
-export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_COUNTS, showArchived = false, onActivate, selected, disabledIds, fixedView, onToggleFavorite, selectable, emptyState, renderNoMatches }: LibraryBrowserProps) {
+export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_COUNTS, showArchived = false, onActivate, selected, disabledIds, fixedView, onToggleFavorite, onDetails, selectable, emptyState, renderNoMatches }: LibraryBrowserProps) {
   const [filter, setFilter] = useState<LibraryFilter>(EMPTY_LIBRARY_FILTER);
   const [view, setViewState] = useState<View>(fixedView ?? readView);
   const [sort, setSort] = useState<LibrarySort>('used');
@@ -118,6 +120,19 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_CO
         {tick(ex) && <span aria-hidden="true" className="absolute left-3 top-3 flex h-5 w-5 items-center justify-center rounded bg-[var(--teal)] text-xs text-white">✓</span>}
         {onToggleFavorite && (
           <button type="button" aria-label={ex.isFavorite ? `Remove ${ex.title} from favourites` : `Add ${ex.title} to favourites`} aria-pressed={ex.isFavorite} className="absolute right-1 top-1 min-h-11 min-w-11 rounded-full text-lg text-[var(--amber-strong)]" onClick={() => onToggleFavorite(ex)}>{ex.isFavorite ? '★' : '☆'}</button>
+        )}
+        {onDetails && (
+          <button
+            type="button"
+            aria-label={`Details for ${ex.title}`}
+            className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)]/95 text-xs font-semibold text-[var(--ink)] shadow-sm hover:border-[var(--teal)] hover:text-[var(--teal)]"
+            onClick={(e) => { e.stopPropagation(); onDetails(ex); }}
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="10" cy="10" r="8" />
+              <path d="M10 9v5M10 6.5h.01" strokeLinecap="round" />
+            </svg>
+          </button>
         )}
       </li>
     );

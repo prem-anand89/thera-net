@@ -203,4 +203,35 @@ describe('ExercisePicker', () => {
     expect(onAdd.mock.calls[0][0].map((i: { title: string }) => i.title)).toEqual(['Quad Sets', 'Wall Slides', 'Sit to Stand']);
     expect(onAdd.mock.calls[0][1]).toEqual({ templateId: 't1', suggestedTitle: 'Knee week 1' });
   });
+
+  it('Details button opens steps, default dose and equipment without toggling the card, and Add/Remove inside toggles it', async () => {
+    await db.exercises.put(ex('1', 'Quad Sets', {
+      instructions: 'Sit tall\nTighten your thigh',
+      equipment: ['Towel'],
+      doseType: 'hold',
+      defaultSets: 3,
+      defaultReps: 12,
+      defaultHoldSeconds: 5,
+      defaultRestSeconds: 30,
+    }));
+    const user = userEvent.setup();
+    renderPicker();
+    await user.click(await screen.findByRole('button', { name: 'Details for Quad Sets' }));
+    expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('Nothing chosen yet');
+
+    const dlg = screen.getByRole('dialog', { name: 'Quad Sets' });
+    expect(within(dlg).getByText('Sit tall')).toBeInTheDocument();
+    expect(within(dlg).getByText('Tighten your thigh')).toBeInTheDocument();
+    expect(within(dlg).getByText(/3 sets × 12 reps · hold each for 5 s.*rest 30 s/)).toBeInTheDocument();
+    expect(within(dlg).getByText('Towel')).toBeInTheDocument();
+
+    await user.click(within(dlg).getByRole('button', { name: 'Add' }));
+    expect(screen.queryByRole('dialog', { name: 'Quad Sets' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('Adding · 1');
+
+    await user.click(screen.getByRole('button', { name: 'Details for Quad Sets' }));
+    const reopened = screen.getByRole('dialog', { name: 'Quad Sets' });
+    await user.click(within(reopened).getByRole('button', { name: 'Remove' }));
+    expect(screen.getByRole('complementary', { name: 'Chosen exercises' })).toHaveTextContent('Nothing chosen yet');
+  });
 });
