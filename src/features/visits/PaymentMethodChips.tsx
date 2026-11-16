@@ -91,6 +91,7 @@ export function PaymentMethodChips({
   const activeIndex = isOtherSelected
     ? radioItems.findIndex((it) => it.kind === 'other')
     : radioItems.findIndex((it) => it.value === value);
+  const focusableIndex = activeIndex >= 0 ? activeIndex : 0;
 
   function handleKeyDown(e: React.KeyboardEvent, index: number) {
     if (disabled) return;
@@ -130,7 +131,7 @@ export function PaymentMethodChips({
           type="button"
           role="radio"
           aria-checked={isAdvanceSelected}
-          tabIndex={activeIndex === 0 ? 0 : -1}
+          tabIndex={focusableIndex === 0 ? 0 : -1}
           disabled={disabled}
           onClick={() => {
             onChange('advance');
@@ -156,7 +157,7 @@ export function PaymentMethodChips({
             type="button"
             role="radio"
             aria-checked={isSelected}
-            tabIndex={activeIndex === radioIndex ? 0 : -1}
+            tabIndex={focusableIndex === radioIndex ? 0 : -1}
             disabled={disabled}
             onClick={() => {
               onChange(opt.value);
@@ -184,7 +185,12 @@ export function PaymentMethodChips({
             aria-checked={isOtherSelected}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            tabIndex={isOtherSelected ? 0 : -1}
+            tabIndex={
+              isOtherSelected ||
+              (focusableIndex === 0 && !showAdvance && primaryOptions.length === 0)
+                ? 0
+                : -1
+            }
             disabled={disabled}
             onClick={() => {
               // Opening the menu never changes the method; only picking an item does.

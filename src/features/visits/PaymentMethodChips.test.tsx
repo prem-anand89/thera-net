@@ -185,4 +185,15 @@ describe('PaymentMethodChips', () => {
     expect(screen.queryByRole('menu')).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('keeps the first chip tabbable when value matches no option', () => {
+    render(
+      <PaymentMethodChips
+        value={'advance'}
+        onChange={vi.fn()}
+        options={fullOptions}
+      />
+    );
+    expect(screen.getByRole('radio', { name: 'UPI' })).toHaveAttribute('tabindex', '0');
+  });
 });

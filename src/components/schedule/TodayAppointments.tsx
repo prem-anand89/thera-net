@@ -24,17 +24,17 @@ const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
  *  code (`appointmentFill`): therapist-colour edge, status fill. */
 const listCls = 'divide-y divide-[var(--border)] border-y tab:border-t-0 border-[var(--border)]';
 
-/** Tighter columns on iPad portrait (`tab:` only); roomier from `desktop:`. */
+/** Tighter columns on iPad portrait (`tab:` only); roomier from `desktop:`. Action column matches sibling cards (`7.5rem` wrapping on `tab:`, `10rem` single-row on `desktop:`). */
 function appointmentGridCols(showTherapist: boolean) {
   return showTherapist
-    ? 'tab:grid tab:grid-cols-[3.25rem_minmax(5.5rem,7.5rem)_minmax(0,1fr)_6.5rem_minmax(0,7.5rem)_4.75rem] tab:items-center tab:gap-x-1.5 tab:gap-y-1 desktop:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_7.25rem] desktop:gap-x-2.5 desktop:gap-y-0'
-    : 'tab:grid tab:grid-cols-[3.25rem_minmax(6rem,8rem)_minmax(0,1fr)_6.5rem_4.75rem] tab:items-center tab:gap-x-1.5 desktop:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_7.25rem] desktop:gap-x-2.5';
+    ? 'tab:grid tab:grid-cols-[3.5rem_minmax(6rem,8rem)_minmax(6rem,1fr)_6.25rem_minmax(0,7.5rem)_7.5rem] tab:items-center tab:gap-x-2 tab:gap-y-1 desktop:grid-cols-[4.5rem_9.5rem_minmax(0,1fr)_9.5rem_10rem_10rem] desktop:gap-x-2.5 desktop:gap-y-0'
+    : 'tab:grid tab:grid-cols-[3.5rem_minmax(6.5rem,9rem)_minmax(6rem,1fr)_6.5rem_7.5rem] tab:items-center tab:gap-x-2 desktop:grid-cols-[4.5rem_10.5rem_minmax(0,1fr)_8rem_10rem] desktop:gap-x-2.5';
 }
 
 function TabAppointmentTable({ children }: { children: ReactNode }) {
   return (
-    <div className="tab:-mx-5 tab:overflow-x-auto tab:px-5">
-      <div className="tab:min-w-[36rem] desktop:min-w-0">{children}</div>
+    <div className="tab:-mx-5 tab:overflow-x-auto tab:overflow-y-visible tab:px-5">
+      <div className="tab:min-w-[40rem] desktop:min-w-0">{children}</div>
     </div>
   );
 }
@@ -172,7 +172,7 @@ export function TodayAppointments({
         key={a.id}
         // Phone: patient on the left, the action pill on the same line (it wraps below only when it cannot fit, e.g.
         // Undo + Complete on a 320px screen), so a row is two lines tall instead of three.
-        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:min-w-0 tab:overflow-hidden tab:px-4 ${appointmentGridCols(showTherapist)} hover:bg-[var(--teal-light)] transition-colors`}
+        className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-l-4 py-2 px-3 tab:min-w-0 tab:px-4 ${appointmentGridCols(showTherapist)} hover:bg-[var(--teal-light)] transition-colors`}
         style={{ borderLeftColor: color, background: fill.background }}
       >
         {/* Col 1: Time & duration */}
@@ -282,7 +282,7 @@ export function TodayAppointments({
         {/* Col 6: Action */}
         {end && (
           <div
-            className={`tab:flex tab:min-w-0 tab:max-w-[4.75rem] tab:shrink-0 tab:justify-end tab:overflow-visible desktop:max-w-none ${showEndOnMobile ? 'ml-auto flex shrink-0 justify-end tab:ml-0' : 'hidden tab:flex'}`}
+            className={`tab:flex tab:min-w-0 tab:shrink-0 tab:justify-end ${showEndOnMobile ? 'ml-auto flex shrink-0 justify-end tab:ml-0' : 'hidden tab:flex'}`}
           >
             {end}
           </div>
@@ -322,7 +322,7 @@ export function TodayAppointments({
     }
     if (a.status === 'no_show' && !a.visitId && onUndoNoShow) {
       return (
-        <span className="flex items-center gap-2">
+        <span className="flex flex-wrap items-center justify-end gap-1.5">
           <button
             type="button"
             className={pillSmDanger}
@@ -385,7 +385,7 @@ export function TodayAppointments({
             {inProgress.map((a) =>
               row(
                 a,
-                <span className="flex items-center gap-2">
+                <span className="flex flex-wrap items-center justify-end gap-1.5">
                   {onUndoArrived && a.source !== 'walk_in' && (
                     <button
                       type="button"

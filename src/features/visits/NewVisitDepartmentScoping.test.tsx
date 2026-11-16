@@ -123,7 +123,9 @@ const mockHomeAppointment: Appointment = {
   updatedAt: '2026-10-01T08:00:00Z',
 } as unknown as Appointment;
 
-const createVisitMock = vi.fn().mockResolvedValue({ id: 'v1' });
+const createVisitMock = vi.fn().mockResolvedValue({ id: 'v1', billPaise: 50000 });
+const openAdvancesWithBalanceMock = vi.fn().mockResolvedValue([]);
+const logPaymentMock = vi.fn().mockResolvedValue({});
 
 vi.mock('@/services', () => ({
   repos: {
@@ -163,7 +165,7 @@ vi.mock('@/services', () => ({
   visitService: {
     create: (...args: unknown[]) => createVisitMock(...args),
   },
-  directPaymentService: { save: vi.fn() },
+  directPaymentService: { save: vi.fn(), logPayment: (...args: unknown[]) => logPaymentMock(...args) },
   dashboardService: {
     treatmentUsageCounts: () => [],
     serviceUsageCounts: () => [],
@@ -173,7 +175,7 @@ vi.mock('@/services', () => ({
   bookingService: { markArrived: vi.fn() },
   consultationNoteService: { linkAppointmentNotesToVisit: vi.fn() },
   advanceService: {
-    openAdvancesWithBalance: vi.fn().mockResolvedValue([]),
+    openAdvancesWithBalance: (...args: unknown[]) => openAdvancesWithBalanceMock(...args),
   },
 }));
 
@@ -214,6 +216,9 @@ describe('NewVisitPage department scoping', () => {
     mockCatalog = [mockService];
     createVisitMock.mockClear();
     navigateMock.mockClear();
+    openAdvancesWithBalanceMock.mockReset();
+    openAdvancesWithBalanceMock.mockResolvedValue([]);
+    logPaymentMock.mockClear();
   });
 
   afterEach(() => {
@@ -454,6 +459,72 @@ describe('NewVisitPage department scoping', () => {
           patientId: 'p1',
         })
       );
+    });
+  }, 30000);
+
+  it('queries advances scoped by visitDept so OP advances do not show or crash in Home care', async () => {
+    currentDept = 'home';
+    openAdvancesWithBalanceMock.mockImplementation((_cid: string, _pid: string, dept?: string) =>
+      dept === 'clinic'
+        ? Promise.resolve([{ advance: { id: 'adv-op', department: 'clinic', receivedDate: '2026-10-01' }, remainingPaise: 50000 }])
+        : Promise.resolve([])
+    );
+
+    render(<NewVisitPage />);
+
+    fireEvent.change(screen.getByPlaceholderText('Search ID, name or phone…'), { target: { value: 'Anita' } });
+    fireEvent.click(await screen.findByText('Anita Roy'));
+
+    const servicePicker = screen.getByRole('combobox', { name: 'Service' });
+    fireEvent.change(servicePicker, { target: { value: 'Physio' } });
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Physiotherapy Session/ }));
+
+    await waitFor(() => {
+      expect(openAdvancesWithBalanceMock).toHaveBeenCalledWith('c1', 'p1', 'home');
+    });
+    expect(screen.getByRole('radio', { name: 'UPI' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Advance' })).not.toBeInTheDocument();
+  });
+
+  it('re-evaluates Advance auto-selection on "Another visit" for the same patient', async () => {
+    currentDept = 'clinic';
+    openAdvancesWithBalanceMock.mockResolvedValue([
+      { advance: { id: 'adv-op', department: 'clinic', receivedDate: '2026-10-01' }, remainingPaise: 50000 },
+    ]);
+
+    render(<NewVisitPage />);
+
+    fireEvent.change(screen.getByPlaceholderText('Search ID, name or phone…'), { target: { value: 'Anita' } });
+    fireEvent.click(await screen.findByText('Anita Roy'));
+
+    const servicePicker = screen.getByRole('combobox', { name: 'Service' });
+    fireEvent.change(servicePicker, { target: { value: 'Physio' } });
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Physiotherapy Session/ }));
+
+    const advanceChip = await screen.findByRole('radio', { name: 'Advance' });
+    await waitFor(() => {
+      expect(advanceChip).toHaveAttribute('aria-checked', 'true');
+    });
+
+    // Staff manually picks a therapist, switches from Advance to UPI, and saves visit #1
+    const therapistPicker = await screen.findByRole('button', { name: /^Therapist:/ });
+    fireEvent.click(therapistPicker);
+    fireEvent.click(screen.getByRole('option', { name: 'Dr OP Only' }));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'UPI' }));
+    expect(advanceChip).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: /Save visit/ }));
+    const anotherBtn = await screen.findByRole('button', { name: 'Another visit for Anita' });
+    fireEvent.click(anotherBtn);
+
+    const nextServicePicker = await screen.findByRole('combobox', { name: 'Service' });
+    fireEvent.change(nextServicePicker, { target: { value: 'Physio' } });
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Physiotherapy Session/ }));
+
+    const nextAdvanceChip = await screen.findByRole('radio', { name: 'Advance' });
+    await waitFor(() => {
+      expect(nextAdvanceChip).toHaveAttribute('aria-checked', 'true');
     });
   }, 30000);
 });

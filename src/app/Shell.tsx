@@ -494,7 +494,7 @@ export function Shell() {
           <UpdateBanner />
           <SyncStatusBanners />
           <main
-            className={`mx-auto max-w-7xl ${MAIN_SAFE_HORIZONTAL} pb-6 ${mainContentTopPadding(pathname)} ${shouldShowPhoneBottomNav(pathname)
+            className={`mx-auto max-w-7xl ${MAIN_SAFE_HORIZONTAL} ${mainContentTopPadding(pathname)} ${shouldShowPhoneBottomNav(pathname)
               ? 'pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6'
               : 'pb-6'
               }`}

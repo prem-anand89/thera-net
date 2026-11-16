@@ -377,4 +377,29 @@ describe('TodayAppointments all-done wording', () => {
     expect(col.className).toMatch(/flex-col/);
     expect(within(col).getByText('Package 6/7')).toBeInTheDocument();
   });
+
+  it('wraps multi-button Action groups cleanly and keeps 7.5rem action track on tab layout', () => {
+    render(
+      <TodayAppointments
+        appointments={[
+          appt('09:00', { id: 'arr-1', status: 'arrived', source: 'booking', patientName: 'Rohan' }),
+        ]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Prem'}
+        showTherapist
+        onSelect={vi.fn()}
+        onUndoArrived={vi.fn()}
+      />
+    );
+    const completeLink = screen.getByRole('link', { name: /Complete/ });
+    const actionsSpan = completeLink.parentElement!;
+    expect(actionsSpan.className).toContain('flex-wrap');
+    const actionCol = actionsSpan.parentElement!;
+    expect(actionCol.className).not.toContain('max-w-[4.75rem]');
+    const row = actionCol.closest('li')!;
+    expect(row.className).toContain('_7.5rem]');
+    expect(row.className).not.toContain('tab:overflow-hidden');
+  });
 });

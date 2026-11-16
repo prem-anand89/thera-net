@@ -403,26 +403,6 @@ export function NewVisitPage() {
     () => (justSaved ? repos.payments.listByVisit(justSaved.visitId) : undefined),
     [justSaved?.visitId]
   );
-  const openAdvances = useLiveQuery(
-    () =>
-      patient?.id ? advanceService.openAdvancesWithBalance(clinic.id, patient.id) : undefined,
-    [clinic.id, patient?.id]
-  );
-  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
-  const showAdvancePayment = canCollectPayment && advanceBalancePaise > 0;
-  useEffect(() => {
-    paymentMethodTouchedRef.current = false;
-  }, [patient?.id]);
-  useEffect(() => {
-    if (paymentChoice !== 'paid' || !showAdvancePayment || paymentMethodTouchedRef.current) return;
-    setPaymentMethod('advance');
-  }, [patient?.id, paymentChoice, showAdvancePayment, advanceBalancePaise]);
-  useEffect(() => {
-    if (paymentMethod !== 'advance') return;
-    if (!showAdvancePayment) {
-      setPaymentMethod(defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
-    }
-  }, [paymentMethod, showAdvancePayment, clinic]);
   // Patient Communications, Slice 1 — tracks whether the post-save "Ask
   // for feedback" button has already been clicked for this visit, so it
   // can't be double-fired (the RLS unique-pending-request-per-visit index
@@ -498,6 +478,26 @@ export function NewVisitPage() {
     () => therapistsInDepartment(visitDept, therapists ?? []),
     [visitDept, therapists]
   );
+  const openAdvances = useLiveQuery(
+    () =>
+      patient?.id ? advanceService.openAdvancesWithBalance(clinic.id, patient.id, visitDept) : undefined,
+    [clinic.id, patient?.id, visitDept]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
+  const showAdvancePayment = canCollectPayment && advanceBalancePaise > 0;
+  useEffect(() => {
+    paymentMethodTouchedRef.current = false;
+  }, [patient?.id, visitDept]);
+  useEffect(() => {
+    if (justSaved || paymentChoice !== 'paid' || !showAdvancePayment || paymentMethodTouchedRef.current) return;
+    setPaymentMethod('advance');
+  }, [justSaved, patient?.id, visitDept, paymentChoice, showAdvancePayment, advanceBalancePaise]);
+  useEffect(() => {
+    if (paymentMethod !== 'advance') return;
+    if (!showAdvancePayment) {
+      setPaymentMethod(defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
+    }
+  }, [paymentMethod, showAdvancePayment, clinic]);
 
   const rawCatalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalog = useMemo(() => {
@@ -1049,9 +1049,10 @@ export function NewVisitPage() {
   ]);
 
   /**
-   * Back to a blank visit after "Visit logged". Date, therapist and payment method stay (back-to-back entry);
-   * everything the last visit filled in goes. `touchedRef` is cleared so the unsaved-changes guard measures
-   * from this blank form, not from the one the page opened with (which made a fresh form look edited).
+   * Back to a blank visit after "Visit logged". Date and therapist stay (back-to-back entry);
+   * everything the last visit filled in goes, and payment method re-evaluates patient advance / clinic default.
+   * `touchedRef` is cleared so the unsaved-changes guard measures from this blank form, not from
+   * the one the page opened with (which made a fresh form look edited).
    */
   function startFreshVisitForm() {
     setRows([emptyDraftLine()]);
@@ -1061,6 +1062,12 @@ export function NewVisitPage() {
     setPendingNote('');
     setTreatmentIds([]);
     setPaymentChoice(activeAdmission ? 'pending' : 'paid');
+    paymentMethodTouchedRef.current = false;
+    setPaymentMethod(
+      showAdvancePayment && !activeAdmission
+        ? 'advance'
+        : defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id))
+    );
     setPaymentRef('');
     setLocation(startingLocation(department));
     locationDecidedRef.current = false;
@@ -1169,7 +1176,7 @@ export function NewVisitPage() {
       if (billPaise > 0 && canCollectPayment && paymentChoice === 'paid') {
         try {
           if (paymentMethod === 'advance') {
-            const open = await advanceService.openAdvancesWithBalance(clinic.id, patient.id);
+            const open = await advanceService.openAdvancesWithBalance(clinic.id, patient.id, visitDept);
             if (open.length === 0) throw new Error('No advance balance on file.');
             const ordered = [...open].sort((a, b) =>
               a.advance.receivedDate.localeCompare(b.advance.receivedDate)
