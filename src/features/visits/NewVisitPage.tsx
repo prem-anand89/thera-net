@@ -12,6 +12,7 @@ import {
   feedbackService,
   bookingService,
   consultationNoteService,
+  advanceService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
@@ -42,7 +43,6 @@ import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import { rankServicesByUsage } from '@/domain/serviceUsage';
 import {
   type Patient,
-  type PaymentMethod,
   type TreatmentItem,
   type CatalogItem,
   type UUID,
@@ -89,7 +89,7 @@ import { therapistColor } from '@/components/schedule/scheduleColors';
 import { patientDue } from '@/domain/patientDue';
 import { formatAmount, currencySymbol } from '@/domain/money';
 import { treatmentsDisplayText } from '@/components/visit/formatters';
-import { PaymentMethodChips } from './PaymentMethodChips';
+import { PaymentMethodChips, type PaymentChipValue } from './PaymentMethodChips';
 import { VisitLoggedCard, type SavedVisitInfo } from './VisitLoggedCard';
 import { visitPermissions } from './visitPermissions';
 import { EditVisitModal } from './EditVisitModal';
@@ -343,9 +343,10 @@ export function NewVisitPage() {
   // Optional: a UTR, cheque number or receipt number for the payment, saved as its note and printed on the bill.
   const [paymentRef, setPaymentRef] = useState('');
   const paymentMethods = paymentMethodOptions(clinic);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() =>
+  const [paymentMethod, setPaymentMethod] = useState<PaymentChipValue>(() =>
     defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id))
   );
+  const paymentMethodTouchedRef = useRef(false);
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   // On a phone the Save button is in the fixed bar, far from this message — bring it into view.
@@ -402,6 +403,26 @@ export function NewVisitPage() {
     () => (justSaved ? repos.payments.listByVisit(justSaved.visitId) : undefined),
     [justSaved?.visitId]
   );
+  const openAdvances = useLiveQuery(
+    () =>
+      patient?.id ? advanceService.openAdvancesWithBalance(clinic.id, patient.id) : undefined,
+    [clinic.id, patient?.id]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
+  const showAdvancePayment = canCollectPayment && advanceBalancePaise > 0;
+  useEffect(() => {
+    paymentMethodTouchedRef.current = false;
+  }, [patient?.id]);
+  useEffect(() => {
+    if (paymentChoice !== 'paid' || !showAdvancePayment || paymentMethodTouchedRef.current) return;
+    setPaymentMethod('advance');
+  }, [patient?.id, paymentChoice, showAdvancePayment, advanceBalancePaise]);
+  useEffect(() => {
+    if (paymentMethod !== 'advance') return;
+    if (!showAdvancePayment) {
+      setPaymentMethod(defaultPaymentMethod(clinic, readLastPaymentMethod(clinic.id)));
+    }
+  }, [paymentMethod, showAdvancePayment, clinic]);
   // Patient Communications, Slice 1 — tracks whether the post-save "Ask
   // for feedback" button has already been clicked for this visit, so it
   // can't be double-fired (the RLS unique-pending-request-per-visit index
@@ -1144,18 +1165,38 @@ export function NewVisitPage() {
       // genuinely unbilled, for whoever does handle billing to collect
       // from later (same Workspace pending-list path).
       let paymentError: string | undefined;
+      let paidFromAdvancePaise = 0;
       if (billPaise > 0 && canCollectPayment && paymentChoice === 'paid') {
         try {
-          await directPaymentService.logPayment(
-            clinic.id,
-            visit.id,
-            billPaise,
-            paymentMethod,
-            // Cash taken at the visit; a future-dated visit can't have been paid yet.
-            receivedDateAtVisit(visitDate, today),
-            paymentReferenceField(paymentMethod) ? paymentRef.trim() || null : null
-          );
-          rememberPaymentMethod(clinic.id, paymentMethod);
+          if (paymentMethod === 'advance') {
+            const open = await advanceService.openAdvancesWithBalance(clinic.id, patient.id);
+            if (open.length === 0) throw new Error('No advance balance on file.');
+            const ordered = [...open].sort((a, b) =>
+              a.advance.receivedDate.localeCompare(b.advance.receivedDate)
+            );
+            const advanceOnFile = open.reduce((sum, a) => sum + a.remainingPaise, 0);
+            let toApply = Math.min(billPaise, advanceOnFile);
+            const received = receivedDateAtVisit(visitDate, today);
+            for (const { advance, remainingPaise } of ordered) {
+              if (toApply <= 0) break;
+              const slice = Math.min(remainingPaise, toApply);
+              await advanceService.applyAdvance(clinic.id, advance, [visit], slice, received);
+              paidFromAdvancePaise += slice;
+              toApply -= slice;
+            }
+            if (paidFromAdvancePaise <= 0) throw new Error('Could not apply advance.');
+          } else {
+            await directPaymentService.logPayment(
+              clinic.id,
+              visit.id,
+              billPaise,
+              paymentMethod,
+              // Cash taken at the visit; a future-dated visit can't have been paid yet.
+              receivedDateAtVisit(visitDate, today),
+              paymentReferenceField(paymentMethod) ? paymentRef.trim() || null : null
+            );
+            rememberPaymentMethod(clinic.id, paymentMethod);
+          }
         } catch (paymentFailure) {
           // The visit is already saved. Falling into the outer catch would keep
           // the form open and a second Save would log the same visit again.
@@ -1209,10 +1250,24 @@ export function NewVisitPage() {
         isPackage: Boolean(packageSessionNumber) || rows.some((r) => r.continuation),
         packageSessionNumber,
         packageTotalSessions,
-        alreadyCollected: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && !paymentError,
-        byPartner: billPaise > 0 && canCollectPayment && paymentChoice === 'paid' && paymentMethod === 'partner' && !paymentError,
+        alreadyCollected:
+          billPaise > 0 &&
+          canCollectPayment &&
+          paymentChoice === 'paid' &&
+          !paymentError &&
+          (paymentMethod !== 'advance' ||
+            paidFromAdvancePaise >= billPaise),
+        byPartner:
+          billPaise > 0 &&
+          canCollectPayment &&
+          paymentChoice === 'paid' &&
+          paymentMethod === 'partner' &&
+          !paymentError,
         paymentError,
-        collectedLabel: paymentMethods.find((m) => m.value === paymentMethod)?.label,
+        collectedLabel:
+          paymentMethod === 'advance'
+            ? 'Patient advance'
+            : paymentMethods.find((m) => m.value === paymentMethod)?.label,
         therapistId,
         billPaise,
         visitDate,
@@ -2114,8 +2169,12 @@ export function NewVisitPage() {
                   {paymentChoice === 'paid' ? (
                     <PaymentMethodChips
                       value={paymentMethod}
-                      onChange={setPaymentMethod}
+                      onChange={(method) => {
+                        paymentMethodTouchedRef.current = true;
+                        setPaymentMethod(method);
+                      }}
                       options={paymentMethods}
+                      advanceBalancePaise={showAdvancePayment ? advanceBalancePaise : undefined}
                       disabled={busy}
                     />
                   ) : (
@@ -2128,7 +2187,18 @@ export function NewVisitPage() {
                   )}
                 </div>
 
-                {paymentChoice === 'paid' && paymentReferenceField(paymentMethod) && (
+                {showAdvancePayment && paymentChoice === 'paid' && (
+                  <p className="text-xs text-[var(--muted)]">
+                    {formatAmount(advanceBalancePaise)} advance on file
+                    {paymentMethod === 'advance' && billPaise > advanceBalancePaise
+                      ? ` · ${formatAmount(billPaise - advanceBalancePaise)} still due after save`
+                      : ''}
+                  </p>
+                )}
+
+                {paymentChoice === 'paid' &&
+                  paymentMethod !== 'advance' &&
+                  paymentReferenceField(paymentMethod) && (
                   <input
                     className={`${inputCls} w-full`}
                     aria-label={paymentReferenceField(paymentMethod)?.label}

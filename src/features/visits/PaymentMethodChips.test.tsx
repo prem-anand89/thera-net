@@ -160,6 +160,20 @@ describe('PaymentMethodChips', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('shows Advance chip when advanceBalancePaise is set', () => {
+    const onChange = vi.fn();
+    render(
+      <PaymentMethodChips
+        value="upi"
+        onChange={onChange}
+        options={fullOptions}
+        advanceBalancePaise={500000}
+      />
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Advance' }));
+    expect(onChange).toHaveBeenCalledWith('advance');
+  });
+
   it('opening Other and dismissing it leaves the method unchanged', () => {
     const onChange = vi.fn();
     render(<PaymentMethodChips value="upi" onChange={onChange} options={fullOptions} />);
