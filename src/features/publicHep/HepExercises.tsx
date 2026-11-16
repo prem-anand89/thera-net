@@ -58,9 +58,10 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
   const [feedback, setFeedback] = useState(() => new Map(data.sessionFeedback.map((f) => [f.sessionIndex as number, f])));
   const [reminderOpen, setReminderOpen] = useState(false);
   const [setsDone, setSetsDone] = useState<{ date: string; byItem: Record<string, number> }>(() => ({ date: today, byItem: {} }));
-  const setsDoneFor = (id: string) => (setsDone.date === today ? (setsDone.byItem[id] ?? 0) : 0);
-  const updateSetsDone = (id: string, count: number) =>
-    setSetsDone((cur) => ({ date: today, byItem: { ...(cur.date === today ? cur.byItem : {}), [id]: count } }));
+  const setKey = (id: string, sessionIndex: number) => `${id}:${sessionIndex}`;
+  const setsDoneFor = (id: string, sessionIndex: number) => (setsDone.date === today ? (setsDone.byItem[setKey(id, sessionIndex)] ?? 0) : 0);
+  const updateSetsDone = (id: string, sessionIndex: number, count: number) =>
+    setSetsDone((cur) => ({ date: today, byItem: { ...(cur.date === today ? cur.byItem : {}), [setKey(id, sessionIndex)]: count } }));
 
   const [soundMode, setSoundMode] = useState<SoundMode>(() => readSoundMode());
   const modeRef = useRef(soundMode);
@@ -305,8 +306,8 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
           }}
           onUndo={() => void undo(shown, activeSession)}
           onImageError={onImageError}
-          setsDone={setsDoneFor(shown.id)}
-          onSetsDoneChange={(n) => updateSetsDone(shown.id, n)}
+          setsDone={setsDoneFor(shown.id, activeSession)}
+          onSetsDoneChange={(n) => updateSetsDone(shown.id, activeSession, n)}
         />
       )}
     </div>

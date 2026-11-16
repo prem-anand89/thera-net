@@ -101,7 +101,7 @@ function PhotoLightbox({
   const total = item.mediaUrls.length;
   const swipeX = useRef<number | null>(null);
   const lastTouchTap = useRef(0);
-  const skipNextDblClick = useRef(false);
+  const skipDblClickUntil = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const [zoomed, setZoomed] = useState(false);
@@ -143,6 +143,7 @@ function PhotoLightbox({
   }, [index, total, onClose, onIndex]);
 
   const caption = item.mediaCaptions[index] || '';
+  const stageTouchAction = zoomed ? 'pan-x pan-y pinch-zoom' : 'pinch-zoom';
   return (
     <div
       ref={dialogRef}
@@ -163,8 +164,8 @@ function PhotoLightbox({
         </button>
       </div>
       <div
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto px-3 py-2"
-        style={{ touchAction: 'pinch-zoom' }}
+        className={`relative flex min-h-0 flex-1 overflow-auto px-3 py-2 ${zoomed ? 'items-start justify-start' : 'items-center justify-center'}`}
+        style={{ touchAction: stageTouchAction }}
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest('button')) return;
           swipeX.current = e.clientX;
@@ -182,7 +183,7 @@ function PhotoLightbox({
             const now = Date.now();
             if (now - lastTouchTap.current < 300) {
               lastTouchTap.current = 0;
-              skipNextDblClick.current = true;
+              skipDblClickUntil.current = now + 400;
               setZoomed((z) => !z);
             } else {
               lastTouchTap.current = now;
@@ -195,14 +196,18 @@ function PhotoLightbox({
           alt={caption || (total > 1 ? `${item.title}, picture ${index + 1}` : item.title)}
           onError={onImageError}
           onDoubleClick={() => {
-            if (skipNextDblClick.current) {
-              skipNextDblClick.current = false;
+            if (Date.now() < skipDblClickUntil.current) {
+              skipDblClickUntil.current = 0;
               return;
             }
             setZoomed((z) => !z);
           }}
-          style={{ transform: zoomed ? 'scale(2)' : 'scale(1)', touchAction: 'pinch-zoom' }}
-          className={`max-h-full max-w-full object-contain transition-transform duration-150 ${zoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+          style={{ touchAction: stageTouchAction }}
+          className={
+            zoomed
+              ? 'h-[200%] w-[200%] max-w-none shrink-0 object-contain cursor-zoom-out'
+              : 'max-h-full max-w-full object-contain cursor-zoom-in'
+          }
         />
         {total > 1 && (
           <>

@@ -70,10 +70,7 @@ async function runCheck(force: boolean) {
     }
   } catch {
     if (seq !== mySeq) return;
-    if (snapshot.clinicId !== clinicId || snapshot.dot) {
-      snapshot = { clinicId, dot: false };
-      emit();
-    }
+    // Preserve last known dot on transient background check failures.
   }
 }
 

@@ -64,6 +64,29 @@ describe('useHepPainDot', () => {
     await waitFor(() => expect(listPainAlerts).toHaveBeenCalledTimes(1));
     expect(err.result.current).toBe(false);
   });
+
+  it('keeps the last known dot state when a background refresh fails temporarily', async () => {
+    vi.useFakeTimers();
+    try {
+      listPainAlerts.mockResolvedValueOnce([
+        { id: 'p1', status: 'active', painReviewedThrough: null, feedback: [{ painScore: 8, createdAt: '2026-11-15T10:00:00Z' }] },
+      ]);
+      const { result, unmount } = renderHook(() => useHepPainDot('c1', true));
+      await act(async () => { await Promise.resolve(); });
+      expect(result.current).toBe(true);
+
+      listPainAlerts.mockRejectedValueOnce(new Error('blip'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        await Promise.resolve();
+      });
+      expect(listPainAlerts).toHaveBeenCalledTimes(2);
+      expect(result.current).toBe(true);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('shares a single query across multiple callers (e.g. Shell + MorePage)', async () => {
     listPainAlerts.mockResolvedValue([
       { id: 'p1', status: 'active', painReviewedThrough: null, feedback: [{ painScore: 8, createdAt: '2026-11-15T10:00:00Z' }] },

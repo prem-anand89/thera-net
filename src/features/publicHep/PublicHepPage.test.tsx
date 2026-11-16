@@ -286,6 +286,25 @@ describe('one exercise at a time', () => {
     expect(svc.submitExerciseLog).not.toHaveBeenCalled();
   });
 
+  it('keeps ticked sets separate between Morning and Evening sessions of a twice-a-day item', async () => {
+    const twice = { ...rich, sessionsPerDay: 2 as const };
+    const u = await signInWith(hepData([twice]));
+    await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));
+    await u.click(screen.getByRole('button', { name: 'Set 2' }));
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'true');
+
+    await u.click(screen.getByRole('button', { name: '‹ List' }));
+    await u.click(within(screen.getByRole('group', { name: 'Session' })).getByRole('button', { name: /Evening/ }));
+    await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));
+    expect(screen.getByRole('button', { name: 'Set 1' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'false');
+
+    await u.click(screen.getByRole('button', { name: '‹ List' }));
+    await u.click(within(screen.getByRole('group', { name: 'Session' })).getByRole('button', { name: /Morning/ }));
+    await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));
+    expect(screen.getByRole('button', { name: 'Set 2' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('opens the steps the first time and collapses them to the first step afterwards', async () => {
     const u = await signInWith(hepData([rich]));
     await u.click(screen.getByRole('button', { name: 'Open Wall Slides' }));

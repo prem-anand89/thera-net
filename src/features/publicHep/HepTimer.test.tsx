@@ -307,15 +307,35 @@ describe('the exercise screen with a timer', () => {
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(nextBtn);
 
-    // Image stage supports pinch-zoom without touch-pan-y and toggles 1x/2x zoom on double-click/tap
+    // Image stage allows pinch-zoom at 1x, switches to pannable 200% layout + pan-x pan-y pinch-zoom at 2x
     const img = within(dialog).getByRole('img');
-    expect(img.parentElement!.className).not.toContain('touch-pan-y');
-    expect(img.parentElement!.style.touchAction).toBe('pinch-zoom');
-    expect(img.style.transform).toBe('scale(1)');
+    const stage = img.parentElement!;
+    expect(stage.className).not.toContain('touch-pan-y');
+    expect(stage.style.touchAction).toBe('pinch-zoom');
+    expect(img.className).toContain('max-h-full');
+
     fireEvent.dblClick(img);
-    expect(img.style.transform).toBe('scale(2)');
+    expect(stage.style.touchAction).toBe('pan-x pan-y pinch-zoom');
+    expect(stage.className).toContain('items-start');
+    expect(img.className).toContain('w-[200%]');
+    expect(img.className).toContain('h-[200%]');
+    expect(img.className).toContain('max-w-none');
+
     fireEvent.dblClick(img);
-    expect(img.style.transform).toBe('scale(1)');
+    expect(stage.style.touchAction).toBe('pinch-zoom');
+    expect(img.className).toContain('max-h-full');
+
+    // Touch double-tap toggles zoom too, and does not swallow a later mouse dblClick
+    fireEvent.pointerDown(img, { clientX: 50, pointerType: 'touch' });
+    fireEvent.pointerUp(img, { clientX: 50, pointerType: 'touch' });
+    vi.advanceTimersByTime(100);
+    fireEvent.pointerDown(img, { clientX: 50, pointerType: 'touch' });
+    fireEvent.pointerUp(img, { clientX: 50, pointerType: 'touch' });
+    expect(stage.style.touchAction).toBe('pan-x pan-y pinch-zoom');
+
+    vi.advanceTimersByTime(500);
+    fireEvent.dblClick(img);
+    expect(stage.style.touchAction).toBe('pinch-zoom');
 
     // Closing restores focus to the trigger button
     fireEvent.click(closeBtn);
