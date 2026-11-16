@@ -64,6 +64,98 @@ describe('useHepPainDot', () => {
     await waitFor(() => expect(listPainAlerts).toHaveBeenCalledTimes(1));
     expect(err.result.current).toBe(false);
   });
+  it('shares a single query across multiple callers (e.g. Shell + MorePage)', async () => {
+    listPainAlerts.mockResolvedValue([
+      { id: 'p1', status: 'active', painReviewedThrough: null, feedback: [{ painScore: 8, createdAt: '2026-11-15T10:00:00Z' }] },
+    ]);
+    const shell = renderHook(() => useHepPainDot('c1', true));
+    render(<MorePage />);
+
+    await waitFor(() => expect(shell.result.current).toBe(true));
+    expect(screen.getByRole('link', { name: /HEP.*pain report waiting/ })).toBeInTheDocument();
+    expect(listPainAlerts).toHaveBeenCalledTimes(1);
+
+    listPainAlerts.mockResolvedValue([]);
+    act(() => { notifyPainReviewed('pt-1'); });
+    await waitFor(() => expect(shell.result.current).toBe(false));
+    expect(listPainAlerts).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('link', { name: /pain report waiting/ })).toBeNull();
+  });
+
+  it('re-checks on focus/visibility (throttled to 60s) and polls every 5 minutes while visible and online', async () => {
+    vi.useFakeTimers();
+    try {
+      let visibility: DocumentVisibilityState = 'visible';
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => visibility,
+      });
+
+      listPainAlerts.mockResolvedValue([]);
+      const { result, unmount } = renderHook(() => useHepPainDot('c1', true));
+      await act(async () => { await Promise.resolve(); });
+      expect(listPainAlerts).toHaveBeenCalledTimes(1);
+      expect(result.current).toBe(false);
+
+      // Focus within 60s is throttled
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+        window.dispatchEvent(new Event('focus'));
+        await Promise.resolve();
+      });
+      expect(listPainAlerts).toHaveBeenCalledTimes(1);
+
+      // After 60s total, focus refreshes cleanly
+      listPainAlerts.mockResolvedValueOnce([
+        { id: 'p1', status: 'active', painReviewedThrough: null, feedback: [{ painScore: 9, createdAt: '2026-11-15T10:00:00Z' }] },
+      ]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+        window.dispatchEvent(new Event('focus'));
+        await Promise.resolve();
+      });
+      expect(listPainAlerts).toHaveBeenCalledTimes(2);
+      expect(result.current).toBe(true);
+
+      // visibilitychange to visible is throttled within 60s, allowed after 60s
+      await act(async () => {
+        visibility = 'hidden';
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(60_000);
+        visibility = 'visible';
+        listPainAlerts.mockResolvedValueOnce([]);
+        document.dispatchEvent(new Event('visibilitychange'));
+        await Promise.resolve();
+      });
+      expect(listPainAlerts).toHaveBeenCalledTimes(3);
+      expect(result.current).toBe(false);
+
+      // 5-minute poll skips when hidden
+      await act(async () => {
+        visibility = 'hidden';
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        await Promise.resolve();
+      });
+      expect(listPainAlerts).toHaveBeenCalledTimes(3);
+
+      // 5-minute poll runs when visible + online
+      listPainAlerts.mockResolvedValueOnce([
+        { id: 'p1', status: 'active', painReviewedThrough: null, feedback: [{ painScore: 8, createdAt: '2026-11-15T10:00:00Z' }] },
+      ]);
+      await act(async () => {
+        visibility = 'visible';
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        await Promise.resolve();
+      });
+      expect(listPainAlerts).toHaveBeenCalledTimes(4);
+      expect(result.current).toBe(true);
+
+      unmount();
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('HEP pain dot in main nav and MorePage', () => {
