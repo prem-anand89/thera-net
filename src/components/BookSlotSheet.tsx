@@ -815,7 +815,7 @@ export function BookSlotSheet({
                   )}
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Patient name"><input className={inputCls} autoComplete="name" value={patientName} onChange={(event) => setPatientName(event.target.value)} /></Field>
                   <Field label="Phone" htmlFor="book-phone"><PhoneField id="book-phone" value={patientPhone} onChange={setPatientPhone} /></Field>
                   <div className="sm:col-span-2">

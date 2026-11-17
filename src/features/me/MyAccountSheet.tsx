@@ -168,7 +168,7 @@ export function MyAccountSheet({
               <Field label="Name on invoices *">
                 <input className={inputCls} value={invoiceName} onChange={(e) => setInvoiceName(e.target.value)} />
               </Field>
-              <div className="grid gap-3 tab:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 tab:grid-cols-2">
                 <Field label="Registration no.">
                   <input
                     className={inputCls}

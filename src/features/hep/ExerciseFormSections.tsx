@@ -32,9 +32,17 @@ export const OTHER_REGION = '__other';
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 export const stepLines = (steps: string) => steps.split('\n').map((s) => s.trim()).filter(Boolean);
 
-/** "Name · Region · Type". The type is left out until one has been chosen. */
-export function detailsSummary(title: string, region: string, phase: ExercisePhase, typeChosen: boolean): string {
-  return [title.trim(), region, typeChosen ? EXERCISE_PHASE_LABELS[phase] : ''].filter(Boolean).join(' · ');
+/** "Name · Region · Type" (plus any additional types). The type is left out until one has been chosen. */
+export function detailsSummary(
+  title: string,
+  region: string,
+  phase: ExercisePhase,
+  typeChosen: boolean,
+  alsoPhases: ExercisePhase[] = [],
+): string {
+  const extra = alsoPhases.filter((p) => p !== phase);
+  const typeLabel = typeChosen ? [phase, ...extra].map((p) => EXERCISE_PHASE_LABELS[p]).join(', ') : '';
+  return [title.trim(), region, typeLabel].filter(Boolean).join(' · ');
 }
 
 /** "2 photos · 3 steps · precautions set". */
@@ -81,7 +89,7 @@ export function FormSection({ index, title, open, done, summary, onToggle, nextT
       </h3>
       {/* Folded bodies stay mounted (only hidden): PictureField revokes its new photos' object URLs when it unmounts, and
           the form and the preview phone still show those photos. They are let go when the sheet itself closes. */}
-      <div id={bodyId} hidden={!open} className="space-y-4 px-3.5 pb-3.5 pt-0.5 sm:pl-[2.875rem]">
+      <div id={bodyId} hidden={!open} className="min-w-0 space-y-4 px-3.5 pb-3.5 pt-0.5 sm:pl-[2.875rem]">
         {children}
         <div className="flex justify-end">
           {nextTitle
@@ -97,8 +105,8 @@ function PillGroup({ label, optional = false, children }: { label: string; optio
   const id = useId();
   return (
     <div className="space-y-1.5">
-      <div id={id} className="text-label font-medium text-[var(--muted)]">
-        {label}{optional && <span className="ml-1.5 text-hint font-normal">optional</span>}
+      <div className="text-label font-medium text-[var(--muted)]">
+        <span id={id}>{label}</span>{optional && <span className="ml-1.5 text-hint font-normal">optional</span>}
       </div>
       <div role="group" aria-labelledby={id} className="flex flex-wrap gap-1.5">{children}</div>
     </div>
@@ -120,12 +128,19 @@ export interface DetailsFieldsProps {
   /** False on a new exercise until a Type pill is tapped (the phase starts at 'other', so it can't tell on its own). */
   typeChosen: boolean;
   onType: (p: ExercisePhase) => void;
+  alsoPhases: ExercisePhase[];
+  setAlsoPhases: (v: ExercisePhase[]) => void;
 }
 
 export function DetailsFields(p: DetailsFieldsProps) {
   const typePills: ExercisePhase[] = [...EXERCISE_TYPES, 'other'];
   // A legacy Warm-up or Cool-down exercise keeps its value (as a pressed pill) until the therapist picks another type.
   if (p.phase === 'warm_up' || p.phase === 'cool_down') typePills.push(p.phase);
+  const alsoTypePills: ExercisePhase[] = ([...EXERCISE_TYPES, 'other'] as ExercisePhase[]).filter(
+    (t) => !(p.typeChosen && t === p.phase),
+  );
+  const toggleAlsoPhase = (t: ExercisePhase) =>
+    p.setAlsoPhases(p.alsoPhases.includes(t) ? p.alsoPhases.filter((x) => x !== t) : [...p.alsoPhases, t]);
   const definition = p.typeChosen && isMainType(p.phase) ? EXERCISE_TYPE_DEFINITIONS[p.phase] : 'Sets the default dosage and the section the patient sees it under.';
   return (
     <>
@@ -142,19 +157,35 @@ export function DetailsFields(p: DetailsFieldsProps) {
       {p.region === OTHER_REGION && (
         <input className={inputCls} aria-label="New region name" placeholder="Region name" value={p.customRegion} maxLength={40} onChange={(e) => p.setCustomRegion(e.target.value)} />
       )}
-      <div className="space-y-1.5">
-        <PillGroup label="Type">
-          {typePills.map((t) => {
-            const on = p.typeChosen && p.phase === t;
-            return (
-              <button key={t} type="button" aria-pressed={on} className={filterChip(on)} onClick={() => p.onType(t)}>
-                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--${EXERCISE_TYPE_TONE[t]})` }} />
-                {EXERCISE_PHASE_LABELS[t]}
-              </button>
-            );
-          })}
-        </PillGroup>
-        <p className="rounded-lg bg-[var(--paper)] px-2.5 py-1.5 text-xs text-[var(--muted)]">{definition}</p>
+      <div className="space-y-2.5">
+        <div className="space-y-1.5">
+          <PillGroup label="Type">
+            {typePills.map((t) => {
+              const on = p.typeChosen && p.phase === t;
+              return (
+                <button key={t} type="button" aria-pressed={on} className={filterChip(on)} onClick={() => p.onType(t)}>
+                  <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--${EXERCISE_TYPE_TONE[t]})` }} />
+                  {EXERCISE_PHASE_LABELS[t]}
+                </button>
+              );
+            })}
+          </PillGroup>
+          <p className="rounded-lg bg-[var(--paper)] px-2.5 py-1.5 text-xs text-[var(--muted)]">{definition}</p>
+        </div>
+        <div className="space-y-1">
+          <PillGroup label="Additional types" optional>
+            {alsoTypePills.map((t) => {
+              const on = p.alsoPhases.includes(t);
+              return (
+                <button key={t} type="button" aria-pressed={on} className={filterChip(on)} onClick={() => toggleAlsoPhase(t)}>
+                  <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--${EXERCISE_TYPE_TONE[t]})` }} />
+                  {EXERCISE_PHASE_LABELS[t]}
+                </button>
+              );
+            })}
+          </PillGroup>
+          <p className="text-hint text-[var(--muted)]">Also appears under these types when filtering the library.</p>
+        </div>
       </div>
     </>
   );

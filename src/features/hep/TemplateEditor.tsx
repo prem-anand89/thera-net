@@ -86,7 +86,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
     <>
       <SheetDialog open={open} wide title={template ? 'Edit template' : 'New template'} onClose={close} busy={busy} error={error} footer={footer}>
         <div className="space-y-4">
-          <div className="grid gap-3 tab:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 tab:grid-cols-2">
             <Field label="Template name"><input className={inputCls} value={title} maxLength={80} onChange={(e) => set({ title: e.target.value })} placeholder="For example Knee replacement, week 1" /></Field>
             <Field label="Short note (optional)" hint={`${note.length}/120`}><input className={inputCls} value={note} maxLength={120} onChange={(e) => set({ note: e.target.value })} placeholder="When to use it" /></Field>
           </div>

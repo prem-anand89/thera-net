@@ -217,7 +217,7 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
             )}
           />
 
-          <section aria-label="Progress" className="grid grid-cols-2 gap-2 tab:grid-cols-5">
+          <section aria-label="Progress" className="grid grid-cols-2 gap-2 tab:grid-cols-3 desktop:grid-cols-5">
             <Tile label="Today" value={row.todayTarget > 0 ? `${row.todayCompleted} of ${row.todayTarget}` : '—'} sub="sessions" />
             <Tile label="Adherence" value={row.habitPercent == null ? 'Not enough data' : `${row.habitPercent}%`} sub={row.habitPercent == null ? undefined : `${row.finishedDays} ${row.finishedDays === 1 ? 'day' : 'days'} finished`} />
             <Tile label="Streak" value={`${streak} ${streak === 1 ? 'day' : 'days'}`} />

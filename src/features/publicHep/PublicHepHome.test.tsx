@@ -257,6 +257,7 @@ describe('pictures in the list and on the exercise page', () => {
     await u.click(screen.getByRole('tab', { name: 'Exercises' }));
     await u.click(screen.getByRole('button', { name: 'Open Heel Raises' }));
 
+    expect(screen.getByText('Start')).toBeInTheDocument();
     await u.click(screen.getByRole('button', { name: 'Zoom Start' }));
     const dlg = screen.getByRole('dialog', { name: 'Full screen picture' });
     expect(dlg).toBeInTheDocument();
@@ -276,6 +277,13 @@ describe('pictures in the list and on the exercise page', () => {
     await u.click(screen.getByRole('button', { name: 'Zoom Start' }));
     await u.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog', { name: 'Full screen picture' })).toBeNull();
+  });
+
+  it('single still picture also displays its caption badge cleanly', async () => {
+    const u = await openWithDevice(hepData([pic({ mediaUrls: ['https://signed/a'], mediaCaptions: ['Start Position'] })]));
+    await u.click(screen.getByRole('tab', { name: 'Exercises' }));
+    await u.click(screen.getByRole('button', { name: 'Open Heel Raises' }));
+    expect(screen.getByText('Start Position')).toBeInTheDocument();
   });
 
   it('an exercise page without pictures has no picture box and no title tile', async () => {

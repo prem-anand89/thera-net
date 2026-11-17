@@ -58,7 +58,7 @@ export function HepChecklist({ items, logs, today, session, sessionCount, onSess
             const doneCount = open.filter((i) => statusOf(i, logs, today, s) !== 'open').length;
             const finished = open.length > 0 && doneCount === open.length;
             return (
-              <button key={s} type="button" aria-pressed={session === s} onClick={() => onSession(s)} className={`min-h-11 flex-1 rounded-full px-3 text-base font-semibold ${session === s ? 'bg-white text-teal-900 shadow' : 'text-slate-700'}`}>
+              <button key={s} type="button" aria-pressed={session === s} onClick={() => onSession(s)} className={`min-h-11 flex-1 rounded-full px-2 text-sm font-semibold sm:px-3 sm:text-base ${session === s ? 'bg-white text-teal-900 shadow' : 'text-slate-700'}`}>
                 {sessionLabel(sessionCount, s)} {finished ? '✓' : `${doneCount}/${open.length}`}
               </button>
             );
@@ -123,7 +123,7 @@ export function HepChecklist({ items, logs, today, session, sessionCount, onSess
       })}
 
       {next ? (
-        <button type="button" onClick={() => onOpen(next)} className={`sticky ${startBottom} z-10 min-h-14 w-full rounded-full bg-teal-700 px-6 text-lg font-bold text-white shadow`}>
+        <button type="button" onClick={() => onOpen(next)} className={`sticky ${startBottom} z-10 min-h-14 w-full truncate rounded-full bg-teal-700 px-6 text-lg font-bold text-white shadow`}>
           ▶ {anyDone ? 'Continue' : 'Start'}: {next.title}
         </button>
       ) : (

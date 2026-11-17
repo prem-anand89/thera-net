@@ -190,7 +190,13 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
   );
 
   return (
-    <div className="min-h-dvh bg-slate-50 pb-28 text-slate-900">
+    <div
+      className={`min-h-dvh bg-slate-50 text-slate-900 ${
+        tab === 'exercises'
+          ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom))]'
+          : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'
+      }`}
+    >
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="mx-auto flex max-w-xl items-center gap-2">
           {logoUrl ? (
@@ -273,7 +279,14 @@ export function HepExercises({ token, data, credential, onPinNeeded, onForget, o
       <HepTabBar tab={tab} onTab={onTab} />
 
       {toast && (
-        <div role="status" className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-xl items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-base text-white shadow-lg">
+        <div
+          role="status"
+          className={`fixed inset-x-4 z-50 mx-auto flex max-w-xl items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-base text-white shadow-lg ${
+            tab === 'exercises'
+              ? 'bottom-[calc(8.75rem+env(safe-area-inset-bottom))]'
+              : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))]'
+          }`}
+        >
           <span className="flex-1">{toast.text}</span>
           {toast.undo && <button type="button" onClick={() => { toast.undo?.(); setToast(null); }} className="min-h-11 px-2 font-bold text-teal-300">Undo</button>}
         </div>

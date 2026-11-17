@@ -257,7 +257,7 @@ describe('ExercisePicker', () => {
     await user.click(await screen.findByRole('button', { name: 'Details for Pelvic Tilt' }));
     const dlg = screen.getByRole('dialog', { name: 'Pelvic Tilt' });
     const img = await within(dlg).findByRole('img');
-    expect(img).toHaveAttribute('src', 'https://img.test/clinics/c1/ex/4/thumb.jpg');
+    expect(img).toHaveAttribute('src', 'https://img.test/clinics/c1/ex/4/0.jpg');
     await user.click(within(dlg).getByRole('button', { name: 'Close' }));
 
     await user.click(screen.getByRole('button', { name: 'Details for No Photo Stretch' }));

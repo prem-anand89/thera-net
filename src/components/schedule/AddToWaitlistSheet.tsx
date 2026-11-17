@@ -125,7 +125,7 @@ export function AddToWaitlistSheet({
       <p className="text-sm text-[var(--muted)]">
         For someone who called or walked in and there is no time for them yet. They stay under Awaiting on Workspace until you book or dismiss them. Needs a connection.
       </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Field label="Name" htmlFor="awaiting-name">
             <input
@@ -175,7 +175,7 @@ export function AddToWaitlistSheet({
           <p className="text-[var(--muted)]">You can still add them.</p>
         </div>
       )}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Preferred day" htmlFor="awaiting-day">
           <input id="awaiting-day" type="date" className={inputCls} value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} />
         </Field>

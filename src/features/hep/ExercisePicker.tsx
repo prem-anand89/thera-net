@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { LoadingRows, SheetDialog, btnPrimary, btnSecondary } from '@/components/ui';
-import type { Exercise, ExerciseTemplate } from '@/domain/hep';
+import { listThumbKey, type Exercise, type ExerciseTemplate } from '@/domain/hep';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { describeDose, exerciseToDose } from '@/domain/hepDose';
 import { hepService, type HepItemInput, type ProgramBundle } from '@/services/hepService';
@@ -85,7 +85,8 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
     [detailEx],
   );
   const detailThumbs = useThumbUrls(clinic.id, detailThumbSrc);
-  const detailPhotoUrl = detailThumbSrc[0]?.thumbKey ? detailThumbs[detailThumbSrc[0].thumbKey] : undefined;
+  const detailThumbKey = detailThumbSrc[0] ? listThumbKey(detailThumbSrc[0]) : null;
+  const detailPhotoUrl = detailThumbKey ? detailThumbs[detailThumbKey] : undefined;
   const chosen = ticked.map((id) => byId.get(id)).filter((e): e is Exercise => !!e);
   const chosenItems = useMemo(() => chosen.map(exerciseToItem), [chosen]);
   const toggle = (ex: Exercise) => setTicked((cur) => (cur.includes(ex.id) ? cur.filter((x) => x !== ex.id) : [...cur, ex.id]));
@@ -136,14 +137,14 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
   );
 
   const basket = (
-    <aside aria-label="Chosen exercises" className="sticky bottom-0 z-[1] -mx-1 border-t border-[var(--border)] bg-[var(--surface)] p-2 desktop:static desktop:top-0 desktop:mx-0 desktop:self-start desktop:rounded-xl desktop:border desktop:p-3">
+    <aside aria-label="Chosen exercises" className="sticky bottom-0 z-[1] -mx-5 border-t border-[var(--border)] bg-[var(--surface)] px-5 py-2.5 desktop:sticky desktop:top-0 desktop:mx-0 desktop:self-start desktop:rounded-xl desktop:border desktop:p-3">
       <div className="flex items-center gap-2 desktop:flex-col desktop:items-stretch desktop:gap-2">
         <div className="text-sm font-semibold text-[var(--ink)]">{chosen.length === 0 ? 'Nothing chosen yet' : `Adding · ${chosen.length}`}</div>
         <ul className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto desktop:flex-col desktop:gap-1 desktop:overflow-visible">
           {chosen.map((e) => (
-            <li key={e.id} className="flex shrink-0 items-center justify-between gap-2 rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-sm text-[var(--ink)] desktop:rounded-none desktop:bg-transparent desktop:px-0">
+            <li key={e.id} className="flex shrink-0 items-center justify-between gap-1 rounded-full bg-[var(--paper)] pl-2.5 pr-1 py-0.5 text-sm text-[var(--ink)] desktop:rounded-none desktop:bg-transparent desktop:px-0">
               <span className="max-w-40 truncate desktop:max-w-none">{e.title}</span>
-              <button type="button" aria-label={`Remove ${e.title}`} className="text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => toggle(e)}>✕</button>
+              <button type="button" aria-label={`Remove ${e.title}`} className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => toggle(e)}>✕</button>
             </li>
           ))}
         </ul>
@@ -158,14 +159,14 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
       <SheetDialog open={open && newName === null} wide="xl" title={title} onClose={onClose} footer={<Button type="button" className={btnSecondary} onClick={onClose}>Cancel</Button>}>
         {!exercises ? <LoadingRows rows={4} label="Loading the Library" /> : (
           <div className="space-y-3">
-            <div role="tablist" aria-label="Where to pick from" className="flex gap-1 border-b border-[var(--border)]">
+            <div role="tablist" aria-label="Where to pick from" className="hide-scrollbar flex gap-1 overflow-x-auto whitespace-nowrap border-b border-[var(--border)]">
               {tabs.map(([key, label]) => (
                 <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
                   className={`min-h-10 px-3 text-sm ${tab === key ? 'border-b-2 border-[var(--teal)] font-semibold text-[var(--teal-strong)]' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}>{label}</button>
               ))}
             </div>
             {tab === 'exercises' && (
-              <div className="grid gap-3 desktop:grid-cols-[1fr_15rem]">
+              <div className="grid grid-cols-1 gap-3 desktop:grid-cols-[minmax(0,1fr)_15rem]">
                 <LibraryBrowser
                   clinicId={clinic.id}
                   exercises={exercises}
@@ -224,7 +225,7 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-              <TypeTag phase={detailEx.phase} />
+              <TypeTag phase={detailEx.phase} alsoPhases={detailEx.alsoPhases} />
               <span>·</span>
               <span>{detailEx.bodyRegion}</span>
             </div>

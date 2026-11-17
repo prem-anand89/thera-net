@@ -162,4 +162,32 @@ describe('LibraryBrowser', () => {
     expect(screen.getByText('Nothing yet')).toBeInTheDocument();
     void names;
   });
+
+  it('prefers the End position still in lists while keeping thumbKey for GIFs, and filters by alsoPhases', async () => {
+    const user = userEvent.setup();
+    const stillEx = ex('s1', 'Bridge Still', {
+      phase: 'strengthening',
+      alsoPhases: ['activation'],
+      mediaType: 'stills',
+      mediaKeys: ['clinics/c1/exercises/s1/0-start', 'clinics/c1/exercises/s1/1-end'],
+      mediaCaptions: ['Start Position', 'End Position'],
+      thumbKey: 'clinics/c1/exercises/s1/thumb-small',
+    });
+    const gifEx = ex('g1', 'Squat GIF', {
+      phase: 'functional',
+      mediaType: 'gif',
+      mediaKeys: ['clinics/c1/exercises/g1/0-anim'],
+      thumbKey: 'clinics/c1/exercises/g1/thumb-still',
+    });
+    const { container } = setup({ exercises: [stillEx, gifEx] });
+    await vi.waitFor(() => expect(container.querySelectorAll('img').length).toBe(2));
+    expect(container.innerHTML).toContain('s1/1-end');
+    expect(container.innerHTML).not.toContain('s1/0-start');
+    expect(container.innerHTML).toContain('g1/thumb-still');
+    expect(screen.getByText('Bridge Still').closest('button')).toHaveTextContent('Activation');
+
+    await user.click(group('Type').getByRole('button', { name: /^Activation/ }));
+    expect(screen.getByText('Bridge Still')).toBeInTheDocument();
+    expect(screen.queryByText('Squat GIF')).toBeNull();
+  });
 });

@@ -223,7 +223,7 @@ export function ProgramSheet({ open, onClose, mode, patientId, bundle, startFrom
     <>
       <SheetDialog open={open && !handOver} wide="xl" title={editing ? `Edit home program · ${bundle?.patientName ?? ''}` : 'New home program'} onClose={close} busy={busy} error={error} footer={footer}>
         {!editing && mode === 'new' && limit != null && activeCount != null && <p className="-mt-1 mb-3 text-xs text-[var(--muted)]">Free plan · {activeCount} of {limit} active programs</p>}
-        <div className="grid gap-5 desktop:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="grid grid-cols-1 gap-5 desktop:grid-cols-[minmax(0,1fr)_19rem]">
           <div className="min-w-0 space-y-4">
             {!isDesktop && (
               <section aria-label="Program settings" className="rounded-xl border border-[var(--border)] p-3">

@@ -119,7 +119,7 @@ export function PictureField({ pictures, setPictures, onProblem, disabled = fals
       {singleStillHint && <p className="text-hint text-[var(--muted)]">Two or more photos show the movement better.</p>}
 
       {pictures.length > 0 && (
-        <ul className="grid gap-2 tab:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 tab:grid-cols-2">
           {pictures.map((p, i) => (
             <li key={p.key ?? p.preview ?? i} className="space-y-1.5 rounded-xl border border-[var(--border)] p-2">
               <div className="flex items-start gap-2">

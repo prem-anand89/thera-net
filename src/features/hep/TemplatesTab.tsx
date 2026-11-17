@@ -99,7 +99,7 @@ export function TemplatesTab({ onUse, reloadKey = 0 }: TemplatesTabProps) {
         </div>
       )}
       {rows.length > 0 && shown.length === 0 && <p className="py-6 text-center text-sm text-[var(--muted)]">No templates match “{query}”.</p>}
-      <ul className="grid gap-3 desktop:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-3 desktop:grid-cols-2">
         {shown.map((t) => {
           const items = t.items.map(templateItemToInput);
           const needs = itemsNeed(items);

@@ -192,7 +192,7 @@ export function OnboardingTeamStep({
         </p>
       </div>
 
-      <div className="grid gap-4 tab:grid-cols-2 tab:gap-6">
+      <div className="grid grid-cols-1 gap-4 tab:grid-cols-2 tab:gap-6">
         <section aria-labelledby="onboarding-you" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-6">
           <h2 id="onboarding-you" className="font-display text-base font-semibold text-[var(--ink)]">
             You

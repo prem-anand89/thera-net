@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise } from './hep';
-import { EMPTY_LIBRARY_FILTER, activeFilterChips, equipmentInUse, exerciseInRegion, filterLibrary, regionLabel, similarExercise, sortLibrary, type LibraryExercise } from './hepLibrary';
+import { EMPTY_LIBRARY_FILTER, activeFilterChips, equipmentInUse, exerciseInPhase, exerciseInRegion, facetCounts, filterLibrary, regionLabel, similarExercise, sortLibrary, type LibraryExercise } from './hepLibrary';
 
 const ex = (id: string, title: string, over: Partial<Exercise> = {}): LibraryExercise =>
   ({ id, title, otherNames: [], bodyRegion: 'Knee', alsoRegions: [], phase: 'strengthening', equipment: [], isFavorite: false, active: true, deleted: false, positions: [], createdAt: '2026-01-01T00:00:00Z', ...over });
@@ -110,5 +110,26 @@ describe('position filter and sort', () => {
   });
   it('breaks used ties A to Z', () => {
     expect(ids(sortLibrary(L, 'used', {}))).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('multi-type (alsoPhases) filtering and facet counts', () => {
+  const multi = [
+    ex('m1', 'Glute Bridge', { phase: 'strengthening', alsoPhases: ['activation', 'mobility'] }),
+    ex('m2', 'Quad Sets', { phase: 'activation' }),
+    ex('m3', 'Dead Bug', { phase: 'activation' }), // no alsoPhases property -> defensive default
+  ];
+  it('matches an exercise under both its primary phase and any alsoPhases', () => {
+    expect(exerciseInPhase(multi[0], 'strengthening')).toBe(true);
+    expect(exerciseInPhase(multi[0], 'activation')).toBe(true);
+    expect(exerciseInPhase(multi[0], 'stretching')).toBe(false);
+    expect(ids(filterLibrary(multi, { ...EMPTY_LIBRARY_FILTER, phase: 'activation' }))).toEqual(['m1', 'm2', 'm3']);
+    expect(ids(filterLibrary(multi, { ...EMPTY_LIBRARY_FILTER, phase: 'mobility' }))).toEqual(['m1']);
+  });
+  it('includes alsoPhases in Type facetCounts', () => {
+    const counts = facetCounts(multi, EMPTY_LIBRARY_FILTER);
+    expect(counts.types.find((t) => t.phase === 'activation')?.n).toBe(3);
+    expect(counts.types.find((t) => t.phase === 'strengthening')?.n).toBe(1);
+    expect(counts.types.find((t) => t.phase === 'mobility')?.n).toBe(1);
   });
 });

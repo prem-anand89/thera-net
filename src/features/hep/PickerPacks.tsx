@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/Button';
 import { filterChip, btnPrimary } from '@/components/ui';
-import { canonicalRegion, type Exercise } from '@/domain/hep';
+import { canonicalRegion, listThumbKey, type Exercise } from '@/domain/hep';
 import { Thumb } from './LibraryParts';
 import { useThumbUrls } from './useHepData';
 
@@ -39,14 +39,15 @@ export function PackList({ clinicId, packs, library, regionChips, empty, onAddAl
           {['All', ...regions].map((r) => <button key={r} type="button" aria-pressed={region === r} className={`${filterChip(region === r)} shrink-0`} onClick={() => setRegion(r)}>{r}</button>)}
         </div>
       )}
-      <ul className="grid gap-2 @[600px]:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2 @[600px]:grid-cols-2">
         {shown.map((p) => (
           <li key={p.id} className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
             <div className="font-display text-sm font-semibold text-[var(--ink)]">{p.title}</div>
             <div className="flex gap-1.5" aria-hidden="true">
               {p.exercises.slice(0, 5).map((e, i) => {
                 const src = e.sourceExerciseId ? byId.get(e.sourceExerciseId) : undefined;
-                return src ? <Thumb key={i} ex={src} url={src.thumbKey && !src.hidePicturesInLists ? thumbs[src.thumbKey] : undefined} size={40} /> : null;
+                const tk = src ? listThumbKey(src) : null;
+                return src ? <Thumb key={i} ex={src} url={tk ? thumbs[tk] : undefined} size={40} /> : null;
               })}
             </div>
             <p className="line-clamp-2 text-xs text-[var(--muted)]">{p.exercises.map((e) => e.title).join(', ')}</p>

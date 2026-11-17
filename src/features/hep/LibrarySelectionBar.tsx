@@ -102,7 +102,7 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
 
   return (
     <>
-      <div role="region" aria-label="Bulk actions" className="sticky bottom-2 z-10 space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg">
+      <div role="region" aria-label="Bulk actions" className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-[var(--ink)]" aria-live="polite">{picked.length} selected</span>
           <Button type="button" className="min-h-11 rounded-lg px-2 text-sm font-medium text-[var(--teal)]" disabled={working} onClick={onSelectAll}>Select all {shownCount} shown</Button>

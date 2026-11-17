@@ -15,9 +15,10 @@ import { addDaysISO } from '@/domain/hep';
 import { hepService, type ProgramBundle } from '@/services/hepService';
 import { EXTEND_DAYS, buildProgramRow, countBuckets, filterRows, matchesProgramSearch, sortRows, telHref, type ProgramBucket, type ProgramRow, type SignalTone } from './programRows';
 import { DayStrip } from './DayStrip';
+import { HomeProgramTab } from './HomeProgramTab';
 import { clinicToday, useOnline } from './useHepData';
 
-const TAB_MEDIA_QUERY = '(min-width: 46.5rem)';
+const TAB_MEDIA_QUERY = '(min-width: 62.5rem)';
 const WINDOW_DAYS = 14;
 const FILTERS: Array<{ key: ProgramBucket; label: string }> = [
   { key: 'attention', label: 'Needs attention' }, { key: 'active', label: 'Active' }, { key: 'ending', label: 'Ending this week' }, { key: 'ended', label: 'Recently ended' }, { key: 'past', label: 'Archived' },
@@ -83,6 +84,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, reloadKe
   const [query, setQuery] = useState('');
   const [completing, setCompleting] = useState<ProgramRow | null>(null);
   const [extending, setExtending] = useState<ProgramRow | null>(null);
+  const [openProgram, setOpenProgram] = useState<ProgramRow | null>(null);
   const [busy, setBusy] = useState(false);
 
   const today = clinicToday(clinic);
@@ -126,7 +128,7 @@ export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, reloadKe
     <KebabMenu ariaLabel={`Actions for ${r.patientName}, ${r.title}`}>
       {(close) => (
         <>
-          <Link to="/patients/$patientId" params={{ patientId: r.patientId }} search={{ view: 'home-program' }} className={menuItem} onClick={close}>Open Home program</Link>
+          <button type="button" className={menuItem} onClick={() => { close(); setOpenProgram(r); }}>Open Home program</button>
           {r.status === 'active' && !r.ended && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(r.id, 'paused')); }}>Pause</button>}
           {r.status === 'paused' && <button type="button" className={menuItem} onClick={() => { close(); void act(() => hepService.setProgramStatus(r.id, 'active')); }}>Resume</button>}
           {r.status !== 'completed' && r.durationDays != null && <button type="button" className={menuItem} onClick={() => { close(); setExtending(r); }}>Extend</button>}
@@ -146,8 +148,13 @@ export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, reloadKe
     const tel = tone === 'red' ? telHref(r.patientPhone, clinicCountryCode(clinic)) : null;
     if (tel) return <a href={tel} className={`${pillSmPrimary} inline-flex items-center`}>Call</a>;
     if (tone === 'amber' && onMessage) return <Button type="button" className={pillSmAccent} onClick={() => onMessage(r, bundleOf(r.id))}>Message</Button>;
-    return <Link to="/patients/$patientId" params={{ patientId: r.patientId }} search={{ view: 'home-program' }} className={`${pillSmNeutral} inline-flex items-center`}>Open</Link>;
+    return <Button type="button" className={pillSmNeutral} onClick={() => setOpenProgram(r)}>Open</Button>;
   };
+
+  const closeProgramSheet = useCallback(() => {
+    setOpenProgram(null);
+    void (controlled ? onReload?.() : load());
+  }, [controlled, onReload, load]);
 
   if (!online && bundles === null) return <p className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted)]">Programs need a connection. Reconnect to see them.</p>;
   if (bundles === null) return <LoadingRows rows={4} label="Loading programs" />;
@@ -255,6 +262,28 @@ export function ProgramsTab({ onMessage, onPrescribeNext, onNewProgram, reloadKe
             <Button key={n} type="button" className={btnPrimary} disabled={busy} onClick={() => { const r = extending; setExtending(null); if (r) void act(() => hepService.extendProgram(r.id, n)); }}>{n} days</Button>
           ))}
         </div>
+      </SheetDialog>
+      <SheetDialog
+        open={openProgram !== null}
+        wide="xl"
+        title={openProgram ? `${openProgram.patientName} — Home program` : 'Home program'}
+        onClose={closeProgramSheet}
+        headerAction={
+          openProgram && (
+            <Link
+              to="/patients/$patientId"
+              params={{ patientId: openProgram.patientId }}
+              search={{ view: 'home-program' }}
+              className={`${pillSmNeutral} inline-flex items-center whitespace-nowrap`}
+              onClick={closeProgramSheet}
+            >
+              Patient chart →
+            </Link>
+          )
+        }
+        footer={<Button type="button" className={btnSecondary} onClick={closeProgramSheet}>Close</Button>}
+      >
+        {openProgram && <HomeProgramTab key={openProgram.patientId} patientId={openProgram.patientId} />}
       </SheetDialog>
     </div>
   );

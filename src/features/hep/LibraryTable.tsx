@@ -2,7 +2,7 @@
 // Used, ★. Below ~620px of container the Region / Type / Position / Equipment / dosage columns drop out and their facts
 // move under the name, so a row reads as two lines.
 import { cellSub, td, th } from '@/components/ui';
-import { canonicalRegion, positionsOf, type Exercise } from '@/domain/hep';
+import { canonicalRegion, listThumbKey, positionsOf, type Exercise } from '@/domain/hep';
 import { doseSummary } from '@/domain/hepDose';
 import { regionLabel } from '@/domain/hepLibrary';
 import { Thumb, TypeTag, exerciseFacts } from './LibraryParts';
@@ -21,7 +21,7 @@ export interface LibraryRowsProps {
   picks?: ReadonlySet<string>;
 }
 
-const WIDE = 'hidden @[620px]:table-cell';
+const WIDE = 'hidden @[820px]:table-cell';
 
 export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, onActivate, onToggleFavorite, picks, sort, onSort }: LibraryRowsProps & { sort: ColumnSort | null; onSort: (s: ColumnSort) => void }) {
   const head = (key: ColumnSort, label: string, cls = '') => (
@@ -53,10 +53,11 @@ export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, o
             const on = selected?.has(ex.id) || picked;
             const uses = useCounts[ex.id] ?? 0;
             const equipment = ex.equipment.filter((e) => e && e !== 'None').join(', ');
+            const tk = listThumbKey(ex);
             return (
               <tr key={ex.id} className={`border-b border-[var(--border)] last:border-0 ${on ? 'bg-[var(--teal-light)]' : ''} ${off ? 'opacity-50' : ''}`}>
                 {picks && <td className="w-11 pl-2"><input type="checkbox" aria-label={`Select ${ex.title}`} checked={!!picked} onChange={() => onActivate(ex)} className="h-5 w-5" /></td>}
-                <td className="w-16 py-2 pl-3"><Thumb ex={ex} url={ex.thumbKey ? thumbs[ex.thumbKey] : undefined} size={48} /></td>
+                <td className="w-16 py-2 pl-3"><Thumb ex={ex} url={tk ? thumbs[tk] : undefined} size={48} /></td>
                 <td className={td}>
                   <button type="button" data-exercise={ex.id} disabled={off} aria-pressed={selected ? on : undefined} onClick={() => onActivate(ex)} className="block text-left font-semibold">
                     {ex.title}{!ex.active && <span className="ml-2 rounded bg-[var(--paper)] px-1.5 text-xs font-medium text-[var(--muted)]">Archived</span>}
@@ -66,7 +67,7 @@ export function LibraryTable({ rows, thumbs, useCounts, selected, disabledIds, o
                   <div className={`${cellSub} @[620px]:hidden`}>{exerciseFacts(ex)} · {doseSummary(ex)}</div>
                 </td>
                 <td className={`${td} ${WIDE}`}>{regionLabel(canonicalRegion(ex.bodyRegion))}</td>
-                <td className={`${td} ${WIDE}`}><TypeTag phase={ex.phase} /></td>
+                <td className={`${td} ${WIDE}`}><TypeTag phase={ex.phase} alsoPhases={ex.alsoPhases} /></td>
                 <td className={`${td} ${WIDE}`}>{positionsOf(ex).join(', ') || '—'}</td>
                 <td className={`${td} ${WIDE}`}>{equipment || '—'}</td>
                 <td className={`${td} ${WIDE}`}>{doseSummary(ex)}</td>

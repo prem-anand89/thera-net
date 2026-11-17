@@ -88,10 +88,24 @@ describe('ExerciseForm: sections', () => {
     await nameAndRegion(user);
     await user.click(pill('Type', 'Strengthening'));
     expect(screen.getByText(EXERCISE_TYPE_DEFINITIONS.strengthening)).toBeInTheDocument();
+    await user.click(pill('Additional types', 'Mobility'));
     await user.click(screen.getByRole('button', { name: 'Next: Media and instructions ›' }));
     expect(expanded()).toEqual(['Media and instructions']);
-    expect(sectionButton('Exercise details')).toHaveTextContent('Bird dog · Core · Strengthening');
+    expect(sectionButton('Exercise details')).toHaveTextContent('Bird dog · Core · Strengthening, Mobility');
     expect(sectionButton('Exercise details')).toHaveTextContent('✓');
+  });
+
+  it('saves multi-selected Additional types as alsoPhases and excludes any promoted primary type', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await nameAndRegion(user);
+    await user.click(pill('Type', 'Strengthening'));
+    await user.click(pill('Additional types', 'Mobility'));
+    await user.click(pill('Additional types', 'Activation'));
+    // Switching primary Type to Mobility automatically removes Mobility from alsoPhases.
+    await user.click(pill('Type', 'Mobility'));
+    await user.click(saveButton());
+    await waitFor(() => expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({ phase: 'mobility', alsoPhases: ['activation'] })));
   });
 
   it('opening one section folds the others; the last one ends with Done', async () => {

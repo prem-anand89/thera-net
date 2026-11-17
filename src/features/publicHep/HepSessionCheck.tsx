@@ -83,7 +83,7 @@ export function HepSessionCheck({ items, defaultSide, initial, clinicPhone, sess
         >
           {[SCALE.slice(0, 6), SCALE.slice(6)].map((row, idx) => (
             <div key={idx} className="space-y-1 sm:contents">
-              <div className={`grid gap-2 sm:contents ${idx === 0 ? 'grid-cols-6' : 'grid-cols-5'}`}>
+              <div className={`grid gap-1.5 sm:gap-2 sm:contents ${idx === 0 ? 'grid-cols-6' : 'grid-cols-5'}`}>
                 {row.map((n) => (
                   <button
                     key={n}

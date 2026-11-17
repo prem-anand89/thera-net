@@ -82,7 +82,7 @@ export function ClosedDaysSheet({
           Closed days show on the calendar and can't be picked on your public booking page. Existing
           appointments are kept.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="From">
             <input
               type="date"

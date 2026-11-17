@@ -41,15 +41,29 @@ export interface HepExerciseScreenProps {
   framed?: boolean;
 }
 
+function CaptionBadge({ text, avoidDots = false }: { text: string; avoidDots?: boolean }) {
+  return (
+    <figcaption
+      className={`pointer-events-none absolute bottom-2 left-2.5 truncate rounded-full border border-[var(--border)]/60 bg-[var(--surface)]/70 px-2.5 py-0.5 text-xs font-medium text-[var(--ink)]/85 backdrop-blur-sm ${avoidDots ? 'max-w-[calc(50%-1.25rem)]' : 'max-w-[calc(100%-1.25rem)]'}`}
+    >
+      {text}
+    </figcaption>
+  );
+}
+
 function Picture({ item, onImageError, onZoom }: { item: PublicHepItem; onImageError: () => void; onZoom: (index: number) => void }) {
   const [at, setAt] = useState(0);
   const strip = useRef<HTMLDivElement>(null);
   if (item.mediaType === 'gif' || item.mediaUrls.length === 1) {
+    const caption = item.mediaType !== 'gif' ? item.mediaCaptions[0] : '';
     const label = item.mediaCaptions[0] || item.title;
     return (
-      <button type="button" onClick={() => onZoom(0)} aria-label={`Zoom ${label}`} className="block h-full w-full cursor-zoom-in">
-        <img src={item.mediaUrls[0]} alt={label} onError={onImageError} className="h-full w-full object-contain" />
-      </button>
+      <figure className="relative h-full w-full">
+        <button type="button" onClick={() => onZoom(0)} aria-label={`Zoom ${label}`} className="block h-full w-full cursor-zoom-in">
+          <img src={item.mediaUrls[0]} alt={label} onError={onImageError} className="h-full w-full object-contain" />
+        </button>
+        {caption && <CaptionBadge text={caption} />}
+      </figure>
     );
   }
   return (
@@ -69,7 +83,7 @@ function Picture({ item, onImageError, onZoom }: { item: PublicHepItem; onImageE
               <button type="button" onClick={() => onZoom(i)} aria-label={`Zoom ${label}`} className="block h-full w-full cursor-zoom-in">
                 <img src={url} alt={label} onError={onImageError} className="h-full w-full object-contain" />
               </button>
-              {item.mediaCaptions[i] && <figcaption className="pointer-events-none absolute inset-x-0 top-0 bg-black/55 px-3 py-1 text-center text-base text-white">{item.mediaCaptions[i]}</figcaption>}
+              {item.mediaCaptions[i] && <CaptionBadge text={item.mediaCaptions[i]} avoidDots />}
             </figure>
           );
         })}
@@ -347,9 +361,9 @@ export function HepExerciseScreen(p: HepExerciseScreenProps) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-40">
+      <div className={`flex-1 overflow-y-auto ${asking ? 'pb-[calc(18rem+env(safe-area-inset-bottom))]' : 'pb-[calc(10rem+env(safe-area-inset-bottom))]'}`}>
         {hasPictures(item) && (
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
+          <div className="relative mx-auto aspect-[4/3] max-h-[45dvh] w-full max-w-xl overflow-hidden bg-white">
             <Picture item={item} onImageError={p.onImageError} onZoom={setZoomIndex} />
           </div>
         )}

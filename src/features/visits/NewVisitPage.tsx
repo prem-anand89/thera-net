@@ -2399,9 +2399,9 @@ export function NewVisitPage() {
           changes (search/create UI vs. confirmed-patient banner), but the
           page's own structure doesn't, so picking a patient doesn't cause a
           jarring column-count/width jump. Collapses to stacked below desktop:. */}
-      <div className="grid gap-4 desktop:grid-cols-[22.5rem_minmax(0,1fr)] desktop:items-start">
+      <div className="grid grid-cols-1 gap-4 desktop:grid-cols-[22.5rem_minmax(0,1fr)] desktop:items-start">
         {/* Left card: unified patient info + this visit context */}
-        <div className="desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]">
+        <div className="min-w-0 desktop:sticky desktop:top-[calc(var(--app-header-h,4rem)+1rem)]">
           {leftCard}
         </div>
         <div className="min-w-0">{visitPanel}</div>

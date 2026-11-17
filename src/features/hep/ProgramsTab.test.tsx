@@ -25,6 +25,7 @@ vi.mock('@/components/useMediaQuery', () => ({ useMediaQuery: () => wide }));
 let scope = { isAdmin: true, myTherapistId: 't1' as string | undefined };
 vi.mock('@/app/useWorkspaceScope', () => ({ useWorkspaceScope: () => scope }));
 vi.mock('@tanstack/react-router', () => ({ Link: ({ children, to, params, search, ...rest }: { children: React.ReactNode; to: string; params?: Record<string, string>; search?: Record<string, string> } & Record<string, unknown>) => <a href={to.replace('$patientId', params?.patientId ?? '') + (search?.view ? `?view=${search.view}` : '')} {...rest}>{children}</a> }));
+vi.mock('./HomeProgramTab', () => ({ HomeProgramTab: ({ patientId }: { patientId: string }) => <div data-testid="home-program-popup">Home program for {patientId}</div> }));
 
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;
 const TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -167,7 +168,7 @@ describe('ProgramsTab', () => {
     const { unmount } = renderTab();
     await screen.findByText('Asha Pillai');
     expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('view=home-program');
+    expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
     unmount();
     renderTab({ onMessage });
     await user.click((await screen.findAllByRole('button', { name: 'Message' }))[0]);
@@ -275,7 +276,7 @@ describe('ProgramsTab', () => {
     expect(call).toHaveAttribute('href', 'tel:+919876543210');
     const noPhone = screen.getByText('No Phone').closest('tr')!;
     expect(within(noPhone).queryByRole('link', { name: 'Call' })).toBeNull();
-    expect(within(noPhone).getByRole('link', { name: 'Open' })).toBeInTheDocument();
+    expect(within(noPhone).getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
 
   it('an amber alert is "Message", and no alert is "Open"', async () => {
@@ -284,7 +285,24 @@ describe('ProgramsTab', () => {
     await screen.findByText('Ravi Kumar');
     expect(within(screen.getByText('Ravi Kumar').closest('tr')!).getByRole('button', { name: 'Message' })).toBeInTheDocument();
     await user.click(chip(/^Active/));
-    expect(within(screen.getByText('Sunil Rao').closest('tr')!).getByRole('link', { name: 'Open' })).toBeInTheDocument();
+    expect(within(screen.getByText('Sunil Rao').closest('tr')!).getByRole('button', { name: 'Open' })).toBeInTheDocument();
+  });
+
+  it('clicking Open opens the Home program in an in-place sheet with a Patient chart link and reloads on close', async () => {
+    const user = userEvent.setup();
+    const onReload = vi.fn().mockResolvedValue(undefined);
+    renderTab({ programs: BUNDLES, programsError: null, onReload });
+    await user.click(chip(/^Active/));
+    await user.click(within(screen.getByText('Sunil Rao').closest('tr')!).getByRole('button', { name: 'Open' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Sunil Rao — Home program' });
+    expect(within(dialog).getByTestId('home-program-popup')).toHaveTextContent('Home program for pt-p3');
+    const chartLink = within(dialog).getByRole('link', { name: 'Patient chart →' });
+    expect(chartLink).toHaveAttribute('href', '/patients/pt-p3?view=home-program');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Sunil Rao — Home program' })).toBeNull();
+    expect(onReload).toHaveBeenCalledTimes(1);
   });
 
   it('offers "+ New program" in the top row when wired, and disables it when offline', async () => {

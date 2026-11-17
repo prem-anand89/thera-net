@@ -34,10 +34,10 @@ export function LibraryFilters({ filter, counts, showUsed, onChange }: Props) {
     </button>
   );
   const heading = (t: string) => <p aria-hidden="true" className="hidden px-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] @[760px]:block">{t}</p>;
-  const row = 'flex gap-1.5 overflow-x-auto pb-1 @[760px]:flex-col @[760px]:gap-0.5 @[760px]:overflow-visible @[760px]:pb-0';
+  const row = 'hide-scrollbar flex gap-1.5 overflow-x-auto pb-1 @[760px]:flex-col @[760px]:gap-0.5 @[760px]:overflow-visible @[760px]:pb-0';
 
   return (
-    <div className="space-y-1.5 @[760px]:space-y-1">
+    <div className="min-w-0 space-y-1.5 @[760px]:space-y-1">
       <div role="group" aria-label="Body region" className={row}>
         {heading('Body region')}
         {showUsed && chip('Used', 'Used this week', counts.used, filter.region === 'Used', () => onChange({ region: filter.region === 'Used' ? 'All' : 'Used' }))}

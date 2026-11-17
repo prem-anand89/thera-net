@@ -68,6 +68,31 @@ export type HepPosition = (typeof HEP_POSITIONS)[number];
 /** Old cached rows have no positions. */
 export const positionsOf = (ex: Partial<Pick<Exercise, 'positions'>>): string[] => ex.positions ?? [];
 
+/** Secondary types (old cached rows have none), excluding duplicates and the primary phase. */
+export const alsoPhasesOf = (ex: Partial<Pick<Exercise, 'phase' | 'alsoPhases'>>): ExercisePhase[] =>
+  [...new Set((ex.alsoPhases ?? []).filter((p): p is ExercisePhase => (EXERCISE_PHASES as readonly string[]).includes(p) && p !== ex.phase))];
+
+/** Primary type first, followed by any additional types. */
+export const phasesOf = (ex: Pick<Exercise, 'phase'> & Partial<Pick<Exercise, 'alsoPhases'>>): ExercisePhase[] =>
+  [ex.phase, ...alsoPhasesOf(ex)];
+
+/** Key of the sharpest preview image for list cards/rows (never when "Hide pictures in lists" is on).
+ *  Still exercises prefer the End position picture (explicit "End" caption, else the last photo) so therapists
+ *  immediately recognise the movement without opening the exercise; single-photo stills use their only photo and
+ *  GIFs keep their static thumbnail. */
+export function listThumbKey(
+  ex: Partial<Pick<Exercise, 'hidePicturesInLists' | 'mediaType' | 'mediaKeys' | 'mediaCaptions' | 'thumbKey'>>,
+): string | null {
+  if (ex.hidePicturesInLists) return null;
+  if (ex.mediaType !== 'gif' && ex.mediaKeys && ex.mediaKeys.length > 0) {
+    const endIdx = (ex.mediaCaptions ?? []).findIndex((c) => /\bend\b/i.test(c));
+    if (endIdx >= 0 && ex.mediaKeys[endIdx]) return ex.mediaKeys[endIdx];
+    const fallback = ex.mediaKeys.length > 1 ? ex.mediaKeys[ex.mediaKeys.length - 1] : ex.mediaKeys[0];
+    if (fallback) return fallback;
+  }
+  return ex.thumbKey ?? null;
+}
+
 /** The suggested kind for a type; the therapist can always change it (amendment 62). */
 export function suggestedDoseType(phase: ExercisePhase): DoseType {
   if (phase === 'stretching' || phase === 'activation' || phase === 'cool_down') return 'hold';
@@ -87,6 +112,8 @@ export interface Exercise {
   /** What the patient needs, for example "Theraband / resistance band". */
   equipment: string[];
   phase: ExercisePhase;
+  /** Extra types this exercise also belongs to for Library/Picker filtering; primary `phase` drives grouping & default dosage. */
+  alsoPhases?: ExercisePhase[];
   /** Starting positions; a filter for staff, never shown to patients. */
   positions: string[];
   instructions: string;

@@ -10,6 +10,7 @@ import { useClinic } from '@/app/clinicContext';
 import { ConfirmDialog, SheetDialog, btnPrimary, btnSecondary, pillSmDanger } from '@/components/ui';
 import {
   HEP_REGIONS,
+  alsoPhasesOf,
   canonicalRegion,
   positionsOf,
   suggestedDoseType,
@@ -54,6 +55,7 @@ function startingValues(ex: Exercise | undefined, initialTitle: string | undefin
     customRegion: '',
     also: ex?.alsoRegions ?? [],
     phase: ex?.phase ?? ('other' as ExercisePhase),
+    alsoPhases: ex ? alsoPhasesOf(ex) : ([] as ExercisePhase[]),
     equipment: ex?.equipment ?? [],
     customEquipment: '',
     steps: ex?.instructions ?? '',
@@ -100,6 +102,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const [customRegion, setCustomRegion] = useState('');
   const [also, setAlso] = useState<string[]>([]);
   const [phase, setPhase] = useState<ExercisePhase>('other');
+  const [alsoPhases, setAlsoPhases] = useState<ExercisePhase[]>([]);
   const [typeChosen, setTypeChosen] = useState(false);
   const [equipment, setEquipment] = useState<string[]>([]);
   const [customEquipment, setCustomEquipment] = useState('');
@@ -141,6 +144,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     setCustomRegion(v.customRegion);
     setAlso(v.also);
     setPhase(v.phase);
+    setAlsoPhases(v.alsoPhases);
     setTypeChosen(!!ex);
     setEquipment(v.equipment);
     setCustomEquipment(v.customEquipment);
@@ -187,7 +191,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const picturesOk = pictures.length === 0 || (hasGif ? pictures.length === 1 : pictures.length >= 1 && pictures.length <= MAX_PICTURES);
   // Position is not needed to save (older exercises have none); only Classification's ✓ waits for it.
   const valid = title.trim().length > 0 && effectiveRegion.length > 0 && isDoseValid(dose) && picturesOk;
-  const dirty = snapshot({ title, region, customRegion, also, phase, equipment, customEquipment, steps, stopIf, dose, otherNames, otherNameDraft, positions, hidePictures, pictures }) !== baseline;
+  const dirty = snapshot({ title, region, customRegion, also, phase, alsoPhases, equipment, customEquipment, steps, stopIf, dose, otherNames, otherNameDraft, positions, hidePictures, pictures }) !== baseline;
 
   // Consent is asked for when a save brings pictures in: a new exercise (a progression included), or a different set of
   // pictures from the saved one. An untouched legacy exercise saves without it (the server rule is the same).
@@ -209,7 +213,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     class: positions.length > 0,
   };
   const summaries: Record<SectionKey, string> = {
-    details: detailsSummary(title, effectiveRegion, phase, typeChosen),
+    details: detailsSummary(title, effectiveRegion, phase, typeChosen, alsoPhases),
     media: mediaSummary(pictures, steps, stopIf),
     dose: describeDose(dose),
     class: classificationSummary(positions, equipment, also.filter((a) => a !== effectiveRegion), otherNames),
@@ -225,6 +229,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
   function chooseType(next: ExercisePhase) {
     setPhase(next);
+    setAlsoPhases((cur) => cur.filter((x) => x !== next));
     setTypeChosen(true);
     if (!kindTouched.current) setDose((d) => withKind(d, suggestedDoseType(next)));
   }
@@ -285,6 +290,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
         alsoRegions: also.filter((a) => a !== effectiveRegion),
         equipment,
         phase,
+        alsoPhases: alsoPhases.filter((p) => p !== phase),
         positions,
         instructions: steps.trim(),
         mediaType,
@@ -369,6 +375,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       <DetailsFields
         title={title} setTitle={setTitle} regionOptions={regionOptions} region={region} setRegion={setRegion}
         customRegion={customRegion} setCustomRegion={setCustomRegion} phase={phase} typeChosen={typeChosen} onType={chooseType}
+        alsoPhases={alsoPhases} setAlsoPhases={setAlsoPhases}
         similarNote={similar && <p className="rounded-md bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber-strong)]" role="status">Similar: {similar.title} ({canonicalRegion(similar.bodyRegion)}). You can still save this one.</p>}
       />
     ),
@@ -396,7 +403,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       open={open} wide="xl" title={editingExisting ? 'Edit exercise' : 'New exercise'} onClose={requestClose} busy={busy} error={error} footer={footer}
       headerAction={!isDesktop && <Button type="button" className={btnSecondary} onClick={() => setPreviewOpen(true)}>Preview</Button>}
     >
-      <div className="grid gap-6 desktop:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 gap-6 desktop:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-2.5">
           {SECTION_ORDER.map((k, i) => {
             const next = nextAfter(k);

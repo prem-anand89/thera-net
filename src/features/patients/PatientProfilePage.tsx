@@ -730,7 +730,7 @@ export function PatientProfilePage() {
                   <div className="p-8 text-center">
                     <p className="text-sm text-[var(--muted)]">No visits recorded yet.</p>
                     <div className="mt-3">
-                      <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
+                      <Link to="/visits/new" search={{ patientId }} className={`${btnPrimary} inline-flex items-center justify-center`}>
                         Record first visit
                       </Link>
                     </div>

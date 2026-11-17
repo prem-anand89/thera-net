@@ -63,7 +63,7 @@ export function HepSignIn({ brand, onSubmit, notice }: HepSignInProps) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5 py-10 text-slate-900">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] text-slate-900 [&>*:first-child]:mt-auto [&>*:last-child]:mb-auto">
       <header className="flex flex-col items-center gap-3 text-center">
         {brand &&
           (brand.logoUrl ? (

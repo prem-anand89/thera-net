@@ -46,6 +46,7 @@ export interface SaveExerciseInput {
   alsoRegions?: string[];
   equipment?: string[];
   phase: ExercisePhase;
+  alsoPhases?: ExercisePhase[];
   instructions: string;
   mediaType: ExerciseMediaType;
   mediaKeys?: string[];
@@ -279,6 +280,7 @@ export const hepService = {
       p_positions: input.positions ?? [],
       p_picture_consent: input.pictureConsent ?? false,
       p_hide_pictures_in_lists: input.hidePicturesInLists ?? false,
+      p_also_phases: input.alsoPhases ?? [],
     });
     if (error) fail(error);
     syncEngine.schedule(0); // bring the saved row into the offline cache

@@ -260,7 +260,7 @@ export function StartVisitSheet({
               {mode === 'find' ? (
                 <SearchableSelect label="" value={patientId} onChange={(value) => setPatientId(value as UUID)} options={options} placeholder="Search name, phone or ID" />
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Patient name *">
                     <input className={inputCls} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
                   </Field>
@@ -317,7 +317,7 @@ export function StartVisitSheet({
 
           <ErrorNote message={error} />
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {canWriteNotes && (
               <button type="button" className={btnPrimary} disabled={busy} onClick={() => void startNote()}>
                 {busy ? 'Starting…' : 'Start note'}

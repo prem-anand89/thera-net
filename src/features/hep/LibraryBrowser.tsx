@@ -3,7 +3,7 @@
 // It shows what the filters leave; the parent decides what a tap does (open the form, or tick the exercise).
 // The root is a container (`@container`), so grid / table / rows follow its width, also inside the picker sheet.
 import { useCallback, useMemo, useState } from 'react';
-import { EXERCISE_TYPES, canonicalRegion, type Exercise } from '@/domain/hep';
+import { EXERCISE_TYPES, canonicalRegion, listThumbKey, type Exercise } from '@/domain/hep';
 import { chipSelect, chipSelectChevron, filterChip, inputCls, segOption, segTrack } from '@/components/ui';
 import { doseSummary } from '@/domain/hepDose';
 import {
@@ -103,7 +103,8 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_CO
   const tick = (ex: Exercise) => !!selected?.has(ex.id);
 
   const card = (ex: Exercise) => {
-    const url = ex.thumbKey && !ex.hidePicturesInLists ? thumbs[ex.thumbKey] : undefined;
+    const tk = listThumbKey(ex);
+    const url = tk ? thumbs[tk] : undefined;
     return (
       <li key={ex.id} className={`relative rounded-xl border bg-[var(--surface)] ${tick(ex) || picks.has(ex.id) ? 'border-[var(--teal)] ring-2 ring-[var(--teal)]' : 'border-[var(--border)]'} ${off(ex) ? 'opacity-50' : ''}`}>
         <button type="button" data-exercise={ex.id} disabled={off(ex)} aria-pressed={selected ? tick(ex) : undefined} onClick={() => activate(ex)} className="block w-full min-w-0 space-y-1 p-2 text-left">
@@ -111,7 +112,7 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_CO
           <span className="block line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug text-[var(--ink)]">
             {ex.title}{!ex.active && <span className="ml-2 rounded bg-[var(--paper)] px-1.5 text-xs font-medium text-[var(--muted)]">Archived</span>}
           </span>
-          <span className="block text-xs text-[var(--ink)]"><TypeTag phase={ex.phase} /></span>
+          <span className="block text-xs text-[var(--ink)]"><TypeTag phase={ex.phase} alsoPhases={ex.alsoPhases} /></span>
           <span className="block line-clamp-2 text-xs text-[var(--muted)]">{exerciseFacts(ex)}</span>
           <span className="block line-clamp-2 text-xs text-[var(--ink)]">{doseSummary(ex)}</span>
         </button>
@@ -141,9 +142,9 @@ export function LibraryBrowser({ clinicId, exercises, usedIds, useCounts = NO_CO
   const otherRegions = filter.region !== 'All' ? filterLibrary(live, { ...filter, region: 'All' }, opts).length : 0;
 
   return (
-    <div className="@container">
-      <div className="grid gap-3 @[760px]:grid-cols-[13rem_1fr] @[760px]:gap-4">
-        <aside aria-label="Filters"><LibraryFilters filter={filter} counts={counts} showUsed={usedIds.size > 0} onChange={set} /></aside>
+    <div className="@container min-w-0">
+      <div className="grid grid-cols-1 gap-3 @[760px]:grid-cols-[13rem_minmax(0,1fr)] @[760px]:gap-4">
+        <aside aria-label="Filters" className="min-w-0"><LibraryFilters filter={filter} counts={counts} showUsed={usedIds.size > 0} onChange={set} /></aside>
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <input type="search" aria-label="Search exercises" placeholder="Search exercises" className={`${inputCls} min-w-40 flex-1`} value={filter.query} onChange={(e) => set({ query: e.target.value })} />

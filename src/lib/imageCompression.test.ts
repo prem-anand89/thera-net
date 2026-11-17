@@ -84,10 +84,10 @@ describe('compressImageForUpload', () => {
     expect(out.type).toBe('image/jpeg');
   });
 
-  it('makes a 160 px thumbnail (a GIF gives its first frame)', async () => {
+  it('makes a 480 px thumbnail (a GIF gives its first frame)', async () => {
     const { made } = stubBrowser({ width: 640, height: 480 });
     await createThumbnailBlob(new Blob(['x'], { type: 'image/gif' }));
-    expect([made[0].width, made[0].height]).toEqual([160, 120]);
+    expect([made[0].width, made[0].height]).toEqual([480, 360]);
   });
 });
 

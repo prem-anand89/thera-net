@@ -21,9 +21,9 @@ export const chipSelectChevron = {
     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
 } as const;
 export const btnPrimary =
-  'inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
+  'min-h-11 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
 export const btnSecondary =
-  'inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
+  'min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
 /** Compact pill actions for list rows. One clear ladder so adjacent buttons never look alike:
  *  primary (the main action) > attention (needs doing) > accent (outlined teal, secondary) >
  *  neutral (quiet). */
@@ -790,7 +790,7 @@ export function SheetDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-[var(--surface)] shadow-xl ${
+        className={`flex max-h-[92dvh] w-full min-w-0 flex-col rounded-t-2xl bg-[var(--surface)] shadow-xl ${
           wide === 'xl'
             ? 'sm:max-w-md tab:max-w-3xl desktop:max-w-6xl'
             : wide
@@ -810,7 +810,7 @@ export function SheetDialog({
         {(footer != null || Boolean(error)) && (
           <div className="shrink-0 space-y-2 border-t border-[var(--border)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <ErrorNote message={error ?? null} />
-            {footer != null && <div className="flex gap-2 [&>*]:flex-1">{footer}</div>}
+            {footer != null && <div className="flex flex-wrap gap-2 [&>*]:flex-1 [&>*]:min-w-[6.5rem]">{footer}</div>}
           </div>
         )}
       </div>

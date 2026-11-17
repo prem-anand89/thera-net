@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { cellSub, td, th } from '@/components/ui';
 import { useMediaQuery } from '@/components/useMediaQuery';
 import { formatDateDM } from '@/domain/fiscalYear';
-import type { Exercise, ProgramItem, ProgramLog, SessionsPerDay } from '@/domain/hep';
+import { listThumbKey, type Exercise, type ProgramItem, type ProgramLog, type SessionsPerDay } from '@/domain/hep';
 import { describeDose } from '@/domain/hepDose';
 import type { SessionFeedback } from '@/services/hepService';
 import { itemDose, programBlocks, programItemToInput } from './hepItems';
@@ -65,18 +65,19 @@ export function ByExerciseTable(props: {
     const byId = new Map((library ?? []).map((e) => [e.id, e]));
     return items.map((i) => (i.sourceExerciseId ? byId.get(i.sourceExerciseId) : undefined));
   }, [library, items]);
-  const pictured = useMemo(() => sources.filter((e): e is Exercise => !!e && !e.hidePicturesInLists && !!e.thumbKey), [sources]);
+  const pictured = useMemo(() => sources.filter((e): e is Exercise => !!e && !!listThumbKey(e)), [sources]);
   const thumbs = useThumbUrls(clinic.id, pictured);
 
   const groups = useMemo(() => {
     const rowOf = (index: number): Row => {
       const item = items[index];
       const src = sources[index];
+      const tk = src ? listThumbKey(src) : null;
       return {
         item,
         week: itemWeek(item, logs, feedback, today, program),
         dose: describeDose(itemDose(programItemToInput(item)), program.sessionsPerDay),
-        thumb: src && !src.hidePicturesInLists && src.thumbKey ? thumbs[src.thumbKey] : undefined,
+        thumb: tk ? thumbs[tk] : undefined,
       };
     };
     const blocks = programBlocks(items.map(programItemToInput));
@@ -89,7 +90,7 @@ export function ByExerciseTable(props: {
 
   const name = (r: Row) => (
     <span className="flex items-center gap-2">
-      {r.thumb && <img src={r.thumb} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg bg-[var(--paper)] object-cover" />}
+      {r.thumb && <img src={r.thumb} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg border border-[var(--border)]/60 bg-[var(--surface)] p-0.5 object-contain" />}
       <span className="font-medium text-[var(--ink)]">{r.item.title}{r.item.optional && <span className="ml-2 text-xs font-normal text-[var(--muted)]">Optional</span>}</span>
     </span>
   );

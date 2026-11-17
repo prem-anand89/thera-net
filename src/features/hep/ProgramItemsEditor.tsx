@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { Field, KebabMenu, btnPrimary, btnSecondary, inputCls, menuItem } from '@/components/ui';
-import { EXERCISE_PHASE_LABELS, type Exercise, type ExercisePhase, type Program, type SessionsPerDay } from '@/domain/hep';
+import { EXERCISE_PHASE_LABELS, listThumbKey, type Exercise, type ExercisePhase, type Program, type SessionsPerDay } from '@/domain/hep';
 import { describeDose } from '@/domain/hepDose';
 import type { HepItemInput, ProgramBundle } from '@/services/hepService';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
@@ -144,10 +144,12 @@ function ItemRow({ row, first, last, items, sessionsPerDay, library, editingLive
   const moves: Array<[ItemBlock, string]> = block === 'main' ? [['warm_up', 'Move to warm-up'], ['cool_down', 'Move to cool-down']] : [['main', 'Move to main exercises']];
   const update = (fn: (i: HepItemInput) => HepItemInput) => setItems(items.map((it, i) => (i === index ? fn(it) : it)));
 
+  const tk = src ? listThumbKey(src) : null;
+
   return (
     <li className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex min-w-0 items-center gap-1 p-2 sm:gap-2">
-        {src && !src.hidePicturesInLists && <Thumb ex={src} url={src.thumbKey ? thumbs[src.thumbKey] : undefined} size={40} />}
+        {src && !src.hidePicturesInLists && <Thumb ex={src} url={tk ? thumbs[tk] : undefined} size={40} />}
         <button type="button" aria-expanded={open} className="min-w-0 flex-1 overflow-hidden text-left" onClick={() => setOpenRow(open ? null : index)}>
           <span className="block truncate text-sm font-semibold text-[var(--ink)]">{item.title}{item.optional && <span className="ml-2 text-xs font-medium text-[var(--muted)]">Optional</span>}</span>
           <span className="block truncate text-xs text-[var(--muted)]">{describeDose(itemDose(item), forTemplate ? 1 : sessionsPerDay)}{override && ` · Only this one: ${SESSION_LABEL[item.sessionsPerDay]}`}</span>

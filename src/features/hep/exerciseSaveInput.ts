@@ -1,4 +1,4 @@
-import { positionsOf, type Exercise } from '@/domain/hep';
+import { alsoPhasesOf, positionsOf, type Exercise } from '@/domain/hep';
 import type { SaveExerciseInput } from '@/services/hepService';
 
 /**
@@ -15,6 +15,7 @@ export function exerciseToSaveInput(ex: Exercise, over: Partial<SaveExerciseInpu
     alsoRegions: ex.alsoRegions,
     equipment: ex.equipment,
     phase: ex.phase,
+    alsoPhases: alsoPhasesOf(ex),
     positions: positionsOf(ex),
     instructions: ex.instructions,
     mediaType: ex.mediaType,

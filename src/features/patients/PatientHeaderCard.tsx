@@ -154,7 +154,7 @@ export function PatientHeaderCard({
               Record advance
             </button>
           )}
-          <Link to="/visits/new" search={{ patientId: patient.id }} className={btnPrimary}>
+          <Link to="/visits/new" search={{ patientId: patient.id }} className={`${btnPrimary} inline-flex items-center justify-center`}>
             New visit
           </Link>
         </div>

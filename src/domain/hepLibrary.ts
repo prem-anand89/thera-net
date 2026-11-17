@@ -8,8 +8,9 @@ import {
   canonicalEquipment,
   canonicalRegion,
   matchesExerciseSearch,
-  regionTree,
+  phasesOf,
   positionsOf,
+  regionTree,
   type Exercise,
   type ExercisePhase,
 } from '@/domain/hep';
@@ -29,9 +30,14 @@ export interface LibraryFilter {
 
 export const EMPTY_LIBRARY_FILTER: LibraryFilter = { region: 'All', phase: 'All', position: 'All', equipment: [], query: '' };
 
-export type LibraryExercise = Pick<Exercise, 'id' | 'title' | 'otherNames' | 'bodyRegion' | 'alsoRegions' | 'phase' | 'positions' | 'equipment' | 'isFavorite' | 'active' | 'deleted' | 'createdAt'>;
+export type LibraryExercise = Pick<Exercise, 'id' | 'title' | 'otherNames' | 'bodyRegion' | 'alsoRegions' | 'phase' | 'alsoPhases' | 'positions' | 'equipment' | 'isFavorite' | 'active' | 'deleted' | 'createdAt'>;
 
 const PELVIC_FLOOR = 'Pelvic floor';
+
+/** True when the exercise belongs to this type (as its primary `phase` or in `alsoPhases`). */
+export function exerciseInPhase(ex: Pick<Exercise, 'phase'> & Partial<Pick<Exercise, 'alsoPhases'>>, phase: ExercisePhase): boolean {
+  return phasesOf(ex).includes(phase);
+}
 
 /** True when the exercise sits under this region (as its main region or in "also under"). 'Pelvic floor' means Women or Men. */
 export function exerciseInRegion(ex: Pick<Exercise, 'bodyRegion' | 'alsoRegions'>, region: string): boolean {
@@ -56,7 +62,7 @@ export function filterLibrary<T extends LibraryExercise>(
     if (filter.region === 'Fav' && !ex.isFavorite) return false;
     if (filter.region === 'Used' && !opts.usedIds?.has(ex.id)) return false;
     if (filter.region !== 'All' && filter.region !== 'Fav' && filter.region !== 'Used' && !exerciseInRegion(ex, filter.region)) return false;
-    if (filter.phase !== 'All' && ex.phase !== filter.phase) return false;
+    if (filter.phase !== 'All' && !exerciseInPhase(ex, filter.phase)) return false;
     if (filter.position !== 'All' && !positionsOf(ex).includes(filter.position)) return false;
     if (wanted.length > 0) {
       const have = ex.equipment.map(canonicalEquipment);
@@ -139,7 +145,7 @@ export function facetCounts<T extends LibraryExercise>(live: T[], filter: Librar
     used: byRegion.filter((e) => opts.usedIds?.has(e.id)).length,
     all: byRegion.length,
     regions: regionNames.map((region) => ({ region, n: byRegion.filter((e) => exerciseInRegion(e, region)).length })),
-    types: phases.map((phase) => ({ phase, n: byType.filter((e) => e.phase === phase).length })),
+    types: phases.map((phase) => ({ phase, n: byType.filter((e) => exerciseInPhase(e, phase)).length })),
     positions: [...new Set(byPosition.flatMap((e) => positionsOf(e)))].map((position) => ({ position, n: byPosition.filter((e) => positionsOf(e).includes(position)).length })),
     equipment: ['None', ...equipmentInUse(live)].map((name) => {
       const n = byEquipment.filter((e) => (name === 'None' ? e.equipment.length === 0 || e.equipment.map(canonicalEquipment).includes('None') : e.equipment.map(canonicalEquipment).includes(name))).length;

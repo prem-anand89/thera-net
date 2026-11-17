@@ -124,9 +124,18 @@ describe('exercises', () => {
       p_media_type: 'gif', p_media_keys: ['clinics/c-1/exercises/ex-9/0-ab12cd34'], p_default_sets: 3, p_default_reps: 12, p_default_hold_seconds: 10, p_default_sessions_per_day: 2,
       p_side: 'none', p_stop_if: 'Sharp pain', p_deleted: false, p_dose_type: 'hold', p_default_duration_seconds: null, p_default_rest_seconds: 30, p_media_captions: ['Hold'],
       p_active: true, p_other_names: ['QS'], p_thumb_key: 'clinics/c-1/exercises/ex-9/thumb-ab12cd34', p_positions: [],
-      p_picture_consent: false, p_hide_pictures_in_lists: false,
+      p_picture_consent: false, p_hide_pictures_in_lists: false, p_also_phases: [],
     });
     expect(schedule).toHaveBeenCalledWith(0);
+  });
+
+  it('sends alsoPhases as p_also_phases, and an empty list when none are given', async () => {
+    const input = { clinicId: 'c-1', title: 'x', bodyRegion: 'Knee', phase: 'strengthening' as const, instructions: '', mediaType: 'none' as const, defaultSets: 3, doseType: 'reps' as const, defaultReps: 10, defaultHoldSeconds: null, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1 as const, side: 'none' as const, stopIf: '' };
+    mockRpc.mockResolvedValue({ data: 'ex-9', error: null });
+    await hepService.saveExercise({ ...input, alsoPhases: ['activation', 'mobility'] });
+    expect(mockRpc).toHaveBeenLastCalledWith('save_exercise', expect.objectContaining({ p_also_phases: ['activation', 'mobility'] }));
+    await hepService.saveExercise(input);
+    expect(mockRpc).toHaveBeenLastCalledWith('save_exercise', expect.objectContaining({ p_also_phases: [] }));
   });
 
   it('sends the positions as p_positions, and an empty list when none are given', async () => {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { clinicTimezone } from '@/domain/clinicRegion';
-import { addDaysISO, type Exercise } from '@/domain/hep';
+import { addDaysISO, listThumbKey, type Exercise } from '@/domain/hep';
 import { db } from '@/lib/db';
 import { hepMediaService } from '@/services/hepMediaService';
 import { hepService, type ProgramBundle } from '@/services/hepService';
@@ -66,7 +66,7 @@ const thumbCache = new Map<string, { url: string; at: number }>();
 export function useThumbUrls(clinicId: string, exercises: Exercise[]): Record<string, string> {
   const online = useOnline();
   const keys = useMemo(
-    () => [...new Set(exercises.filter((e) => e.thumbKey && !e.hidePicturesInLists).map((e) => e.thumbKey as string))],
+    () => [...new Set(exercises.map((e) => listThumbKey(e)).filter((k): k is string => !!k))],
     [exercises],
   );
   const wanted = keys.join('|');

@@ -30,7 +30,7 @@ export function ProgramDays(props: {
   const { day, today, timeline } = props;
   const isToday = day === today;
   return (
-    <div className="grid items-start gap-3 desktop:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 items-start gap-3 desktop:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <p className="text-sm font-semibold text-[var(--ink)]">Last 14 days <span className="font-normal text-[var(--muted)]">· tap a day to see what was done</span></p>
         <div className="grid grid-cols-7 gap-1 tab:grid-cols-14" role="group" aria-label="Last 14 days">

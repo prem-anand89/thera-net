@@ -8,7 +8,7 @@ import { DEFAULT_BLUR_STRENGTH, MAX_HEP_GIF_BYTES, blurLook, boxInCrop, cropRect
 export { MAX_HEP_GIF_BYTES };
 export const HEP_GIF_TOO_LARGE_MESSAGE = 'That GIF is over 1 MB. Make it shorter or smaller, or use photos.';
 export const HEP_MAX_DIMENSION = 1280;
-export const HEP_THUMB_SIZE = 160;
+export const HEP_THUMB_SIZE = 480;
 
 /** A region in pixels of the image as it will be saved (after scaling). */
 export interface BlurBox {
@@ -87,8 +87,8 @@ export async function compressImageForUpload(
   }
 }
 
-/** The small square-ish picture used in lists: the longest side is `size` px (a GIF gives its first frame). */
-export async function createThumbnailBlob(source: Blob, size = HEP_THUMB_SIZE, quality = 0.7): Promise<Blob> {
+/** The preview picture used in lists: the longest side is `size` px (a GIF gives its first frame). */
+export async function createThumbnailBlob(source: Blob, size = HEP_THUMB_SIZE, quality = 0.82): Promise<Blob> {
   const bitmap = await createImageBitmap(source);
   try {
     const scale = Math.min(1, size / Math.max(bitmap.width, bitmap.height));
