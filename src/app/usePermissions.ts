@@ -1,6 +1,7 @@
 import { useClinic } from './clinicContext';
 import { useWorkspaceScope } from './useWorkspaceScope';
 import { useEntitlements } from './useEntitlements';
+import { hepAvailableForClinic } from '@/domain/hep';
 
 export interface Permissions {
   role: 'admin' | 'therapist' | 'front_desk' | 'unknown';
@@ -92,7 +93,7 @@ export function usePermissions(): Permissions {
     // an admin on Lite/Solo doesn't get it either.
     canViewPayouts: scope.isAdmin && entitlements.can('revenueSplit'),
     canViewClinicalNotes: !scope.isFrontDesk,
-    canUseExercises: scope.role === 'admin' || scope.role === 'therapist',
+    canUseExercises: (scope.role === 'admin' || scope.role === 'therapist') && hepAvailableForClinic(clinic),
     // Plan tier is the outermost gate (a Lite clinic can't bill no matter
     // what invoicingAccess says — see issue_invoice()'s own
     // precedence), then the two existing clinic-owned preferences.

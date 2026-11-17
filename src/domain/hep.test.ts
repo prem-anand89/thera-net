@@ -9,6 +9,7 @@ import {
   EXERCISE_TYPES,
   EXERCISE_TYPE_TONE,
   EXERCISE_TYPE_DEFINITIONS,
+  hepAvailableForClinic,
   HEP_POSITIONS,
   SESSION_ORDER,
   isMainType,
@@ -287,5 +288,17 @@ describe('exercise types, positions and session order', () => {
     expect(matchesExerciseSearch({ ...base, positions: ['Supine'] }, 'Supine')).toBe(true);
     expect(matchesExerciseSearch({ ...base, positions: ['Prone'] }, 'Supine')).toBe(false);
     expect(matchesExerciseSearch(base as never, 'bridge')).toBe(true);
+  });
+});
+
+describe('hepAvailableForClinic', () => {
+  it('enables HEP only for Beyond Mechanics and Physio Clinic (case-insensitive, trimmed)', () => {
+    expect(hepAvailableForClinic({ name: 'Beyond Mechanics' })).toBe(true);
+    expect(hepAvailableForClinic({ name: '  beyond mechanics  ' })).toBe(true);
+    expect(hepAvailableForClinic({ name: 'Physio Clinic' })).toBe(true);
+    expect(hepAvailableForClinic({ name: 'physio clinic' })).toBe(true);
+    expect(hepAvailableForClinic({ name: 'Sunrise Physio' })).toBe(false);
+    expect(hepAvailableForClinic({ name: '' })).toBe(false);
+    expect(hepAvailableForClinic(null)).toBe(false);
   });
 });

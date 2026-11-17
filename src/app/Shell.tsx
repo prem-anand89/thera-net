@@ -58,6 +58,8 @@ import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
 import { MAIN_SAFE_HORIZONTAL, mainContentTopPadding } from '@/lib/safeArea';
 import { DepartmentSwitch } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
+import { Pill } from '@/components/ui';
+import { hepAvailableForClinic } from '@/domain/hep';
 import { useHepPainDot } from '@/features/hep/hepSignals';
 import { isChromelessPrintRoute, shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './phoneChrome';
 
@@ -152,7 +154,8 @@ export function Shell() {
     pathname.startsWith(p)
   );
   const nav = useMemo(() => filterNavItems(role), [role]);
-  const hepPainDot = useHepPainDot(clinic?.id, role === 'admin' || role === 'therapist');
+  const hepAvailable = hepAvailableForClinic(clinic);
+  const hepPainDot = useHepPainDot(clinic?.id, (role === 'admin' || role === 'therapist') && hepAvailable);
 
   const prevUserId = useRef<string | null>(null);
 
@@ -442,7 +445,13 @@ export function Shell() {
                 <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
               </Link>
               {shouldShowDesktopNav(pathname) && (
-                <DesktopNav nav={nav} pathname={pathname} pendingRequestsCount={pendingRequestsCount} hepPainDot={hepPainDot} />
+                <DesktopNav
+                  nav={nav}
+                  pathname={pathname}
+                  pendingRequestsCount={pendingRequestsCount}
+                  hepPainDot={hepPainDot}
+                  hepComingSoon={!hepAvailable}
+                />
               )}
               <div className="ml-auto flex min-w-0 max-w-full items-center gap-1 min-[400px]:gap-1.5 sm:gap-2 tab:gap-3">
                 <ClinicSwitcher
@@ -561,15 +570,32 @@ export function DesktopNav({
   pathname,
   pendingRequestsCount,
   hepPainDot,
+  hepComingSoon = false,
 }: {
   nav: ReadonlyArray<(typeof NAV)[number]>;
   pathname: string;
   pendingRequestsCount: number;
   hepPainDot: boolean;
+  hepComingSoon?: boolean;
 }) {
   return (
     <nav className="hidden shrink-0 gap-1 sm:flex">
       {nav.map((item) => {
+        if (item.to === '/hep' && hepComingSoon) {
+          return (
+            <span
+              key={item.to}
+              aria-disabled="true"
+              aria-label={`${item.label} (Coming soon)`}
+              title={`${item.label} — Coming soon`}
+              className="flex min-h-10 cursor-not-allowed items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-[var(--muted)] opacity-75 desktop:px-3"
+            >
+              <item.Icon className="shrink-0" />
+              <span className="hidden desktop:inline">{item.label}</span>
+              <Pill tone="slate" className="hidden desktop:inline-flex">Coming soon</Pill>
+            </span>
+          );
+        }
         const showHepDot = item.to === '/hep' && hepPainDot;
         return (
           <Link

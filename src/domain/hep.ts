@@ -1,6 +1,15 @@
 // HEP (home exercise programs): types and the pure rules the screens, the patient page and the tests share.
 // Plan: docs/superpowers/plans/2026-11-09-hep-module.md (Task 3 and amendments 14 to 22, 41 to 43, 53, 61 to 69, 78 to 81).
 
+/**
+ * HEP is temporarily restricted to Beyond Mechanics and Physio Clinic while
+ * mobile layout and starter-library refinements are finished.
+ */
+export function hepAvailableForClinic(clinic: { name?: string | null } | null | undefined): boolean {
+  const name = (clinic?.name ?? '').trim().toLowerCase();
+  return name === 'beyond mechanics' || name === 'physio clinic';
+}
+
 export type ExerciseMediaType = 'none' | 'gif' | 'stills';
 /** How an exercise is done: dynamic reps, reps each held for a few seconds, or continuous for a set time. */
 export type DoseType = 'reps' | 'hold' | 'timed';

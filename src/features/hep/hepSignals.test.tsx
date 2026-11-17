@@ -200,4 +200,26 @@ describe('HEP pain dot in main nav and MorePage', () => {
     const link = await screen.findByRole('link', { name: /HEP.*pain report waiting/ });
     expect(link).toHaveAttribute('href', '/hep');
   });
+
+  it('shows HEP as Coming soon (disabled) in DesktopNav when hepComingSoon is true', () => {
+    const nav = filterNavItems('therapist');
+    render(<DesktopNav nav={nav} pathname="/workspace" pendingRequestsCount={0} hepPainDot={false} hepComingSoon />);
+    expect(screen.queryByRole('link', { name: /HEP/ })).toBeNull();
+    const disabled = screen.getByLabelText('HEP (Coming soon)');
+    expect(disabled).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+  });
+
+  it('shows HEP as Coming soon in MorePage for clinical staff when gated off, and hides it for front desk', () => {
+    perms = { canEditSettings: false, canUseExercises: false, isAdmin: false, role: 'therapist' };
+    const { rerender } = render(<MorePage />);
+    expect(screen.queryByRole('link', { name: /HEP/ })).toBeNull();
+    expect(screen.getByText('HEP')).toBeInTheDocument();
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+
+    perms = { canEditSettings: false, canUseExercises: false, isAdmin: false, role: 'front_desk' };
+    rerender(<MorePage />);
+    expect(screen.queryByText('HEP')).toBeNull();
+    expect(screen.queryByText('Coming soon')).toBeNull();
+  });
 });

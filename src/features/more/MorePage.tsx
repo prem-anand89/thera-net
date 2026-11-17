@@ -4,6 +4,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { IconHep, IconPatients, IconReports, IconSettings } from '@/components/NavIcons';
 import { IconChevronRight } from '@/components/StatIcons';
+import { Pill } from '@/components/ui';
 import { useHepPainDot } from '@/features/hep/hepSignals';
 
 /**
@@ -16,6 +17,7 @@ export function MorePage() {
   const { canEditSettings, canUseExercises, isAdmin, role } = usePermissions();
   // Same gate as the desktop nav's Reports item in Shell.tsx.
   const showReports = isAdmin || role === 'front_desk';
+  const canSeeHepRow = role === 'admin' || role === 'therapist';
   const hepPainDot = useHepPainDot(clinic.id, canUseExercises);
 
   return (
@@ -25,9 +27,22 @@ export function MorePage() {
         <MoreItem to="/patients" label="Patients" icon={<IconPatients />} />
         {showReports && <MoreItem to="/insights" label="Reports" icon={<IconReports />} />}
         {canUseExercises && <MoreItem to="/hep" label="HEP" icon={<IconHep />} dot={hepPainDot} />}
+        {canSeeHepRow && !canUseExercises && <MoreComingSoonItem label="HEP" icon={<IconHep />} />}
         {canEditSettings && <MoreItem to="/settings" label="Settings" icon={<IconSettings />} />}
       </ul>
     </div>
+  );
+}
+
+function MoreComingSoonItem({ label, icon }: { label: string; icon: ReactNode }) {
+  return (
+    <li aria-disabled="true" className="flex min-h-12 items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--muted)] opacity-75">
+      <span className="text-[var(--muted)]" aria-hidden>
+        {icon}
+      </span>
+      <span className="flex-1">{label}</span>
+      <Pill tone="slate">Coming soon</Pill>
+    </li>
   );
 }
 
