@@ -29,7 +29,7 @@ export function PrintLetterhead({
   // name alone doesn't mean there is a partner: only a clinic with partner mode on prints it.
   const partnerName = clinic.hasPartner ? clinic.partnerHospitalName : null;
   return (
-    <header className="doc-paper grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 border-b-[1.5px] border-[var(--doc-rule)] pb-3">
+    <header className="doc-paper grid grid-cols-1 gap-3 border-b-[1.5px] border-[var(--doc-rule)] pb-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5 print:grid-cols-[minmax(0,1fr)_auto] print:items-center print:gap-5">
       <div className="flex min-w-0 items-center gap-3.5">
         {logoUrl && (
           <img
@@ -39,7 +39,10 @@ export function PrintLetterhead({
           />
         )}
         <div className="min-w-0">
-          <h1 className={`font-display font-bold leading-tight text-[var(--doc-name)] ${compact ? 'text-xl' : 'text-[26px]'}`}>
+          <h1
+            className={`font-display font-bold leading-tight break-words text-[var(--doc-name)] ${compact ? 'text-xl' : 'text-xl sm:text-[26px] print:text-[26px]'
+              }`}
+          >
             {clinic.name}
           </h1>
           {clinic.tagline && (
@@ -61,7 +64,10 @@ export function PrintLetterhead({
         </div>
       </div>
 
-      <div className={`${compact ? 'max-w-[170px]' : 'max-w-[240px]'} text-right leading-relaxed text-[var(--muted)] ${small}`}>
+      <div
+        className={`${compact ? 'sm:max-w-[170px] print:max-w-[170px]' : 'sm:max-w-[240px] print:max-w-[240px]'
+          } text-left sm:text-right print:text-right leading-relaxed text-[var(--muted)] ${small}`}
+      >
         {clinic.address && <p className="whitespace-pre-line break-words">{clinic.address}</p>}
         {clinic.phone && <p>{clinic.phone}</p>}
         {clinic.email && <p className="break-words">{clinic.email}</p>}
@@ -207,9 +213,8 @@ export function DocFieldList({
         <div key={r.label} className="contents">
           <dt className="font-medium text-[var(--muted)]">{r.label}</dt>
           <dd
-            className={`m-0 break-words ${r.strong ? 'font-semibold' : ''} ${
-              r.tone === 'good' ? 'font-bold text-[var(--doc-good)]' : r.tone === 'due' ? 'font-bold text-[var(--doc-due)]' : r.tone === 'muted' ? 'font-bold text-[var(--muted)]' : 'text-[var(--ink)]'
-            }`}
+            className={`m-0 break-words ${r.strong ? 'font-semibold' : ''} ${r.tone === 'good' ? 'font-bold text-[var(--doc-good)]' : r.tone === 'due' ? 'font-bold text-[var(--doc-due)]' : r.tone === 'muted' ? 'font-bold text-[var(--muted)]' : 'text-[var(--ink)]'
+              }`}
           >
             : {r.value}
           </dd>
@@ -235,9 +240,9 @@ export function PrintSignatureFooter({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const showImage = Boolean(signatureUrl) && failedUrl !== signatureUrl;
   return (
-    <footer className="mt-6 flex items-end justify-between gap-5 border-t border-[var(--border)] pt-3 text-[10px] text-[var(--muted)]">
+    <footer className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-[var(--border)] pt-3 text-[10px] text-[var(--muted)] sm:flex-nowrap sm:gap-5 print:flex-nowrap print:gap-5">
       <div className="min-w-0">{left}</div>
-      <div className="min-w-[170px] shrink-0 text-center">
+      <div className="min-w-0 shrink-0 text-center sm:min-w-[170px] print:min-w-[170px]">
         <div className="flex h-10 items-end justify-center">
           {showImage && (
             <img

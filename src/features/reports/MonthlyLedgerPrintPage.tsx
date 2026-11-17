@@ -8,6 +8,7 @@ import { formatAmount } from '@/domain/money';
 import { fiscalYearOf, monthDateRange, monthName, formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { useDepartment } from '@/app/DepartmentContext';
 import { inDepartment } from '@/domain/departments';
@@ -63,8 +64,8 @@ export function MonthlyLedgerPrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: A4 portrait; margin: 10mm; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
-        <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
+      <div className={`no-print mx-auto flex max-w-6xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
+        <Link to="/insights" search={{ tab: 'monthly' }} className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}>
           ← Back
         </Link>
         <button type="button" className={`${btnPrimary} ml-auto`} onClick={() => window.print()}>
@@ -72,9 +73,9 @@ export function MonthlyLedgerPrintPage() {
         </button>
       </div>
 
-      <div className="mx-auto max-w-6xl bg-[var(--surface)] p-8 print:max-w-[190mm] print:p-0">
+      <div className="mx-auto max-w-6xl bg-[var(--surface)] p-4 sm:p-8 print:max-w-[190mm] print:p-0">
         {/* Letterhead */}
-        <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto shrink-0 object-contain" />}
             <div className="min-w-0">
@@ -109,52 +110,54 @@ export function MonthlyLedgerPrintPage() {
         </div>
 
         {/* Per-visit table */}
-        <table className="mt-4 w-full text-xs">
-          <thead>
-            <tr className="border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)]">
-              <th className="py-1.5 pr-2">Date</th>
-              <th className="py-1.5 pr-2">Patient</th>
-              <th className="py-1.5 pr-2">Condition</th>
-              <th className="py-1.5 pr-2">Therapist</th>
-              <th className="py-1.5 pr-2">Service</th>
-              <th className="py-1.5 text-right">Bill Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedVisits.map((v) => {
-              const p = patientById.get(v.patientId);
-              return (
-                <tr key={v.id} className="border-b border-[var(--border)]">
-                  <td className="py-1 pr-2">{formatDateDM(v.visitDate)}</td>
-                  <td className="py-1 pr-2">
-                    <div className="font-display font-medium text-[var(--ink)]">{p?.name ?? '—'}</div>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      {p?.mrno ?? '—'} · {p?.age ?? '—'}/{p?.sex ?? '—'}
-                    </div>
-                  </td>
-                  <td className="py-1 pr-2">{v.condition ?? '—'}</td>
-                  <td className="py-1 pr-2">{therapistName.get(v.therapistId) ?? '—'}</td>
-                  <td className="py-1 pr-2">
-                    {serviceName.get(v.serviceCatalogId) ?? '—'}
-                    {v.sessionIndex && v.packageTotal && (
-                      <span className="ml-1 text-[var(--muted)]">
-                        {v.sessionIndex}/{v.packageTotal}
-                      </span>
-                    )}
-                  </td>
-                  <td className="font-num py-1 text-right">{formatAmount(v.actualBillPaise)}</td>
-                </tr>
-              );
-            })}
-            {sortedVisits.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-6 text-center text-[var(--muted)]">
-                  No visits in this month.
-                </td>
+        <div className="mt-4 overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[560px] text-xs print:min-w-full">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)]">
+                <th className="py-1.5 pr-2">Date</th>
+                <th className="py-1.5 pr-2">Patient</th>
+                <th className="py-1.5 pr-2">Condition</th>
+                <th className="py-1.5 pr-2">Therapist</th>
+                <th className="py-1.5 pr-2">Service</th>
+                <th className="py-1.5 text-right">Bill Amount</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedVisits.map((v) => {
+                const p = patientById.get(v.patientId);
+                return (
+                  <tr key={v.id} className="border-b border-[var(--border)]">
+                    <td className="py-1 pr-2">{formatDateDM(v.visitDate)}</td>
+                    <td className="py-1 pr-2">
+                      <div className="font-display font-medium text-[var(--ink)]">{p?.name ?? '—'}</div>
+                      <div className="text-[10px] text-[var(--muted)]">
+                        {p?.mrno ?? '—'} · {p?.age ?? '—'}/{p?.sex ?? '—'}
+                      </div>
+                    </td>
+                    <td className="py-1 pr-2">{v.condition ?? '—'}</td>
+                    <td className="py-1 pr-2">{therapistName.get(v.therapistId) ?? '—'}</td>
+                    <td className="py-1 pr-2">
+                      {serviceName.get(v.serviceCatalogId) ?? '—'}
+                      {v.sessionIndex && v.packageTotal && (
+                        <span className="ml-1 text-[var(--muted)]">
+                          {v.sessionIndex}/{v.packageTotal}
+                        </span>
+                      )}
+                    </td>
+                    <td className="font-num py-1 text-right">{formatAmount(v.actualBillPaise)}</td>
+                  </tr>
+                );
+              })}
+              {sortedVisits.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-[var(--muted)]">
+                    No visits in this month.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {/* Per-therapist summary */}
         <h2 className="mt-8 text-sm font-bold text-[var(--ink)]">Monthly Summary</h2>

@@ -44,6 +44,14 @@ describe('PrintLetterhead', () => {
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByText('Partner')).toBeInTheDocument();
   });
+
+  it('stacks the letterhead below sm: to avoid colliding on phones while keeping sm:/print: two-column', () => {
+    const { container } = render(<PrintLetterhead clinic={{ ...clinic, name: 'Beyond Mechanics' }} logoUrl={null} partnerLogoUrl={null} />);
+    const header = container.querySelector('header')!;
+    expect(header.className).toContain('grid-cols-1');
+    expect(header.className).toContain('sm:grid-cols-[minmax(0,1fr)_auto]');
+    expect(header.className).toContain('print:grid-cols-[minmax(0,1fr)_auto]');
+  });
 });
 
 describe('BillTotals', () => {

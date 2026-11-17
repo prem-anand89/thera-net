@@ -10,6 +10,7 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { PrintLetterhead } from '@/features/invoices/printChrome';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_EARLY_RETURN_SAFE, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 import {
   upcastSessionPayload,
   SESSION_ASSESSMENT_OPTIONS,
@@ -253,7 +254,7 @@ export function SessionLogPrintPage() {
   if (!canPrintNotes) {
     // Direct URL visits get the same answer as the missing button; while the plan is still loading, show nothing rather than a false lock.
     return entitlementsLoading ? null : (
-      <div className="mx-auto max-w-xl p-8">
+      <div className={`mx-auto max-w-xl ${PRINT_EARLY_RETURN_SAFE}`}>
         <LockedSectionNotice feature="notePrinting" sectionLabel="Printing and PDF export of notes" />
       </div>
     );
@@ -261,7 +262,7 @@ export function SessionLogPrintPage() {
 
   if (patient === undefined) {
     return (
-      <div className="p-8 text-sm text-[var(--muted)]">Patient not found (or not yet synced).</div>
+      <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>Patient not found (or not yet synced).</div>
     );
   }
 
@@ -269,12 +270,12 @@ export function SessionLogPrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
+      <div className={`no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
         <Link
           to="/patients/$patientId"
           params={{ patientId: patient.id }}
           search={backTo ? { from: backTo } : undefined}
-          className={btnSecondary}
+          className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}
         >
           ← Back
         </Link>

@@ -93,13 +93,12 @@ function KpiCard({
       </div>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         <span
-          className={`font-num font-semibold text-[var(--ink)] tracking-tight whitespace-nowrap ${
-            isVeryLongValue
-              ? 'text-base sm:text-lg md:text-2xl'
+          className={`font-num font-semibold text-[var(--ink)] tracking-tight whitespace-nowrap ${isVeryLongValue
+              ? 'text-base sm:text-lg tab:text-2xl'
               : isLongValue
-                ? 'text-lg sm:text-xl md:text-2xl'
+                ? 'text-lg sm:text-xl tab:text-2xl'
                 : 'text-xl sm:text-2xl'
-          } ${projected ? 'border-b border-dotted border-[var(--muted)]' : ''}`}
+            } ${projected ? 'border-b border-dotted border-[var(--muted)]' : ''}`}
           title={projected ? 'Projected — not a settled figure' : undefined}
         >
           {value}
@@ -619,7 +618,7 @@ export function ReportsOverviewPage() {
           space on desktop) — the rail cost more room than a page of
           reference cards, glanced at rather than edited, actually needed. */}
       {/* Jump-nav row with fixed Print button */}
-      <div className="sticky top-14 z-20 -mx-4 flex items-center border-b border-[var(--border)] bg-[var(--paper)]">
+      <div className="sticky top-[var(--app-header-h,3.5rem)] z-20 -mx-4 flex items-center border-b border-[var(--border)] bg-[var(--paper)]">
         {/* Scrollable Jump Targets */}
         <nav className="flex flex-1 gap-1.5 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {jumpTargets.map(({ key, label }) => (
@@ -680,7 +679,7 @@ export function ReportsOverviewPage() {
             if (el) sectionRefs.current.set('revenue', el);
             else sectionRefs.current.delete('revenue');
           }}
-          className="scroll-mt-28 md:scroll-mt-20"
+          className="scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)]"
         >
           <SectionCard
             title={
@@ -730,7 +729,7 @@ export function ReportsOverviewPage() {
               if (el) sectionRefs.current.set('therapistComparison', el);
               else sectionRefs.current.delete('therapistComparison');
             }}
-            className="scroll-mt-28 md:scroll-mt-20"
+            className="scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)]"
           >
             <TherapistComparisonCard
               controlledTrend
@@ -750,7 +749,7 @@ export function ReportsOverviewPage() {
               if (el) sectionRefs.current.set('utilisation', el);
               else sectionRefs.current.delete('utilisation');
             }}
-            className="scroll-mt-28 md:scroll-mt-20"
+            className="scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)]"
           >
             <ClinicUtilisationCard />
           </div>
@@ -762,7 +761,7 @@ export function ReportsOverviewPage() {
               if (el) sectionRefs.current.set('modalityUsage', el);
               else sectionRefs.current.delete('modalityUsage');
             }}
-            className="scroll-mt-28 md:scroll-mt-20"
+            className="scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)]"
           >
             <SectionCard title="Treatment modalities">
               <p className="mb-3 text-xs text-[var(--muted)]">
@@ -793,7 +792,7 @@ export function ReportsOverviewPage() {
             if (el) sectionRefs.current.set('referralSources', el);
             else sectionRefs.current.delete('referralSources');
           }}
-          className="scroll-mt-28 md:scroll-mt-20"
+          className="scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)]"
         >
           <SectionCard title="Referral sources">
             <p className="mb-4 text-xs text-[var(--muted)]">
@@ -824,32 +823,32 @@ export function ReportsOverviewPage() {
                   <div className="tab:hidden space-y-1.5">
                     {referralNeedsDetail
                       ? referralGroupsList.visible.map(([name, g]) => (
-                          <div
-                            key={name}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                          >
-                            <span className="min-w-0 truncate">{name}</span>
-                            <span className="font-num shrink-0 text-xs text-[var(--muted)]">
-                              {g.patients} patient{g.patients === 1 ? '' : 's'} · {g.visits} visit
-                              {g.visits === 1 ? '' : 's'} · {formatAmount(g.revenuePaise)}
-                            </span>
-                          </div>
-                        ))
+                        <div
+                          key={name}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 truncate">{name}</span>
+                          <span className="font-num shrink-0 text-xs text-[var(--muted)]">
+                            {g.patients} patient{g.patients === 1 ? '' : 's'} · {g.visits} visit
+                            {g.visits === 1 ? '' : 's'} · {formatAmount(g.revenuePaise)}
+                          </span>
+                        </div>
+                      ))
                       : referralPatientsList.visible.map((p) => (
-                          <div
-                            key={p.patientId}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate">{p.patientName}</span>
-                              <span className="block text-xs text-[var(--muted)]">{p.mrno}</span>
-                            </span>
-                            <span className="font-num shrink-0 text-xs text-[var(--muted)]">
-                              {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
-                              {formatAmount(p.revenuePaise)}
-                            </span>
-                          </div>
-                        ))}
+                        <div
+                          key={p.patientId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate">{p.patientName}</span>
+                            <span className="block text-xs text-[var(--muted)]">{p.mrno}</span>
+                          </span>
+                          <span className="font-num shrink-0 text-xs text-[var(--muted)]">
+                            {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
+                            {formatAmount(p.revenuePaise)}
+                          </span>
+                        </div>
+                      ))}
                   </div>
 
                   <div className="hidden tab:block overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">

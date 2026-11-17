@@ -9,6 +9,7 @@ import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_EARLY_RETURN_SAFE, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
 import { advanceReceiptLabel } from '@/domain/advanceReceipt';
 import { paymentMethodLabel } from '@/domain/paymentMethods';
@@ -51,11 +52,11 @@ export function AdvanceReceiptPrintPage() {
   }, [advance, patient]);
 
   if (advance === undefined || patient === undefined) {
-    return <div className="p-8 text-sm text-[var(--muted)]">Loading…</div>;
+    return <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>Loading…</div>;
   }
   if (!advance || !patient) {
     return (
-      <div className="p-8 text-sm text-[var(--muted)]">Advance not found (or not yet synced).</div>
+      <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>Advance not found (or not yet synced).</div>
     );
   }
 
@@ -67,12 +68,12 @@ export function AdvanceReceiptPrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: A5; margin: 10mm; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
+      <div className={`no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
         <Link
           to="/patients/$patientId"
           params={{ patientId }}
           search={backTo ? { from: backTo } : undefined}
-          className={btnSecondary}
+          className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}
         >
           ← Back
         </Link>

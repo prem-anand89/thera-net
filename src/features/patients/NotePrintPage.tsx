@@ -10,6 +10,7 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { PrintLetterhead } from '@/features/invoices/printChrome';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_EARLY_RETURN_SAFE, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 import type { Clinic, ConsultationNote, Patient, Therapist } from '@/domain/types';
 import {
   upcastPayload,
@@ -81,10 +82,10 @@ export function NoteContent({
     : [];
   const yellowFlagsPresent = payload
     ? YELLOW_FLAG_ITEMS.filter(
-        (f) =>
-          payload.screening.yellowFlags[f] === 'some-concern' ||
-          payload.screening.yellowFlags[f] === 'significant-concern'
-      )
+      (f) =>
+        payload.screening.yellowFlags[f] === 'some-concern' ||
+        payload.screening.yellowFlags[f] === 'significant-concern'
+    )
     : [];
 
   return (
@@ -235,26 +236,26 @@ export function NoteContent({
           {(payload.objective.rom.length > 0 ||
             payload.objective.strength.length > 0 ||
             payload.objective.specialTests.length > 0) && (
-            <Section title="Objective">
-              {payload.objective.rom.map((r, i) => (
-                <Row
-                  key={`rom-${i}`}
-                  label={`ROM — ${r.movement}${r.side ? ` (${r.side})` : ''}`}
-                  value={`Active ${r.active ?? '—'}${r.unit}, Passive ${r.passive ?? '—'}${r.unit}`}
-                />
-              ))}
-              {payload.objective.strength.map((s, i) => (
-                <Row
-                  key={`str-${i}`}
-                  label={`Strength — ${s.movement}${s.side ? ` (${s.side})` : ''}`}
-                  value={s.grade}
-                />
-              ))}
-              {payload.objective.specialTests.map((t, i) => (
-                <Row key={`test-${i}`} label={t.testId} value={t.result} />
-              ))}
-            </Section>
-          )}
+              <Section title="Objective">
+                {payload.objective.rom.map((r, i) => (
+                  <Row
+                    key={`rom-${i}`}
+                    label={`ROM — ${r.movement}${r.side ? ` (${r.side})` : ''}`}
+                    value={`Active ${r.active ?? '—'}${r.unit}, Passive ${r.passive ?? '—'}${r.unit}`}
+                  />
+                ))}
+                {payload.objective.strength.map((s, i) => (
+                  <Row
+                    key={`str-${i}`}
+                    label={`Strength — ${s.movement}${s.side ? ` (${s.side})` : ''}`}
+                    value={s.grade}
+                  />
+                ))}
+                {payload.objective.specialTests.map((t, i) => (
+                  <Row key={`test-${i}`} label={t.testId} value={t.result} />
+                ))}
+              </Section>
+            )}
 
           <Section title="Treatment">
             <Row
@@ -292,7 +293,7 @@ export function NoteContent({
               label="Suture status"
               value={
                 payload.treatment.session.sutureStatus &&
-                payload.treatment.session.sutureStatus !== 'na'
+                  payload.treatment.session.sutureStatus !== 'na'
                   ? payload.treatment.session.sutureStatus
                   : null
               }
@@ -417,7 +418,7 @@ export function NotePrintPage() {
   if (!canPrintNotes) {
     // Direct URL visits get the same answer as the missing button; while the plan is still loading, show nothing rather than a false lock.
     return entitlementsLoading ? null : (
-      <div className="mx-auto max-w-xl p-8">
+      <div className={`mx-auto max-w-xl ${PRINT_EARLY_RETURN_SAFE}`}>
         <LockedSectionNotice feature="notePrinting" sectionLabel="Printing and PDF export of notes" />
       </div>
     );
@@ -425,13 +426,13 @@ export function NotePrintPage() {
 
   if (!note || patient === undefined) {
     return (
-      <div className="p-8 text-sm text-[var(--muted)]">Note not found (or not yet synced).</div>
+      <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>Note not found (or not yet synced).</div>
     );
   }
 
   if (note.noteMode === 'session') {
     return (
-      <div className="p-8 text-sm text-[var(--muted)]">
+      <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>
         Session notes print from the multi-visit session log, not individually.{' '}
         <Link
           to="/patients/$patientId"
@@ -451,12 +452,12 @@ export function NotePrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
+      <div className={`no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
         <Link
           to="/patients/$patientId"
           params={{ patientId: patient.id }}
           search={backTo ? { from: backTo } : undefined}
-          className={btnSecondary}
+          className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}
         >
           ← Back
         </Link>

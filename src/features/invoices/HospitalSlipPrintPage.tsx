@@ -8,6 +8,7 @@ import { formatAmount } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { buildHospitalSlip } from '@/domain/hospitalSlip';
 import { btnPrimary, btnSecondary } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_EARLY_RETURN_SAFE, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 
 /**
  * Hospital billing slip: one compact page for the hospital counter (date, IPD no, patient, ward/bed, service, therapist,
@@ -26,18 +27,18 @@ export function HospitalSlipPrintPage() {
   const slip = useMemo(() => (invoice && therapists ? buildHospitalSlip(invoice, therapists) : null), [invoice, therapists]);
 
   if (!invoice || !slip) {
-    return <div className="p-8 text-sm text-[var(--muted)]">{invoice === undefined ? 'Loading…' : 'Bill not found (or not yet synced).'}</div>;
+    return <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>{invoice === undefined ? 'Loading…' : 'Bill not found (or not yet synced).'}</div>;
   }
 
   return (
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: A5; margin: 10mm; }`}</style>
-      <div className="no-print mx-auto flex max-w-2xl flex-wrap items-center gap-2 px-4 py-3">
+      <div className={`no-print mx-auto flex max-w-2xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
         <Link
           to="/invoices/$invoiceId/print"
           params={{ invoiceId }}
           search={{ ...(backTo ? { from: backTo } : {}), ...(backPatient ? { patient: backPatient } : {}) }}
-          className={btnSecondary}
+          className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}
         >
           ← Back to bill
         </Link>

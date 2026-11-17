@@ -26,6 +26,7 @@ import {
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_EARLY_RETURN_SAFE, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
@@ -307,7 +308,7 @@ export function InvoicePrintPage() {
 
   if (!invoice) {
     return (
-      <div className="p-8 text-sm text-[var(--muted)]">Invoice not found (or not yet synced).</div>
+      <div className={`${PRINT_EARLY_RETURN_SAFE} text-sm text-[var(--muted)]`}>Invoice not found (or not yet synced).</div>
     );
   }
 
@@ -343,11 +344,11 @@ export function InvoicePrintPage() {
   // processed last. Legacy: unchanged, the one `invoice.therapistId`.
   const footerTherapists: Therapist[] = isV2Invoice
     ? Array.from(new Set(invoice.lineItems.flatMap((li) => li.therapistIds ?? [])))
-        .map((id) => therapists?.find((t) => t.id === id))
-        .filter((t): t is Therapist => t !== undefined)
+      .map((id) => therapists?.find((t) => t.id === id))
+      .filter((t): t is Therapist => t !== undefined)
     : [therapists?.find((t) => t.id === invoice.therapistId)].filter(
-        (t): t is Therapist => t !== undefined
-      );
+      (t): t is Therapist => t !== undefined
+    );
 
   const shareSummary = `Bill ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatAmount(invoice.totalPaise)}. From ${clinic.name}.`;
 
@@ -355,13 +356,13 @@ export function InvoicePrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '12mm'}; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-4 py-3">
+      <div className={`no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
         {backTo === '/patients' && backPatient ? (
           <Link
             to="/patients/$patientId"
             params={{ patientId: backPatient }}
             search={{ view: 'invoices' }}
-            className={btnSecondary}
+            className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}
           >
             ← Back
           </Link>
@@ -369,7 +370,7 @@ export function InvoicePrintPage() {
           <Link
             to={backTo ?? '/ledger'}
             search={backTab ? { tab: backTab } : undefined}
-            className={btnSecondary}
+            className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}
           >
             ← Back
           </Link>
@@ -560,13 +561,13 @@ export function InvoicePrintPage() {
               { label: 'Patient ID', value: invoice.patientSnapshot.mrno },
               ...(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex
                 ? [
-                    {
-                      label: 'Age / Gender',
-                      value: [invoice.patientSnapshot.age != null ? `${invoice.patientSnapshot.age} Y` : null, invoice.patientSnapshot.sex]
-                        .filter(Boolean)
-                        .join(' / '),
-                    },
-                  ]
+                  {
+                    label: 'Age / Gender',
+                    value: [invoice.patientSnapshot.age != null ? `${invoice.patientSnapshot.age} Y` : null, invoice.patientSnapshot.sex]
+                      .filter(Boolean)
+                      .join(' / '),
+                  },
+                ]
                 : []),
               ...(invoice.patientSnapshot.phone ? [{ label: 'Phone', value: invoice.patientSnapshot.phone }] : []),
             ]}
@@ -578,20 +579,20 @@ export function InvoicePrintPage() {
               { label: 'Billing Date', value: formatDateDMY(invoice.issuedAt) },
               ...(footerTherapists.length > 0
                 ? [
-                    {
-                      label: footerTherapists.length === 1 ? 'Therapist' : 'Therapists',
-                      value: footerTherapists.map((t) => `${t.name}${t.registrationNo ? ` · Reg. ${t.registrationNo}` : ''}`).join(', '),
-                    },
-                  ]
+                  {
+                    label: footerTherapists.length === 1 ? 'Therapist' : 'Therapists',
+                    value: footerTherapists.map((t) => `${t.name}${t.registrationNo ? ` · Reg. ${t.registrationNo}` : ''}`).join(', '),
+                  },
+                ]
                 : []),
               ...(statusLoaded
                 ? [
-                    {
-                      label: 'Status',
-                      value: isVoid ? 'VOID' : supersededBy ? 'SUPERSEDED' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE',
-                      tone: (supersededBy ? 'muted' : isPaid ? 'good' : 'due') as 'good' | 'due' | 'muted',
-                    },
-                  ]
+                  {
+                    label: 'Status',
+                    value: isVoid ? 'VOID' : supersededBy ? 'SUPERSEDED' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE',
+                    tone: (supersededBy ? 'muted' : isPaid ? 'good' : 'due') as 'good' | 'due' | 'muted',
+                  },
+                ]
                 : []),
             ]}
           />

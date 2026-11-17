@@ -59,18 +59,16 @@ export const pillSmOverdue = `${pillSmBase} bg-[var(--rust)] text-white hover:op
  */
 export const segTrack = 'inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5 text-xs';
 export function segOption(active: boolean): string {
-  return `inline-flex min-h-6 items-center rounded-md px-3 py-0.5 text-xs transition-colors ${
-    active
+  return `inline-flex min-h-6 items-center rounded-md px-3 py-0.5 text-xs transition-colors ${active
       ? 'bg-[var(--surface)] font-semibold text-[var(--ink)] shadow-2xs ring-1 ring-[var(--border)]'
       : 'font-medium text-[var(--muted)] hover:text-[var(--ink)]'
-  }`;
+    }`;
 }
 export function filterChip(active: boolean): string {
-  return `inline-flex min-h-[26px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-    active
+  return `inline-flex min-h-[26px] items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs transition-colors ${active
       ? 'border-[var(--teal)] bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
       : 'border-[var(--border)] bg-transparent font-medium text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--ink)]'
-  }`;
+    }`;
 }
 export function ChipCount({ n }: { n: number }) {
   // The space before keeps the accessible name readable ("Due 3", not "Due3"); a flex chip drops it visually.
@@ -326,7 +324,7 @@ export function StatTile({
       <div className="line-clamp-2 text-[11px] font-medium leading-snug text-[var(--muted)] sm:line-clamp-1 sm:truncate sm:text-[10px] sm:uppercase sm:tracking-wide">
         {label}
       </div>
-      <div className="font-num mt-0.5 truncate text-base font-semibold tabular-nums text-[var(--ink)] sm:text-xl md:text-2xl">
+      <div className="font-num mt-0.5 truncate text-base font-semibold tabular-nums text-[var(--ink)] sm:text-xl tab:text-2xl">
         {value}
       </div>
       {detail != null && detail !== '' && (
@@ -899,9 +897,8 @@ export function Segmented<T extends string>({
           aria-checked={value === option.value}
           title={option.hint}
           onClick={() => option.value !== value && onChange(option.value)}
-          className={`min-h-9 rounded-md px-3 text-xs font-medium ${
-            value === option.value ? 'bg-[var(--surface)] text-[var(--teal-strong)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'
-          }`}
+          className={`min-h-9 rounded-md px-3 text-xs font-medium ${value === option.value ? 'bg-[var(--surface)] text-[var(--teal-strong)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'
+            }`}
         >
           {option.label}
           {option.badge ? (

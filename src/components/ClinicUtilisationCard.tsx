@@ -191,7 +191,7 @@ export function ClinicUtilisationView({
             onCompareModeChange={setCompareMode}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 tab:grid-cols-2 gap-4">
             <UtilisationTrendCard
               reports={displayedReports}
               activeIndex={activeIndex}

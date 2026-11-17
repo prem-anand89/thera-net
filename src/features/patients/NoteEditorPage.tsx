@@ -787,16 +787,16 @@ export function NoteEditorPage() {
     const rom = exists
       ? payload.objective.rom.map((r) => (r.movement === movement ? { ...r, ...patch } : r))
       : [
-          ...payload.objective.rom,
-          {
-            movement,
-            active: null,
-            passive: null,
-            unit: 'deg' as const,
-            painProvoked: false,
-            ...patch,
-          },
-        ];
+        ...payload.objective.rom,
+        {
+          movement,
+          active: null,
+          passive: null,
+          unit: 'deg' as const,
+          painProvoked: false,
+          ...patch,
+        },
+      ];
     update('objective', { ...payload.objective, rom });
   }
 
@@ -810,19 +810,19 @@ export function NoteEditorPage() {
     const prior = existing.find((i) => i.instrumentId === instrumentId);
     const instruments = prior
       ? existing.map((i) =>
-          i.instrumentId === instrumentId
-            ? {
-                ...i,
-                previousScore: i.latestScore,
-                latestScore,
-                trend: outcomeTrend(def.direction, i.latestScore, latestScore),
-              }
-            : i
-        )
+        i.instrumentId === instrumentId
+          ? {
+            ...i,
+            previousScore: i.latestScore,
+            latestScore,
+            trend: outcomeTrend(def.direction, i.latestScore, latestScore),
+          }
+          : i
+      )
       : [
-          ...existing,
-          { instrumentId, latestScore, direction: def.direction, trend: 'stable' as const },
-        ];
+        ...existing,
+        { instrumentId, latestScore, direction: def.direction, trend: 'stable' as const },
+      ];
     update('outcomeTracking', { instruments });
   }
 
@@ -854,9 +854,9 @@ export function NoteEditorPage() {
   const episodeCondition = patient?.primaryCondition || 'Episode of care';
   const enrolledDate = enrollment?.enrolledAt
     ? new Date(enrollment.enrolledAt).toLocaleDateString(undefined, {
-        day: 'numeric',
-        month: 'short',
-      })
+      day: 'numeric',
+      month: 'short',
+    })
     : null;
   const episodeLine = [
     `Episode: ${episodeCondition}`,
@@ -869,10 +869,10 @@ export function NoteEditorPage() {
 
   const initials = patient
     ? patient.name
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((w) => w[0]?.toUpperCase() ?? '')
-        .join('')
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('')
     : '';
 
   const region = payload.chiefComplaint.anatomicalRegion;
@@ -938,7 +938,7 @@ export function NoteEditorPage() {
               Follow-up
             </button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="flex flex-wrap items-center gap-1.5">
             {consentStatus !== 'unknown' && (
               <span className={`chip ${consentStatus === 'on_file' ? 'pkg' : 'pending'}`}>
                 {consentStatus === 'on_file' ? 'Consent on file' : 'No consent on record'}
@@ -951,7 +951,10 @@ export function NoteEditorPage() {
               <span className="text-xs text-[var(--muted)]">Saving…</span>
             )}
             {!readOnly && saveIndicator === 'unsaved' && (
-              <span className="text-xs text-[var(--amber-strong)]">Unsaved changes</span>
+              <span className="text-xs text-[var(--amber-strong)]">
+                <span className="sm:hidden">Unsaved</span>
+                <span className="hidden sm:inline">Unsaved changes</span>
+              </span>
             )}
             {!readOnly && saveIndicator === 'saved' && (
               <span className="text-xs text-[var(--muted)]">Saved</span>
@@ -981,7 +984,7 @@ export function NoteEditorPage() {
             cards, so scrolling (or needing to jump) through them had no tab
             bar visible at all. Sticky under Shell's own header so it stays
             on screen through the whole page, not just the accordion. */}
-        <nav className="sticky top-14 z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+        <nav className="sticky top-[var(--app-header-h,3.5rem)] z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 desktop:hidden">
           {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
             <button
               key={key}
@@ -1028,8 +1031,8 @@ export function NoteEditorPage() {
           })}
         </nav>
 
-        <div className="md:flex md:items-start md:gap-6">
-          <nav className="hidden md:sticky md:top-20 md:flex md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:flex-col md:gap-0.5 md:overflow-y-auto">
+        <div className="desktop:flex desktop:items-start desktop:gap-6">
+          <nav className="hidden desktop:sticky desktop:top-[calc(var(--app-header-h,3.5rem)+1.5rem)] desktop:flex desktop:max-h-[calc(100vh-6rem)] desktop:w-52 desktop:shrink-0 desktop:flex-col desktop:gap-0.5 desktop:overflow-y-auto">
             <div className="mb-1.5">
               {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
                 <button
@@ -1113,7 +1116,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('generalHealth', el);
                 else sectionRefs.current.delete('generalHealth');
               }}
-              className="setup-card scroll-mt-28 md:scroll-mt-20"
+              className="setup-card scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)]"
             >
               <div className="ne-block-head">
                 <h3>General health &amp; triage</h3>
@@ -1183,7 +1186,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('screening', el);
                 else sectionRefs.current.delete('screening');
               }}
-              className={`screening-banner scroll-mt-28 md:scroll-mt-20 ${derived.redFlagCount > 0 ? 'red' : derived.yellowConcernCount > 0 ? 'amber' : 'clear'} ${screeningOpen ? 'open' : ''}`}
+              className={`screening-banner scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${derived.redFlagCount > 0 ? 'red' : derived.yellowConcernCount > 0 ? 'amber' : 'clear'} ${screeningOpen ? 'open' : ''}`}
             >
               <button type="button" className="sb-head" onClick={() => setScreeningOpen((v) => !v)}>
                 <span>
@@ -1304,7 +1307,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('chiefComplaint', el);
                 else sectionRefs.current.delete('chiefComplaint');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('chiefComplaint') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('chiefComplaint') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -1497,9 +1500,9 @@ export function NoteEditorPage() {
                               const surgeryDate = e.target.value;
                               const postOpWeek = surgeryDate
                                 ? Math.floor(
-                                    (Date.now() - new Date(surgeryDate).getTime()) /
-                                      (7 * 24 * 3600 * 1000)
-                                  )
+                                  (Date.now() - new Date(surgeryDate).getTime()) /
+                                  (7 * 24 * 3600 * 1000)
+                                )
                                 : null;
                               update('chiefComplaint', {
                                 ...payload.chiefComplaint,
@@ -1667,7 +1670,7 @@ export function NoteEditorPage() {
                         </button>
                       </div>
                       {!payload.chiefComplaint.secondaryComplaints ||
-                      payload.chiefComplaint.secondaryComplaints.length === 0 ? (
+                        payload.chiefComplaint.secondaryComplaints.length === 0 ? (
                         <p className="empty-note">No secondary complaints added.</p>
                       ) : (
                         payload.chiefComplaint.secondaryComplaints.map((complaint) => (
@@ -1801,7 +1804,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('history', el);
                 else sectionRefs.current.delete('history');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('history') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('history') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -2185,7 +2188,7 @@ export function NoteEditorPage() {
                         </button>
                       </div>
                       {!payload.history.previousPainHistory ||
-                      payload.history.previousPainHistory.length === 0 ? (
+                        payload.history.previousPainHistory.length === 0 ? (
                         <p className="empty-note">No previous pain history added.</p>
                       ) : (
                         payload.history.previousPainHistory.map((entry) => (
@@ -2279,10 +2282,10 @@ export function NoteEditorPage() {
                                         (x) =>
                                           x.id === entry.id
                                             ? {
-                                                ...x,
-                                                intensity: (e.target.value ||
-                                                  undefined) as typeof entry.intensity,
-                                              }
+                                              ...x,
+                                              intensity: (e.target.value ||
+                                                undefined) as typeof entry.intensity,
+                                            }
                                             : x
                                       ),
                                     })
@@ -2328,7 +2331,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('subjective', el);
                 else sectionRefs.current.delete('subjective');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('subjective') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('subjective') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -2476,7 +2479,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('psfs', el);
                 else sectionRefs.current.delete('psfs');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('psfs') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('psfs') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -2618,7 +2621,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('objective', el);
                 else sectionRefs.current.delete('objective');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('objective') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('objective') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -2773,9 +2776,9 @@ export function NoteEditorPage() {
                               payload.palpation.map((x, j) =>
                                 j === i
                                   ? {
-                                      ...x,
-                                      painOnPalpation: e.target.value as typeof x.painOnPalpation,
-                                    }
+                                    ...x,
+                                    painOnPalpation: e.target.value as typeof x.painOnPalpation,
+                                  }
                                   : x
                               )
                             )
@@ -3146,9 +3149,9 @@ export function NoteEditorPage() {
                                 rom: payload.objective.rom.map((x, j) =>
                                   j === i
                                     ? {
-                                        ...x,
-                                        active: e.target.value ? Number(e.target.value) : null,
-                                      }
+                                      ...x,
+                                      active: e.target.value ? Number(e.target.value) : null,
+                                    }
                                     : x
                                 ),
                               })
@@ -3167,9 +3170,9 @@ export function NoteEditorPage() {
                                 rom: payload.objective.rom.map((x, j) =>
                                   j === i
                                     ? {
-                                        ...x,
-                                        passive: e.target.value ? Number(e.target.value) : null,
-                                      }
+                                      ...x,
+                                      passive: e.target.value ? Number(e.target.value) : null,
+                                    }
                                     : x
                                 ),
                               })
@@ -3294,10 +3297,10 @@ export function NoteEditorPage() {
                                 strength: payload.objective.strength.map((x, j) =>
                                   j === i
                                     ? {
-                                        ...x,
-                                        nerveRoot: (e.target.value || undefined) as
-                                          NeuroLevel | undefined,
-                                      }
+                                      ...x,
+                                      nerveRoot: (e.target.value || undefined) as
+                                        NeuroLevel | undefined,
+                                    }
                                     : x
                                 ),
                               })
@@ -3417,7 +3420,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('treatment', el);
                 else sectionRefs.current.delete('treatment');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('treatment') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('treatment') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -3537,117 +3540,117 @@ export function NoteEditorPage() {
 
                   {(payload.chiefComplaint.onset === 'post-surgical' ||
                     payload.history.surgeries.some((s) => s.currentStatus === 'ongoing')) && (
-                    <>
-                      <p className="section-label" style={{ marginTop: 10 }}>
-                        Load management (post-surgical)
-                      </p>
-                      <div className="field-row">
-                        <div className="field-block">
-                          <label>Weight-bearing</label>
-                          <select
-                            value={payload.treatment.session.weightBearing ?? ''}
-                            disabled={readOnly}
-                            onChange={(e) =>
-                              update('treatment', {
-                                ...payload.treatment,
-                                session: {
-                                  ...payload.treatment.session,
-                                  weightBearing: (e.target.value ||
-                                    undefined) as CoreAssessmentPayload['treatment']['session']['weightBearing'],
-                                },
-                              })
-                            }
-                          >
-                            <option value="">—</option>
-                            <option value="nwb">NWB</option>
-                            <option value="pwb">PWB</option>
-                            <option value="wb">WBAT</option>
-                            <option value="fwb">FWB</option>
-                          </select>
-                        </div>
-                        {payload.treatment.session.weightBearing === 'pwb' && (
+                      <>
+                        <p className="section-label" style={{ marginTop: 10 }}>
+                          Load management (post-surgical)
+                        </p>
+                        <div className="field-row">
                           <div className="field-block">
-                            <label>PWB %</label>
+                            <label>Weight-bearing</label>
+                            <select
+                              value={payload.treatment.session.weightBearing ?? ''}
+                              disabled={readOnly}
+                              onChange={(e) =>
+                                update('treatment', {
+                                  ...payload.treatment,
+                                  session: {
+                                    ...payload.treatment.session,
+                                    weightBearing: (e.target.value ||
+                                      undefined) as CoreAssessmentPayload['treatment']['session']['weightBearing'],
+                                  },
+                                })
+                              }
+                            >
+                              <option value="">—</option>
+                              <option value="nwb">NWB</option>
+                              <option value="pwb">PWB</option>
+                              <option value="wb">WBAT</option>
+                              <option value="fwb">FWB</option>
+                            </select>
+                          </div>
+                          {payload.treatment.session.weightBearing === 'pwb' && (
+                            <div className="field-block">
+                              <label>PWB %</label>
+                              <input
+                                type="number"
+                                value={payload.treatment.session.pwbPercentage ?? ''}
+                                disabled={readOnly}
+                                onChange={(e) =>
+                                  update('treatment', {
+                                    ...payload.treatment,
+                                    session: {
+                                      ...payload.treatment.session,
+                                      pwbPercentage: e.target.value
+                                        ? Number(e.target.value)
+                                        : undefined,
+                                    },
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="field-row">
+                          <div className="field-block">
+                            <label>Brace</label>
+                            <select
+                              value={payload.treatment.session.brace ?? ''}
+                              disabled={readOnly}
+                              onChange={(e) =>
+                                update('treatment', {
+                                  ...payload.treatment,
+                                  session: {
+                                    ...payload.treatment.session,
+                                    brace: (e.target.value ||
+                                      undefined) as CoreAssessmentPayload['treatment']['session']['brace'],
+                                  },
+                                })
+                              }
+                            >
+                              <option value="">—</option>
+                              <option value="none">None</option>
+                              <option value="hinged">Hinged</option>
+                              <option value="locked">Locked</option>
+                            </select>
+                          </div>
+                          {payload.treatment.session.brace === 'locked' && (
+                            <div className="field-block">
+                              <label>Locked at (°)</label>
+                              <input
+                                value={payload.treatment.session.lockedDegrees ?? ''}
+                                disabled={readOnly}
+                                onChange={(e) =>
+                                  update('treatment', {
+                                    ...payload.treatment,
+                                    session: {
+                                      ...payload.treatment.session,
+                                      lockedDegrees: e.target.value || undefined,
+                                    },
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
+                          <div className="field-block">
+                            <label>ROM limit (°)</label>
                             <input
                               type="number"
-                              value={payload.treatment.session.pwbPercentage ?? ''}
+                              value={payload.treatment.session.romLimit ?? ''}
                               disabled={readOnly}
                               onChange={(e) =>
                                 update('treatment', {
                                   ...payload.treatment,
                                   session: {
                                     ...payload.treatment.session,
-                                    pwbPercentage: e.target.value
-                                      ? Number(e.target.value)
-                                      : undefined,
+                                    romLimit: e.target.value ? Number(e.target.value) : undefined,
                                   },
                                 })
                               }
                             />
                           </div>
-                        )}
-                      </div>
-                      <div className="field-row">
-                        <div className="field-block">
-                          <label>Brace</label>
-                          <select
-                            value={payload.treatment.session.brace ?? ''}
-                            disabled={readOnly}
-                            onChange={(e) =>
-                              update('treatment', {
-                                ...payload.treatment,
-                                session: {
-                                  ...payload.treatment.session,
-                                  brace: (e.target.value ||
-                                    undefined) as CoreAssessmentPayload['treatment']['session']['brace'],
-                                },
-                              })
-                            }
-                          >
-                            <option value="">—</option>
-                            <option value="none">None</option>
-                            <option value="hinged">Hinged</option>
-                            <option value="locked">Locked</option>
-                          </select>
                         </div>
-                        {payload.treatment.session.brace === 'locked' && (
-                          <div className="field-block">
-                            <label>Locked at (°)</label>
-                            <input
-                              value={payload.treatment.session.lockedDegrees ?? ''}
-                              disabled={readOnly}
-                              onChange={(e) =>
-                                update('treatment', {
-                                  ...payload.treatment,
-                                  session: {
-                                    ...payload.treatment.session,
-                                    lockedDegrees: e.target.value || undefined,
-                                  },
-                                })
-                              }
-                            />
-                          </div>
-                        )}
-                        <div className="field-block">
-                          <label>ROM limit (°)</label>
-                          <input
-                            type="number"
-                            value={payload.treatment.session.romLimit ?? ''}
-                            disabled={readOnly}
-                            onChange={(e) =>
-                              update('treatment', {
-                                ...payload.treatment,
-                                session: {
-                                  ...payload.treatment.session,
-                                  romLimit: e.target.value ? Number(e.target.value) : undefined,
-                                },
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      </>
+                    )}
 
                   <div className="field-block" style={{ margin: 0 }}>
                     <label>Notes</label>
@@ -3669,7 +3672,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('hep', el);
                 else sectionRefs.current.delete('hep');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('hep') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('hep') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -3836,7 +3839,7 @@ export function NoteEditorPage() {
                 if (el) sectionRefs.current.set('plan', el);
                 else sectionRefs.current.delete('plan');
               }}
-              className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('plan') ? 'open' : ''}`}
+              className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('plan') ? 'open' : ''}`}
             >
               <button
                 type="button"
@@ -4014,10 +4017,10 @@ export function NoteEditorPage() {
                                     goals: payload.plan.goals.map((x, j) =>
                                       j === i
                                         ? {
-                                            ...x,
-                                            targetTerm: e.target.value as
-                                              'short-term' | 'long-term' | '',
-                                          }
+                                          ...x,
+                                          targetTerm: e.target.value as
+                                            'short-term' | 'long-term' | '',
+                                        }
                                         : x
                                     ),
                                   })
@@ -4075,7 +4078,7 @@ export function NoteEditorPage() {
                   if (el) sectionRefs.current.set('outcome', el);
                   else sectionRefs.current.delete('outcome');
                 }}
-                className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
+                className={`setup-section scroll-mt-[calc(var(--app-header-h,3.5rem)+3.5rem)] desktop:scroll-mt-[calc(var(--app-header-h,3.5rem)+1.5rem)] ${openSections.has('outcome') ? 'open' : ''}`}
               >
                 <button
                   type="button"

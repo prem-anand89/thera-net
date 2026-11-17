@@ -10,6 +10,7 @@ import { formatAmount } from '@/domain/money';
 import { fiscalYearOf, monthName, formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary, StatTile } from '@/components/ui';
+import { PRINT_BACK_TOUCH, PRINT_TOOLBAR_SAFE } from '@/lib/safeArea';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
@@ -198,10 +199,10 @@ export function TrendsReviewPrintPage() {
   const revenueDeltaPct =
     report && prevReport && prevReport.total.netPostTaxPaise > 0
       ? Math.round(
-          ((report.total.netPostTaxPaise - prevReport.total.netPostTaxPaise) /
-            prevReport.total.netPostTaxPaise) *
-            100
-        )
+        ((report.total.netPostTaxPaise - prevReport.total.netPostTaxPaise) /
+          prevReport.total.netPostTaxPaise) *
+        100
+      )
       : null;
   const visitsDelta =
     report && prevReport ? report.total.visitCount - prevReport.total.visitCount : null;
@@ -213,14 +214,14 @@ export function TrendsReviewPrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: A4 portrait; margin: 10mm; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
-        <Link to="/insights" className={btnSecondary}>← Back to Trends</Link>
+      <div className={`no-print mx-auto flex max-w-6xl flex-wrap items-center gap-2 ${PRINT_TOOLBAR_SAFE}`}>
+        <Link to="/insights" className={`${btnSecondary} ${PRINT_BACK_TOUCH}`}>← Back to Trends</Link>
         <button type="button" className={`${btnPrimary} ml-auto`} onClick={() => window.print()}>
           Print / Save PDF
         </button>
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-6 bg-[var(--surface)] p-8 print:max-w-[190mm] print:p-0">
+      <div className="mx-auto max-w-6xl space-y-6 bg-[var(--surface)] p-4 sm:p-8 print:max-w-[190mm] print:p-0">
         <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {logoUrl && (

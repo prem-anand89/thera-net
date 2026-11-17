@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { filterNavItems, shouldShowDesktopNav, shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './Shell';
+import { isChromelessPrintRoute } from './phoneChrome';
 
 describe('filterNavItems', () => {
   it('shows core nav items including Reports to an admin in the header nav', () => {
@@ -59,5 +60,20 @@ describe('shouldShowPhoneAppHeader', () => {
     expect(shouldShowPhoneAppHeader('/workspace')).toBe(true);
     expect(shouldShowPhoneAppHeader('/visits')).toBe(true);
     expect(shouldShowPhoneAppHeader('/patients/abc')).toBe(true);
+  });
+});
+
+describe('isChromelessPrintRoute', () => {
+  it('matches every print, slip, packet, session-log, and trends-print route', () => {
+    expect(isChromelessPrintRoute('/invoices/i1/print')).toBe(true);
+    expect(isChromelessPrintRoute('/patients/p1/advances/a1/print')).toBe(true);
+    expect(isChromelessPrintRoute('/patients/p1/notes/n1/print')).toBe(true);
+    expect(isChromelessPrintRoute('/insights/print')).toBe(true);
+    expect(isChromelessPrintRoute('/invoices/i1/slip')).toBe(true);
+    expect(isChromelessPrintRoute('/insights/trends-print')).toBe(true);
+    expect(isChromelessPrintRoute('/patients/p1/session-log/e1')).toBe(true);
+    expect(isChromelessPrintRoute('/patients/p1/insurer-packet/e1')).toBe(true);
+    expect(isChromelessPrintRoute('/patients/p1')).toBe(false);
+    expect(isChromelessPrintRoute('/insights')).toBe(false);
   });
 });

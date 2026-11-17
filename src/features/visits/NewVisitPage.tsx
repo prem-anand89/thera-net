@@ -2357,9 +2357,9 @@ export function NewVisitPage() {
       }}
     >
       {/* Page navigational header — phones hide the Shell bar, so back needs a 44px
-          touch target and must not share one row with the title (Dynamic Island / narrow widths). */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-3">
+          icon-only touch target; keep Unsaved compact on the right so appearing never shifts the form. */}
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
             disabled={busy}
@@ -2380,14 +2380,15 @@ export function NewVisitPage() {
         </div>
 
         {isDirty && (
-          <div className="flex shrink-0 items-center gap-1.5 self-end rounded-full bg-[var(--amber-light)] px-2.5 py-1 text-xs font-medium text-[var(--amber-strong)] sm:self-auto">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-[11px] font-medium text-[var(--amber-strong)] sm:px-2.5 sm:py-1 sm:text-xs">
             <span
               role="img"
               aria-label="Unsaved changes"
               title="Unsaved changes"
               className="h-2 w-2 shrink-0 rounded-full bg-[var(--amber)]"
             />
-            <span>Unsaved changes</span>
+            <span className="sm:hidden">Unsaved</span>
+            <span className="hidden sm:inline">Unsaved changes</span>
           </div>
         )}
       </div>

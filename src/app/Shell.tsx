@@ -59,7 +59,7 @@ import { MAIN_SAFE_HORIZONTAL, mainContentTopPadding } from '@/lib/safeArea';
 import { DepartmentSwitch } from '@/components/DepartmentSwitch';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 import { useHepPainDot } from '@/features/hep/hepSignals';
-import { shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './phoneChrome';
+import { isChromelessPrintRoute, shouldShowPhoneAppHeader, shouldShowPhoneBottomNav } from './phoneChrome';
 
 export { shouldShowPhoneAppHeader, shouldShowPhoneBottomNav };
 
@@ -401,12 +401,14 @@ export function Shell() {
   }
 
   // Print views render without app chrome
-  if (pathname.endsWith('/print')) {
+  if (isChromelessPrintRoute(pathname)) {
     return (
       <ClinicContext.Provider value={clinic}>
-        <Suspense fallback={<AppLoading />}>
-          <Outlet />
-        </Suspense>
+        <DepartmentProvider clinic={clinic} userId={session?.user?.id} role={role} departments={effectiveMemberDepartments}>
+          <Suspense fallback={<AppLoading />}>
+            <Outlet />
+          </Suspense>
+        </DepartmentProvider>
       </ClinicContext.Provider>
     );
   }
@@ -455,26 +457,26 @@ export function Shell() {
                       overlays the bell (which goes invisible but keeps its space), so the clinic, department and
                       account items never move. */}
                   <div className="relative flex shrink-0 items-center justify-end max-sm:w-[5.5rem]">
-                  <span className="flex items-center max-sm:group-has-[[data-sync-expanded=true]]/hdr:invisible">
-                    {(role === 'admin' || role === 'front_desk') && (
-                    <NotificationBell
-                      clinicId={clinic.id}
-                      userId={session?.user?.id}
-                      pendingRequestsCount={pendingRequestsCount}
-                      isAdmin={role === 'admin'}
-                    />
-                  )}
-                  {role === 'therapist' && myTherapistId && (
-                    <NotificationBell
-                      clinicId={clinic.id}
-                      userId={session?.user?.id}
-                      pendingRequestsCount={0}
-                      isAdmin={false}
-                      therapistId={myTherapistId}
-                    />
-                  )}
-                  </span>
-                  <SyncBadge />
+                    <span className="flex items-center max-sm:group-has-[[data-sync-expanded=true]]/hdr:invisible">
+                      {(role === 'admin' || role === 'front_desk') && (
+                        <NotificationBell
+                          clinicId={clinic.id}
+                          userId={session?.user?.id}
+                          pendingRequestsCount={pendingRequestsCount}
+                          isAdmin={role === 'admin'}
+                        />
+                      )}
+                      {role === 'therapist' && myTherapistId && (
+                        <NotificationBell
+                          clinicId={clinic.id}
+                          userId={session?.user?.id}
+                          pendingRequestsCount={0}
+                          isAdmin={false}
+                          therapistId={myTherapistId}
+                        />
+                      )}
+                    </span>
+                    <SyncBadge />
                   </div>
                   <AccountMenu
                     displayName={displayName}
