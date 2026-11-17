@@ -698,7 +698,7 @@ export function PatientProfilePage() {
               )}
               <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
                 {selectedRows.length > 0 && (
-                  <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
                     <span className="text-sm font-medium text-[var(--teal)]">
                       {selectedRows.length} selected · {formatAmount(canBill ? selectedBillPaise : selectedDuePaise)}
                     </span>

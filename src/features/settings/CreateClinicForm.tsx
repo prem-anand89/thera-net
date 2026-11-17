@@ -304,7 +304,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       />
       {twice ? <p role="alert" className="text-sm text-[var(--rust)]">&quot;{twice}&quot; is listed twice. Give each service its own name.</p> : null}
       <ErrorNote message={error} />
-      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-[var(--surface)] px-1 pb-1 pt-2">
+      <div className="sticky bottom-0 -mx-1 flex gap-2 bg-[var(--surface)] px-1 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {!created && (
           <button type="button" disabled={busy} className={btnSecondary} onClick={() => setStep('practice')}>
             Back
@@ -326,7 +326,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
   if (variant === 'dialog') return formEl;
 
   return (
-    <div className="mx-auto mt-4 max-w-md px-4 sm:mt-10">
+    <div className="mx-auto max-w-md px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pt-10">
       <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-7">
         <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">
           {step === 'practice' ? 'Your practice' : 'Your services'}

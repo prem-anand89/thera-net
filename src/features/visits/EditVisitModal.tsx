@@ -498,7 +498,7 @@ export function EditVisitModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-0 sm:p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-0 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy) void requestClose();
       }}
@@ -508,9 +508,9 @@ export function EditVisitModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-visit-title"
-        className="modal-shell w-full sm:max-w-xl h-full sm:h-auto sm:max-h-[90vh] flex flex-col rounded-none sm:rounded-2xl"
+        className="modal-shell w-full sm:max-w-xl h-full sm:h-auto sm:max-h-[90dvh] flex flex-col rounded-none sm:rounded-2xl"
       >
-        <div className="modal-header shrink-0 flex items-center justify-between border-b border-[var(--border)] px-4 py-3 sm:px-5">
+        <div className="modal-header shrink-0 flex items-center justify-between border-b border-[var(--border)] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:px-5 sm:py-3">
           <div>
             <h2 id="edit-visit-title" className="text-base font-semibold text-[var(--ink)]">
               Edit visit
@@ -521,7 +521,7 @@ export function EditVisitModal({
             {patient && <PatientFollowUpLine patient={patient} />}
           </div>
           <button
-            className="modal-close"
+            className="modal-close !h-11 !w-11 shrink-0"
             onClick={() => void requestClose()}
             aria-label="Close"
             type="button"

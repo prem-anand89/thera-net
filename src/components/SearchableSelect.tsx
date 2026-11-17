@@ -106,7 +106,7 @@ export function SearchableSelect({
           className={
             inputClassName ||
             (isEmbedded
-              ? 'w-full rounded-lg border border-[var(--border)] bg-[var(--paper)] py-2 pl-9 pr-8 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] shadow-2xs transition-all focus:border-[var(--teal)] focus:bg-[var(--surface)] focus:outline-none'
+              ? 'w-full rounded-lg border border-[var(--border)] bg-[var(--paper)] py-2 pl-9 pr-8 text-base sm:text-sm text-[var(--ink)] placeholder:text-[var(--muted)] shadow-2xs transition-all focus:border-[var(--teal)] focus:bg-[var(--surface)] focus:outline-none'
               : inputCls)
           }
           role="combobox"

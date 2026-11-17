@@ -115,7 +115,7 @@ export function FeedbackFormPage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-sm px-4">
+    <div className="mx-auto max-w-sm px-4 pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:pt-16">
       <div className="mb-6 text-center">
         {clinicLogo && (
           <img
@@ -149,7 +149,7 @@ export function FeedbackFormPage() {
             Anything you'd like to share? (optional)
           </span>
           <textarea
-            className="w-full rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-2 text-sm text-[var(--ink)]"
+            className="w-full rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-2 text-base text-[var(--ink)] sm:text-sm"
             rows={4}
             value={comment}
             onChange={(e) => setComment(e.target.value)}

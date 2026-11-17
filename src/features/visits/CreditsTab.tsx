@@ -221,8 +221,8 @@ export function CreditsTab({ myTherapistId, isAdmin }: { myTherapistId?: UUID; i
       {entries === undefined && <LoadingRows label="Loading credits" />}
       {emptyNote}
       {rows.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
-          <div className="space-y-3 lg:sticky lg:top-4">
+        <div className="grid gap-4 desktop:grid-cols-[17rem_minmax(0,1fr)] desktop:items-start">
+          <div className="space-y-3 desktop:sticky desktop:top-[calc(var(--app-header-h,3.5rem)+1rem)]">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5">
               <p className="text-xs text-[var(--muted)]">Net this month{isSelf ? '' : ` · ${subjectName}`}</p>
               <p className={`mt-1 font-display text-3xl font-semibold tabular-nums ${summary.net > 0 ? 'text-[var(--moss-strong)]' : 'text-[var(--ink)]'}`}>{signed(summary.net)}</p>

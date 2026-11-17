@@ -303,18 +303,18 @@ function PaymentsSummarySection({
   return (
     <SideCard title="Payments">
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg border border-[var(--border)]/60 bg-[var(--paper)] p-2">
-          <div className="font-num text-sm font-semibold text-[var(--ink)]">{formatAmount(billed)}</div>
+        <div className="min-w-0 rounded-lg border border-[var(--border)]/60 bg-[var(--paper)] p-2">
+          <div className="font-num truncate text-sm font-semibold text-[var(--ink)]">{formatAmount(billed)}</div>
           <div className="mt-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">Billed</div>
         </div>
-        <div className="rounded-lg border border-[var(--teal)]/20 bg-[var(--teal-light)]/60 p-2">
-          <div className="font-num text-sm font-semibold text-[var(--teal)]">{formatAmount(collected)}</div>
+        <div className="min-w-0 rounded-lg border border-[var(--teal)]/20 bg-[var(--teal-light)]/60 p-2">
+          <div className="font-num truncate text-sm font-semibold text-[var(--teal)]">{formatAmount(collected)}</div>
           <div className="mt-0.5 text-[10px] uppercase tracking-wide text-[var(--teal-strong)]">Collected</div>
         </div>
         <div
-          className={`rounded-lg border p-2 ${outstanding > 0 ? 'border-[var(--rust)]/20 bg-[var(--rust-light)]/60' : 'border-[var(--border)]/60 bg-[var(--paper)]'}`}
+          className={`min-w-0 rounded-lg border p-2 ${outstanding > 0 ? 'border-[var(--rust)]/20 bg-[var(--rust-light)]/60' : 'border-[var(--border)]/60 bg-[var(--paper)]'}`}
         >
-          <div className={`font-num text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
+          <div className={`font-num truncate text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
             {formatAmount(outstanding)}
           </div>
           <div className={`mt-0.5 text-[10px] uppercase tracking-wide ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>

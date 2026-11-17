@@ -21,9 +21,9 @@ export const chipSelectChevron = {
     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
 } as const;
 export const btnPrimary =
-  'min-h-11 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
 export const btnSecondary =
-  'min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
 /** Compact pill actions for list rows. One clear ladder so adjacent buttons never look alike:
  *  primary (the main action) > attention (needs doing) > accent (outlined teal, secondary) >
  *  neutral (quiet). */
@@ -487,9 +487,9 @@ export function KebabMenu({
         pos &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-10" onClick={close} />
+            <div className="fixed inset-0 z-[70]" onClick={close} />
             <div
-              className="fixed z-30 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
+              className="fixed z-[71] min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
               style={{ top: pos.top, bottom: pos.bottom, right: pos.right }}
             >
               {children(close)}
@@ -628,22 +628,28 @@ export function Panel({
   title: string;
   children: ReactNode;
 }) {
+  const panelRef = useDialogBehavior<HTMLDivElement>(open, onClose);
+  const titleId = useId();
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-20 flex items-end justify-center bg-[var(--ink)]/40"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-[var(--ink)]/40"
       onClick={onClose}
     >
       <div
-        className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 id={titleId} className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
           <button
             type="button"
             aria-label="Close"
-            className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
+            className="flex min-h-9 min-w-9 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--paper)]"
             onClick={onClose}
           >
             ✕
@@ -784,7 +790,13 @@ export function SheetDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`dialog-panel flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-[var(--surface)] ${wide === 'xl' ? 'sm:max-w-md desktop:max-w-6xl' : wide ? 'sm:max-w-md desktop:max-w-4xl' : 'sm:max-w-md'} sm:rounded-2xl`}
+        className={`flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-[var(--surface)] shadow-xl ${
+          wide === 'xl'
+            ? 'sm:max-w-md tab:max-w-3xl desktop:max-w-6xl'
+            : wide
+              ? 'sm:max-w-md tab:max-w-2xl desktop:max-w-4xl'
+              : 'sm:max-w-md'
+        } sm:rounded-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 px-5 pt-2.5 sm:pt-5">
@@ -795,10 +807,12 @@ export function SheetDialog({
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-3">{children}</div>
-        <div className="shrink-0 space-y-2 border-t border-[var(--border)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <ErrorNote message={error ?? null} />
-          <div className="flex gap-2 [&>*]:flex-1">{footer}</div>
-        </div>
+        {(footer != null || Boolean(error)) && (
+          <div className="shrink-0 space-y-2 border-t border-[var(--border)] px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <ErrorNote message={error ?? null} />
+            {footer != null && <div className="flex gap-2 [&>*]:flex-1">{footer}</div>}
+          </div>
+        )}
       </div>
     </div>,
     document.body

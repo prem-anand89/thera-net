@@ -156,7 +156,7 @@ export function PickerMenu({
                 placeholder="Search…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm focus:border-[var(--teal)] focus:outline-none"
+                className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 text-base sm:text-sm focus:border-[var(--teal)] focus:outline-none"
               />
             </div>
           )}

@@ -182,8 +182,12 @@ export function SessionNoteEditorBody({
       </div>
 
       {!readOnly && (
-        <div className="ne-actionbar">
-          <span className="save-indicator">
+        <div className="modal-actions sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[2] flex-wrap items-center justify-start bg-[var(--paper)] pt-3 sm:bottom-0">
+          <span
+            className={`mr-auto text-xs ${
+              saveIndicator === 'unsaved' ? 'font-medium text-[var(--amber-strong)]' : 'text-[var(--muted)]'
+            }`}
+          >
             {saveIndicator === 'saving'
               ? 'Saving…'
               : saveIndicator === 'unsaved'

@@ -129,7 +129,7 @@ export function SyncBadge() {
         title={status.error ? `${status.error}. ${lastSynced}` : lastSynced}
         aria-label={`Sync: ${label}`}
         data-sync-expanded={expanded}
-        className={`flex min-h-11 items-center gap-2 rounded-full text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'min-w-9 justify-center px-1.5' : 'z-10 border border-[var(--border)] bg-[var(--surface)] px-3 py-1 max-sm:absolute max-sm:right-0 max-sm:top-1/2 max-sm:max-w-[10rem] max-sm:-translate-y-1/2 max-sm:gap-1.5 max-sm:px-2.5'}`}
+        className={`flex min-h-11 items-center gap-2 rounded-full text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'min-w-9 justify-center px-1.5' : 'z-10 border border-[var(--border)] bg-[var(--surface)] px-3 py-1 max-sm:absolute max-sm:right-0 max-sm:top-1/2 max-sm:max-w-[8.5rem] max-sm:-translate-y-1/2 max-sm:gap-1.5 max-sm:px-2.5 sm:max-w-[8.5rem] tab:max-w-[9.5rem] desktop:max-w-none'}`}
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
         {/* Quiet: text shows tab:-and-up only, same room-sharing as the

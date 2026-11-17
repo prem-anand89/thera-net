@@ -40,7 +40,7 @@ export function ResetPasswordPage() {
 
   if (!hasSupabaseConfig) {
     return (
-      <div className="mx-auto mt-24 max-w-md rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] p-6 text-sm text-[var(--rust)]">
+      <div className="mx-4 mt-[max(3rem,env(safe-area-inset-top))] max-w-md rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] p-6 text-sm text-[var(--rust)] sm:mx-auto sm:mt-24">
         <h1 className="font-display mb-2 text-base font-semibold">Supabase not configured</h1>
         <p>
           Copy <code>.env.example</code> to <code>.env</code> and restart the dev server.
@@ -75,7 +75,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="mx-auto mt-24 max-w-sm">
+    <div className="mx-auto max-w-sm px-4 pt-[max(3rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:pt-24">
       <AuthBrandHeader
         subtitle={
           inviteSetup

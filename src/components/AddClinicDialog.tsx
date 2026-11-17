@@ -17,7 +17,7 @@ export function AddClinicDialog({
 }) {
   const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
       <div
         ref={dialogRef} role="dialog"
         aria-modal="true"

@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
 import type { UUID } from '@/domain/types';
+import { btnPrimary, btnSecondary, SheetDialog } from '@/components/ui';
 
 /** Quick prompt to add optional patient details (phone, age, sex) after
  *  a new walk-in patient is created during visit logging. Offers two paths:
@@ -16,26 +17,22 @@ export function AddPatientDetailsModal({
 }) {
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
 
-  if (!patient) return null;
-
-  const hasDetails = patient.phone || patient.age || patient.sex;
-  if (hasDetails) return null;
+  const hasDetails = Boolean(patient?.phone || patient?.age || patient?.sex);
+  const open = Boolean(patient && !hasDetails);
 
   return (
-    <div className="modal-overlay open">
-      <div className="modal-card">
-        <h3>Add patient details?</h3>
-        <p className="modal-sub">{patient.name}</p>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-          Optional: add phone, age, and sex to complete the patient profile.
-        </p>
-        <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+    <SheetDialog
+      open={open}
+      title="Add patient details?"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={btnSecondary} onClick={onClose}>
             Edit later
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className={btnPrimary}
             onClick={() => {
               onOpenEdit();
               onClose();
@@ -43,8 +40,17 @@ export function AddPatientDetailsModal({
           >
             Add now
           </button>
+        </>
+      }
+    >
+      {patient && (
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium text-[var(--ink)]">{patient.name}</p>
+          <p className="text-sm text-[var(--muted)]">
+            Optional: add phone, age, and sex to complete the patient profile.
+          </p>
         </div>
-      </div>
-    </div>
+      )}
+    </SheetDialog>
   );
 }
