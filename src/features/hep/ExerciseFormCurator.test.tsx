@@ -56,9 +56,16 @@ describe('ExerciseForm: TheraNet Library curator controls', () => {
     const shareBtn = await screen.findByRole('button', { name: 'Share to TheraNet Library' });
     await user.click(shareBtn);
 
-    const dlg = screen.getByRole('dialog', { name: 'Share to TheraNet Library?' });
-    await user.click(within(dlg).getByRole('button', { name: 'Share to library' }));
-    await waitFor(() => expect(publishExercise).toHaveBeenCalledWith('c1', ex, undefined));
+    const dlg = screen.getByRole('dialog', { name: 'Add to TheraNet Library?' });
+    const confirm = within(dlg).getByRole('button', { name: 'Add to library' });
+    expect(confirm).toBeDisabled(); // a source and the permission tick are needed for pictures
+    await user.selectOptions(within(dlg).getByLabelText('Where do the pictures come from?'), 'ai_generated');
+    await user.type(within(dlg).getByLabelText('Note (optional)'), 'Checked by the physio');
+    await user.click(within(dlg).getByLabelText('I have the right to share these pictures with all TheraNet clinics.'));
+    expect(confirm).toBeDisabled(); // AI pictures also need the movements tick
+    await user.click(within(dlg).getByLabelText('I have checked that the movements are shown correctly.'));
+    await user.click(confirm);
+    await waitFor(() => expect(publishExercise).toHaveBeenCalledWith('c1', ex, undefined, { imageSource: 'ai_generated', imageNote: 'Checked by the physio' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent('Shared to TheraNet Library.');
     expect(screen.getByRole('button', { name: 'Update in TheraNet Library' })).toBeInTheDocument();

@@ -5,12 +5,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { ConfirmDialog, ErrorNote, btnSecondary, pillSmDanger } from '@/components/ui';
-import type { Exercise } from '@/domain/hep';
+import { isStarterCuratorClinic, type Exercise, type LibraryProvenance } from '@/domain/hep';
 import { db } from '@/lib/db';
 import { hepService } from '@/services/hepService';
+import { starterLibraryService } from '@/services/starterLibraryService';
 import { PrintSheet } from './PrintSheet';
 import { exerciseToItem } from './hepItems';
 import { exerciseToSaveInput } from './exerciseSaveInput';
+import { PublishToLibraryDialog } from './PublishToLibraryDialog';
 
 type Action = 'archive' | 'delete';
 interface Plan { action: Action; remove: Exercise[]; archive: Exercise[] }
@@ -41,15 +43,17 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const curator = isStarterCuratorClinic(clinic);
   const [error, setError] = useState<string | null>(null);
   const working = checking || progress !== null;
   const printItems = useMemo(() => picked.map(exerciseToItem), [picked]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !plan && !working) onExit(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !plan && !working && !publishing) onExit(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [plan, working, onExit]);
+  }, [plan, working, publishing, onExit]);
 
   async function prepare(action: Action) {
     setError(null);
@@ -102,6 +106,25 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
     }
   }
 
+  async function publish(provenance: LibraryProvenance) {
+    setPublishing(false);
+    setError(null);
+    setProgress({ done: 0, total: picked.length });
+    const result = await starterLibraryService.publishMany(clinic.id, picked, provenance, (done, total) => setProgress({ done, total }));
+    setProgress(null);
+    const head = `Added ${result.published} to the TheraNet Library.`;
+    if (result.skipped.length > 0) {
+      onSelectionChange(result.skipped.map((s) => s.id));
+      const list = result.skipped.slice(0, 3).map((s) => `${s.title} (${s.reason})`).join('; ');
+      const more = result.skipped.length > 3 ? ` and ${result.skipped.length - 3} more` : '';
+      setError(`${head} Not added: ${list}${more}.`);
+      if (result.published > 0) onResult(head);
+    } else {
+      onResult(head);
+      onExit();
+    }
+  }
+
   const disabled = !online || picked.length === 0 || working;
   const title = online ? undefined : 'Needs a connection';
   const text = plan ? planText(plan) : null;
@@ -115,6 +138,7 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
           <div className="flex-1" />
           {progress && <span className="text-sm text-[var(--muted)]" role="status">Working {Math.min(progress.done + 1, progress.total)} of {progress.total}…</span>}
           <Button type="button" className={btnSecondary} disabled={picked.length === 0 || working} onClick={() => setPrinting(true)}>Print PDF / Sheet</Button>
+          {curator && <Button type="button" className={btnSecondary} disabled={disabled} title={title} onClick={() => setPublishing(true)}>Add to TheraNet Library</Button>}
           <Button type="button" className={btnSecondary} disabled={disabled} title={title} onClick={() => void prepare('archive')}>Archive</Button>
           <Button type="button" className={pillSmDanger} disabled={disabled} title={title} onClick={() => void prepare('delete')}>Delete</Button>
           <Button type="button" className={btnSecondary} disabled={working} onClick={onExit}>Cancel</Button>
@@ -124,6 +148,13 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
       <ConfirmDialog
         open={plan !== null} title={text?.title ?? ''} message={text?.message ?? ''} confirmLabel={text?.confirm ?? 'Confirm'} destructive
         onConfirm={() => { if (plan) void run(plan); }} onCancel={() => setPlan(null)}
+      />
+      <PublishToLibraryDialog
+        open={publishing}
+        count={picked.length}
+        hasPictures={picked.some((e) => e.mediaKeys.length > 0)}
+        onConfirm={(p) => void publish(p)}
+        onCancel={() => setPublishing(false)}
       />
       <PrintSheet open={printing} onClose={() => setPrinting(false)} clinicName={clinic.name} programTitle="Exercise handout" items={printItems} />
     </>

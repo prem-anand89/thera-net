@@ -17,6 +17,11 @@ vi.mock('@/services/hepService', async (orig) => ({
   ...(await orig<typeof import('@/services/hepService')>()),
   hepService: { toggleExerciseFavorite: vi.fn(), recentlyUsedExerciseIds: async () => [], exerciseUsage: (...a: unknown[]) => exerciseUsage(...a), saveExercise: (...a: unknown[]) => saveExercise(...a) },
 }));
+const publishMany = vi.fn();
+vi.mock('@/services/starterLibraryService', async (orig) => ({
+  ...(await orig<typeof import('@/services/starterLibraryService')>()),
+  starterLibraryService: { publishMany: (...a: unknown[]) => publishMany(...a) },
+}));
 vi.mock('@/services/hepMediaService', () => ({ hepMediaService: { mintViewUrls: async () => ({}) } }));
 vi.mock('@/app/useEntitlements', () => ({ useEntitlements: () => ({ tier: 'lite', enforcementEnabled: false }) }));
 
@@ -32,6 +37,7 @@ beforeEach(async () => {
   await db.exercises.clear();
   await db.exercises.bulkPut([ex('a', 'Alpha'), ex('b', 'Bravo'), ex('c', 'Charlie')]);
   saveExercise.mockReset().mockResolvedValue('x');
+  publishMany.mockReset().mockResolvedValue({ published: 2, skipped: [] });
   exerciseUsage.mockReset().mockImplementation(async (id: string) => (id === 'b' ? { programs: 2, templates: 0 } : { programs: 0, templates: 0 }));
   localStorage.clear();
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -128,6 +134,43 @@ describe('Library select mode', () => {
     expect(await screen.findByText(/1 could not be changed and is still selected/, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select Charlie' })).toBeChecked();
+  });
+
+  it('offers "Add to TheraNet Library" only to curator clinics, and publishes the picked exercises', async () => {
+    const user = userEvent.setup();
+    const curator = { ...clinic, starterCurator: true } as unknown as Clinic;
+    render(<ClinicContext.Provider value={curator}><LibraryTab /></ClinicContext.Provider>);
+    await enterSelect(user);
+    await user.click(screen.getByRole('button', { name: 'Select all 3 shown' }));
+    await user.click(screen.getByRole('button', { name: 'Add to TheraNet Library' }));
+    const dlg = screen.getByRole('dialog', { name: 'Add to TheraNet Library?' });
+    await user.click(within(dlg).getByRole('button', { name: 'Add to library' })); // no pictures: nothing to declare
+    await waitFor(() => expect(publishMany).toHaveBeenCalledTimes(1));
+    const [clinicId, picked, provenance] = publishMany.mock.calls[0] as [string, Exercise[], unknown];
+    expect(clinicId).toBe('c1');
+    expect(picked.map((e) => e.id).sort()).toEqual(['a', 'b', 'c']);
+    expect(provenance).toEqual({ imageSource: null, imageNote: null });
+    expect(await screen.findByText('Added 2 to the TheraNet Library.')).toBeInTheDocument();
+  });
+
+  it('keeps skipped exercises selected and names them', async () => {
+    publishMany.mockResolvedValue({ published: 1, skipped: [{ id: 'c', title: 'Charlie', reason: 'its pictures are hidden in lists' }] });
+    const user = userEvent.setup();
+    const curator = { ...clinic, starterCurator: true } as unknown as Clinic;
+    render(<ClinicContext.Provider value={curator}><LibraryTab /></ClinicContext.Provider>);
+    await enterSelect(user);
+    await user.click(screen.getByRole('button', { name: 'Select all 3 shown' }));
+    await user.click(screen.getByRole('button', { name: 'Add to TheraNet Library' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Add to TheraNet Library?' })).getByRole('button', { name: 'Add to library' }));
+    expect(await screen.findByText(/Not added: Charlie \(its pictures are hidden in lists\)/, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('does not offer "Add to TheraNet Library" to other clinics', async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await enterSelect(user);
+    expect(screen.queryByRole('button', { name: 'Add to TheraNet Library' })).toBeNull();
   });
 
   it('disables Archive and Delete offline', async () => {

@@ -123,3 +123,30 @@ describe('starterLibraryService', () => {
     expect(mockRpc).toHaveBeenCalledWith('unpublish_starter_exercise', { p_clinic_id: 'c-bm', p_starter_id: 'st-9' });
   });
 });
+
+describe('starterLibraryService.publishMany and provenance', () => {
+  it('sends the image source and note with the publish call when there are pictures', async () => {
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) });
+    cloneToStarter.mockResolvedValue({ mediaKeys: ['starter/exercises/s/0-aaaaaaaa'], thumbKey: null });
+    mockRpc.mockResolvedValue({ data: 's', error: null });
+    await starterLibraryService.publishExercise('c-bm', ex(), null, { imageSource: 'ai_generated', imageNote: 'checked' });
+    expect(mockRpc).toHaveBeenCalledWith('publish_starter_exercise', expect.objectContaining({ p_image_source: 'ai_generated', p_image_note: 'checked' }));
+  });
+
+  it('skips archived and hidden-picture exercises, keeps going after a failure, and reports each', async () => {
+    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) });
+    cloneToStarter.mockResolvedValue({ mediaKeys: ['starter/exercises/s/0-aaaaaaaa'], thumbKey: null });
+    mockRpc.mockImplementation(async (_fn: string, args: { p_title: string }) =>
+      args.p_title === 'Bad' ? { data: null, error: { message: 'nope' } } : { data: 'id', error: null });
+    const progress = vi.fn();
+    const result = await starterLibraryService.publishMany(
+      'c-bm',
+      [ex({ id: 'a', title: 'Good' }), ex({ id: 'b', title: 'Old', active: false }), ex({ id: 'c', title: 'Hidden', hidePicturesInLists: true }), ex({ id: 'd', title: 'Bad' }), ex({ id: 'e', title: 'Good 2' })],
+      { imageSource: 'own_photography', imageNote: null },
+      progress,
+    );
+    expect(result.published).toBe(2);
+    expect(result.skipped.map((s) => [s.id, s.reason])).toEqual([['b', 'it is archived'], ['c', 'its pictures are hidden in lists'], ['d', 'nope']]);
+    expect(progress).toHaveBeenLastCalledWith(5, 5);
+  });
+});

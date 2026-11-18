@@ -5,6 +5,7 @@ import {
   canonicalEquipment,
   canonicalRegion,
   type Exercise,
+  type LibraryProvenance,
   type StarterLibraryItem,
 } from '@/domain/hep';
 import { doseToExerciseFields } from '@/domain/hepDose';
@@ -138,7 +139,12 @@ export const starterLibraryService = {
   },
 
   /** Curator-only: publishes or updates a clinic exercise into the shared TheraNet Library (cloning any pictures to `starter/exercises/`). */
-  async publishExercise(clinicId: string, ex: Exercise, existingStarterId?: string | null): Promise<string> {
+  async publishExercise(
+    clinicId: string,
+    ex: Exercise,
+    existingStarterId?: string | null,
+    provenance?: LibraryProvenance,
+  ): Promise<string> {
     const supabase = requireOnline();
     if (ex.hidePicturesInLists) {
       throw new Error('Turn off "Hide pictures in lists" in Media and instructions before sharing to the TheraNet Library.');
@@ -176,9 +182,39 @@ export const starterLibraryService = {
       p_default_rest_seconds: ex.defaultRestSeconds,
       p_default_sessions_per_day: ex.defaultSessionsPerDay,
       p_side: ex.side,
+      p_image_source: cloned.mediaKeys.length > 0 ? (provenance?.imageSource ?? null) : null,
+      p_image_note: cloned.mediaKeys.length > 0 ? (provenance?.imageNote ?? null) : null,
     });
     if (error) throw new Error(error.message);
     return (data as string) ?? starterId;
+  },
+
+  /**
+   * Curator-only: publishes several clinic exercises one after another. Archived exercises and ones that hide their
+   * pictures in lists are skipped with a reason; a failure on one does not stop the rest.
+   */
+  async publishMany(
+    clinicId: string,
+    exercises: Exercise[],
+    provenance: LibraryProvenance,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ published: number; skipped: Array<{ id: string; title: string; reason: string }> }> {
+    const skipped: Array<{ id: string; title: string; reason: string }> = [];
+    let published = 0;
+    for (const [i, ex] of exercises.entries()) {
+      if (!ex.active) skipped.push({ id: ex.id, title: ex.title, reason: 'it is archived' });
+      else if (ex.hidePicturesInLists) skipped.push({ id: ex.id, title: ex.title, reason: 'its pictures are hidden in lists' });
+      else {
+        try {
+          await this.publishExercise(clinicId, ex, null, provenance);
+          published += 1;
+        } catch (e) {
+          skipped.push({ id: ex.id, title: ex.title, reason: e instanceof Error ? e.message : 'it could not be published' });
+        }
+      }
+      onProgress?.(i + 1, exercises.length);
+    }
+    return { published, skipped };
   },
 
   /** Curator-only: removes a TheraNet Library entry from future browsing without affecting clinics that already copied it. */

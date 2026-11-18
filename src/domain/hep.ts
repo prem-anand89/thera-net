@@ -17,6 +17,21 @@ export function isStarterCuratorClinic(
   return clinic?.starterCurator === true;
 }
 
+/** Where a TheraNet Library item's pictures come from (recorded when a curator publishes). */
+export const IMAGE_SOURCES = ['own_photography', 'ai_generated', 'illustration', 'licensed'] as const;
+export type ImageSource = (typeof IMAGE_SOURCES)[number];
+export const IMAGE_SOURCE_LABELS: Record<ImageSource, string> = {
+  own_photography: 'Own photography',
+  ai_generated: 'AI-generated',
+  illustration: 'Illustration',
+  licensed: 'Licensed',
+};
+/** What a curator states when publishing: the source (needed when there are pictures) and an optional note. */
+export interface LibraryProvenance {
+  imageSource: ImageSource | null;
+  imageNote: string | null;
+}
+
 export type ExerciseMediaType = 'none' | 'gif' | 'stills';
 /** How an exercise is done: dynamic reps, reps each held for a few seconds, or continuous for a set time. */
 export type DoseType = 'reps' | 'hold' | 'timed';

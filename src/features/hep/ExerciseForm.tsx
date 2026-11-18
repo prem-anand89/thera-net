@@ -18,6 +18,7 @@ import {
   type Exercise,
   type ExerciseMediaType,
   type ExercisePhase,
+  type LibraryProvenance,
   type StarterLibraryItem,
 } from '@/domain/hep';
 import { formatDateDM } from '@/domain/fiscalYear';
@@ -30,6 +31,7 @@ import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService, type HepItemInput } from '@/services/hepService';
 import { starterLibraryService } from '@/services/starterLibraryService';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
+import { PublishToLibraryDialog } from './PublishToLibraryDialog';
 import {
   ClassificationFields,
   DetailsFields,
@@ -373,14 +375,14 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const editingExisting = isEdit && !duplicated;
   const isCurator = isStarterCuratorClinic(clinic);
 
-  async function publishStarter() {
+  async function publishStarter(provenance: LibraryProvenance) {
     if (!exercise) return;
     setConfirmPublish(false);
     setBusy(true);
     setError(null);
     setStarterNotice(null);
     try {
-      const starterId = await starterLibraryService.publishExercise(clinicId, exercise, starterEntry?.id);
+      const starterId = await starterLibraryService.publishExercise(clinicId, exercise, starterEntry?.id, provenance);
       const refreshed = await starterLibraryService.findPublishedForExercise(clinicId, exercise.id);
       setStarterEntry(refreshed ?? { ...(starterEntry ?? {}), id: starterId, publishedAt: new Date().toISOString() } as StarterLibraryItem);
       setStarterNotice(starterEntry ? 'TheraNet Library entry updated.' : 'Shared to TheraNet Library.');
@@ -529,13 +531,12 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
         confirmLabel="Discard" cancelLabel="Keep editing" destructive
         onConfirm={() => { setConfirmDiscard(false); onClose(); }} onCancel={() => setConfirmDiscard(false)}
       />
-      <ConfirmDialog
+      <PublishToLibraryDialog
         open={confirmPublish}
-        title={starterEntry ? 'Update in TheraNet Library?' : 'Share to TheraNet Library?'}
-        message={`Copy “${exercise?.title ?? ''}” (and any pictures) to the shared TheraNet Library so other clinics can add it? Confirm you have permission to share these pictures across TheraNet clinics.`}
-        confirmLabel={starterEntry ? 'Update library' : 'Share to library'}
-        cancelLabel="Cancel"
-        onConfirm={() => void publishStarter()}
+        count={1}
+        hasPictures={(exercise?.mediaKeys.length ?? 0) > 0}
+        update={starterEntry !== null}
+        onConfirm={(provenance) => void publishStarter(provenance)}
         onCancel={() => setConfirmPublish(false)}
       />
     </SheetDialog>
