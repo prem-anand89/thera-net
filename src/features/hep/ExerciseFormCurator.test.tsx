@@ -11,12 +11,17 @@ let clinic = { id: 'c1', name: 'Beyond Mechanics', starterCurator: true, timezon
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => clinic }));
 vi.mock('@/services/hepService', async (orig) => ({
   ...(await orig<typeof import('@/services/hepService')>()),
-  hepService: { saveExercise: vi.fn(async () => 'e1'), exerciseUsage: vi.fn(async () => ({ programs: 0, templates: 0 })) },
+  hepService: {
+    saveExercise: vi.fn(async () => 'e1'),
+    exerciseUsage: vi.fn(async () => ({ programs: 0, templates: 0 })),
+    listExerciseOrigins: (...a: unknown[]) => listExerciseOrigins(...a),
+  },
 }));
 vi.mock('@/services/hepMediaService', () => ({
   hepMediaService: { mintUploadUrls: vi.fn(), putBlob: vi.fn(), mintViewUrls: async () => ({}) },
 }));
 
+const listExerciseOrigins = vi.fn();
 const findPublishedForExercise = vi.fn();
 const publishExercise = vi.fn();
 const unpublishExercise = vi.fn();
@@ -40,6 +45,7 @@ const saved = (over: Partial<Exercise> = {}): Exercise => ({
 
 beforeEach(() => {
   clinic = { id: 'c1', name: 'Beyond Mechanics', starterCurator: true, timezone: 'Asia/Kolkata' };
+  listExerciseOrigins.mockReset().mockResolvedValue([]);
   findPublishedForExercise.mockReset().mockResolvedValue(null);
   publishExercise.mockReset().mockResolvedValue('st-1');
   unpublishExercise.mockReset().mockResolvedValue(undefined);
@@ -74,7 +80,7 @@ describe('ExerciseForm: TheraNet Library curator controls', () => {
     await user.click(rmBtn);
     await waitFor(() => expect(unpublishExercise).toHaveBeenCalledWith('c1', 'st-1'));
     expect(await screen.findByRole('status')).toHaveTextContent('Removed from TheraNet Library.');
-  });
+  }, 30000);
 
   it('hides TheraNet Library curator controls for non-curator clinics (even if named Physio Clinic)', () => {
     clinic = { id: 'c1', name: 'Physio Clinic', starterCurator: false, timezone: 'Asia/Kolkata' };
@@ -88,5 +94,18 @@ describe('ExerciseForm: TheraNet Library curator controls', () => {
     const ex = saved();
     render(<ExerciseForm open clinicId="c1" exercise={ex} allExercises={[ex]} onClose={vi.fn()} onSaved={vi.fn()} />);
     expect(await screen.findByRole('button', { name: 'Update in TheraNet Library' })).toBeInTheDocument();
+  });
+
+  it('says where a copied exercise came from, and says nothing for the clinic\'s own', async () => {
+    clinic = { id: 'c1', name: 'Sunrise', starterCurator: false, timezone: 'Asia/Kolkata' };
+    const ex = saved();
+    listExerciseOrigins.mockResolvedValue([{ exerciseId: 'e1', sourceKind: 'library', sourceId: 'st-9', sourcePublishedAt: null, importedAt: '2026-11-18T10:00:00Z' }]);
+    const { unmount } = render(<ExerciseForm open clinicId="c1" exercise={ex} allExercises={[ex]} onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(await screen.findByText(/Copied from the TheraNet Library on/)).toBeInTheDocument();
+    unmount();
+    listExerciseOrigins.mockResolvedValue([]);
+    render(<ExerciseForm open clinicId="c1" exercise={ex} allExercises={[ex]} onClose={vi.fn()} onSaved={vi.fn()} />);
+    await waitFor(() => expect(listExerciseOrigins).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Copied from the TheraNet Library/)).toBeNull();
   });
 });

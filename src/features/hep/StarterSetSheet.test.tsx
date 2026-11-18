@@ -14,7 +14,13 @@ import { exerciseFromSaveInput, starterToSaveInput } from './starterSet';
 import { exerciseToSaveInput } from './exerciseSaveInput';
 
 const saveExercise = vi.fn();
-vi.mock('@/services/hepService', async (orig) => ({ ...(await orig<typeof import('@/services/hepService')>()), hepService: { saveExercise: (...a: unknown[]) => saveExercise(...a) } }));
+const recordExerciseOrigin = vi.fn();
+vi.mock('@/services/hepService', async (orig) => ({
+  ...(await orig<typeof import('@/services/hepService')>()),
+  hepService: { saveExercise: (...a: unknown[]) => saveExercise(...a), recordExerciseOrigin: (...a: unknown[]) => recordExerciseOrigin(...a) },
+}));
+const plan = vi.hoisted(() => ({ value: { tier: 'lite', enforcementEnabled: false } }));
+vi.mock('@/app/useEntitlements', () => ({ useEntitlements: () => plan.value }));
 const cloneFromStarter = vi.fn();
 const mintStarterViewUrls = vi.fn();
 vi.mock('@/services/hepMediaService', () => ({
@@ -36,6 +42,14 @@ const ex = (id: string, title: string): Exercise => ({
   id, clinicId: 'c1', title, positions: [], otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null,
   defaultSets: 3, doseType: 'reps', defaultReps: 10, defaultHoldSeconds: null, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1, side: 'none', stopIf: '', isFavorite: false, active: true, deleted: false, version: 1, createdAt: '', updatedAt: '',
 });
+const dbItem = (id: string, title: string) => ({
+  id, sourceClinicId: 'c-bm', sourceExerciseId: `src-${id}`, title, otherNames: [], bodyRegion: 'Hip', alsoRegions: [],
+  phase: 'stretching', alsoPhases: [], positions: [], equipment: [], instructions: 'Kneel\nLean', stopIf: '',
+  mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null, doseType: 'hold', defaultSets: 1, defaultReps: 3,
+  defaultHoldSeconds: 30, defaultDurationSeconds: null, defaultRestSeconds: 30, defaultSessionsPerDay: 1, side: 'both',
+  publishedAt: '2026-11-18T00:00:00Z',
+});
+
 function renderSheet() {
   const onClose = vi.fn();
   render(<ClinicContext.Provider value={clinic}><StarterSetSheet open onClose={onClose} /></ClinicContext.Provider>);
@@ -45,6 +59,8 @@ beforeEach(async () => {
   await db.exercises.clear();
   let n = 0;
   saveExercise.mockReset().mockImplementation(async () => `id-${++n}`);
+  recordExerciseOrigin.mockReset().mockResolvedValue(undefined);
+  plan.value = { tier: 'lite', enforcementEnabled: false };
   cloneFromStarter.mockReset().mockResolvedValue({ mediaKeys: [], thumbKey: null });
   mintStarterViewUrls.mockReset().mockResolvedValue({});
   const { staticStarterItems } = await import('@/services/starterLibraryService');
@@ -173,5 +189,56 @@ describe('starterToSaveInput', () => {
   it("keeps an exercise's positions when it is sent back (archive, restore, delete)", () => {
     expect(exerciseToSaveInput({ ...ex('e1', 'Bridge'), positions: ['Supine'] }).positions).toEqual(['Supine']);
     expect(exerciseToSaveInput({ ...ex('e1', 'Bridge'), positions: undefined as unknown as string[] }).positions).toEqual([]);
+  });
+
+  it('records which library item a copy came from, but not for built-in items', async () => {
+    const user = userEvent.setup();
+    listStarterItems.mockResolvedValue([dbItem('11111111-1111-4111-8111-111111111111', 'Library Test Exercise')]);
+    const { onClose } = renderSheet();
+    await user.click(await screen.findByLabelText(/^Library Test Exercise/));
+    await user.click(screen.getByRole('button', { name: 'Add 1 exercise' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(recordExerciseOrigin).toHaveBeenCalledWith('c1', 'id-1', '11111111-1111-4111-8111-111111111111', '2026-11-18T00:00:00Z');
+  });
+
+  it('a built-in item has nothing to link to, so no origin is recorded', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderSheet();
+    await user.click(await screen.findByLabelText(/^Quad Sets/));
+    await user.click(screen.getByRole('button', { name: 'Add 1 exercise' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(recordExerciseOrigin).not.toHaveBeenCalled();
+  });
+
+  it('the add still succeeds when recording the origin fails (it tries twice)', async () => {
+    const user = userEvent.setup();
+    recordExerciseOrigin.mockRejectedValue(new Error('offline'));
+    listStarterItems.mockResolvedValue([dbItem('22222222-2222-4222-8222-222222222222', 'Library Test Exercise')]);
+    const { onClose } = renderSheet();
+    await user.click(await screen.findByLabelText(/^Library Test Exercise/));
+    await user.click(screen.getByRole('button', { name: 'Add 1 exercise' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(recordExerciseOrigin).toHaveBeenCalledTimes(2);
+    expect(await db.exercises.count()).toBe(1);
+  });
+
+  it('on a free plan it shows the room left and stops ticking beyond it', async () => {
+    const user = userEvent.setup();
+    plan.value = { tier: 'lite', enforcementEnabled: true };
+    await db.exercises.bulkPut(Array.from({ length: 8 }, (_, i) => ex(`seed${i}`, `Seed exercise ${i}`)));
+    renderSheet();
+    expect(await screen.findByText('Free plan: room for 2 more exercises.', {}, { timeout: 5000 })).toBeInTheDocument();
+    await user.click(await screen.findByLabelText(/^Quad Sets/));
+    await user.click(screen.getByLabelText(/^Chin Tucks/));
+    expect(screen.getByLabelText(/^Pendulum Swings/)).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add 2 exercises' })).toBeEnabled();
+  });
+
+  it('on a free plan at its limit it says so and offers nothing to tick', async () => {
+    plan.value = { tier: 'lite', enforcementEnabled: true };
+    await db.exercises.bulkPut(Array.from({ length: 10 }, (_, i) => ex(`seed${i}`, `Seed exercise ${i}`)));
+    renderSheet();
+    expect(await screen.findByText('You have reached the free-plan limit of 10 exercises. Visit theranet.in to upgrade.', {}, { timeout: 5000 })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/^Quad Sets/)).toBeDisabled());
   });
 });

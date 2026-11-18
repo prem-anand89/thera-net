@@ -134,6 +134,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const [starterEntry, setStarterEntry] = useState<StarterLibraryItem | null>(null);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [starterNotice, setStarterNotice] = useState<string | null>(null);
+  const [originAt, setOriginAt] = useState<string | null>(null);
   const kindTouched = useRef(false);
 
   const setPictures = (next: Picture[]) => {
@@ -178,8 +179,15 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     setStarterEntry(null);
     setConfirmPublish(false);
     setStarterNotice(null);
+    setOriginAt(null);
     kindTouched.current = !!ex;
     if (ex && navigator.onLine) hepService.exerciseUsage(ex.id).then(setUsage).catch(() => {});
+    if (ex && navigator.onLine) {
+      Promise.resolve()
+        .then(() => hepService.listExerciseOrigins(clinicId))
+        .then((list) => setOriginAt(list.find((o) => o.exerciseId === ex.id && o.sourceKind === 'library')?.importedAt ?? null))
+        .catch(() => {});
+    }
     if (ex && isStarterCuratorClinic(clinic) && navigator.onLine) {
       starterLibraryService.findPublishedForExercise(clinicId, ex.id).then(setStarterEntry).catch(() => {});
     }
@@ -468,6 +476,9 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
             );
           })}
 
+          {editingExisting && originAt && (
+            <p className="text-hint text-[var(--muted)]">Copied from the TheraNet Library on {formatDateDM(clinicToday(clinic, new Date(originAt)))}.</p>
+          )}
           {editingExisting && exercise && isCurator && (
             <section aria-labelledby="ex-starter" className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3">
               <h3 id="ex-starter" className="font-display text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">TheraNet Library</h3>

@@ -4,6 +4,7 @@
 // Exercises the clinic already has (same name) are shown but not offered again.
 import { useEffect, useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
+import { useEntitlements } from '@/app/useEntitlements';
 import { Button } from '@/components/Button';
 import { SheetDialog, btnPrimary, btnSecondary } from '@/components/ui';
 import {
@@ -14,6 +15,7 @@ import {
   type StarterLibraryItem,
 } from '@/domain/hep';
 import { doseSummary } from '@/domain/hepDose';
+import { TIER_LIMITS } from '@/domain/plans';
 import { db } from '@/lib/db';
 import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService } from '@/services/hepService';
@@ -41,6 +43,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
   const clinic = useClinic();
   const online = useOnline();
   const exercises = useExercises(clinic.id);
+  const ent = useEntitlements(clinic.id);
   const [items, setItems] = useState<StarterLibraryItem[]>(() => staticStarterItems());
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
@@ -76,14 +79,37 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
     return [...byRegion.entries()].sort(([a], [b]) => order(a) - order(b));
   }, [items]);
 
-  const toggle = (title: string) => setTicked((cur) => { const n = new Set(cur); if (n.has(title)) n.delete(title); else n.add(title); return n; });
+  // The free plan caps the clinic's own exercises; every exercise added from the library counts. The server enforces it.
+  const limit = ent.enforcementEnabled ? TIER_LIMITS[ent.tier]?.exercises ?? null : null;
+  const room = limit == null ? null : Math.max(0, limit - (exercises ?? []).length);
+  const tickedFree = (cur: ReadonlySet<string>) => items.filter((s) => cur.has(s.title) && offered(s)).length;
+  const toggle = (title: string) => setTicked((cur) => {
+    const n = new Set(cur);
+    if (n.has(title)) n.delete(title);
+    else if (room == null || tickedFree(cur) < room) n.add(title);
+    return n;
+  });
   const toggleRegion = (list: StarterLibraryItem[]) => setTicked((cur) => {
     const n = new Set(cur);
     const free = list.filter(offered);
     const allOn = free.every((s) => n.has(s.title));
-    for (const s of free) { if (allOn) n.delete(s.title); else n.add(s.title); }
+    for (const s of free) {
+      if (allOn) n.delete(s.title);
+      else if (!n.has(s.title) && (room == null || tickedFree(n) < room)) n.add(s.title);
+    }
     return n;
   });
+
+  /** Notes which library item the copy came from. Built-in items have nothing to link to; a failure never undoes the add. */
+  async function rememberOrigin(exerciseId: string, item: StarterLibraryItem) {
+    if (item.id.startsWith('static-')) return;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await hepService.recordExerciseOrigin(clinic.id, exerciseId, item.id, item.publishedAt);
+        return;
+      } catch { /* try once more, then carry on */ }
+    }
+  }
 
   async function add() {
     if (!online) { setError(HEP_NEEDS_CONNECTION); return; }
@@ -101,6 +127,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
         const input = starterItemToSaveInput(clinic.id, s, newId, cloned);
         const id = await hepService.saveExercise(input);
         await db.exercises.put(exerciseFromSaveInput(input, id)).catch(() => {});
+        await rememberOrigin(id, s);
         added += 1;
         setProgress({ done: added, total: chosen.length });
       }
@@ -132,6 +159,13 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
       }
     >
       <p className="mb-3 text-sm text-[var(--muted)]">Ready-made exercises with simple steps and a usual dose. They are copied into your own Library, where you can change anything and add photos. Pick only what you want.</p>
+      {limit != null && room != null && (
+        <p role="status" className="mb-3 text-sm font-medium text-[var(--ink)]">
+          {room > 0
+            ? `Free plan: room for ${room} more ${room === 1 ? 'exercise' : 'exercises'}.`
+            : `You have reached the free-plan limit of ${limit} exercises. Visit theranet.in to upgrade.`}
+        </p>
+      )}
       <div className="space-y-4">
         {groups.map(([region, list]) => {
           const free = list.filter(offered);
@@ -150,7 +184,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
                   return (
                     <li key={s.id}>
                       <label className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 ${mine ? 'opacity-50' : 'hover:bg-[var(--paper)]'}`}>
-                        <input type="checkbox" className="shrink-0" disabled={mine} checked={mine || ticked.has(s.title)} onChange={() => toggle(s.title)} />
+                        <input type="checkbox" className="shrink-0" disabled={mine || (room != null && !ticked.has(s.title) && tickedFree(ticked) >= room)} checked={mine || ticked.has(s.title)} onChange={() => toggle(s.title)} />
                         {url && <Thumb ex={asThumbExercise(s)} url={url} size={36} />}
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-[var(--ink)]">{s.title}{mine && <span className="ml-2 text-xs font-normal text-[var(--muted)]">Already in your Library</span>}</span>

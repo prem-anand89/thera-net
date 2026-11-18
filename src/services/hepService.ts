@@ -510,6 +510,42 @@ export const hepService = {
     return count ?? 0;
   },
 
+  /** Remembers which TheraNet Library item a clinic's copy came from (so an update can be offered later). */
+  async recordExerciseOrigin(clinicId: string, exerciseId: string, sourceId: string, sourcePublishedAt: string | null): Promise<void> {
+    const supabase = requireOnline();
+    const { error } = await supabase.rpc('record_exercise_origin', {
+      p_clinic_id: clinicId,
+      p_exercise_id: exerciseId,
+      p_source_kind: 'library',
+      p_source_id: sourceId,
+      p_source_published_at: sourcePublishedAt,
+    });
+    if (error) fail(error);
+  },
+
+  /** Where this clinic's copied exercises came from. Empty offline or on an error: the origin is only a convenience. */
+  async listExerciseOrigins(
+    clinicId: string,
+  ): Promise<Array<{ exerciseId: string; sourceKind: 'library' | 'public'; sourceId: string; sourcePublishedAt: string | null; importedAt: string }>> {
+    try {
+      const supabase = requireOnline();
+      const { data, error } = await supabase
+        .from('exercise_origins')
+        .select('exercise_id, source_kind, source_id, source_published_at, imported_at')
+        .eq('clinic_id', clinicId);
+      if (error || !data) return [];
+      return (data as Row[]).map((r) => ({
+        exerciseId: String(r.exercise_id),
+        sourceKind: r.source_kind === 'public' ? 'public' : 'library',
+        sourceId: String(r.source_id),
+        sourcePublishedAt: (r.source_published_at as string | null) ?? null,
+        importedAt: String(r.imported_at),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
   /** One patient's programs (active, paused, completed), newest first. */
   async listPatientPrograms(patientId: string, since: string): Promise<ProgramBundle[]> {
     return fetchBundles((q) => q.eq('patient_id', patientId), since);
