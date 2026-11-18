@@ -110,7 +110,7 @@ describe('HepPage', () => {
   it('opens on Library when the library is empty and moves between tabs through the URL', async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(await screen.findByRole('tab', { name: 'Library' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'My exercises' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('library tab')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Programs' }));
     expect(navigate).toHaveBeenCalledWith({ to: '/hep', search: { tab: 'programs' } });
@@ -141,7 +141,7 @@ describe('HepPage', () => {
     cleanup();
     search = { tab: 'library' };
     renderPage();
-    expect(screen.getByRole('tab', { name: 'Library' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'My exercises' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('library tab')).toBeInTheDocument();
   });
 

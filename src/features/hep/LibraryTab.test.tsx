@@ -37,12 +37,12 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe('LibraryTab', () => {
-  it('starts empty with no built-in list, offering a first exercise and the optional starter set', async () => {
+  it('starts empty with no built-in list, offering a first exercise and the optional TheraNet Library', async () => {
     const onStarter = vi.fn();
     renderTab({ onStarter });
     expect(await screen.findByText('Your Library is empty')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add your first exercise' })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Add the starter library' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open the TheraNet Library' }));
     expect(onStarter).toHaveBeenCalled();
   });
 

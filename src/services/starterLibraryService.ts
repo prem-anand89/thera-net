@@ -1,4 +1,4 @@
-// Shared Starter Library service: reads the curated `starter_exercises` catalog (with offline/pre-migration fallback
+// Shared TheraNet Library service: reads the curated `starter_exercises` catalog (with offline/pre-migration fallback
 // to the static STARTER_EXERCISES list) and lets Beyond Mechanics & Physio Clinic publish, update, or remove entries.
 import {
   alsoPhasesOf,
@@ -94,7 +94,7 @@ function mapRow(r: Row): StarterLibraryItem {
 }
 
 export const starterLibraryService = {
-  /** Lists active Starter Library items from Supabase, falling back cleanly to static STARTER_EXERCISES offline or before migration. */
+  /** Lists active TheraNet Library items from Supabase, falling back cleanly to static STARTER_EXERCISES offline or before migration. */
   async listStarterItems(): Promise<StarterLibraryItem[]> {
     const supabase = getSupabase();
     if (!supabase || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
@@ -137,11 +137,11 @@ export const starterLibraryService = {
     }
   },
 
-  /** Curator-only: publishes or updates a clinic exercise into the shared Starter Library (cloning any pictures to `starter/exercises/`). */
+  /** Curator-only: publishes or updates a clinic exercise into the shared TheraNet Library (cloning any pictures to `starter/exercises/`). */
   async publishExercise(clinicId: string, ex: Exercise, existingStarterId?: string | null): Promise<string> {
     const supabase = requireOnline();
     if (ex.hidePicturesInLists) {
-      throw new Error('Turn off "Hide pictures in lists" in Media and instructions before sharing to the Starter library.');
+      throw new Error('Turn off "Hide pictures in lists" in Media and instructions before sharing to the TheraNet Library.');
     }
     const existing = existingStarterId ? null : await this.findPublishedForExercise(clinicId, ex.id);
     const starterId = existingStarterId ?? existing?.id ?? crypto.randomUUID();
@@ -181,7 +181,7 @@ export const starterLibraryService = {
     return (data as string) ?? starterId;
   },
 
-  /** Curator-only: removes a Starter Library entry from future browsing without affecting clinics that already copied it. */
+  /** Curator-only: removes a TheraNet Library entry from future browsing without affecting clinics that already copied it. */
   async unpublishExercise(clinicId: string, starterId: string): Promise<void> {
     const supabase = requireOnline();
     const { error } = await supabase.rpc('unpublish_starter_exercise', {

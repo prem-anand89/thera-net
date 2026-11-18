@@ -383,9 +383,9 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       const starterId = await starterLibraryService.publishExercise(clinicId, exercise, starterEntry?.id);
       const refreshed = await starterLibraryService.findPublishedForExercise(clinicId, exercise.id);
       setStarterEntry(refreshed ?? { ...(starterEntry ?? {}), id: starterId, publishedAt: new Date().toISOString() } as StarterLibraryItem);
-      setStarterNotice(starterEntry ? 'Starter library entry updated.' : 'Shared to Starter library.');
+      setStarterNotice(starterEntry ? 'TheraNet Library entry updated.' : 'Shared to TheraNet Library.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not publish to the Starter library.');
+      setError(e instanceof Error ? e.message : 'Could not publish to the TheraNet Library.');
     } finally {
       setBusy(false);
     }
@@ -399,9 +399,9 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     try {
       await starterLibraryService.unpublishExercise(clinicId, starterEntry.id);
       setStarterEntry(null);
-      setStarterNotice('Removed from Starter library.');
+      setStarterNotice('Removed from TheraNet Library.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove from the Starter library.');
+      setError(e instanceof Error ? e.message : 'Could not remove from the TheraNet Library.');
     } finally {
       setBusy(false);
     }
@@ -468,7 +468,7 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
           {editingExisting && exercise && isCurator && (
             <section aria-labelledby="ex-starter" className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3">
-              <h3 id="ex-starter" className="font-display text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Starter library</h3>
+              <h3 id="ex-starter" className="font-display text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">TheraNet Library</h3>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -476,18 +476,18 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
                   onClick={() => setConfirmPublish(true)}
                   disabled={busy || !online || dirty || hidePictures}
                 >
-                  {starterEntry ? 'Update in Starter library' : 'Share to Starter library'}
+                  {starterEntry ? 'Update in TheraNet Library' : 'Share to TheraNet Library'}
                 </Button>
                 {starterEntry && (
                   <Button type="button" className={pillSmDanger} onClick={() => void unpublishStarter()} disabled={busy || !online}>
-                    Remove from Starter
+                    Remove from TheraNet Library
                   </Button>
                 )}
               </div>
               {starterEntry?.publishedAt && (
                 <p className="text-hint text-[var(--muted)]">Published {formatDateDM(clinicToday(clinic, new Date(starterEntry.publishedAt)))}</p>
               )}
-              {dirty && <p className="text-hint text-[var(--muted)]">Save your changes first before sharing to the Starter library.</p>}
+              {dirty && <p className="text-hint text-[var(--muted)]">Save your changes first before sharing to the TheraNet Library.</p>}
               {hidePictures && <p className="text-hint text-[var(--muted)]">Turn off “Hide pictures in lists” in Media and instructions to share this exercise.</p>}
               {starterNotice && <p className="text-xs font-medium text-[var(--moss)]" role="status">{starterNotice}</p>}
             </section>
@@ -531,9 +531,9 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
       />
       <ConfirmDialog
         open={confirmPublish}
-        title={starterEntry ? 'Update in Starter library?' : 'Share to Starter library?'}
-        message={`Copy “${exercise?.title ?? ''}” (and any pictures) to the shared Starter library so other clinics can add it? Confirm you have permission to share these pictures across TheraNet clinics.`}
-        confirmLabel={starterEntry ? 'Update Starter' : 'Share to Starter'}
+        title={starterEntry ? 'Update in TheraNet Library?' : 'Share to TheraNet Library?'}
+        message={`Copy “${exercise?.title ?? ''}” (and any pictures) to the shared TheraNet Library so other clinics can add it? Confirm you have permission to share these pictures across TheraNet clinics.`}
+        confirmLabel={starterEntry ? 'Update library' : 'Share to library'}
         cancelLabel="Cancel"
         onConfirm={() => void publishStarter()}
         onCancel={() => setConfirmPublish(false)}

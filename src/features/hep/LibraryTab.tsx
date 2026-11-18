@@ -47,7 +47,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
       <p className="mx-auto max-w-md text-sm text-[var(--muted)]">Add the exercises you prescribe most, with a photo or GIF and the usual dose. Then build a program for a patient in a minute.</p>
       <div className="flex flex-wrap justify-center gap-2">
         <Button type="button" className={btnPrimary} onClick={() => setForm({})}>Add your first exercise</Button>
-        {onStarter && <Button type="button" className={btnSecondary} onClick={onStarter}>Add the starter library</Button>}
+        {onStarter && <Button type="button" className={btnSecondary} onClick={onStarter}>Open the TheraNet Library</Button>}
       </div>
     </div>
   );
@@ -65,7 +65,7 @@ export function LibraryTab({ onStarter }: { onStarter?: () => void }) {
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived ({archivedCount})
           </label>
         )}
-        {onStarter && count > 0 && <Button type="button" className={btnSecondary} onClick={onStarter}>Starter library</Button>}
+        {onStarter && count > 0 && <Button type="button" className={btnSecondary} onClick={onStarter}>TheraNet Library</Button>}
         <Button type="button" className={btnPrimary} disabled={!online} onClick={() => setForm({})}>{online ? '+ Add exercise' : 'Needs a connection'}</Button>
       </div>
       <ErrorNote message={error} />

@@ -128,7 +128,7 @@ describe('ExercisePicker', () => {
     await db.exercises.clear();
     const user = userEvent.setup();
     renderPicker();
-    await user.click(await screen.findByRole('button', { name: 'Add the starter library' }));
+    await user.click(await screen.findByRole('button', { name: 'Open the TheraNet Library' }));
     expect(screen.getByText('starter sheet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Or create your own exercise' })).toBeInTheDocument();
   });

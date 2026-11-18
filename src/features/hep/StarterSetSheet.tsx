@@ -1,4 +1,4 @@
-// Library > Starter library: tick the exercises to copy into the clinic's own Library. Optional, never automatic.
+// Library > TheraNet Library: tick the exercises to copy into the clinic's own Library. Optional, never automatic.
 // Reads from the shared `starter_exercises` catalog curated by Beyond Mechanics & Physio Clinic (falling back offline or
 // pre-migration to the static STARTER_EXERCISES list), and clones any Starter pictures into the clinic's R2 prefix.
 // Exercises the clinic already has (same name) are shown but not offered again.
@@ -118,7 +118,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
   return (
     <SheetDialog
       open={open}
-      title="Starter library"
+      title="TheraNet Library"
       onClose={onClose}
       busy={busy}
       error={error}

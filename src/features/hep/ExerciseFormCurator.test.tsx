@@ -47,39 +47,39 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('ExerciseForm: Starter library curator controls', () => {
-  it('lets Beyond Mechanics & Physio Clinic publish, update and remove an exercise from Starter library', async () => {
+describe('ExerciseForm: TheraNet Library curator controls', () => {
+  it('lets Beyond Mechanics & Physio Clinic publish, update and remove an exercise from TheraNet Library', async () => {
     const user = userEvent.setup();
     const ex = saved();
     render(<ExerciseForm open clinicId="c1" exercise={ex} allExercises={[ex]} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    const shareBtn = await screen.findByRole('button', { name: 'Share to Starter library' });
+    const shareBtn = await screen.findByRole('button', { name: 'Share to TheraNet Library' });
     await user.click(shareBtn);
 
-    const dlg = screen.getByRole('dialog', { name: 'Share to Starter library?' });
-    await user.click(within(dlg).getByRole('button', { name: 'Share to Starter' }));
+    const dlg = screen.getByRole('dialog', { name: 'Share to TheraNet Library?' });
+    await user.click(within(dlg).getByRole('button', { name: 'Share to library' }));
     await waitFor(() => expect(publishExercise).toHaveBeenCalledWith('c1', ex, undefined));
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Shared to Starter library.');
-    expect(screen.getByRole('button', { name: 'Update in Starter library' })).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('Shared to TheraNet Library.');
+    expect(screen.getByRole('button', { name: 'Update in TheraNet Library' })).toBeInTheDocument();
 
-    const rmBtn = screen.getByRole('button', { name: 'Remove from Starter' });
+    const rmBtn = screen.getByRole('button', { name: 'Remove from TheraNet Library' });
     await user.click(rmBtn);
     await waitFor(() => expect(unpublishExercise).toHaveBeenCalledWith('c1', 'st-1'));
-    expect(await screen.findByRole('status')).toHaveTextContent('Removed from Starter library.');
+    expect(await screen.findByRole('status')).toHaveTextContent('Removed from TheraNet Library.');
   });
 
-  it('hides Starter library curator controls for non-curator clinics (even if named Physio Clinic)', () => {
+  it('hides TheraNet Library curator controls for non-curator clinics (even if named Physio Clinic)', () => {
     clinic = { id: 'c1', name: 'Physio Clinic', starterCurator: false, timezone: 'Asia/Kolkata' };
     const ex = saved();
     render(<ExerciseForm open clinicId="c1" exercise={ex} allExercises={[ex]} onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: /Starter library/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /TheraNet Library/i })).toBeNull();
   });
 
-  it('shows Update and published date when already shared in Starter library', async () => {
+  it('shows Update and published date when already shared in TheraNet Library', async () => {
     findPublishedForExercise.mockResolvedValue({ id: 'st-7', publishedAt: '2026-11-18T00:00:00Z' } as StarterLibraryItem);
     const ex = saved();
     render(<ExerciseForm open clinicId="c1" exercise={ex} allExercises={[ex]} onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect(await screen.findByRole('button', { name: 'Update in Starter library' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Update in TheraNet Library' })).toBeInTheDocument();
   });
 });

@@ -10,7 +10,7 @@ export function hepAvailableForClinic(clinic: { name?: string | null } | null | 
   return name === 'beyond mechanics' || name === 'physio clinic';
 }
 
-/** Clinics allowed to publish and maintain shared Starter Library exercises. */
+/** Clinics allowed to publish and maintain shared TheraNet Library exercises. */
 export function isStarterCuratorClinic(
   clinic: { starterCurator?: boolean | null } | null | undefined,
 ): boolean {

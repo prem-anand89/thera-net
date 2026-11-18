@@ -17,7 +17,7 @@ import { ProgramsTab } from './ProgramsTab';
 import { TemplatesTab } from './TemplatesTab';
 import { clinicToday, useClinicPrograms, useExercises, useOnline } from './useHepData';
 
-const LABELS: Record<HepTab, string> = { library: 'Library', templates: 'Templates', programs: 'Programs' };
+const LABELS: Record<HepTab, string> = { library: 'My exercises', templates: 'Templates', programs: 'Programs' };
 const WINDOW_DAYS = 14;
 
 export function HepPage() {

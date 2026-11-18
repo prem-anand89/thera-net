@@ -128,9 +128,9 @@ export function ExercisePicker({ open, onClose, onAdd, disabledIds, patientId, p
   const empty = (
     <div className="space-y-3 rounded-2xl border border-dashed border-[var(--border)] p-6 text-center">
       <p className="font-display text-base font-semibold text-[var(--ink)]">Your Library is empty</p>
-      <p className="mx-auto max-w-md text-sm text-[var(--muted)]">Start from the starter library, or create the exercises you prescribe most.</p>
+      <p className="mx-auto max-w-md text-sm text-[var(--muted)]">Start from the TheraNet Library, or create the exercises you prescribe most.</p>
       <div className="flex flex-wrap justify-center gap-2">
-        <Button type="button" className={btnPrimary} onClick={() => setStarterOpen(true)}>Add the starter library</Button>
+        <Button type="button" className={btnPrimary} onClick={() => setStarterOpen(true)}>Open the TheraNet Library</Button>
         <Button type="button" className={btnSecondary} disabled={!online} onClick={() => setNewName('')}>Or create your own exercise</Button>
       </div>
     </div>
