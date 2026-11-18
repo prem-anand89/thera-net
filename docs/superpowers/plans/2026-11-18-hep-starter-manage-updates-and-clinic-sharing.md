@@ -1,3 +1,5 @@
+> **Superseded by `2026-11-18-theranet-library-curation.md`** (sharing and update badges are deferred to the Public Exercise Library).
+
 # HEP Starter Manage Mode, Starter Updates (Step 2) & Clinic-to-Clinic Sharing (Step 3)
 
 **Goal:**
