@@ -126,7 +126,8 @@ describe('starterLibraryService', () => {
 
 describe('starterLibraryService.publishMany and provenance', () => {
   it('sends the image source and note with the publish call when there are pictures', async () => {
-    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) });
+    const chain: Record<string, unknown> = { eq: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
+    mockFrom.mockReturnValue({ select: () => chain });
     cloneToStarter.mockResolvedValue({ mediaKeys: ['starter/exercises/s/0-aaaaaaaa'], thumbKey: null });
     mockRpc.mockResolvedValue({ data: 's', error: null });
     await starterLibraryService.publishExercise('c-bm', ex(), null, { imageSource: 'ai_generated', imageNote: 'checked' });
@@ -134,7 +135,8 @@ describe('starterLibraryService.publishMany and provenance', () => {
   });
 
   it('skips archived and hidden-picture exercises, keeps going after a failure, and reports each', async () => {
-    mockFrom.mockReturnValue({ select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }) });
+    const chain: Record<string, unknown> = { eq: () => chain, maybeSingle: async () => ({ data: null, error: null }) };
+    mockFrom.mockReturnValue({ select: () => chain });
     cloneToStarter.mockResolvedValue({ mediaKeys: ['starter/exercises/s/0-aaaaaaaa'], thumbKey: null });
     mockRpc.mockImplementation(async (_fn: string, args: { p_title: string }) =>
       args.p_title === 'Bad' ? { data: null, error: { message: 'nope' } } : { data: 'id', error: null });
@@ -148,5 +150,15 @@ describe('starterLibraryService.publishMany and provenance', () => {
     expect(result.published).toBe(2);
     expect(result.skipped.map((s) => [s.id, s.reason])).toEqual([['b', 'it is archived'], ['c', 'its pictures are hidden in lists'], ['d', 'nope']]);
     expect(progress).toHaveBeenLastCalledWith(5, 5);
+  });
+
+  it('republishing reuses the id of a row that was removed from the library (one row per clinic exercise)', async () => {
+    const chain: Record<string, unknown> = { eq: () => chain, maybeSingle: async () => ({ data: { id: 'old-row' }, error: null }) };
+    mockFrom.mockReturnValue({ select: () => chain });
+    cloneToStarter.mockResolvedValue({ mediaKeys: ['starter/exercises/old-row/0-aaaaaaaa'], thumbKey: null });
+    mockRpc.mockResolvedValue({ data: 'old-row', error: null });
+    await starterLibraryService.publishExercise('c-bm', ex(), null, { imageSource: 'licensed', imageNote: null });
+    expect(cloneToStarter).toHaveBeenCalledWith('c-bm', 'old-row', expect.any(Array), expect.anything());
+    expect(mockRpc).toHaveBeenCalledWith('publish_starter_exercise', expect.objectContaining({ p_starter_id: 'old-row' }));
   });
 });

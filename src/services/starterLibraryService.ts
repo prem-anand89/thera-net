@@ -138,6 +138,23 @@ export const starterLibraryService = {
     }
   },
 
+  /**
+   * Curator-only: the library row made from this clinic exercise, whether it is in the library now or was removed.
+   * Republishing reuses its id (the table allows one row per clinic exercise), which also brings a removed one back.
+   */
+  async findRowIdForExercise(clinicId: string, exerciseId: string): Promise<string | null> {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('starter_exercises')
+      .select('id')
+      .eq('source_clinic_id', clinicId)
+      .eq('source_exercise_id', exerciseId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? String((data as Row).id) : null;
+  },
+
   /** Curator-only: publishes or updates a clinic exercise into the shared TheraNet Library (cloning any pictures to `starter/exercises/`). */
   async publishExercise(
     clinicId: string,
@@ -149,8 +166,8 @@ export const starterLibraryService = {
     if (ex.hidePicturesInLists) {
       throw new Error('Turn off "Hide pictures in lists" in Media and instructions before sharing to the TheraNet Library.');
     }
-    const existing = existingStarterId ? null : await this.findPublishedForExercise(clinicId, ex.id);
-    const starterId = existingStarterId ?? existing?.id ?? crypto.randomUUID();
+    const existingId = existingStarterId ?? (await this.findRowIdForExercise(clinicId, ex.id));
+    const starterId = existingId ?? crypto.randomUUID();
     const cloned =
       ex.mediaKeys.length > 0
         ? await hepMediaService.cloneToStarter(clinicId, starterId, ex.mediaKeys, ex.thumbKey)

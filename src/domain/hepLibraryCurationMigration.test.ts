@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { IMAGE_SOURCES } from './hep';
 
 const OLD_PUB_SIG = 'uuid, uuid, uuid, text, text[], text, text[], text, text[], text[], text[], text, text, text, text[], text[], text, text, smallint, smallint, smallint, smallint, smallint, smallint, text';
 const NEW_PUB_SIG = `${OLD_PUB_SIG}, text, text`;
@@ -17,6 +18,17 @@ describe('TheraNet Library curation migration contract', () => {
     const s = sql();
     expect(s).toContain("check (image_source in ('own_photography', 'ai_generated', 'illustration', 'licensed'))");
     expect(s).toContain('check (length(image_note) <= 200)');
+  });
+
+  it('allows exactly the picture sources the app offers', () => {
+    const m = sql().match(/check \(image_source in \(([^)]*)\)\)/);
+    expect(m).not.toBeNull();
+    const fromSql = (m?.[1] ?? '').split(',').map((v) => v.trim().replace(/'/g, ''));
+    expect(fromSql).toEqual([...IMAGE_SOURCES]);
+  });
+
+  it('lets a curator clinic read its own removed rows, everyone else active rows only', () => {
+    expect(sql()).toContain('using (active = true or public.is_starter_curator(source_clinic_id))');
   });
 
   it('replaces publish_starter_exercise: drops the 25-argument overload, grants only the 27-argument one', () => {

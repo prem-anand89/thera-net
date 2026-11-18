@@ -1,7 +1,8 @@
 -- TheraNet Library curation (table `starter_exercises`):
 --   1) where each library item's pictures come from (image_source, image_note),
 --   2) publish_starter_exercise takes those two values and refuses pictures without a source,
---   3) exercise_origins: which library item a clinic's copy came from (library now, public library later).
+--   3) curator clinics can read their own removed rows (republish reuses the row),
+--   4) exercise_origins: which library item a clinic's copy came from (library now, public library later).
 -- Earlier HEP migrations are live and are not edited.
 
 -- 1. Provenance on library items.
@@ -11,6 +12,15 @@ alter table public.starter_exercises
 alter table public.starter_exercises
   add column if not exists image_note text
     check (length(image_note) <= 200);
+
+-- 1b. A curator clinic can also read its own removed (inactive) rows, so republishing an exercise reuses its row
+--     (the table allows one row per clinic exercise) instead of failing on the unique index. Others see active rows only.
+drop policy if exists "starter_exercises_select_authenticated" on public.starter_exercises;
+create policy "starter_exercises_select_authenticated"
+  on public.starter_exercises
+  for select
+  to authenticated
+  using (active = true or public.is_starter_curator(source_clinic_id));
 
 -- 2. publish_starter_exercise gains p_image_source and p_image_note (last two parameters).
 --    Drop the 25-argument version from 20261118110000_hep_starter_library.sql so only one overload exists.
@@ -64,7 +74,7 @@ declare
   v_image_note text := nullif(btrim(coalesce(p_image_note, '')), '');
 begin
   if not public.is_starter_curator(p_clinic_id) then
-    raise exception 'Only curator clinics can update the Starter library.';
+    raise exception 'Only curator clinics can update the TheraNet Library.';
   end if;
 
   if cardinality(coalesce(p_media_keys, '{}'::text[])) > 0 and v_image_source is null then
