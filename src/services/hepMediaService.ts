@@ -64,4 +64,39 @@ export const hepMediaService = {
     const res = await fetch(upload.url, { method: 'PUT', headers: { ...upload.headers, 'Content-Type': blob.type || 'application/octet-stream' }, body: blob });
     if (!res.ok) throw new Error(`The picture could not be saved (${res.status}). Try again.`);
   },
+
+  /** Signed viewing links for shared Starter Library pictures (`starter/exercises/...`). */
+  async mintStarterViewUrls(clinicId: string, keys: string[]): Promise<Record<string, string>> {
+    if (keys.length === 0) return {};
+    const out: Record<string, string> = {};
+    for (let i = 0; i < keys.length; i += 60) {
+      const d = await invoke({ action: 'mint_starter_view_urls', clinicId, keys: keys.slice(i, i + 60) });
+      Object.assign(out, (d.urls as Record<string, string>) ?? {});
+    }
+    return out;
+  },
+
+  /** Curator-only: copies clinic exercise images into `starter/exercises/{starterId}/...` on R2. */
+  async cloneToStarter(
+    clinicId: string,
+    starterId: string,
+    mediaKeys: string[],
+    thumbKey: string | null,
+  ): Promise<{ mediaKeys: string[]; thumbKey: string | null }> {
+    if (mediaKeys.length === 0 && !thumbKey) return { mediaKeys: [], thumbKey: null };
+    const d = await invoke({ action: 'clone_to_starter', clinicId, starterId, mediaKeys, thumbKey });
+    return { mediaKeys: (d.mediaKeys as string[]) ?? [], thumbKey: (d.thumbKey as string | null) ?? null };
+  },
+
+  /** Copies shared Starter images into `clinics/{clinicId}/exercises/{exerciseId}/...` on R2 when adding an item. */
+  async cloneFromStarter(
+    clinicId: string,
+    exerciseId: string,
+    mediaKeys: string[],
+    thumbKey: string | null,
+  ): Promise<{ mediaKeys: string[]; thumbKey: string | null }> {
+    if (mediaKeys.length === 0 && !thumbKey) return { mediaKeys: [], thumbKey: null };
+    const d = await invoke({ action: 'clone_from_starter', clinicId, exerciseId, mediaKeys, thumbKey });
+    return { mediaKeys: (d.mediaKeys as string[]) ?? [], thumbKey: (d.thumbKey as string | null) ?? null };
+  },
 };

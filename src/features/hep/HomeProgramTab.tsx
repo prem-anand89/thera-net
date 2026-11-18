@@ -60,7 +60,10 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
   const [handOver, setHandOver] = useState<{ pin: string } | null>(null);
   const [painSeen, setPainSeen] = useState<Record<string, string>>({});
   const [earlierOpen, setEarlierOpen] = useState(false);
+  const [shownPin, setShownPin] = useState<string | null | undefined>(undefined);
+  const [pinLoading, setPinLoading] = useState(false);
 
+  useEffect(() => { setShownPin(undefined); }, [patientId]);
   useEffect(() => { void repos.patients.get(patientId).then((p) => setPatient(p ?? null)).catch(() => {}); }, [patientId]);
 
   const load = useCallback(async () => {
@@ -91,6 +94,19 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
 
   async function act(fn: () => Promise<unknown>) {
     try { setError(null); await fn(); await load(); } catch (e) { setError(e instanceof Error ? e.message : 'That did not work. Try again.'); }
+  }
+
+  async function togglePin() {
+    if (shownPin !== undefined) { setShownPin(undefined); return; }
+    setPinLoading(true);
+    setError(null);
+    try {
+      setShownPin(await hepService.getPatientPin(patientId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load the PIN.');
+    } finally {
+      setPinLoading(false);
+    }
   }
 
   if (!online && bundles === null) return <p className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted)]">The home program needs a connection. Reconnect to see it.</p>;
@@ -210,8 +226,12 @@ export function HomeProgramTab({ patientId }: { patientId: string }) {
                 timeZone={tz}
                 online={online}
                 whatsAppUrl={shareUrl}
+                requirePin={clinic.hepRequirePin ?? true}
+                pin={shownPin}
+                pinLoading={pinLoading}
+                onTogglePin={() => void togglePin()}
                 onCopy={() => { if (access) void navigator.clipboard.writeText(buildHepPortalUrl(access.token)).catch(() => setError('Could not copy. Select it and copy by hand.')); }}
-                onResetPin={() => setConfirmReset(true)}
+                onResetPin={() => { setShownPin(undefined); setConfirmReset(true); }}
                 onStop={() => setConfirmStop(true)}
               />
             )}

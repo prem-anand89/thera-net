@@ -22,7 +22,8 @@ afterEach(cleanup);
 describe('PrintSheet', () => {
   it('prints the clinic, patient, link, the PIN, and the exercises section by section with steps, dose and stop-if', async () => {
     renderSheet('4821');
-    await waitFor(() => expect(window.print).toHaveBeenCalled());
+    // First test in the file: the QR library loads on a cold start, so allow more than the default 1 s.
+    await waitFor(() => expect(window.print).toHaveBeenCalled(), { timeout: 5000 });
     const text = document.querySelector('.hep-print')?.textContent ?? '';
     expect(text).toContain('Sunrise Physio');
     expect(text).toContain('Home exercise program for Ravi Kumar');
@@ -59,5 +60,20 @@ describe('PrintSheet', () => {
     renderSheet('4821');
     await waitFor(() => expect(window.print).toHaveBeenCalled());
     expect(document.querySelector('.hep-print style')?.textContent).toMatch(/\.hep-print\{display:none\}.*@media print.*body>\*:not\(\.hep-print\)\{display:none!important\}/);
+  });
+
+  it('prints a standalone handout without a QR code or patient name when link is omitted', async () => {
+    render(
+      <ClinicContext.Provider value={clinic}>
+        <PrintSheet open onClose={vi.fn()} clinicName="Sunrise Physio" programTitle="Knee handout" items={[item('Squat')]} />
+      </ClinicContext.Provider>,
+    );
+    await waitFor(() => expect(window.print).toHaveBeenCalled());
+    const text = document.querySelector('.hep-print')?.textContent ?? '';
+    expect(text).toContain('Sunrise Physio');
+    expect(text).toContain('Knee handout');
+    expect(text).toContain('Squat');
+    expect(text).not.toContain('Open this link on your phone');
+    expect(document.querySelector('.hep-print svg')).toBeNull();
   });
 });

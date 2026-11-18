@@ -455,6 +455,14 @@ export const hepService = {
 
   // ---- The patient's link and PIN -------------------------------------------------
 
+  /** Reads the patient's existing 4-digit HEP PIN for staff without resetting it (null for legacy rows). */
+  async getPatientPin(patientId: string): Promise<string | null> {
+    const supabase = requireOnline();
+    const { data, error } = await supabase.rpc('get_patient_hep_pin', { p_patient_id: patientId });
+    if (error) fail(error);
+    return (data as string | null) ?? null;
+  },
+
   /** A new random PIN, returned ONCE. Remembered phones are signed out. */
   async resetPin(patientId: string): Promise<string> {
     const supabase = requireOnline();

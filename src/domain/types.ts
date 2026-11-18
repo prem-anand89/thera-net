@@ -131,6 +131,10 @@ export interface Clinic {
   signaturePath?: string | null;
   /** Name printed under the signature: the clinic's authorised signatory (not the treating therapist, who prints as "Therapist"). */
   signatoryName?: string | null;
+  /** True (default) = patients verify a 4-digit PIN to open HEP links; false = link opens directly without PIN. */
+  hepRequirePin?: boolean;
+  /** Platform-managed flag allowing staff at this clinic to curate shared Starter Library exercises. */
+  starterCurator?: boolean;
   slotDurationMinutes: number;
   /** Staff start times come every this many minutes (15 or 30). Absent/null = every slotDurationMinutes. Public booking ignores it. */
   startStepMinutes?: number | null;

@@ -49,6 +49,25 @@ export function isKeyForClinic(clinicId: string, key: string): boolean {
   return parsed !== null && parsed.clinicId === clinicId;
 }
 
+/** Splits a starter key (`starter/exercises/{starterId}/{slot}-{suffix}`) or returns null. */
+export function parseStarterMediaKey(
+  key: string,
+): { starterId: string; slot: number | 'thumb'; suffix: string | null } | null {
+  const parts = key.split('/');
+  if (parts.length !== 4 || parts[0] !== 'starter' || parts[1] !== 'exercises') return null;
+  const [, , starterId, last] = parts;
+  if (!SAFE_ID.test(starterId)) return null;
+  const m = /^(thumb|\d)(?:-([a-z0-9]{8}))?$/.exec(last);
+  if (!m) return null;
+  if (m[2] !== undefined && !SUFFIX.test(m[2])) return null;
+  return { starterId, slot: m[1] === 'thumb' ? 'thumb' : Number(m[1]), suffix: m[2] ?? null };
+}
+
+/** True when the key is a well-formed key inside the shared `starter/exercises/` prefix. */
+export function isStarterKey(key: string): boolean {
+  return parseStarterMediaKey(key) !== null;
+}
+
 /**
  * The keys of one exercise: none (0 keys), one GIF (1), or 1 to 4 photos. Every key must be in this clinic's prefix,
  * in one exercise folder, and photo number n must sit at position n.

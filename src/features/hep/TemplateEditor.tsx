@@ -10,6 +10,7 @@ import { useClinic } from '@/app/clinicContext';
 import { hepService, HEP_NEEDS_CONNECTION, type HepItemInput } from '@/services/hepService';
 import { ExercisePicker } from './ExercisePicker';
 import { ProgramPreviewDialog } from './PatientPreview';
+import { PrintSheet } from './PrintSheet';
 import { ProgramItemsEditor } from './ProgramItemsEditor';
 import { itemDose, orderBySection, templateItemToInput, type ItemBlock } from './hepItems';
 import { commonSessionsPerDay } from './programDraft';
@@ -34,6 +35,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
   const [initial, setInitial] = useState<Draft>(fromTemplate());
   const [picking, setPicking] = useState<ItemBlock | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
     setInitial(d);
     setPicking(null);
     setPreviewing(false);
+    setPrinting(false);
     setConfirmDiscard(false);
     setError(null);
     setBusy(false);
@@ -76,6 +79,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
     <>
       <Button type="button" className={btnSecondary} onClick={close} disabled={busy}>Cancel</Button>
       <Button type="button" className={btnSecondary} onClick={() => setPreviewing(true)} disabled={busy || items.length === 0}>Preview as patient</Button>
+      <Button type="button" className={btnSecondary} onClick={() => setPrinting(true)} disabled={busy || items.length === 0}>Print sheet</Button>
       <Button type="button" className={btnPrimary} onClick={() => void save()} disabled={busy || !valid || !online}>
         {busy ? 'Saving…' : !online ? 'Needs a connection' : 'Save template'}
       </Button>
@@ -101,6 +105,7 @@ export function TemplateEditor({ open, template, onClose, onSaved }: TemplateEdi
         onAdd={(list) => setDraft((d) => ({ ...d, items: [...d.items, ...list] }))}
       />
       <ProgramPreviewDialog open={open && previewing} onClose={() => setPreviewing(false)} clinicId={clinic.id} clinicName={clinic.name} title={title.trim() || 'Template'} items={orderBySection(items)} sessionsPerDay={sessionsPerDay} />
+      <PrintSheet open={open && printing} onClose={() => setPrinting(false)} clinicName={clinic.name} programTitle={title.trim() || 'Exercise handout'} items={orderBySection(items)} />
       <ConfirmDialog open={confirmDiscard} title="Discard unsaved changes?" message="What you changed in this template will not be saved." confirmLabel="Discard" destructive onConfirm={() => { setConfirmDiscard(false); onClose(); }} onCancel={() => setConfirmDiscard(false)} />
     </>
   );

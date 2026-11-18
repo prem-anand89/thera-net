@@ -1,42 +1,83 @@
 // Library > Starter library: tick the exercises to copy into the clinic's own Library. Optional, never automatic.
-// Exercises the clinic already has (same name) are shown but not offered again. The free plan's cap is enforced by the
-// server: if it is hit part-way, what was added stays and the message says how many.
+// Reads from the shared `starter_exercises` catalog curated by Beyond Mechanics & Physio Clinic (falling back offline or
+// pre-migration to the static STARTER_EXERCISES list), and clones any Starter pictures into the clinic's R2 prefix.
+// Exercises the clinic already has (same name) are shown but not offered again.
 import { useEffect, useMemo, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { SheetDialog, btnPrimary, btnSecondary } from '@/components/ui';
-import { HEP_BODY_ORDER, canonicalRegion } from '@/domain/hep';
+import {
+  HEP_BODY_ORDER,
+  canonicalRegion,
+  listThumbKey,
+  type Exercise,
+  type StarterLibraryItem,
+} from '@/domain/hep';
 import { doseSummary } from '@/domain/hepDose';
-import { STARTER_EXERCISES, type StarterExercise } from '@/domain/hepStarterSet';
 import { db } from '@/lib/db';
+import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService } from '@/services/hepService';
-import { exerciseFromSaveInput, starterToSaveInput } from './starterSet';
+import { starterLibraryService, staticStarterItems } from '@/services/starterLibraryService';
+import { Thumb } from './LibraryParts';
+import { exerciseFromSaveInput, starterItemToSaveInput } from './starterSet';
 import { useExercises, useOnline } from './useHepData';
 
 const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+function asThumbExercise(item: StarterLibraryItem): Exercise {
+  return {
+    id: item.id, clinicId: 'starter', title: item.title, otherNames: item.otherNames,
+    bodyRegion: item.bodyRegion, alsoRegions: item.alsoRegions, phase: item.phase, alsoPhases: item.alsoPhases,
+    positions: item.positions, equipment: item.equipment, instructions: item.instructions, stopIf: item.stopIf,
+    mediaType: item.mediaType, mediaKeys: item.mediaKeys, mediaCaptions: item.mediaCaptions, thumbKey: item.thumbKey,
+    defaultSets: item.defaultSets, doseType: item.doseType, defaultReps: item.defaultReps,
+    defaultHoldSeconds: item.defaultHoldSeconds, defaultDurationSeconds: item.defaultDurationSeconds,
+    defaultRestSeconds: item.defaultRestSeconds, defaultSessionsPerDay: item.defaultSessionsPerDay,
+    side: item.side, isFavorite: false, active: true, deleted: false, version: 1, createdAt: '', updatedAt: '',
+  };
+}
 
 export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const clinic = useClinic();
   const online = useOnline();
   const exercises = useExercises(clinic.id);
+  const [items, setItems] = useState<StarterLibraryItem[]>(() => staticStarterItems());
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { if (open) { setTicked(new Set()); setError(null); setBusy(false); } }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    setTicked(new Set());
+    setError(null);
+    setBusy(false);
+    let live = true;
+    void starterLibraryService.listStarterItems().then((list) => {
+      if (!live) return;
+      setItems(list);
+      const keys = [...new Set(list.map((s) => listThumbKey(s)).filter((k): k is string => !!k))];
+      if (keys.length > 0 && online) {
+        void hepMediaService.mintStarterViewUrls(clinic.id, keys).then((urls) => {
+          if (live) setThumbUrls(urls);
+        }).catch(() => {});
+      }
+    });
+    return () => { live = false; };
+  }, [open, online, clinic.id]);
 
   const have = useMemo(() => new Set((exercises ?? []).map((e) => squash(e.title))), [exercises]);
-  const offered = (s: StarterExercise) => !have.has(squash(s.title));
+  const offered = (s: StarterLibraryItem) => !have.has(squash(s.title));
   const groups = useMemo(() => {
     const order = (r: string) => { const i = (HEP_BODY_ORDER as readonly string[]).indexOf(r); return i === -1 ? 99 : i; };
-    const byRegion = new Map<string, StarterExercise[]>();
-    for (const s of STARTER_EXERCISES) byRegion.set(canonicalRegion(s.region), [...(byRegion.get(canonicalRegion(s.region)) ?? []), s]);
+    const byRegion = new Map<string, StarterLibraryItem[]>();
+    for (const s of items) byRegion.set(canonicalRegion(s.bodyRegion), [...(byRegion.get(canonicalRegion(s.bodyRegion)) ?? []), s]);
     return [...byRegion.entries()].sort(([a], [b]) => order(a) - order(b));
-  }, []);
+  }, [items]);
 
   const toggle = (title: string) => setTicked((cur) => { const n = new Set(cur); if (n.has(title)) n.delete(title); else n.add(title); return n; });
-  const toggleRegion = (list: StarterExercise[]) => setTicked((cur) => {
+  const toggleRegion = (list: StarterLibraryItem[]) => setTicked((cur) => {
     const n = new Set(cur);
     const free = list.filter(offered);
     const allOn = free.every((s) => n.has(s.title));
@@ -46,14 +87,18 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
 
   async function add() {
     if (!online) { setError(HEP_NEEDS_CONNECTION); return; }
-    const chosen = STARTER_EXERCISES.filter((s) => ticked.has(s.title) && offered(s));
+    const chosen = items.filter((s) => ticked.has(s.title) && offered(s));
     setBusy(true);
     setError(null);
     setProgress({ done: 0, total: chosen.length });
     let added = 0;
     try {
       for (const s of chosen) {
-        const input = starterToSaveInput(clinic.id, s);
+        const newId = crypto.randomUUID();
+        const cloned = s.mediaKeys.length > 0
+          ? await hepMediaService.cloneFromStarter(clinic.id, newId, s.mediaKeys, s.thumbKey)
+          : { mediaKeys: [], thumbKey: null };
+        const input = starterItemToSaveInput(clinic.id, s, newId, cloned);
         const id = await hepService.saveExercise(input);
         await db.exercises.put(exerciseFromSaveInput(input, id)).catch(() => {});
         added += 1;
@@ -69,7 +114,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
     }
   }
 
-  const count = [...ticked].filter((t) => STARTER_EXERCISES.some((s) => s.title === t && offered(s))).length;
+  const count = [...ticked].filter((t) => items.some((s) => s.title === t && offered(s))).length;
   return (
     <SheetDialog
       open={open}
@@ -100,13 +145,16 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
               <ul className="space-y-1">
                 {list.map((s) => {
                   const mine = !offered(s);
+                  const tk = listThumbKey(s);
+                  const url = tk ? thumbUrls[tk] : undefined;
                   return (
-                    <li key={s.title}>
-                      <label className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${mine ? 'opacity-50' : 'hover:bg-[var(--paper)]'}`}>
-                        <input type="checkbox" className="mt-1" disabled={mine} checked={mine || ticked.has(s.title)} onChange={() => toggle(s.title)} />
+                    <li key={s.id}>
+                      <label className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 ${mine ? 'opacity-50' : 'hover:bg-[var(--paper)]'}`}>
+                        <input type="checkbox" className="shrink-0" disabled={mine} checked={mine || ticked.has(s.title)} onChange={() => toggle(s.title)} />
+                        {url && <Thumb ex={asThumbExercise(s)} url={url} size={36} />}
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-[var(--ink)]">{s.title}{mine && <span className="ml-2 text-xs font-normal text-[var(--muted)]">Already in your Library</span>}</span>
-                          <span className="block text-xs text-[var(--muted)]">{doseSummary({ doseType: s.dose.kind, defaultSets: s.dose.sets, defaultReps: s.dose.reps ?? null, defaultHoldSeconds: s.dose.holdSeconds ?? null, defaultDurationSeconds: s.dose.durationSeconds ?? null, defaultRestSeconds: s.dose.restSeconds, side: s.dose.side, defaultSessionsPerDay: s.dose.perDay })}</span>
+                          <span className="block text-xs text-[var(--muted)]">{doseSummary(s)}</span>
                         </span>
                       </label>
                     </li>

@@ -6,7 +6,9 @@ export {
   buildExerciseThumbKey,
   exerciseMediaPrefix,
   isKeyForClinic,
+  isStarterKey,
   newKeySuffix,
   parseExerciseMediaKey,
+  parseStarterMediaKey,
   validateMediaKeysForClinic,
 } from '../../supabase/functions/_shared/hepMediaKeys';

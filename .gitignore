@@ -14,3 +14,4 @@ deno.lock
 # local scratch files
 scratch/
 .eslintcache
+*.tsbuildinfo

@@ -72,6 +72,9 @@ function normalize(table: SyncedTable, obj: Record<string, unknown>) {
   for (const f of NUMERIC_FIELDS[table] ?? []) {
     if (obj[f] != null) obj[f] = Number(obj[f]);
   }
+  if (table === 'clinics') {
+    obj.starterCurator = obj.starterCurator === true;
+  }
   return obj;
 }
 

@@ -14,11 +14,13 @@ export interface PrintSheetProps {
   open: boolean;
   onClose: () => void;
   clinicName: string;
-  patientName: string;
+  /** Optional: omitted for standalone template / exercise handouts. */
+  patientName?: string | null;
   programTitle: string;
-  link: string;
+  /** Optional: omitted for standalone handouts without a patient portal link or QR code. */
+  link?: string | null;
   /** Shown only when given. */
-  pin: string | null;
+  pin?: string | null;
   items: HepItemInput[];
 }
 
@@ -35,18 +37,20 @@ export function PrintSheet({ open, onClose, clinicName, patientName, programTitl
     setQr(null);
     const done = () => { if (live) onClose(); };
     (async () => {
-      try {
-        const { default: QRCode } = await import('qrcode');
-        const symbol = QRCode.create(link, { errorCorrectionLevel: 'M' });
-        const { size, data } = symbol.modules;
-        let path = '';
-        for (let r = 0; r < size; r++) {
-          for (let c = 0; c < size; c++) {
-            if (data[r * size + c]) path += `M${c} ${r}h1v1h-1z`;
+      if (link) {
+        try {
+          const { default: QRCode } = await import('qrcode');
+          const symbol = QRCode.create(link, { errorCorrectionLevel: 'M' });
+          const { size, data } = symbol.modules;
+          let path = '';
+          for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+              if (data[r * size + c]) path += `M${c} ${r}h1v1h-1z`;
+            }
           }
-        }
-        if (live) setQr({ size, path });
-      } catch { /* print without QR */ }
+          if (live) setQr({ size, path });
+        } catch { /* print without QR */ }
+      }
       let urls: Record<string, string> = {};
       const keys = [...new Set(items.map((i) => i.mediaKeys[0]).filter((k): k is string => !!k))];
       try { urls = await hepMediaService.mintViewUrls(clinic.id, keys); } catch { /* print without pictures */ }
@@ -67,37 +71,45 @@ export function PrintSheet({ open, onClose, clinicName, patientName, programTitl
     <div className="hep-print" aria-hidden="true">
       <style>{PRINT_CSS}</style>
       <h1 style={{ fontSize: '22pt', margin: 0 }}>{clinicName}</h1>
-      <p style={{ fontSize: '14pt', margin: '4pt 0' }}>Home exercise program for {patientName}</p>
-      <p style={{ fontSize: '12pt', margin: '0 0 10pt' }}>{programTitle}</p>
-      <div style={{ border: '2pt solid #000', padding: '8pt', margin: '8pt 0' }}>
-        <div style={{ display: 'flex', gap: '10pt', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontSize: '11pt' }}>1. Open this link on your phone:</p>
-            <p style={{ margin: '3pt 0 0', fontSize: '10.5pt', wordBreak: 'break-all' }}><strong>{link}</strong></p>
+      <p style={{ fontSize: '14pt', margin: '4pt 0' }}>{patientName ? `Home exercise program for ${patientName}` : 'Home exercise program'}</p>
+      {programTitle && <p style={{ fontSize: '12pt', margin: '0 0 10pt' }}>{programTitle}</p>}
+      {link && (
+        <div style={{ border: '2pt solid #000', padding: '8pt', margin: '8pt 0' }}>
+          <div style={{ display: 'flex', gap: '10pt', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: '11pt' }}>1. Open this link on your phone:</p>
+              <p style={{ margin: '3pt 0 0', fontSize: '10.5pt', wordBreak: 'break-all' }}><strong>{link}</strong></p>
+            </div>
+            {qr && (
+              <svg
+                role="img"
+                aria-label="QR code to open the program link"
+                viewBox={`-2 -2 ${qr.size + 4} ${qr.size + 4}`}
+                shapeRendering="crispEdges"
+                style={{ width: '3cm', height: '3cm', flexShrink: 0, background: '#fff' }}
+              >
+                <rect x={-2} y={-2} width={qr.size + 4} height={qr.size + 4} fill="#fff" />
+                <path d={qr.path} fill="#000" />
+              </svg>
+            )}
           </div>
-          {qr && (
-            <svg
-              role="img"
-              aria-label="QR code to open the program link"
-              viewBox={`-2 -2 ${qr.size + 4} ${qr.size + 4}`}
-              shapeRendering="crispEdges"
-              style={{ width: '3cm', height: '3cm', flexShrink: 0, background: '#fff' }}
-            >
-              <rect x={-2} y={-2} width={qr.size + 4} height={qr.size + 4} fill="#fff" />
-              <path d={qr.path} fill="#000" />
-            </svg>
-          )}
+          {pin && <p style={{ margin: '6pt 0 0', fontSize: '11pt' }}>2. Enter your PIN: <strong style={{ fontSize: '24pt', letterSpacing: '6pt' }}>{pin}</strong></p>}
+          <p style={{ margin: '6pt 0 0', fontSize: '11pt' }}>{pin ? '3.' : '2.'} Tick “Remember this phone” so you are not asked again.</p>
+          <p style={{ margin: '6pt 0 0', fontSize: '10pt' }}>Keep this sheet private. Share the link only with the person helping you.</p>
         </div>
-        {pin && <p style={{ margin: '6pt 0 0', fontSize: '11pt' }}>2. Enter your PIN: <strong style={{ fontSize: '24pt', letterSpacing: '6pt' }}>{pin}</strong></p>}
-        <p style={{ margin: '6pt 0 0', fontSize: '11pt' }}>{pin ? '3.' : '2.'} Tick “Remember this phone” so you are not asked again.</p>
-        <p style={{ margin: '6pt 0 0', fontSize: '10pt' }}>Keep this sheet private. Share the link only with the person helping you.</p>
-      </div>
+      )}
       {groupItemsByPhase(items).map((s) => (
         <section key={s.phase} style={{ margin: '10pt 0' }}>
           <h2 style={{ fontSize: '14pt', borderBottom: '1pt solid #000', margin: '0 0 6pt' }}>{EXERCISE_PHASE_LABELS[s.phase]}</h2>
           {s.rows.map(({ item }, n) => (
             <div key={n} style={{ display: 'flex', gap: '10pt', margin: '0 0 8pt' }}>
-              {item.mediaKeys[0] && pictures[item.mediaKeys[0]] && <img src={pictures[item.mediaKeys[0]]} alt="" style={{ width: '90pt', height: '90pt', objectFit: 'cover' }} />}
+              {item.mediaKeys[0] && pictures[item.mediaKeys[0]] && (
+                <img
+                  src={pictures[item.mediaKeys[0]]}
+                  alt=""
+                  style={{ width: '90pt', height: '90pt', objectFit: 'contain', background: '#fff', border: '0.75pt solid #d4d4d4', borderRadius: '4pt', padding: '2pt', flexShrink: 0 }}
+                />
+              )}
               <div>
                 <p style={{ margin: 0, fontSize: '12pt', fontWeight: 700 }}>{item.title}{item.optional ? ' (optional)' : ''}</p>
                 <p style={{ margin: '1pt 0', fontSize: '10.5pt' }}>{describeDose(itemDose(item))}</p>

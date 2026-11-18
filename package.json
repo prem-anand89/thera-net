@@ -8,7 +8,7 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint --cache --cache-strategy content .",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",

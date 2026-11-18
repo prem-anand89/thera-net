@@ -16,6 +16,7 @@ const setProgramStatus = vi.fn();
 const extendProgram = vi.fn();
 const duplicateProgram = vi.fn();
 const resetPin = vi.fn();
+const getPatientPin = vi.fn();
 const revokeLink = vi.fn();
 const rotateToken = vi.fn();
 const saveProgramAsTemplate = vi.fn();
@@ -24,6 +25,7 @@ vi.mock('@/services/hepService', async (orig) => ({
   hepService: {
     listPatientPrograms: (...a: unknown[]) => listPatientPrograms(...a), markPainReviewed: (...a: unknown[]) => markPainReviewed(...a), setProgramStatus: (...a: unknown[]) => setProgramStatus(...a),
     extendProgram: (...a: unknown[]) => extendProgram(...a), duplicateProgram: (...a: unknown[]) => duplicateProgram(...a), resetPin: (...a: unknown[]) => resetPin(...a),
+    getPatientPin: (...a: unknown[]) => getPatientPin(...a),
     revokeLink: (...a: unknown[]) => revokeLink(...a), rotateToken: (...a: unknown[]) => rotateToken(...a), saveProgramAsTemplate: (...a: unknown[]) => saveProgramAsTemplate(...a),
   },
 }));
@@ -420,5 +422,18 @@ describe('HomeProgramTab: programs and actions', () => {
     renderTab();
     expect(screen.getByText(/needs a connection/)).toBeInTheDocument();
     expect(listPatientPrograms).not.toHaveBeenCalled();
+  });
+
+  it('Show PIN loads and reveals the patient 4-digit PIN inline and can hide it again', async () => {
+    const user = userEvent.setup();
+    getPatientPin.mockResolvedValue('3210');
+    listPatientPrograms.mockResolvedValue([bundle()]);
+    renderTab();
+    await user.click(await screen.findByRole('button', { name: 'Show PIN' }));
+    await waitFor(() => expect(getPatientPin).toHaveBeenCalledWith('pt1'));
+    expect(await screen.findByText('3210')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(screen.queryByText('3210')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show PIN' })).toBeInTheDocument();
   });
 });

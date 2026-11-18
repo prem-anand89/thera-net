@@ -10,11 +10,12 @@ const toCamel = (s: string) => s.replace(/_([a-z0-9])/g, (_, c: string) => c.toU
 export function domainToRow(obj: Record<string, unknown>): Record<string, unknown> {
   const row: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) row[toSnake(k)] = v;
-  // updated_at/created_by/updated_by are server-authoritative (set by the
-  // set_updated_at trigger from auth.uid()); never send client values for them
+  // updated_at/created_by/updated_by/starter_curator are server-authoritative;
+  // never send client values for them
   delete row.updated_at;
   delete row.created_by;
   delete row.updated_by;
+  delete row.starter_curator;
   return row;
 }
 

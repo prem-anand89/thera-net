@@ -15,6 +15,8 @@ function deps(over: Partial<HepMediaDeps> = {}): HepMediaDeps {
       items: payload.items.map(({ mediaKeys, ...rest }) => ({ ...rest, mediaUrls: (mediaKeys ?? []).filter((k) => k.startsWith(prefix)).map((k) => `https://signed.example/${k}`) })),
     })),
     newSuffix: () => 'ab12cd34',
+    isCurator: vi.fn(async () => true),
+    copyObject: vi.fn(async () => {}),
     ...over,
   };
 }
@@ -127,5 +129,55 @@ describe('hep-media: staff actions', () => {
   it('answers 503 for staff actions when R2 is not configured', async () => {
     const d = deps({ r2Ready: () => false });
     expect((await handleHepMedia({ action: 'mint_upload_urls', clinicId: 'c-1', exerciseId: 'ex-1', slots: [0] }, d)).status).toBe(503);
+  });
+
+  it('mint_starter_view_urls: signs starter keys for clinic staff and rejects non-starter keys', async () => {
+    const d = deps();
+    const ok = await handleHepMedia({ action: 'mint_starter_view_urls', clinicId: 'c-1', keys: ['starter/exercises/st-1/1-ab12cd34'] }, d);
+    expect(ok.status).toBe(200);
+    expect(ok.body.urls).toEqual({ 'starter/exercises/st-1/1-ab12cd34': 'https://signed.example/starter/exercises/st-1/1-ab12cd34' });
+    const bad = await handleHepMedia({ action: 'mint_starter_view_urls', clinicId: 'c-1', keys: ['clinics/c-2/exercises/ex-1/0'] }, d);
+    expect(bad.status).toBe(403);
+  });
+
+  it('clone_to_starter: copies clinic keys into starter/exercises only for curator clinics', async () => {
+    const d = deps();
+    const r = await handleHepMedia({
+      action: 'clone_to_starter',
+      clinicId: 'c-1',
+      starterId: 'st-1',
+      mediaKeys: ['clinics/c-1/exercises/ex-1/0-aaaaaaaa', 'clinics/c-1/exercises/ex-1/1-bbbbbbbb'],
+      thumbKey: 'clinics/c-1/exercises/ex-1/thumb-cccccccc',
+    }, d);
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({
+      ok: true,
+      mediaKeys: ['starter/exercises/st-1/0-ab12cd34', 'starter/exercises/st-1/1-ab12cd34'],
+      thumbKey: 'starter/exercises/st-1/thumb-ab12cd34',
+    });
+    expect(d.copyObject).toHaveBeenCalledTimes(3);
+
+    const nonCurator = deps({ isCurator: vi.fn(async () => false) });
+    expect((await handleHepMedia({
+      action: 'clone_to_starter', clinicId: 'c-1', starterId: 'st-1', mediaKeys: ['clinics/c-1/exercises/ex-1/0-aaaaaaaa'],
+    }, nonCurator)).status).toBe(403);
+  });
+
+  it('clone_from_starter: copies starter keys into the receiving clinic folder', async () => {
+    const d = deps();
+    const r = await handleHepMedia({
+      action: 'clone_from_starter',
+      clinicId: 'c-2',
+      exerciseId: 'ex-9',
+      mediaKeys: ['starter/exercises/st-1/0-aaaaaaaa'],
+      thumbKey: 'starter/exercises/st-1/thumb-cccccccc',
+    }, d);
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({
+      ok: true,
+      mediaKeys: ['clinics/c-2/exercises/ex-9/0-ab12cd34'],
+      thumbKey: 'clinics/c-2/exercises/ex-9/thumb-ab12cd34',
+    });
+    expect(d.copyObject).toHaveBeenCalledWith('starter/exercises/st-1/0-aaaaaaaa', 'clinics/c-2/exercises/ex-9/0-ab12cd34');
   });
 });

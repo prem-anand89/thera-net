@@ -12,11 +12,13 @@ import {
   HEP_REGIONS,
   alsoPhasesOf,
   canonicalRegion,
+  isStarterCuratorClinic,
   positionsOf,
   suggestedDoseType,
   type Exercise,
   type ExerciseMediaType,
   type ExercisePhase,
+  type StarterLibraryItem,
 } from '@/domain/hep';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { describeDose, doseToExerciseFields, exerciseToDose, isDoseValid, withKind, type DoseValue } from '@/domain/hepDose';
@@ -26,6 +28,7 @@ import { compressImageForUpload, createThumbnailBlob } from '@/lib/imageCompress
 import { MAX_PICTURES, type Picture } from './PictureField';
 import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService, type HepItemInput } from '@/services/hepService';
+import { starterLibraryService } from '@/services/starterLibraryService';
 import { ExerciseDoseEditor } from './ExerciseDoseEditor';
 import {
   ClassificationFields,
@@ -126,6 +129,9 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
   const [baseline, setBaseline] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [starterEntry, setStarterEntry] = useState<StarterLibraryItem | null>(null);
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const [starterNotice, setStarterNotice] = useState<string | null>(null);
   const kindTouched = useRef(false);
 
   const setPictures = (next: Picture[]) => {
@@ -167,8 +173,14 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
     setOpenSections(ex ? [] : ['details']);
     setConfirmDiscard(false);
     setPreviewOpen(false);
+    setStarterEntry(null);
+    setConfirmPublish(false);
+    setStarterNotice(null);
     kindTouched.current = !!ex;
     if (ex && navigator.onLine) hepService.exerciseUsage(ex.id).then(setUsage).catch(() => {});
+    if (ex && isStarterCuratorClinic(clinic) && navigator.onLine) {
+      starterLibraryService.findPublishedForExercise(clinicId, ex.id).then(setStarterEntry).catch(() => {});
+    }
     if (ex && ex.mediaKeys.length > 0 && navigator.onLine) {
       hepMediaService.mintViewUrls(clinicId, ex.mediaKeys).then((urls) => {
         setPicturesState((cur) => cur.map((p) => (p.key && !p.preview ? { ...p, preview: urls[p.key] ?? null } : p)));
@@ -359,6 +371,41 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
 
   const used = (usage?.programs ?? 0) + (usage?.templates ?? 0) > 0;
   const editingExisting = isEdit && !duplicated;
+  const isCurator = isStarterCuratorClinic(clinic);
+
+  async function publishStarter() {
+    if (!exercise) return;
+    setConfirmPublish(false);
+    setBusy(true);
+    setError(null);
+    setStarterNotice(null);
+    try {
+      const starterId = await starterLibraryService.publishExercise(clinicId, exercise, starterEntry?.id);
+      const refreshed = await starterLibraryService.findPublishedForExercise(clinicId, exercise.id);
+      setStarterEntry(refreshed ?? { ...(starterEntry ?? {}), id: starterId, publishedAt: new Date().toISOString() } as StarterLibraryItem);
+      setStarterNotice(starterEntry ? 'Starter library entry updated.' : 'Shared to Starter library.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not publish to the Starter library.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unpublishStarter() {
+    if (!starterEntry) return;
+    setBusy(true);
+    setError(null);
+    setStarterNotice(null);
+    try {
+      await starterLibraryService.unpublishExercise(clinicId, starterEntry.id);
+      setStarterEntry(null);
+      setStarterNotice('Removed from Starter library.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove from the Starter library.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const footer = (
     <>
@@ -419,6 +466,33 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
             );
           })}
 
+          {editingExisting && exercise && isCurator && (
+            <section aria-labelledby="ex-starter" className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3">
+              <h3 id="ex-starter" className="font-display text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Starter library</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  className={btnSecondary}
+                  onClick={() => setConfirmPublish(true)}
+                  disabled={busy || !online || dirty || hidePictures}
+                >
+                  {starterEntry ? 'Update in Starter library' : 'Share to Starter library'}
+                </Button>
+                {starterEntry && (
+                  <Button type="button" className={pillSmDanger} onClick={() => void unpublishStarter()} disabled={busy || !online}>
+                    Remove from Starter
+                  </Button>
+                )}
+              </div>
+              {starterEntry?.publishedAt && (
+                <p className="text-hint text-[var(--muted)]">Published {formatDateDM(clinicToday(clinic, new Date(starterEntry.publishedAt)))}</p>
+              )}
+              {dirty && <p className="text-hint text-[var(--muted)]">Save your changes first before sharing to the Starter library.</p>}
+              {hidePictures && <p className="text-hint text-[var(--muted)]">Turn off “Hide pictures in lists” in Media and instructions to share this exercise.</p>}
+              {starterNotice && <p className="text-xs font-medium text-[var(--moss)]" role="status">{starterNotice}</p>}
+            </section>
+          )}
+
           {editingExisting && exercise && (
             <section aria-labelledby="ex-manage" className="space-y-2 pt-3">
               <h3 id="ex-manage" className="sr-only">Manage</h3>
@@ -454,6 +528,15 @@ export function ExerciseForm({ open, clinicId, exercise, allExercises, initialTi
         open={confirmDiscard} title="Discard unsaved changes?" message="Your changes to this exercise will be lost."
         confirmLabel="Discard" cancelLabel="Keep editing" destructive
         onConfirm={() => { setConfirmDiscard(false); onClose(); }} onCancel={() => setConfirmDiscard(false)}
+      />
+      <ConfirmDialog
+        open={confirmPublish}
+        title={starterEntry ? 'Update in Starter library?' : 'Share to Starter library?'}
+        message={`Copy “${exercise?.title ?? ''}” (and any pictures) to the shared Starter library so other clinics can add it? Confirm you have permission to share these pictures across TheraNet clinics.`}
+        confirmLabel={starterEntry ? 'Update Starter' : 'Share to Starter'}
+        cancelLabel="Cancel"
+        onConfirm={() => void publishStarter()}
+        onCancel={() => setConfirmPublish(false)}
       />
     </SheetDialog>
   );

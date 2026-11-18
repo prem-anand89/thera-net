@@ -701,7 +701,7 @@ export function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: b
   );
 }
 
-type AfterVisitFields = Pick<Clinic, 'clinicalDocsEnabled' | 'enablePatientComms' | 'googleReviewUrl'>;
+type AfterVisitFields = Pick<Clinic, 'clinicalDocsEnabled' | 'enablePatientComms' | 'googleReviewUrl' | 'hepRequirePin'>;
 
 /**
  * What staff are offered right after logging a visit: a prompt for the clinical note, and a feedback request (with the
@@ -713,6 +713,7 @@ export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: bo
       clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
       enablePatientComms: c.enablePatientComms ?? false,
       googleReviewUrl: c.googleReviewUrl ?? null,
+      hepRequirePin: c.hepRequirePin ?? true,
     }),
     onDirtyChange
   );
@@ -727,6 +728,12 @@ export function AfterVisitSection({ onDirtyChange }: { onDirtyChange: (dirty: bo
               hint="When off, therapists can still open a patient's notes from their profile."
               checked={form.clinicalDocsEnabled ?? false}
               onChange={(v) => set({ clinicalDocsEnabled: v })}
+            />
+            <SwitchRow
+              label="Require 4-digit PIN on home exercise links"
+              hint="When off, opening the link shows the patient's exercises right away without a PIN."
+              checked={form.hepRequirePin ?? true}
+              onChange={(v) => set({ hepRequirePin: v })}
             />
             <SwitchRow
               label="Ask patients for feedback"

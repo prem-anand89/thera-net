@@ -162,7 +162,8 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         return;
       }
 
-      clinic = rowToDomain<Clinic>(data as Record<string, unknown>);
+      const mapped = rowToDomain<Clinic>(data as Record<string, unknown>);
+      clinic = { ...mapped, starterCurator: mapped.starterCurator === true };
       // The server already confirmed this row (and added us as admin): cache it without queuing a push of our own.
       await repos.clinics.putLocal(clinic);
       const now = new Date().toISOString();

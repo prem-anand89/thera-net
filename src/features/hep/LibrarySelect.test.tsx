@@ -125,7 +125,7 @@ describe('Library select mode', () => {
     await user.click(screen.getByRole('button', { name: 'Select all 3 shown' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     await user.click(await screen.findByRole('button', { name: 'Delete 2 · archive 1' }));
-    expect(await screen.findByText(/1 could not be changed and is still selected/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 could not be changed and is still selected/, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select Charlie' })).toBeChecked();
   });

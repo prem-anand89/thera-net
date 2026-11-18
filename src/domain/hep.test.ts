@@ -17,6 +17,7 @@ import {
   HEP_BODY_ORDER,
   isFourDigitPin,
   isHighPainAlert,
+  isStarterCuratorClinic,
   matchesExerciseSearch,
   nextSessionSlotToday,
   regionTree,
@@ -300,5 +301,15 @@ describe('hepAvailableForClinic', () => {
     expect(hepAvailableForClinic({ name: 'Sunrise Physio' })).toBe(false);
     expect(hepAvailableForClinic({ name: '' })).toBe(false);
     expect(hepAvailableForClinic(null)).toBe(false);
+  });
+});
+
+describe('isStarterCuratorClinic', () => {
+  it('reads only the platform-managed starterCurator flag, never the clinic name', () => {
+    expect(isStarterCuratorClinic({ starterCurator: true })).toBe(true);
+    expect(isStarterCuratorClinic({ name: 'Physio Clinic' } as { name?: string | null; starterCurator?: boolean | null })).toBe(false);
+    expect(isStarterCuratorClinic({ name: 'Beyond Mechanics', starterCurator: false } as { name?: string | null; starterCurator?: boolean | null })).toBe(false);
+    expect(isStarterCuratorClinic({ name: 'Any Clinic', starterCurator: true } as { name?: string | null; starterCurator?: boolean | null })).toBe(true);
+    expect(isStarterCuratorClinic(null)).toBe(false);
   });
 });

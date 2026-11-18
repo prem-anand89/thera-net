@@ -82,28 +82,38 @@ export function HandOverPanel(p: HandOverPanelProps) {
     try { setError(null); await hepService.saveProgramAsTemplate(p.programId, templateName.trim() || p.programTitle); setTemplateSaved(true); setTemplateName(null); } catch (e) { setError(e instanceof Error ? e.message : 'Could not save the template.'); }
   }
 
+  const requirePin = clinic.hepRequirePin ?? true;
+  const effectivePin = requirePin ? pin : null;
+
   return (
     <>
       <SheetDialog open={p.open} title="Share with patient" onClose={p.onClose} error={error} footer={<Button type="button" className={btnPrimary} onClick={p.onClose}>{tried || openedAt ? 'Done' : 'Skip for now'}</Button>}>
         <div className="space-y-4">
-          <section aria-label="PIN details" className="rounded-2xl bg-[var(--paper)] p-4 text-center">
-            {pin ? (
-              <>
-                <p className="text-sm text-[var(--muted)]">The patient&apos;s PIN (shown only now)</p>
-                <p className="font-num text-4xl font-semibold tracking-[0.3em] text-[var(--ink)]" aria-label="PIN">{pin}</p>
-                <div className="mt-2 flex flex-wrap justify-center gap-2">
-                  <Button type="button" className={btnSecondary} onClick={() => void copy('pin', pin)}>{copied === 'pin' ? 'Copied ✓' : 'Copy PIN'}</Button>
-                  <Button type="button" className={btnSecondary} onClick={() => setPrinting(true)}>🖨 Print sheet with PIN</Button>
-                </div>
-                <p className="mt-2 text-hint text-[var(--muted)]">The WhatsApp message never contains the PIN.</p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-[var(--ink)]">This patient already has a PIN. It is not shown again.</p>
-                <Button type="button" className={`${btnSecondary} mt-2`} disabled={resetting || !online} onClick={() => setConfirmReset(true)}>{resetting ? 'Resetting…' : 'Reset PIN…'}</Button>
-              </>
-            )}
-          </section>
+          {requirePin ? (
+            <section aria-label="PIN details" className="rounded-2xl bg-[var(--paper)] p-4 text-center">
+              {pin ? (
+                <>
+                  <p className="text-sm text-[var(--muted)]">The patient&apos;s PIN</p>
+                  <p className="font-num text-4xl font-semibold tracking-[0.3em] text-[var(--ink)]" aria-label="PIN">{pin}</p>
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    <Button type="button" className={btnSecondary} onClick={() => void copy('pin', pin)}>{copied === 'pin' ? 'Copied ✓' : 'Copy PIN'}</Button>
+                    <Button type="button" className={btnSecondary} onClick={() => setPrinting(true)}>🖨 Print sheet with PIN</Button>
+                  </div>
+                  <p className="mt-2 text-hint text-[var(--muted)]">The WhatsApp message never contains the PIN.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-[var(--ink)]">This patient already has a PIN.</p>
+                  <Button type="button" className={`${btnSecondary} mt-2`} disabled={resetting || !online} onClick={() => setConfirmReset(true)}>{resetting ? 'Resetting…' : 'Reset PIN…'}</Button>
+                </>
+              )}
+            </section>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[var(--paper)] p-3 text-sm text-[var(--ink)]">
+              <span>No PIN needed — the link opens directly.</span>
+              <Button type="button" className={btnSecondary} onClick={() => setPrinting(true)}>🖨 Print sheet</Button>
+            </div>
+          )}
 
           <ol className="space-y-3">
             <li className="space-y-1.5">
@@ -113,18 +123,20 @@ export function HandOverPanel(p: HandOverPanelProps) {
                 <Button type="button" className={btnSecondary} onClick={() => void copy('link', link)}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</Button>
               </div>
             </li>
-            <li className="space-y-1.5">
-              <p className="text-sm font-medium text-[var(--ink)]">2. Show the PIN to the patient</p>
-              {pin
-                ? <Button type="button" className={btnSecondary} onClick={() => setShowPin(true)}>Show PIN</Button>
-                : <p className="text-sm text-[var(--muted)]">The patient uses the PIN they already have. If they have forgotten it, use Reset PIN above.</p>}
-            </li>
+            {requirePin && (
+              <li className="space-y-1.5">
+                <p className="text-sm font-medium text-[var(--ink)]">2. Show the PIN to the patient</p>
+                {pin
+                  ? <Button type="button" className={btnSecondary} onClick={() => setShowPin(true)}>Show PIN</Button>
+                  : <p className="text-sm text-[var(--muted)]">The patient uses the PIN they already have. If they have forgotten it, use Reset PIN above.</p>}
+              </li>
+            )}
             <li className="space-y-1">
-              <p className="text-sm font-medium text-[var(--ink)]">3. The patient opens the link, enters the PIN and keeps “Remember this phone” ticked</p>
+              <p className="text-sm font-medium text-[var(--ink)]">{requirePin ? '3.' : '2.'} {requirePin ? 'The patient opens the link, enters the PIN and keeps “Remember this phone” ticked' : 'The patient opens the link to start their exercises'}</p>
               <p className={`text-sm ${openedAt ? 'font-medium text-[var(--moss,var(--teal-strong))]' : 'text-[var(--muted)]'}`} aria-live="polite">{openedAt ? `Opened ✓ ${time}` : online ? 'Waiting for the patient to open it…' : 'Needs a connection to check.'}</p>
             </li>
             <li>
-              <label className="flex items-center gap-2 text-sm font-medium text-[var(--ink)]"><input type="checkbox" checked={tried} onChange={(e) => setTried(e.target.checked)} /> 4. Try one exercise together</label>
+              <label className="flex items-center gap-2 text-sm font-medium text-[var(--ink)]"><input type="checkbox" checked={tried} onChange={(e) => setTried(e.target.checked)} /> {requirePin ? '4.' : '3.'} Try one exercise together</label>
             </li>
           </ol>
 
@@ -157,7 +169,7 @@ export function HandOverPanel(p: HandOverPanelProps) {
           </div>
         </div>
       )}
-      <PrintSheet open={printing} onClose={() => setPrinting(false)} clinicName={clinic.name} patientName={p.patientName} programTitle={p.programTitle} link={link} pin={pin} items={p.items} />
+      <PrintSheet open={printing} onClose={() => setPrinting(false)} clinicName={clinic.name} patientName={p.patientName} programTitle={p.programTitle} link={link} pin={effectivePin} items={p.items} />
       <ConfirmDialog open={confirmReset} title="Reset the PIN?" message="The old PIN stops working and phones that were remembered will ask for the new one." confirmLabel="Reset PIN" onConfirm={() => void resetPin()} onCancel={() => setConfirmReset(false)} />
     </>
   );

@@ -15,6 +15,22 @@ import { exerciseToSaveInput } from './exerciseSaveInput';
 
 const saveExercise = vi.fn();
 vi.mock('@/services/hepService', async (orig) => ({ ...(await orig<typeof import('@/services/hepService')>()), hepService: { saveExercise: (...a: unknown[]) => saveExercise(...a) } }));
+const cloneFromStarter = vi.fn();
+const mintStarterViewUrls = vi.fn();
+vi.mock('@/services/hepMediaService', () => ({
+  hepMediaService: {
+    cloneFromStarter: (...a: unknown[]) => cloneFromStarter(...a),
+    mintStarterViewUrls: (...a: unknown[]) => mintStarterViewUrls(...a),
+  },
+}));
+const listStarterItems = vi.fn();
+vi.mock('@/services/starterLibraryService', async (orig) => {
+  const actual = await orig<typeof import('@/services/starterLibraryService')>();
+  return {
+    ...actual,
+    starterLibraryService: { ...actual.starterLibraryService, listStarterItems: (...a: unknown[]) => listStarterItems(...a) },
+  };
+});
 const clinic = { id: 'c1', name: 'Sunrise', timezone: 'UTC' } as unknown as Clinic;
 const ex = (id: string, title: string): Exercise => ({
   id, clinicId: 'c1', title, positions: [], otherNames: [], bodyRegion: 'Knee', alsoRegions: [], equipment: [], phase: 'strengthening', instructions: '', mediaType: 'none', mediaKeys: [], mediaCaptions: [], thumbKey: null,
@@ -29,6 +45,10 @@ beforeEach(async () => {
   await db.exercises.clear();
   let n = 0;
   saveExercise.mockReset().mockImplementation(async () => `id-${++n}`);
+  cloneFromStarter.mockReset().mockResolvedValue({ mediaKeys: [], thumbKey: null });
+  mintStarterViewUrls.mockReset().mockResolvedValue({});
+  const { staticStarterItems } = await import('@/services/starterLibraryService');
+  listStarterItems.mockReset().mockResolvedValue(staticStarterItems());
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 });
 afterEach(cleanup);
@@ -87,6 +107,48 @@ describe('StarterSetSheet', () => {
     renderSheet();
     await screen.findByLabelText(/^Quad Sets/);
     expect(screen.getByRole('button', { name: 'Needs a connection' })).toBeDisabled();
+  });
+
+  it('shows pictured Starter items with signed thumbnails and clones Starter images into the clinic on add', async () => {
+    const user = userEvent.setup();
+    listStarterItems.mockResolvedValue([
+      {
+        id: 'st-pic-1', sourceClinicId: 'c-bm', sourceExerciseId: 'ex-src',
+        title: 'Hip Flexor Stretch', otherNames: [], bodyRegion: 'Hip', alsoRegions: [],
+        phase: 'stretching', alsoPhases: ['mobility'], positions: ['Kneeling'], equipment: ['Mat'],
+        instructions: 'Kneel\nLean', stopIf: 'Sharp pain',
+        mediaType: 'stills', mediaKeys: ['starter/exercises/st-pic-1/0-aaaa', 'starter/exercises/st-pic-1/1-bbbb'],
+        mediaCaptions: ['Start', 'End'], thumbKey: 'starter/exercises/st-pic-1/thumb-cccc',
+        doseType: 'hold', defaultSets: 1, defaultReps: 3, defaultHoldSeconds: 30, defaultDurationSeconds: null,
+        defaultRestSeconds: 30, defaultSessionsPerDay: 1, side: 'both', publishedAt: '2026-11-18T00:00:00Z',
+      },
+    ]);
+    mintStarterViewUrls.mockResolvedValue({ 'starter/exercises/st-pic-1/1-bbbb': 'https://img.test/end.webp' });
+    cloneFromStarter.mockResolvedValue({
+      mediaKeys: ['clinics/c1/exercises/new-id/0-1111', 'clinics/c1/exercises/new-id/1-2222'],
+      thumbKey: 'clinics/c1/exercises/new-id/thumb-3333',
+    });
+
+    const { onClose } = renderSheet();
+    await waitFor(() => expect(mintStarterViewUrls).toHaveBeenCalledWith('c1', ['starter/exercises/st-pic-1/1-bbbb']));
+    await user.click(await screen.findByLabelText(/^Hip Flexor Stretch/));
+    await user.click(screen.getByRole('button', { name: 'Add 1 exercise' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(cloneFromStarter).toHaveBeenCalledWith(
+      'c1',
+      expect.any(String),
+      ['starter/exercises/st-pic-1/0-aaaa', 'starter/exercises/st-pic-1/1-bbbb'],
+      'starter/exercises/st-pic-1/thumb-cccc',
+    );
+    expect(saveExercise).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Hip Flexor Stretch',
+      mediaType: 'stills',
+      mediaKeys: ['clinics/c1/exercises/new-id/0-1111', 'clinics/c1/exercises/new-id/1-2222'],
+      thumbKey: 'clinics/c1/exercises/new-id/thumb-3333',
+      alsoPhases: ['mobility'],
+      pictureConsent: true,
+    }));
   });
 });
 

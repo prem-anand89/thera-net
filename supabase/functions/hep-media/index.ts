@@ -75,6 +75,30 @@ Deno.serve(async (request) => {
       }),
     hydrate: (payload, allowedPrefix) => hydratePublicHepWithSignedUrls(payload, config!, allowedPrefix, new Date()),
     newSuffix: () => newKeySuffix(),
+    isCurator: async (clinicId) => {
+      if (!authorization) return false;
+      const asUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        auth: { persistSession: false },
+        global: { headers: { Authorization: authorization } },
+      });
+      const { data, error } = await asUser.rpc('is_starter_curator', { p_clinic: clinicId });
+      return !error && data === true;
+    },
+    copyObject: async (srcKey, dstKey) => {
+      const urls = await mintPublicHepViewUrls({ pinVerified: true, keys: [srcKey], r2Config: config!, now: new Date() });
+      const srcUrl = urls[srcKey];
+      if (!srcUrl) throw new Error('Source media not found');
+      const getRes = await fetch(srcUrl);
+      if (!getRes.ok) throw new Error(`Failed reading source media (${getRes.status})`);
+      const contentType = getRes.headers.get('Content-Type') || 'application/octet-stream';
+      const bytes = await getRes.arrayBuffer();
+      const putUrl = await presignR2Url({
+        config: config!, objectKey: dstKey, method: 'PUT', expiresInSeconds: UPLOAD_URL_VALID_SECONDS, now: new Date(),
+        signedHeaders: { 'Cache-Control': HEP_UPLOAD_CACHE_CONTROL },
+      });
+      const putRes = await fetch(putUrl, { method: 'PUT', headers: { 'Cache-Control': HEP_UPLOAD_CACHE_CONTROL, 'Content-Type': contentType }, body: bytes });
+      if (!putRes.ok) throw new Error(`Failed writing copied media (${putRes.status})`);
+    },
   };
 
   try {

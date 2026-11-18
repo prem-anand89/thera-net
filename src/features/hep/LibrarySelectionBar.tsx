@@ -1,12 +1,15 @@
 // The Library's select mode bar: "{n} selected", Select all, Archive / Delete and Cancel. An exercise that programs or
 // templates still use is archived, not deleted (the same rule as the exercise form); unused ones are deleted. The saves
 // run one after another, because the server enforces its own guards. HEP writes need a connection.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useClinic } from '@/app/clinicContext';
 import { Button } from '@/components/Button';
 import { ConfirmDialog, ErrorNote, btnSecondary, pillSmDanger } from '@/components/ui';
 import type { Exercise } from '@/domain/hep';
 import { db } from '@/lib/db';
 import { hepService } from '@/services/hepService';
+import { PrintSheet } from './PrintSheet';
+import { exerciseToItem } from './hepItems';
 import { exerciseToSaveInput } from './exerciseSaveInput';
 
 type Action = 'archive' | 'delete';
@@ -33,11 +36,14 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
   onExit: () => void;
   onResult: (message: string) => void;
 }) {
+  const clinic = useClinic();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const working = checking || progress !== null;
+  const printItems = useMemo(() => picked.map(exerciseToItem), [picked]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !plan && !working) onExit(); };
@@ -108,6 +114,7 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
           <Button type="button" className="min-h-11 rounded-lg px-2 text-sm font-medium text-[var(--teal)]" disabled={working} onClick={onSelectAll}>Select all {shownCount} shown</Button>
           <div className="flex-1" />
           {progress && <span className="text-sm text-[var(--muted)]" role="status">Working {Math.min(progress.done + 1, progress.total)} of {progress.total}…</span>}
+          <Button type="button" className={btnSecondary} disabled={picked.length === 0 || working} onClick={() => setPrinting(true)}>Print PDF / Sheet</Button>
           <Button type="button" className={btnSecondary} disabled={disabled} title={title} onClick={() => void prepare('archive')}>Archive</Button>
           <Button type="button" className={pillSmDanger} disabled={disabled} title={title} onClick={() => void prepare('delete')}>Delete</Button>
           <Button type="button" className={btnSecondary} disabled={working} onClick={onExit}>Cancel</Button>
@@ -118,6 +125,7 @@ export function LibrarySelectionBar({ picked, shownCount, online, onSelectAll, o
         open={plan !== null} title={text?.title ?? ''} message={text?.message ?? ''} confirmLabel={text?.confirm ?? 'Confirm'} destructive
         onConfirm={() => { if (plan) void run(plan); }} onCancel={() => setPlan(null)}
       />
+      <PrintSheet open={printing} onClose={() => setPrinting(false)} clinicName={clinic.name} programTitle="Exercise handout" items={printItems} />
     </>
   );
 }

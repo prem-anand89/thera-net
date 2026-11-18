@@ -10,6 +10,13 @@ export function hepAvailableForClinic(clinic: { name?: string | null } | null | 
   return name === 'beyond mechanics' || name === 'physio clinic';
 }
 
+/** Clinics allowed to publish and maintain shared Starter Library exercises. */
+export function isStarterCuratorClinic(
+  clinic: { starterCurator?: boolean | null } | null | undefined,
+): boolean {
+  return clinic?.starterCurator === true;
+}
+
 export type ExerciseMediaType = 'none' | 'gif' | 'stills';
 /** How an exercise is done: dynamic reps, reps each held for a few seconds, or continuous for a set time. */
 export type DoseType = 'reps' | 'hold' | 'timed';
@@ -145,6 +152,36 @@ export interface Exercise {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** An item in the shared `starter_exercises` catalog (or a static fallback entry from STARTER_EXERCISES). */
+export interface StarterLibraryItem {
+  id: string;
+  sourceClinicId: string | null;
+  sourceExerciseId: string | null;
+  title: string;
+  otherNames: string[];
+  bodyRegion: string;
+  alsoRegions: string[];
+  phase: ExercisePhase;
+  alsoPhases: ExercisePhase[];
+  positions: string[];
+  equipment: string[];
+  instructions: string;
+  stopIf: string;
+  mediaType: ExerciseMediaType;
+  mediaKeys: string[];
+  mediaCaptions: string[];
+  thumbKey: string | null;
+  doseType: DoseType;
+  defaultSets: number;
+  defaultReps: number | null;
+  defaultHoldSeconds: number | null;
+  defaultDurationSeconds: number | null;
+  defaultRestSeconds: number;
+  defaultSessionsPerDay: SessionsPerDay;
+  side: ExerciseSide;
+  publishedAt: string | null;
 }
 
 /** The dose and flags every saved copy of an exercise carries (template items and program items). */
