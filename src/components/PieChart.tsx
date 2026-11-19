@@ -48,7 +48,6 @@ export function PieChart({ data, width = 200, height = 200, showPercent = false,
     currentAngle = endAngle;
     const dimmed = interactive && selectedIndex != null && selectedIndex !== i;
     const common = {
-      key: i,
       fill: SERIES_COLORS[i % SERIES_COLORS.length],
       opacity: dimmed ? 0.35 : 1,
       onClick: interactive ? () => toggle(i) : undefined,
@@ -57,7 +56,7 @@ export function PieChart({ data, width = 200, height = 200, showPercent = false,
 
     // One slice covering everything: an arc whose start and end points coincide
     // draws nothing, so the whole pie vanished — draw a full circle instead.
-    if (sliceAngle >= 359.99) return <circle {...common} cx={centerX} cy={centerY} r={radius} />;
+    if (sliceAngle >= 359.99) return <circle key={i} {...common} cx={centerX} cy={centerY} r={radius} />;
 
     const path = [
       `M ${centerX} ${centerY}`,
@@ -66,7 +65,7 @@ export function PieChart({ data, width = 200, height = 200, showPercent = false,
       'Z',
     ].join(' ');
 
-    return <path {...common} d={path} />;
+    return <path key={i} {...common} d={path} />;
   });
 
   return (
