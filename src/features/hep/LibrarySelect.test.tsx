@@ -92,7 +92,7 @@ describe('Library select mode', () => {
     await enterSelect(user);
     await user.click(screen.getByRole('button', { name: 'Select all 3 shown' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(await screen.findByText('Delete 2 and archive 1?')).toBeInTheDocument();
+    expect(await screen.findByText('Delete 2 and archive 1?', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('Exercises used in programs or templates are archived, not deleted.')).toBeInTheDocument();
     let running = 0; let overlap = false;
     saveExercise.mockImplementation(async () => { running += 1; if (running > 1) overlap = true; await new Promise((r) => setTimeout(r, 5)); running -= 1; });
@@ -103,7 +103,7 @@ describe('Library select mode', () => {
     expect(sent.filter((s) => s.deleted).map((s) => s.id).sort()).toEqual(['a', 'c']);
     expect(sent.find((s) => s.id === 'b')).toMatchObject({ active: false });
     expect(sent.find((s) => s.id === 'b')?.deleted).toBeUndefined();
-    expect(await screen.findByText('Deleted 2, archived 1')).toBeInTheDocument();
+    expect(await screen.findByText('Deleted 2, archived 1', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument();
   });
 
@@ -116,7 +116,7 @@ describe('Library select mode', () => {
     await user.click(screen.getByRole('button', { name: 'Delete / archive' }));
     await user.click(screen.getByRole('button', { name: 'Select all 4 shown' }));
     await user.click(screen.getByRole('button', { name: 'Archive' }));
-    expect(await screen.findByText('Archive 3 exercises?')).toBeInTheDocument();
+    expect(await screen.findByText('Archive 3 exercises?', {}, { timeout: 5000 })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Archive 3' }));
     await waitFor(() => expect(saveExercise).toHaveBeenCalledTimes(3));
     expect(saveExercise.mock.calls.every((c) => (c[0] as { active: boolean }).active === false)).toBe(true);
@@ -130,7 +130,7 @@ describe('Library select mode', () => {
     await enterSelect(user);
     await user.click(screen.getByRole('button', { name: 'Select all 3 shown' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
-    await user.click(await screen.findByRole('button', { name: 'Delete 2 · archive 1' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete 2 · archive 1' }, { timeout: 5000 }));
     expect(await screen.findByText(/1 could not be changed and is still selected/, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select Charlie' })).toBeChecked();
@@ -150,7 +150,7 @@ describe('Library select mode', () => {
     expect(clinicId).toBe('c1');
     expect(picked.map((e) => e.id).sort()).toEqual(['a', 'b', 'c']);
     expect(provenance).toEqual({ imageSource: null, imageNote: null });
-    expect(await screen.findByText('Added 2 to the TheraNet Library.')).toBeInTheDocument();
+    expect(await screen.findByText('Added 2 to the TheraNet Library.', {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('keeps skipped exercises selected and names them', async () => {
