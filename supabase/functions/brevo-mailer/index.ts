@@ -48,8 +48,9 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error('Server is not configured.');
+    const jwt = authHeader.slice(7);
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
+    const { data: { user: caller }, error: authError } = await userClient.auth.getUser(jwt);
     if (authError || !caller) return json({ error: 'Sign in to send this.' }, 401);
 
     const raw = (await req.json()) as WebhookPayload;
@@ -65,7 +66,7 @@ serve(async (req) => {
       userId: caller.id,
       userName: cut(caller.user_metadata?.display_name, MAX_SHORT) ?? caller.email ?? undefined,
       clinicId: cut(raw.clinicId, MAX_SHORT),
-      category: raw.category,
+      category: raw.category === 'bug' || raw.category === 'feature' || raw.category === 'support' ? raw.category : undefined,
     };
 
     const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY');
