@@ -1,5 +1,7 @@
 # TheraNet Security & Privacy Hardening Plan
 
+> **Status (2026-11-19):** Tasks 1, 2, 3, 5 and 6 are built, pushed and deployed. Task 4 is built and pushed with the Content-Security-Policy in **report-only** mode (the other headers are enforced): switch it to enforcing (`Content-Security-Policy`) once a pass over the live site shows no `[Report Only]` console lines. Still open: Task 0 (dashboard checks: MFA, leaked-password protection, redirect URLs, Dependabot), Task 7 (idle-lock decision) and Task 8 (clinic checklist). Beyond the plan: the policy also allows the R2 picture host, and `public/hep-preview.html` is excluded from the headers. Known leftovers: no per-user rate limit on `brevo-mailer`; `clinicId` in feedback emails is not verified; 7 dev-only audit findings (vitest) need a breaking upgrade. Details: FEATURES_AND_SCHEMA.md, "Security hardening".
+
 > **For agentic workers:** Execute tasks in priority order. Verify live Supabase configuration (Task 0) before deploying Task 1, because changing `hookAllowed()` to fail closed without `EDGE_HOOK_SECRET` configured in production will drop push notifications and scheduled/trigger emails.
 
 **Goal:** Eliminate externally exploitable Edge Function abuse, close browser/HTTP header gaps, patch production dependency CVEs, neutralize CSV and error-telemetry leakage, and establish clinic-level operational controls without breaking offline-first workflows.
@@ -24,7 +26,7 @@ Before modifying Edge Function auth, confirm live secrets in the Supabase Dashbo
 
 ---
 
-## Task 1: Fail-Close `hookAllowed()` on Internal Edge Functions
+## Task 1: Fail-Close `hookAllowed()` on Internal Edge Functions (DONE)
 
 **Files:**
 - Modify: `supabase/functions/_shared/hookAuth.ts`
@@ -45,7 +47,7 @@ Before modifying Edge Function auth, confirm live secrets in the Supabase Dashbo
 
 ---
 
-## Task 2: Authenticate `brevo-mailer` & Scrub Telemetry URLs
+## Task 2: Authenticate `brevo-mailer` & Scrub Telemetry URLs (DONE)
 
 **Files:**
 - Modify: `supabase/functions/brevo-mailer/index.ts`
@@ -72,7 +74,7 @@ Before modifying Edge Function auth, confirm live secrets in the Supabase Dashbo
 
 ---
 
-## Task 3: Restrict Edge Function CORS Origins
+## Task 3: Restrict Edge Function CORS Origins (DONE)
 
 **Files:**
 - Modify: `supabase/functions/_shared/cors.ts`
@@ -89,7 +91,7 @@ Before modifying Edge Function auth, confirm live secrets in the Supabase Dashbo
 
 ---
 
-## Task 4: Add HTTP Security Headers & Content Security Policy in `vercel.json`
+## Task 4: Add HTTP Security Headers & Content Security Policy in `vercel.json` (DONE; CSP report-only)
 
 **Files:**
 - Create: `public/blank-recovery.js` (extracted from `index.html`)
@@ -124,7 +126,7 @@ Before modifying Edge Function auth, confirm live secrets in the Supabase Dashbo
 
 ---
 
-## Task 5: Upgrade Vulnerable Production Dependencies
+## Task 5: Upgrade Vulnerable Production Dependencies (DONE)
 
 **Files:**
 - Modify: `package.json`, `package-lock.json`
@@ -151,7 +153,7 @@ Before modifying Edge Function auth, confirm live secrets in the Supabase Dashbo
 
 ---
 
-## Task 6: Neutralize CSV / Excel Formula Injection Across All Exports
+## Task 6: Neutralize CSV / Excel Formula Injection Across All Exports (DONE)
 
 **Files:**
 - Create or update shared helper (e.g., `src/domain/csv.ts` or export helper in `src/domain/visitsCsv.ts`)
