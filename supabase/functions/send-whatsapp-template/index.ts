@@ -1,3 +1,4 @@
+import { applyCors } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 /**
@@ -49,7 +50,6 @@ const MESSAGE_LOG_KINDS = [
 // '*' is fine here too — authorization is enforced by the JWT + membership
 // check inside the handler, not by which origin the browser claims.
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
@@ -208,4 +208,4 @@ export default async function handler(req: Request): Promise<Response> {
   }
 }
 
-Deno.serve(handler);
+Deno.serve(async (request) => applyCors(request, await handler(request)));

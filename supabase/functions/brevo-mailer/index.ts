@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
-import { corsHeaders } from '../_shared/cors.ts';
+import { applyCors, corsHeaders } from '../_shared/cors.ts';
 
 // Longest text accepted per field, so nobody can send oversized emails through this function.
 const MAX_MESSAGE = 8000;
@@ -36,7 +36,9 @@ function escapeHtml(unsafe: string | undefined): string {
     .replace(/'/g, '&#039;');
 }
 
-serve(async (req) => {
+serve(async (req) => applyCors(req, await handle(req)));
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -145,4 +147,4 @@ serve(async (req) => {
       status: 500,
     });
   }
-});
+}

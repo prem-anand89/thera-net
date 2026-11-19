@@ -1721,6 +1721,15 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/book/$clinicSlug` | Public booking request form (Patient Communications, Phase 5) | Unauthenticated — slug-scoped, no clinic membership |
 | `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
 
+### Security hardening (edge functions and browser)
+
+- **Internal hooks fail closed.** `send-push`, `send-agenda` and `notify-therapist` (database-triggered, `verify_jwt = false`) accept a call only with the `x-hook-secret` header equal to the `EDGE_HOOK_SECRET` function secret (`_shared/hookAuth.ts`). With no secret set every call is refused, so the secret (same value as the vault's `edge_hook_secret`) must exist before these functions are deployed.
+- **`brevo-mailer` needs a signed-in user.** It verifies the login (`auth.getUser`), takes the sender's id and name from it, accepts only the `bug`/`feature`/`support` categories, and caps every field's length. `src/lib/errorReporting.ts` sends only a sanitised path (`sanitizeUrl`: no query/hash, tokens and ids replaced) and only while signed in.
+- **CORS.** Functions the browser calls (`invite-therapist`, `brevo-mailer`, `send-whatsapp-template`, `hep-media`) answer only the app's own origins (`_shared/cors.ts`, `applyCors`): the `ALLOWED_ORIGINS` secret (comma-separated exact origins) or, when unset, the production URL and localhost 5173/5174. Add a new domain or preview URL to the secret before using it, or the browser blocks its calls. Other origins get no `Access-Control-Allow-Origin`.
+- **HTTP headers (`vercel.json`).** Every page except `public/hep-preview.html` gets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (camera, microphone and geolocation off) and HSTS, plus a `Content-Security-Policy-Report-Only` that allows only the app, Google Fonts, Supabase (https and wss) and the R2 picture host. It is report-only until the browser console shows no violations on the main screens, then the key is renamed `Content-Security-Policy`. The page has no inline script (the blank-page recovery code is `public/blank-recovery.js`); a new third-party host or inline script needs the policy updated.
+- **CSV exports** (`src/domain/csv.ts`): every export cell goes through `csvQuoted`/`csvMinimal`, which prefix text starting with `=`, `+`, `-` or `@` with an apostrophe; numbers and numeric text are left alone.
+
+
 ---
 
 ## Database Schema

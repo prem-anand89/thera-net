@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
-import { corsHeaders } from '../_shared/cors.ts';
+import { applyCors, corsHeaders } from '../_shared/cors.ts';
 import { handleHepMedia, HEP_UPLOAD_CACHE_CONTROL, type HepMediaDeps } from '../_shared/hepMediaHandler.ts';
 import { newKeySuffix } from '../_shared/hepMediaKeys.ts';
 import {
@@ -28,7 +28,9 @@ function r2Config(): R2Config | null {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const service = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 
-Deno.serve(async (request) => {
+Deno.serve(async (request) => applyCors(request, await handle(request)));
+
+async function handle(request: Request): Promise<Response> {
   if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (request.method !== 'POST') return json({ ok: false, reason: 'bad_request' }, 405);
 
@@ -108,4 +110,4 @@ Deno.serve(async (request) => {
     console.error('hep-media failed:', e instanceof Error ? e.message : String(e));
     return json({ ok: false, reason: 'unavailable' }, 500);
   }
-});
+}

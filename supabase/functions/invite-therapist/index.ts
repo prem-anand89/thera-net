@@ -1,3 +1,4 @@
+import { applyCors } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 interface InviteRequest {
@@ -39,7 +40,6 @@ interface InviteRequest {
 // check inside the handler, not by which origin the browser says it's
 // calling from.
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
@@ -592,4 +592,4 @@ export default async function handler(req: Request): Promise<Response> {
 // That's the actual root cause of the stuck "Sending…"/no-email bug, not
 // the missing CORS headers or verify_jwt (both still worth having, but
 // neither would matter if the function never started listening).
-Deno.serve(handler);
+Deno.serve(async (request) => applyCors(request, await handler(request)));
