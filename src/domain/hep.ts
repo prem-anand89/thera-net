@@ -1,5 +1,5 @@
 // HEP (home exercise programs): types and the pure rules the screens, the patient page and the tests share.
-// Plan: docs/superpowers/plans/2026-11-09-hep-module.md (Task 3 and amendments 14 to 22, 41 to 43, 53, 61 to 69, 78 to 81).
+// Plan (executed and removed): the 2026-11-09 HEP module plan; see FEATURES_AND_SCHEMA.md section 11.
 
 /**
  * HEP is temporarily restricted to Beyond Mechanics and Physio Clinic while
