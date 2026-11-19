@@ -51,7 +51,7 @@ Clinics submit their own exercises (with pictures) and templates for the public 
   - `public_templates` and `public_template_items` (as the clinic tables).
   - `public_submissions` (what a clinic sent: the clinic exercise or template id, the terms version accepted, the consent answers, the reviewer's checklist and decision, reasons).
   - `public_reports` (a clinic's report on a published item: reason, note, status).
-- **Clinic copies carry their origin:** `exercises.source_public_id uuid null` (and the same on templates) so the Library can show "From the TheraNet library" and offer "A newer version is available" without changing the clinic's copy.
+- **Clinic copies carry their origin** in `exercise_origins` (`source_kind` library or public; see `2026-11-18-theranet-library-curation.md`), so the Library can show "From the TheraNet library" and offer "A newer version is available" without changing the clinic's copy. Templates would need their own link.
 - **Media:** public pictures live under their own prefix in a **public** R2 bucket (or a separate public prefix with its own read rule), never the clinic's private keys. On approval the platform **copies** the files there; on "Add to my library" they are copied again into the clinic's private prefix, so a withdrawn public item never breaks a clinic's programs.
 - **Lite cap:** adding public exercises counts toward the clinic's exercise cap like any other.
 
