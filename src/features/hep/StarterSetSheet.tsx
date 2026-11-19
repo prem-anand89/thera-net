@@ -10,6 +10,7 @@ import { SheetDialog, btnPrimary, btnSecondary } from '@/components/ui';
 import {
   HEP_BODY_ORDER,
   canonicalRegion,
+  isStarterCuratorClinic,
   listThumbKey,
   type Exercise,
   type StarterLibraryItem,
@@ -20,6 +21,7 @@ import { db } from '@/lib/db';
 import { hepMediaService } from '@/services/hepMediaService';
 import { HEP_NEEDS_CONNECTION, hepService } from '@/services/hepService';
 import { starterLibraryService, staticStarterItems } from '@/services/starterLibraryService';
+import { LibraryCoverage } from './LibraryCoverage';
 import { Thumb } from './LibraryParts';
 import { exerciseFromSaveInput, starterItemToSaveInput } from './starterSet';
 import { useExercises, useOnline } from './useHepData';
@@ -50,12 +52,15 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'coverage'>('list');
+  const curator = isStarterCuratorClinic(clinic);
 
   useEffect(() => {
     if (!open) return;
     setTicked(new Set());
     setError(null);
     setBusy(false);
+    setView('list');
     let live = true;
     void starterLibraryService.listStarterItems().then((list) => {
       if (!live) return;
@@ -148,6 +153,11 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
       title="TheraNet Library"
       onClose={onClose}
       busy={busy}
+      headerAction={curator ? (
+        <Button type="button" className={btnSecondary} onClick={() => setView((v) => (v === 'list' ? 'coverage' : 'list'))}>
+          {view === 'list' ? 'Coverage' : 'Exercises'}
+        </Button>
+      ) : undefined}
       error={error}
       footer={
         <>
@@ -158,6 +168,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
         </>
       }
     >
+      {view === 'coverage' && curator ? <LibraryCoverage items={items} /> : (<>
       <p className="mb-3 text-sm text-[var(--muted)]">Ready-made exercises with simple steps and a usual dose. They are copied into your own Library, where you can change anything and add photos. Pick only what you want.</p>
       {limit != null && room != null && (
         <p role="status" className="mb-3 text-sm font-medium text-[var(--ink)]">
@@ -199,6 +210,7 @@ export function StarterSetSheet({ open, onClose }: { open: boolean; onClose: () 
           );
         })}
       </div>
+      </>)}
     </SheetDialog>
   );
 }

@@ -241,4 +241,24 @@ describe('starterToSaveInput', () => {
     expect(await screen.findByText('You have reached the free-plan limit of 10 exercises. Visit theranet.in to upgrade.', {}, { timeout: 5000 })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText(/^Quad Sets/)).toBeDisabled());
   });
+
+  it('Coverage is for curator clinics only; it shows counts per region and type, and a way back to the list', async () => {
+    const user = userEvent.setup();
+    renderSheet();
+    await screen.findByLabelText(/^Quad Sets/);
+    expect(screen.queryByRole('button', { name: 'Coverage' })).toBeNull();
+    cleanup();
+
+    const curator = { ...clinic, starterCurator: true } as unknown as Clinic;
+    render(<ClinicContext.Provider value={curator}><StarterSetSheet open onClose={vi.fn()} /></ClinicContext.Provider>);
+    await screen.findByLabelText(/^Quad Sets/);
+    await user.click(screen.getByRole('button', { name: 'Coverage' }));
+    expect(screen.getByRole('status')).toHaveTextContent(`${STARTER_EXERCISES.length} exercises in the library`);
+    const table = screen.getByRole('table', { name: /by body region and type/ });
+    const knee = within(table).getByRole('row', { name: /^Knee/ });
+    expect(within(knee).getAllByRole('cell').length).toBeGreaterThan(5);
+    expect(within(table).getByRole('row', { name: /^Face/ })).toHaveTextContent('–'); // no Face exercises: a visible gap
+    await user.click(screen.getByRole('button', { name: 'Exercises' }));
+    expect(screen.getByLabelText(/^Quad Sets/)).toBeInTheDocument();
+  });
 });
