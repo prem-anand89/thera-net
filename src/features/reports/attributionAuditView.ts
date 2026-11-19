@@ -1,3 +1,4 @@
+import { csvMinimal } from '@/domain/csv';
 import { formatAmount, type Paise, currencySymbol } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
@@ -55,10 +56,7 @@ export function summarize(entries: AttributionEntry[]): { therapistId: UUID; giv
   return [...m].map(([therapistId, v]) => ({ therapistId, ...v }));
 }
 
-const csvCell = (v: string | number) => {
-  const t = String(v);
-  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-};
+const csvCell = csvMinimal;
 
 export function toAuditCsv(
   entries: AttributionEntry[],

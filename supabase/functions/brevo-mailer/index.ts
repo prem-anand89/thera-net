@@ -1,5 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders } from '../_shared/cors.ts'; // assuming standard cors implementation
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
+import { corsHeaders } from '../_shared/cors.ts';
+
+// Longest text accepted per field, so nobody can send oversized emails through this function.
+const MAX_MESSAGE = 8000;
+const MAX_STACK = 16000;
+const MAX_SHORT = 500;
+const cut = (v: unknown, max: number): string | undefined => (typeof v === 'string' ? v.slice(0, max) : undefined);
+
+function json(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
 
 interface WebhookPayload {
   type: 'error' | 'feedback';
@@ -31,8 +42,32 @@ serve(async (req) => {
   }
 
   try {
-    const payload = (await req.json()) as WebhookPayload;
-    
+    // Only signed-in users may send: the function mails the support inbox and spends Brevo quota.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return json({ error: 'Sign in to send this.' }, 401);
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error('Server is not configured.');
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
+    if (authError || !caller) return json({ error: 'Sign in to send this.' }, 401);
+
+    const raw = (await req.json()) as WebhookPayload;
+    // Who sent it comes from the verified login, never from what the browser says.
+    const payload: WebhookPayload = {
+      type: raw.type,
+      context: cut(raw.context, MAX_SHORT),
+      message: cut(raw.message, MAX_MESSAGE) ?? '',
+      stack: cut(raw.stack, MAX_STACK),
+      url: cut(raw.url, MAX_SHORT),
+      userAgent: cut(raw.userAgent, MAX_SHORT),
+      time: cut(raw.time, MAX_SHORT),
+      userId: caller.id,
+      userName: cut(caller.user_metadata?.display_name, MAX_SHORT) ?? caller.email ?? undefined,
+      clinicId: cut(raw.clinicId, MAX_SHORT),
+      category: raw.category,
+    };
+
     const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY');
     const SUPPORT_EMAIL = Deno.env.get('SUPPORT_EMAIL');
 
@@ -104,7 +139,7 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });

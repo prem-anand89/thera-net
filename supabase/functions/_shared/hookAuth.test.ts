@@ -4,9 +4,9 @@ import { hookAllowed } from './hookAuth.ts';
 const call = (secret?: string) =>
   new Request('https://x/functions/v1/send-push', { method: 'POST', headers: secret === undefined ? {} : { 'x-hook-secret': secret } });
 
-Deno.test('with no secret configured every call is accepted', () => {
-  assertEquals(hookAllowed(call(), ''), true);
-  assertEquals(hookAllowed(call('anything'), ''), true);
+Deno.test('with no secret configured every call is rejected', () => {
+  assertEquals(hookAllowed(call(), ''), false);
+  assertEquals(hookAllowed(call('anything'), ''), false);
 });
 
 Deno.test('with a secret configured only the matching header is accepted', () => {

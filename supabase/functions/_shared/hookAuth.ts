@@ -1,11 +1,11 @@
 /**
  * Database-only edge functions (send-push, send-agenda, notify-therapist) run without a login check because
  * triggers and pg_cron call them. Every such call carries `x-hook-secret` (public.edge_hook_headers()); this
- * compares it with the EDGE_HOOK_SECRET function setting. While that setting is absent, calls are accepted as
- * before, so deploying the code before setting the secret never drops a notification.
+ * compares it with the EDGE_HOOK_SECRET function setting. With no secret configured every call is refused (fails
+ * closed), so the secret MUST be set, and match the vault's edge_hook_secret, before this code is deployed.
  */
 export function hookAllowed(request: Request, expected: string | undefined = Deno.env.get('EDGE_HOOK_SECRET')): boolean {
-  if (!expected) return true;
+  if (!expected) return false;
   const given = request.headers.get('x-hook-secret') ?? '';
   if (given.length !== expected.length) return false;
   let diff = 0;

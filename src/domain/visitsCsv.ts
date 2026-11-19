@@ -1,3 +1,4 @@
+import { csvQuoted } from './csv';
 import type { Paise } from './money';
 import { paiseToRupees } from './money';
 import { formatDateDMY } from './fiscalYear';
@@ -18,7 +19,7 @@ export interface VisitsCsvRow {
 }
 
 function csvLine(cells: unknown[]): string {
-  return cells.map((c) => `"${String(c ?? '').replaceAll('"', '""')}"`).join(',');
+  return cells.map(csvQuoted).join(',');
 }
 
 /**

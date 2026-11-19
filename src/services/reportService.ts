@@ -4,6 +4,7 @@ import { paiseToRupees } from '@/domain/money';
 import { attributablePackageGroupIds, payBaseByTherapist, type PayBaseInput } from '@/domain/payBase';
 import { treatedTherapists } from '@/domain/visitLines';
 import { monthDateRange, monthName, type FyMonth } from '@/domain/fiscalYear';
+import { csvQuoted } from '@/domain/csv';
 import { inDepartment, type Department } from '@/domain/departments';
 import type { Repos } from '@/repositories/types';
 
@@ -333,12 +334,12 @@ export function createReportService(repos: Repos) {
         }
         rows.push(line({ ...opts.allDepartmentsTotal, therapistName: 'All departments' }));
         return rows
-          .map((cells) => cells.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(','))
+          .map((cells) => cells.map(csvQuoted).join(','))
           .join('\n');
       }
 
       return [header, ...report.rows.map(line), line(report.total)]
-        .map((cells) => cells.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(','))
+        .map((cells) => cells.map(csvQuoted).join(','))
         .join('\n');
     },
   };

@@ -12,6 +12,18 @@
 const WEBHOOK_URL = import.meta.env.VITE_ERROR_WEBHOOK_URL as string | undefined;
 const LAST_ERROR_TIME_KEY = 'thera_last_error_time';
 
+/**
+ * The page path with anything identifying removed: no query string or hash, patient and other ids replaced, and the
+ * single-use tokens in /f/ (feedback), /p/ (patient page) and /book/ links hidden.
+ */
+export function sanitizeUrl(path: string): string {
+  const noQuery = path.split(/[?#]/)[0];
+  return noQuery
+    .replace(/^\/(f|p)\/[^/]+/, '/$1/[token]')
+    .replace(/^\/book\/[^/]+/, '/book/[clinic]')
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[id]');
+}
+
 export function reportError(error: unknown, context: string): void {
   console.error(`[${context}]`, error);
 
@@ -31,7 +43,7 @@ export function reportError(error: unknown, context: string): void {
     context,
     message: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
-    url: typeof location !== 'undefined' ? location.href : undefined,
+    url: typeof location !== 'undefined' ? sanitizeUrl(location.pathname) : undefined,
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
     time: new Date().toISOString(),
   };
@@ -40,12 +52,15 @@ export function reportError(error: unknown, context: string): void {
   import('@/lib/supabase').then(({ getSupabase }) => {
     const supabase = getSupabase();
     if (supabase) {
-      supabase.functions.invoke('brevo-mailer', {
-        body: { type: 'error', ...payload }
+      // The mailer only accepts signed-in senders; with nobody signed in (a patient page, the booking page) the error
+      // stays in the console.
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data.session) return;
+        return supabase.functions.invoke('brevo-mailer', { body: { type: 'error', ...payload } });
       }).catch(() => {});
       return;
     }
-    
+
     // Fallback to webhook if Supabase isn't ready or configured
     if (!WEBHOOK_URL) return;
     fetch(WEBHOOK_URL, {
